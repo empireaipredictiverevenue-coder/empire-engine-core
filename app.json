@@ -1,0 +1,27 @@
+{
+  "name": "empire-ai",
+  "description": "Empire AI · Predictive Revenue Cloud",
+  "keywords": ["empire", "ai", "storm", "logistics", "predictive"],
+  "scripts": {
+    "dokku": {
+      "predeploy": "echo '[deploy] Empire V49 build complete'",
+      "postdeploy": "echo '[deploy] Empire V49 live · /command'"
+    }
+  },
+  "healthchecks": {
+    "web": [
+      {
+        "type": "startup",
+        "name": "web check",
+        "description": "Hub startup",
+        "path": "/api/market-pulse",
+        "attempts": 3
+      }
+    ]
+  },
+  "formation": {
+    "web": {
+      "quantity": 1
+    }
+  }
+}
