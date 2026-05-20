@@ -11,7 +11,7 @@ python-multipart==0.0.12
 
 # Data + storage
 supabase==2.28.3
-postgrest==0.16.10
+# postgrest installed by supabase
 
 # Empire Brain (Claude)
 anthropic==0.39.0
@@ -20,7 +20,7 @@ anthropic==0.39.0
 resend==2.4.0
 
 # Voice engine (Vonage JWT auth)
-PyJWT[crypto]==2.9.0
+PyJWT[crypto]>=2.10.1
 
 # Lead generation pipeline
 beautifulsoup4==4.12.3
