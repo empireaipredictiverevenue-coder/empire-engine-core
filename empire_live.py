@@ -50,6 +50,10 @@ from starlette.websockets import WebSocketState
 #   empire_live.HUB_TOKEN = HUB_TOKEN
 HUB_TOKEN: str = ""
 
+# Set lazily by register_live_routes — gives the WS endpoint access to the
+# operator_sessions table so per-operator session tokens can authenticate.
+_AUTH_ENGINE = None
+
 
 class LiveBroadcaster:
     """
@@ -63,6 +67,8 @@ class LiveBroadcaster:
 
     def __init__(self):
         self._connections: Set[WebSocket] = set()
+        # SSE fallback: each subscriber owns an asyncio.Queue we push events into.
+        self._sse_queues: Set[asyncio.Queue] = set()
         self._stats = {
             "connected":         0,
             "total_connections": 0,
@@ -74,8 +80,29 @@ class LiveBroadcaster:
     def stats(self) -> dict:
         return {
             **self._stats,
-            "connected": len(self._connections),
+            "connected":     len(self._connections),
+            "sse_connected": len(self._sse_queues),
         }
+
+    # ── SSE subscribe / unsubscribe ─────────────────────────────────────
+    def subscribe_sse(self) -> asyncio.Queue:
+        """Register an SSE subscriber and return its queue. Caller awaits queue.get()."""
+        q: asyncio.Queue = asyncio.Queue(maxsize=200)
+        self._sse_queues.add(q)
+        self._stats["total_connections"] += 1
+        # Hello frame, same shape as WS
+        try:
+            q.put_nowait({
+                "type": "hello",
+                "ts":   datetime.now(timezone.utc).isoformat(),
+                "stats": self.stats,
+            })
+        except asyncio.QueueFull:
+            pass
+        return q
+
+    def unsubscribe_sse(self, q: asyncio.Queue) -> None:
+        self._sse_queues.discard(q)
 
     async def connect(self, ws: WebSocket):
         """Register a new client. Caller must have already accepted the WS."""
@@ -94,10 +121,10 @@ class LiveBroadcaster:
 
     async def broadcast(self, event: dict):
         """
-        Fan an event out to every connected client. Dead connections are
-        pruned silently — they're already disconnected, no need to alarm.
+        Fan an event out to every connected client (WS + SSE).
+        Dead connections are pruned silently.
         """
-        if not self._connections:
+        if not self._connections and not self._sse_queues:
             return
 
         # Stamp the event with a server timestamp
@@ -106,15 +133,27 @@ class LiveBroadcaster:
             "ts": datetime.now(timezone.utc).isoformat(),
         }
 
-        # Copy the set so disconnects during iteration don't blow up
-        dead: list[WebSocket] = []
+        # WS fan-out
+        dead_ws: list[WebSocket] = []
         for ws in list(self._connections):
             ok = await self._safe_send(ws, payload)
             if not ok:
-                dead.append(ws)
-
-        for ws in dead:
+                dead_ws.append(ws)
+        for ws in dead_ws:
             self.disconnect(ws)
+
+        # SSE fan-out — non-blocking put; if a subscriber is too slow we drop
+        # rather than backing up the broadcaster.
+        for q in list(self._sse_queues):
+            try:
+                q.put_nowait(payload)
+            except asyncio.QueueFull:
+                # Drop oldest, push newest — backpressure-tolerant
+                try:
+                    q.get_nowait()
+                    q.put_nowait(payload)
+                except Exception:
+                    pass
 
         self._stats["messages_sent"] += 1
 
@@ -138,14 +177,46 @@ live_broadcaster = LiveBroadcaster()
 # ─────────────────────────────────────────────────────────────────────────────
 async def websocket_endpoint(websocket: WebSocket, token: str = Query("")):
     """
-    Operator WebSocket. Authenticates via ?token= query parameter.
+    Operator WebSocket. Authenticates via:
+      1. ?token=<session_token> query param (per-operator session)
+      2. empire_session cookie (per-operator session, browser default)
+      3. ?token=<HUB_TOKEN> (legacy cron / backwards compat)
     Streams Subconscious Mind events as they happen.
-
-    Wire-up in hub.py:
-        app.add_api_websocket_route("/ws/live", websocket_endpoint)
     """
-    # Auth check before accepting the connection
-    if not HUB_TOKEN or token != HUB_TOKEN:
+    # Resolve a token from query or cookie
+    if not token:
+        token = websocket.cookies.get("empire_session", "")
+
+    authorized = False
+    if token:
+        # Legacy hub token check (constant-time-ish)
+        if HUB_TOKEN and token == HUB_TOKEN:
+            authorized = True
+        else:
+            # Per-operator session lookup
+            ae = globals().get("_AUTH_ENGINE")
+            if ae is not None:
+                try:
+                    import hashlib
+                    from datetime import datetime, timezone
+                    token_hash = hashlib.sha256(token.encode("utf-8")).hexdigest()
+                    db = ae.get_db()
+                    res = db.table("operator_sessions").select(
+                        "operator_id, expires_at, revoked_at"
+                    ).eq("token_hash", token_hash).limit(1).execute()
+                    if res.data:
+                        s = res.data[0]
+                        if not s.get("revoked_at"):
+                            exp = s["expires_at"]
+                            if isinstance(exp, str):
+                                from empire_auth import parse_pg_timestamptz
+                                exp = parse_pg_timestamptz(exp)
+                            if exp >= datetime.now(timezone.utc):
+                                authorized = True
+                except Exception:
+                    authorized = False
+
+    if not authorized:
         await websocket.close(code=1008, reason="Unauthorized")
         return
 
@@ -220,11 +291,14 @@ async def stats_heartbeat(
 LIVE_CLIENT_JS = """
 <script>
 (function() {
+  // Token is optional — server also accepts the empire_session cookie. The
+  // cookie is HttpOnly and travels with the WebSocket handshake automatically.
   const TOKEN = window.EMPIRE_TOKEN || localStorage.getItem('hub_token') || '';
-  if (!TOKEN) return; // No auth = no live
 
   const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
-  const WS_URL = `${protocol}//${location.host}/ws/live?token=${encodeURIComponent(TOKEN)}`;
+  const WS_URL = TOKEN
+    ? `${protocol}//${location.host}/ws/live?token=${encodeURIComponent(TOKEN)}`
+    : `${protocol}//${location.host}/ws/live`;
 
   // Event bus — other scripts can subscribe via:
   //   window.EMPIRE_LIVE.on('strike', e => { ... });
@@ -294,3 +368,105 @@ LIVE_CLIENT_JS = """
 })();
 </script>
 """
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# COMPATIBILITY SHIMS for hub.py
+# hub.py imports `LiveBroadcaster` (singleton instance) and `register_live_routes`.
+# These wire the existing live_broadcaster + websocket_endpoint to those names.
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Alias: hub.py does `LiveBroadcaster()` expecting it to return an instance.
+# The real LiveBroadcaster class is defined above; this lets `LiveBroadcaster()`
+# return the existing singleton so we don't fragment state.
+_LiveBroadcasterClass = LiveBroadcaster
+
+def LiveBroadcaster():  # noqa: F811  — intentional shadow
+    """Factory that returns the module-level singleton."""
+    return live_broadcaster
+
+
+def register_live_routes(app, broadcaster=None, hub_token: str = "", auth_engine=None):
+    """Register WebSocket route + (optional) HTTP stats endpoint."""
+    global HUB_TOKEN, _AUTH_ENGINE
+    if hub_token:
+        HUB_TOKEN = hub_token
+    elif not HUB_TOKEN:
+        # Pull from env as fallback
+        import os
+        HUB_TOKEN = os.environ.get("HUB_TOKEN", "")
+    if auth_engine is not None:
+        _AUTH_ENGINE = auth_engine
+
+    app.add_api_websocket_route("/ws/live", websocket_endpoint)
+
+    @app.get("/api/v1/live/stats")
+    async def _live_stats():
+        return live_broadcaster.stats
+
+    # ── SSE fallback for environments where WebSocket Upgrade is blocked ────
+    # EventSource in the browser can't set custom headers, so auth uses
+    # the same ?token=<session_token|HUB_TOKEN> contract as the WS endpoint.
+    from fastapi import Request, HTTPException
+    from fastapi.responses import StreamingResponse
+    import hashlib
+
+    def _authorize_live_token(token: str) -> bool:
+        if not token:
+            return False
+        if HUB_TOKEN and token == HUB_TOKEN:
+            return True
+        ae = _AUTH_ENGINE
+        if ae is None:
+            return False
+        try:
+            token_hash = hashlib.sha256(token.encode("utf-8")).hexdigest()
+            res = ae.get_db().table("operator_sessions").select(
+                "operator_id, expires_at, revoked_at"
+            ).eq("token_hash", token_hash).limit(1).execute()
+            if not res.data:
+                return False
+            s = res.data[0]
+            if s.get("revoked_at"):
+                return False
+            exp = s["expires_at"]
+            if isinstance(exp, str):
+                from empire_auth import parse_pg_timestamptz
+                exp = parse_pg_timestamptz(exp)
+            return exp >= datetime.now(timezone.utc)
+        except Exception:
+            return False
+
+    @app.get("/api/v1/live/stream")
+    async def _live_stream(request: Request, token: str = ""):
+        if not _authorize_live_token(token):
+            raise HTTPException(401, "Authentication required")
+
+        q = live_broadcaster.subscribe_sse()
+
+        async def event_source():
+            # SSE retry hint — browser auto-reconnects after 3s on drop
+            yield "retry: 3000\n\n"
+            try:
+                while True:
+                    if await request.is_disconnected():
+                        break
+                    try:
+                        payload = await asyncio.wait_for(q.get(), timeout=20.0)
+                    except asyncio.TimeoutError:
+                        # Heartbeat — keeps proxies from idle-closing the stream
+                        yield ": keepalive\n\n"
+                        continue
+                    yield f"data: {json.dumps(payload)}\n\n"
+            finally:
+                live_broadcaster.unsubscribe_sse(q)
+
+        return StreamingResponse(
+            event_source(),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control":     "no-cache, no-transform",
+                "X-Accel-Buffering": "no",   # nginx-style: disable proxy buffering
+                "Connection":        "keep-alive",
+            },
+        )

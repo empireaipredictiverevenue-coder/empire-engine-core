@@ -502,7 +502,7 @@ $$;
 
 -- ⚠ REPLACE THE EMAIL BELOW WITH YOUR REAL OWNER EMAIL BEFORE RUNNING
 INSERT INTO operators (email, name, role) VALUES
-  ('REPLACE_ME@empire-ai.co.uk', 'Empire Owner', 'owner')
+  ('PhillipLivesley@empire-ai.co.uk', 'Empire Owner', 'owner')
 ON CONFLICT (email) DO NOTHING;
 
 

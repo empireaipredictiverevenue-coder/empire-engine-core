@@ -651,6 +651,18 @@ class PayoutEngine:
             except Exception as e:
                 log.error(f"[payouts] approval update failed: {e}")
 
+        # Push to live dashboards
+        if approved > 0 and self.broadcaster:
+            try:
+                await self.broadcaster.broadcast({
+                    "type":          "payout_approved",
+                    "tx_signature":  tx_signature,
+                    "count":         approved,
+                    "approved_by":   approved_by,
+                })
+            except Exception:
+                pass
+
         # Kick off execution if anything approved
         if approved > 0:
             asyncio.create_task(self._execute_approved_payouts())
@@ -896,8 +908,14 @@ def register_payout_routes(
     *,
     engine: PayoutEngine,
     require_auth: Callable,
+    require_owner: Optional[Callable] = None,
 ):
-    """Wire payout operator endpoints."""
+    """Wire payout operator endpoints. `require_owner` gates approve/cancel
+    (owner-only per role matrix in empire_auth). Falls back to `require_auth`
+    if not provided for backward compat, but log a warning."""
+    if require_owner is None:
+        log.warning("[payouts] require_owner not provided · approve/cancel will accept any operator (violates role matrix)")
+        require_owner = require_auth
 
     @app.get("/api/v1/payouts/pending")
     async def payouts_pending(auth: bool = Depends(require_auth)):
@@ -913,9 +931,9 @@ def register_payout_routes(
             raise HTTPException(500, str(e))
 
     @app.post("/api/v1/payouts/approve")
-    async def payouts_approve(request: Request, auth: bool = Depends(require_auth)):
+    async def payouts_approve(request: Request, op: dict = Depends(require_owner)):
         """
-        Approve all pending payouts for a settlement (tx_signature).
+        Approve all pending payouts for a settlement (tx_signature). Owner only.
         Body: {"settlement_id": "<sig>"}
         """
         try:
@@ -929,7 +947,7 @@ def register_payout_routes(
 
         n = await engine._approve_payouts_for_settlement(
             tx_signature=settlement_id,
-            approved_by="operator",
+            approved_by=op.get("name") or op.get("email") or "operator",
         )
         return {"ok": True, "approved": n}
 
@@ -956,8 +974,8 @@ def register_payout_routes(
         return result
 
     @app.post("/api/v1/payouts/cancel")
-    async def payouts_cancel(request: Request, auth: bool = Depends(require_auth)):
-        """Cancel a pending or approved payout (e.g. wrong attribution)."""
+    async def payouts_cancel(request: Request, op: dict = Depends(require_owner)):
+        """Cancel a pending or approved payout (e.g. wrong attribution). Owner only."""
         try:
             body = await request.json()
         except Exception:
@@ -969,10 +987,23 @@ def register_payout_routes(
 
         try:
             db = engine.get_db()
+            reason = body.get("reason", "operator cancelled")
             db.table("payout_log").update({
                 "status":         "cancelled",
-                "failure_reason": body.get("reason", "operator cancelled"),
+                "failure_reason": reason,
             }).eq("id", payout_id).in_("status", ["pending", "approved"]).execute()
+
+            if engine.broadcaster:
+                try:
+                    await engine.broadcaster.broadcast({
+                        "type":         "payout_cancelled",
+                        "payout_id":    payout_id,
+                        "cancelled_by": op.get("name") or op.get("email") or "operator",
+                        "reason":       reason,
+                    })
+                except Exception:
+                    pass
+
             return {"ok": True}
         except Exception as e:
             raise HTTPException(500, str(e))

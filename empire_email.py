@@ -572,6 +572,23 @@ def register_email_routes(
         async def email_stats(auth: bool = Depends(require_auth)):
             return engine.stats
 
+        @app.get("/api/v1/email/sequences")
+        async def email_sequences(
+            status: str = "all",
+            limit:  int = 100,
+            auth:   bool = Depends(require_auth),
+        ):
+            """List email sequences. `status` accepts active/done/unsubscribed/bounced/all."""
+            try:
+                db = engine.get_db()
+                q = db.table("email_sequences").select("*") \
+                    .order("next_send_at", desc=True).limit(max(1, min(limit, 500)))
+                if status and status != "all":
+                    q = q.eq("status", status)
+                return {"sequences": q.execute().data or []}
+            except Exception as e:
+                raise HTTPException(500, str(e))
+
         @app.post("/api/v1/email/bulk-enroll")
         async def email_bulk(request: Request, auth: bool = Depends(require_auth)):
             """Enroll all radar_targets with an email column populated."""
@@ -651,3 +668,7 @@ p {{
   <p>{message}</p>
 </div>
 </body></html>"""
+
+
+# Compat alias for hub.py
+EmailEngine = EmailSequenceEngine

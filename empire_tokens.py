@@ -638,3 +638,39 @@ def empire_head(title: str = "Empire AI · Command Deck", extra: str = "") -> st
 {extra}
 </style>
 </head>"""
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# JWT helpers for unsubscribe links + session tokens.
+# Used by empire_email.py for one-click unsubscribe URLs.
+# ─────────────────────────────────────────────────────────────────────────────
+import os as _os
+import datetime as _dt
+
+try:
+    import jwt as _jwt
+except ImportError:
+    _jwt = None
+
+_SECRET_KEY = _os.environ.get("SECRET_KEY", "empire-rotate-me-to-a-real-secret")
+_ALGORITHM = "HS256"
+
+
+def _sign_token(data: dict) -> str:
+    """Sign a payload dict and return a JWT string."""
+    if _jwt is None:
+        raise RuntimeError("PyJWT not installed — pip install pyjwt")
+    payload = dict(data)
+    if "exp" not in payload:
+        payload["exp"] = _dt.datetime.now(_dt.timezone.utc) + _dt.timedelta(days=365)
+    return _jwt.encode(payload, _SECRET_KEY, algorithm=_ALGORITHM)
+
+
+def _verify_token(token: str):
+    """Verify a JWT string. Returns the decoded payload dict, or None on failure."""
+    if _jwt is None or not token:
+        return None
+    try:
+        return _jwt.decode(token, _SECRET_KEY, algorithms=[_ALGORITHM])
+    except Exception:
+        return None

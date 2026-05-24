@@ -604,6 +604,23 @@ def register_sms_routes(
             """SMS engine status snapshot."""
             return engine.stats
 
+        @app.get("/api/v1/sms/sequences")
+        async def sms_sequences(
+            status: str = "all",
+            limit:  int = 100,
+            auth:   bool = Depends(require_auth),
+        ):
+            """List SMS sequences. `status` accepts active/done/opted_out/replied/all."""
+            try:
+                db = engine.get_db()
+                q = db.table("sms_sequences").select("*") \
+                    .order("next_send_at", desc=True).limit(max(1, min(limit, 500)))
+                if status and status != "all":
+                    q = q.eq("status", status)
+                return {"sequences": q.execute().data or []}
+            except Exception as e:
+                raise HTTPException(500, str(e))
+
         @app.post("/api/v1/sms/bulk-enroll")
         async def sms_bulk_enroll(request: Request, auth: bool = Depends(require_auth)):
             """
@@ -647,3 +664,7 @@ def register_sms_routes(
             }
 
     log.info("[sms] Routes registered · /api/v1/sms/{inbound,enroll,bulk-enroll,stats}")
+
+
+# Compat alias for hub.py
+SMSEngine = SMSSequenceEngine

@@ -25,22 +25,30 @@ inlined in all 8 view routes.
 """
 
 from empire_tokens import empire_head
+from empire_live import LIVE_CLIENT_JS
 
 # ─────────────────────────────────────────────────────────────────────────────
 # MODULE NAV — defines the sidebar items. Single source of truth.
 # Add new views here; the sidebar updates automatically.
 # ─────────────────────────────────────────────────────────────────────────────
 MODULES = [
-    # (slug, num, name, icon, special)
-    ("scout",       "01", "Warp Scout",      "ti-radar-2",      False),
-    ("cabinet",     "02", "The Cabinet",     "ti-message-2",    False),
-    ("sales",       "03", "Sales Forge",     "ti-coin",         False),
-    ("yard",        "04", "Yard Sniper",     "ti-crosshair",    False),
-    ("settle",      "05", "Settlements",     "ti-receipt-2",    False),
-    ("ab",          "06", "A/B Splitter",    "ti-arrows-split", False),
-    ("calibration", "07", "Calibration",     "ti-target-arrow", False),
-    ("sovereign",   "08", "Sovereign Vault", "ti-shield-lock",  True),
+    # (slug, num, name, icon, section)
+    # section: "ops" → Operations group · "sov" → Sovereign group
+    ("pulse",       "01", "Pulse",       "ti-activity-heartbeat", "ops"),
+    ("pipeline",    "02", "Pipeline",    "ti-line-dotted",        "ops"),
+    ("dispatch",    "03", "Dispatch",    "ti-route",              "ops"),
+    ("inbound",     "04", "Inbound",     "ti-phone-incoming",     "ops"),
+    ("payouts",     "05", "Payouts",     "ti-coin",               "ops"),
+    ("contractors", "06", "Contractors", "ti-users-group",        "ops"),
+    ("console",     "07", "Console",     "ti-terminal-2",         "sov"),
+    ("audit",       "08", "Audit Log",   "ti-shield-check",       "sov"),
+    ("operators",   "09", "Operators",   "ti-id-badge-2",         "sov"),
 ]
+
+# Each module slug maps to its URL. `pulse` is the canonical /command page;
+# the rest are /command/<slug>. This keeps the original URL working.
+def _module_href(slug: str) -> str:
+    return "/command" if slug == "pulse" else f"/command/{slug}"
 
 
 def _layout_css() -> str:
@@ -313,12 +321,12 @@ def _layout_css() -> str:
 
 def _sidebar_html(active_module: str) -> str:
     """Render the sidebar with active state set for `active_module`."""
-    items_html = []
-    for slug, num, name, icon, special in MODULES:
+    sections = {"ops": [], "sov": []}
+    for slug, num, name, icon, section in MODULES:
         active_cls = " active" if slug == active_module else ""
-        special_cls = " special" if special else ""
-        items_html.append(f"""
-        <a href="/view/{slug}" class="e-nav-item{active_cls}{special_cls}" data-module="{slug}">
+        special_cls = " special" if section == "sov" else ""
+        sections[section].append(f"""
+        <a href="{_module_href(slug)}" class="e-nav-item{active_cls}{special_cls}" data-module="{slug}">
           <i class="ti {icon} e-nav-icon" aria-hidden="true"></i>
           <span class="e-nav-num">{num}</span>
           <span class="e-nav-name">{name}</span>
@@ -327,12 +335,12 @@ def _sidebar_html(active_module: str) -> str:
     return f"""
     <aside class="e-sidebar" aria-label="Empire navigation">
       <div class="e-nav-section">
-        <div class="e-nav-label">/ / Modules</div>
-        {''.join(items_html[:-1])}
+        <div class="e-nav-label">/ / Operations</div>
+        {''.join(sections["ops"])}
       </div>
       <div class="e-nav-section" style="border-bottom:none;">
-        <div class="e-nav-label">/ / Vault</div>
-        {items_html[-1]}
+        <div class="e-nav-label">/ / Sovereign</div>
+        {''.join(sections["sov"])}
       </div>
       <div class="e-agi">
         <div class="e-agi-label">/ / Subconscious Mind</div>
@@ -390,13 +398,18 @@ def _ticker_html() -> str:
 
 
 def _shell_js() -> str:
-    """JavaScript for live clock + AGI status + ticker refresh."""
+    """JavaScript for live clock + AGI status (driven by /ws/live stats events)."""
     return """
     <script>
     (function() {
+      // Session token lives in localStorage (set by /auth/verify) — used for
+      // WS auth (?token=) and any explicit Authorization header fetches.
+      // HTTP requests authenticate via the HttpOnly empire_session cookie.
       const TOKEN = new URLSearchParams(location.search).get('token')
         || localStorage.getItem('hub_token') || '';
-      if (TOKEN) localStorage.setItem('hub_token', TOKEN);
+      if (TOKEN && new URLSearchParams(location.search).get('token')) {
+        localStorage.setItem('hub_token', TOKEN);
+      }
       window.EMPIRE_TOKEN = TOKEN;
 
       // ── LIVE CLOCK ──
@@ -411,71 +424,47 @@ def _shell_js() -> str:
       tickClock();
       setInterval(tickClock, 1000);
 
-      // ── AGI STATUS POLLER ──
-      async function pollAgi() {
-        try {
-          const r = await fetch('/api/subconscious', {
-            headers: { Authorization: 'Bearer ' + TOKEN },
-          });
-          if (!r.ok) return;
-          const s = await r.json();
-          const dot = document.getElementById('agi-dot');
-          const txt = document.getElementById('agi-status');
-          if (!dot || !txt) return;
-          const stat = (s.last_status || 'idle').toLowerCase();
-          dot.className = 'e-agi-dot';
-          if (stat === 'ok') {
-            dot.classList.add('online');
-            txt.textContent = 'Online';
-            txt.style.color = 'var(--signal-teal)';
-          } else if (stat === 'scanning') {
-            dot.classList.add('scanning');
-            txt.textContent = 'Scanning';
-            txt.style.color = 'var(--strike-cyan)';
-          } else if (stat.startsWith('error')) {
-            dot.classList.add('error');
-            txt.textContent = 'Error';
-            txt.style.color = 'var(--status-red)';
-          } else {
-            txt.textContent = stat.charAt(0).toUpperCase() + stat.slice(1);
-            txt.style.color = 'var(--empire-mist)';
-          }
-          const cyc = document.getElementById('agi-cycles');
-          const stk = document.getElementById('agi-strikes');
-          if (cyc) cyc.textContent = s.cycles || 0;
-          if (stk) stk.textContent = s.strikes_total || 0;
-        } catch (e) {}
+      // ── AGI STATUS — driven by /ws/live `stats` events ──
+      function applyAgi(agi) {
+        const dot = document.getElementById('agi-dot');
+        const txt = document.getElementById('agi-status');
+        if (!dot || !txt) return;
+        const stat = String(agi.status || 'idle').toLowerCase();
+        dot.className = 'e-agi-dot';
+        if (agi.running && stat === 'ok') {
+          dot.classList.add('online');
+          txt.textContent = 'Online';
+          txt.style.color = 'var(--signal-teal)';
+        } else if (stat === 'scanning') {
+          dot.classList.add('scanning');
+          txt.textContent = 'Scanning';
+          txt.style.color = 'var(--strike-cyan)';
+        } else if (stat.startsWith('error')) {
+          dot.classList.add('error');
+          txt.textContent = 'Error';
+          txt.style.color = 'var(--status-red)';
+        } else {
+          txt.textContent = stat.charAt(0).toUpperCase() + stat.slice(1);
+          txt.style.color = 'var(--empire-mist)';
+        }
+        const cyc = document.getElementById('agi-cycles');
+        const stk = document.getElementById('agi-strikes');
+        if (cyc) cyc.textContent = agi.cycles || 0;
+        if (stk) stk.textContent = agi.strikes_total || 0;
       }
-      pollAgi();
-      setInterval(pollAgi, 12000);
 
-      // ── NWS TICKER ──
-      async function refreshTicker() {
-        try {
-          const r = await fetch('/api/live-storm-radar', {
-            headers: { Authorization: 'Bearer ' + TOKEN },
+      // Subscribe once EMPIRE_LIVE is wired by LIVE_CLIENT_JS (loaded by views
+      // that opt-in to live updates). Falls back silently on pages without WS.
+      function bindLive() {
+        if (window.EMPIRE_LIVE && window.EMPIRE_LIVE.on) {
+          window.EMPIRE_LIVE.on('stats', payload => {
+            if (payload && payload.agi) applyAgi(payload.agi);
           });
-          if (!r.ok) return;
-          const d = await r.json();
-          const inner = document.getElementById('ticker-inner');
-          if (!inner) return;
-          if (!d.alerts || d.alerts.length === 0) {
-            inner.innerHTML = '<div class="e-tick default"><span class="dot"></span><span class="e-tick-event">All corridors clear</span></div>';
-            return;
-          }
-          const cls = sev => ({ Extreme: 'extreme', Severe: 'severe' })[sev] || 'default';
-          const half = d.alerts.map(a =>
-            `<div class="e-tick ${cls(a.severity)}">
-              <span class="dot"></span>
-              <span class="e-tick-event">${a.event}</span>
-              <span class="e-tick-area">${a.area}</span>
-            </div><span class="e-tick-sep">/</span>`
-          ).join('');
-          inner.innerHTML = half + half;
-        } catch (e) {}
+        } else {
+          setTimeout(bindLive, 500);
+        }
       }
-      refreshTicker();
-      setInterval(refreshTicker, 90000);
+      bindLive();
     })();
     </script>
     """
@@ -526,11 +515,44 @@ def base_layout(
     </div>
   </main>
 </div>
-{_ticker_html()}
+{LIVE_CLIENT_JS}
 {_shell_js()}
 {extra_js or ''}
 </body>
 </html>"""
+
+
+def section_stub(slug: str, title: str, blurb: str = "") -> str:
+    """
+    Placeholder section page — full chrome, empty content slot.
+    Lets the sidebar work end-to-end before sections are built out.
+    """
+    content = f"""
+    <div class="e-page">
+      <div class="e-page-header">
+        <div>
+          <div class="e-page-title">{title}</div>
+          <div class="e-page-sub">{blurb or 'Awaiting build · Phase 3'}</div>
+        </div>
+      </div>
+      <div class="e-panel" style="text-align:center; padding:80px 32px;">
+        <div style="font-family:var(--font-mono); font-size:10px; color:var(--empire-fog);
+                    letter-spacing:0.22em; text-transform:uppercase; margin-bottom:14px;">
+          Under construction
+        </div>
+        <div style="color:var(--empire-mist); font-size:13px; max-width:520px; margin:0 auto;">
+          This section is wired in the nav but the view hasn't been built yet.
+          Backing APIs are live · UI lands in Phase 3.
+        </div>
+      </div>
+    </div>
+    """
+    return base_layout(
+        title=title,
+        content=content,
+        active_module=slug,
+        subtitle="Operator Console",
+    )
 
 
 def standalone_layout(

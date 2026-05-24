@@ -122,6 +122,7 @@ WIRE-UP IN hub.py
 """
 
 import os
+import re
 import hmac
 import time
 import hashlib
@@ -129,6 +130,25 @@ import secrets
 import logging
 from datetime import datetime, timezone, timedelta
 from typing import Callable, Optional
+
+
+def parse_pg_timestamptz(s: str) -> datetime:
+    """
+    Tolerant ISO-8601 parser. PostgreSQL serializes timestamptz with
+    trailing-zeros-stripped microseconds (e.g. `.52529+00:00`), but
+    Python 3.10's `datetime.fromisoformat` requires exactly 3 or 6
+    digits. Pad to 6 before delegating.
+    """
+    s = s.replace("Z", "+00:00")
+    m = re.match(r"^(.*\.)(\d+)([+-].*|$)", s)
+    if m:
+        prefix, micros, suffix = m.groups()
+        if 0 < len(micros) < 6:
+            micros = micros.ljust(6, "0")
+        elif len(micros) > 6:
+            micros = micros[:6]
+        s = prefix + micros + suffix
+    return datetime.fromisoformat(s)
 
 from fastapi import FastAPI, Request, HTTPException, Depends, Query
 from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
@@ -299,6 +319,7 @@ class AuthEngine:
         await self.audit(
             operator_id=str(operator["id"]),
             operator_name=operator["name"],
+            operator_email=operator["email"],
             action="login",
             target_type="session",
             ip=ip,
@@ -349,6 +370,10 @@ class AuthEngine:
             token = request.query_params.get("token", "")
 
         if not token:
+            # Cookie fallback — set by /auth/verify on magic-link success
+            token = request.cookies.get("empire_session", "")
+
+        if not token:
             return None
 
         # Legacy HUB_TOKEN path → return synthetic "system" operator with owner role
@@ -375,7 +400,7 @@ class AuthEngine:
                 return None
             expires_at = session["expires_at"]
             if isinstance(expires_at, str):
-                expires_at = datetime.fromisoformat(expires_at.replace("Z", "+00:00"))
+                expires_at = parse_pg_timestamptz(expires_at)
             if expires_at < datetime.now(timezone.utc):
                 return None
 
@@ -410,25 +435,29 @@ class AuthEngine:
     async def audit(
         self,
         *,
-        operator_id:   str = "",
-        operator_name: str = "",
-        action:        str,
-        target_type:   str = "",
-        target_id:     str = "",
-        details:       Optional[dict] = None,
-        ip:            str = "",
+        operator_id:    str = "",
+        operator_name:  str = "",
+        operator_email: str = "",
+        action:         str,
+        target_type:    str = "",
+        target_id:      str = "",
+        details:        Optional[dict] = None,
+        ip:             str = "",
     ) -> None:
         """Persist an audit log entry. Best-effort — never raises."""
         try:
             db = self.get_db()
+            # NB: live schema uses resource_type/resource_id (not target_*),
+            # and operator_name/operator_email/resource_type are NOT NULL.
             db.table("audit_log").insert({
-                "operator_id":   operator_id or None,
-                "operator_name": operator_name or None,
-                "action":        action[:80],
-                "target_type":   target_type[:40] if target_type else None,
-                "target_id":     target_id[:80] if target_id else None,
-                "details":       details or {},
-                "ip":            ip[:60] if ip else None,
+                "operator_id":    operator_id or None,
+                "operator_name":  (operator_name or "")[:160],
+                "operator_email": (operator_email or "")[:160],
+                "action":         action[:80],
+                "resource_type":  (target_type or "")[:40],
+                "resource_id":    target_id[:80] if target_id else None,
+                "details":        details or {},
+                "ip":             ip[:60] if ip else None,
             }).execute()
             self.stats["audit_entries"] += 1
         except Exception as e:
@@ -447,6 +476,7 @@ class AuthEngine:
         role: str,
         invited_by_id: str,
         invited_by_name: str = "",
+        invited_by_email: str = "",
     ) -> dict:
         """Owner invites a new operator. Creates the row + sends a login link."""
         if role not in ROLE_HIERARCHY:
@@ -470,6 +500,7 @@ class AuthEngine:
             await self.audit(
                 operator_id=invited_by_id,
                 operator_name=invited_by_name,
+                operator_email=invited_by_email,
                 action="operator_invited",
                 target_type="operator",
                 target_id=str(ins.data[0]["id"]) if ins.data else None,
@@ -639,13 +670,9 @@ a.cta {{ display: inline-block; background: #44E5B8; color: #000;
   <a class="cta" href="/command">Open Command Deck →</a>
 </div>
 <script>
-// Persist the session token in localStorage so all subsequent fetches authenticate
-try {{
-  localStorage.setItem('hub_token', {session_token!r});
-  // Also set a cookie as belt-and-braces for view routes
-  document.cookie = 'empire_session=' + encodeURIComponent({session_token!r}) +
-    '; path=/; max-age=43200; samesite=lax';
-}} catch (e) {{}}
+// Persist token in localStorage for SPA fetches that prefer Authorization headers.
+// The server-side Set-Cookie on this response is what authenticates plain navigation.
+try {{ localStorage.setItem('hub_token', {session_token!r}); }} catch (e) {{}}
 </script>
 </body></html>"""
 
@@ -698,23 +725,41 @@ def register_auth_routes(
                 </body></html>
             """, status_code=401)
 
-        return HTMLResponse(_verified_page(result["operator"], result["session_token"]))
+        response = HTMLResponse(_verified_page(result["operator"], result["session_token"]))
+        response.set_cookie(
+            key="empire_session",
+            value=result["session_token"],
+            max_age=int(auth_engine.session_ttl.total_seconds()),
+            httponly=True,
+            secure=True,
+            samesite="lax",
+            path="/",
+        )
+        return response
 
     # ── PUBLIC: LOGOUT ─────────────────────────────────────────────────
     @app.post("/api/v1/auth/logout")
     async def auth_logout(request: Request, op: dict = Depends(auth_engine.require_auth)):
-        # Grab the actual token to revoke it
+        # Grab the actual token to revoke it — check Bearer header, then cookie
         creds: Optional[HTTPAuthorizationCredentials] = await auth_engine.bearer(request)
+        token_to_revoke = None
         if creds and creds.credentials != auth_engine.legacy_hub_token:
-            await auth_engine.revoke_session(creds.credentials)
+            token_to_revoke = creds.credentials
+        if not token_to_revoke:
+            token_to_revoke = request.cookies.get("empire_session", "")
+        if token_to_revoke:
+            await auth_engine.revoke_session(token_to_revoke)
 
         await auth_engine.audit(
             operator_id=op.get("id", ""),
             operator_name=op.get("name", ""),
+            operator_email=op.get("email", ""),
             action="logout",
             ip=request.client.host if request.client else "",
         )
-        return {"ok": True}
+        response = JSONResponse({"ok": True})
+        response.delete_cookie("empire_session", path="/")
+        return response
 
     # ── OPERATOR: WHO AM I ─────────────────────────────────────────────
     @app.get("/api/v1/auth/me")
@@ -747,6 +792,7 @@ def register_auth_routes(
             role=role,
             invited_by_id=op.get("id", ""),
             invited_by_name=op.get("name", ""),
+            invited_by_email=op.get("email", ""),
         )
 
     # ── OWNER: LIST OPERATORS ──────────────────────────────────────────
@@ -797,6 +843,7 @@ def register_auth_routes(
             await auth_engine.audit(
                 operator_id=op.get("id", ""),
                 operator_name=op.get("name", ""),
+                operator_email=op.get("email", ""),
                 action="operator_updated",
                 target_type="operator",
                 target_id=target_id,

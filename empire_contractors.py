@@ -518,6 +518,7 @@ def register_contractor_routes(
     ntfy_topic: str = "",
     ntfy_token: str = "",
     link_ttl_seconds: int = 72 * 3600,
+    broadcaster=None,
 ):
     """
     Wire all contractor onboarding routes. Reuses the HMAC token helpers
@@ -650,6 +651,19 @@ def register_contractor_routes(
             html=html,
         )
 
+        # Push to live dashboards
+        if broadcaster:
+            try:
+                await broadcaster.broadcast({
+                    "type":           "contractor_application_received",
+                    "application_id": application_id,
+                    "name":           name,
+                    "metro":          metro,
+                    "specialties":    specialties,
+                })
+            except Exception:
+                pass
+
         # Ntfy the operator
         if ntfy_topic:
             try:
@@ -705,6 +719,18 @@ def register_contractor_routes(
                 db.table("contractor_applications").update({
                     "status": "pending_review",
                 }).eq("id", payload["app_id"]).execute()
+
+                # Push to live dashboards — applicant became actionable
+                if broadcaster:
+                    try:
+                        await broadcaster.broadcast({
+                            "type":           "contractor_verified",
+                            "application_id": payload["app_id"],
+                            "name":           app_row.get("name"),
+                            "metro":          app_row.get("metro"),
+                        })
+                    except Exception:
+                        pass
         except Exception as e:
             log.error(f"[contractors] verify update failed: {e}")
             return HTMLResponse(
@@ -834,6 +860,19 @@ def register_contractor_routes(
             html=welcome_html,
         )
 
+        # Push to live dashboards
+        if broadcaster:
+            try:
+                await broadcaster.broadcast({
+                    "type":           "contractor_approved",
+                    "application_id": application_id,
+                    "contractor_id":  contractor_id,
+                    "name":           app_row.get("name"),
+                    "metro":          app_row.get("metro"),
+                })
+            except Exception:
+                pass
+
         return {"ok": True, "contractor_id": contractor_id}
 
     # ── OPERATOR: REJECT ────────────────────────────────────────────────
@@ -867,6 +906,18 @@ def register_contractor_routes(
         except Exception as e:
             log.error(f"[contractors] reject failed: {e}")
             raise HTTPException(500, str(e))
+
+        # Push to live dashboards
+        if broadcaster:
+            try:
+                await broadcaster.broadcast({
+                    "type":           "contractor_rejected",
+                    "application_id": application_id,
+                    "name":           app_row.get("name"),
+                    "reason":         reason,
+                })
+            except Exception:
+                pass
 
         # Optional: send rejection email (commented out by default — many
         # operators prefer silent reject over notifying. Enable if you want.)

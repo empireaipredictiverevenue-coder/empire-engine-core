@@ -19,7 +19,7 @@ This becomes the default landing view after the splash gateway.
 """
 
 from empire_layout import base_layout
-from empire_live import LIVE_CLIENT_JS
+# LIVE_CLIENT_JS is now injected by base_layout — no need to import here.
 
 
 def command_deck_view(token: str = "") -> str:
@@ -260,7 +260,7 @@ def command_deck_view(token: str = "") -> str:
     </div>
     """
 
-    extra_js = LIVE_CLIENT_JS + """
+    extra_js = """
     <script>
     (function() {
       const fmtMoney = n => n != null ? '$' + Math.round(n).toLocaleString() : '$0';
@@ -473,7 +473,15 @@ def command_deck_view(token: str = "") -> str:
         title="Command Deck",
         subtitle="Owner Mode",
         content=content,
-        active_module="command",
+        active_module="pulse",
         extra_css=extra_css,
         extra_js=extra_js,
     )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Compatibility alias for hub.py — hub.py imports `command_deck_page`,
+# real function is `command_deck_view`.
+# ─────────────────────────────────────────────────────────────────────────────
+def command_deck_page(token: str = "") -> str:
+    return command_deck_view(token)
