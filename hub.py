@@ -46,6 +46,9 @@ from empire_inbound import InboundCallTriage, register_inbound_routes
 from empire_brain_memory import BrainMemory
 from empire_brain_learning import BrainLearning
 from empire_console import SovereignConsole, register_console_routes
+from empire_orchestrator import StormOrchestrator, register_storm_routes
+from empire_ai_router import AIRouter
+from empire_brain_decide import BrainDecider
 
 
 logging.basicConfig(level=logging.INFO)
@@ -198,6 +201,24 @@ console = SovereignConsole(
 )
 
 
+# AI Router + Brain (local Ollama, no external dependencies)
+ai_router = AIRouter(get_db=get_db)
+brain_decider = BrainDecider(router=ai_router)
+
+storm_orchestrator = StormOrchestrator(
+    get_db=get_db,
+    email_engine=email_engine,
+    brain=brain_decider,
+    broadcaster=live_broadcaster,
+    poll_interval_sec=int(os.environ.get("STORM_POLL_INTERVAL_SEC", "300")),
+    lane_count=int(os.environ.get("STORM_LANE_COUNT", "6")),
+    max_sends_hour=int(os.environ.get("STORM_MAX_SENDS_PER_HOUR", "50")),
+    max_sends_day=int(os.environ.get("STORM_MAX_SENDS_PER_DAY", "200")),
+    bounce_breaker_pct=float(os.environ.get("STORM_BOUNCE_BREAKER_PCT", "5")),
+)
+
+
+
 # ─────────────────────────────────────────────────────────────────────
 # AUTH
 # ─────────────────────────────────────────────────────────────────────
@@ -254,6 +275,7 @@ register_payout_routes(app, engine=payout_engine, require_auth=require_auth, req
 register_auth_routes(app, auth_engine=auth_engine, require_auth=require_auth)
 register_inbound_routes(app, inbound_triage, require_auth=require_auth)
 register_console_routes(app, console=console, require_auth=require_auth, get_db=get_db)
+register_storm_routes(app, storm_orchestrator, require_auth=require_auth)
 
 
 # ─────────────────────────────────────────────────────────────────────
@@ -265,6 +287,7 @@ async def startup():
     asyncio.create_task(brain_learning.nightly_tune_loop())
     asyncio.create_task(sms_engine.dispatcher_loop())
     asyncio.create_task(email_engine.dispatcher_loop())
+    asyncio.create_task(storm_orchestrator.poll_loop())
     log.info("Empire V49 · Operational")
 
 
