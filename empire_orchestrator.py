@@ -31,6 +31,9 @@ class StormOrchestrator:
         get_db: Callable,
         email_engine,
         brain=None,
+        drafter=None,
+        enricher=None,
+        narrator=None,
         broadcaster=None,
         zones: Optional[List[str]] = None,
         poll_interval_sec: int = 300,
@@ -43,6 +46,9 @@ class StormOrchestrator:
         self.get_db = get_db
         self.email_engine = email_engine
         self.brain = brain
+        self.drafter = drafter
+        self.enricher = enricher
+        self.narrator = narrator
         self.broadcaster = broadcaster
         self.poll_interval = poll_interval_sec
         self.max_sends_hour = max_sends_hour
@@ -195,12 +201,41 @@ class StormOrchestrator:
                     self.state.update_strike_status(strike_id, "skipped_brain")
                 return "skipped_brain_lowconf"
 
-        # Enroll only if we have an email — most OSM data doesn't have one yet
+        # Try to enrich email if missing
         target_email = target.get("email")
+        if not target_email and target.get("website") and self.enricher:
+            try:
+                found = await self.enricher.find_email(target["website"], target.get("warehouse_name"))
+                if found:
+                    target_email = found["email"]
+                    target["email"] = target_email
+                    log.info(f"[orchestrator] enriched email for {target.get('warehouse_name')}: {target_email} ({found.get('source')})")
+            except Exception as e:
+                log.warning(f"[orchestrator] enrich failed for {target.get('warehouse_name')}: {e}")
+
         if not target_email:
             if strike_id:
                 self.state.update_strike_status(strike_id, "skipped_dup")
             return "no_email"
+
+        # If we have a drafter, generate a draft instead of direct enrolling
+        if self.drafter:
+            decision_for_draft = decision if self.brain else {"decision": "GO", "confidence": 0.7, "reasoning": "default"}
+            draft = await self.drafter.draft_for_target(
+                target=target,
+                alert_summary=alert_summary,
+                brain_decision=decision_for_draft,
+                target_id=target_id,
+                strike_id=strike_id,
+            )
+            if draft:
+                if strike_id:
+                    self.state.update_strike_status(strike_id, "enrolled")
+                return "draft_created"
+            else:
+                if strike_id:
+                    self.state.update_strike_status(strike_id, "error")
+                return "draft_failed"
 
         success = await launch_3d_render(
             details={

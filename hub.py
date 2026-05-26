@@ -49,6 +49,12 @@ from empire_console import SovereignConsole, register_console_routes
 from empire_orchestrator import StormOrchestrator, register_storm_routes
 from empire_ai_router import AIRouter
 from empire_brain_decide import BrainDecider
+from empire_email_drafter import EmailDrafter
+from empire_enricher_ai import AIEnricher
+from empire_reply_qualifier import ReplyQualifier
+from empire_narrator import Narrator
+from empire_3d_map import register_map_routes
+from empire_voice_control import register_voice_control_routes
 
 
 logging.basicConfig(level=logging.INFO)
@@ -205,10 +211,20 @@ console = SovereignConsole(
 ai_router = AIRouter(get_db=get_db)
 brain_decider = BrainDecider(router=ai_router)
 
+# Agentic features layer
+email_drafter = EmailDrafter(router=ai_router, get_db=get_db)
+ai_enricher = AIEnricher(router=ai_router)
+reply_qualifier = ReplyQualifier(router=ai_router)
+narrator = Narrator(broadcaster=live_broadcaster)
+
+
 storm_orchestrator = StormOrchestrator(
     get_db=get_db,
     email_engine=email_engine,
     brain=brain_decider,
+    drafter=email_drafter,
+    enricher=ai_enricher,
+    narrator=narrator,
     broadcaster=live_broadcaster,
     poll_interval_sec=int(os.environ.get("STORM_POLL_INTERVAL_SEC", "300")),
     lane_count=int(os.environ.get("STORM_LANE_COUNT", "6")),
@@ -276,6 +292,8 @@ register_auth_routes(app, auth_engine=auth_engine, require_auth=require_auth)
 register_inbound_routes(app, inbound_triage, require_auth=require_auth)
 register_console_routes(app, console=console, require_auth=require_auth, get_db=get_db)
 register_storm_routes(app, storm_orchestrator, require_auth=require_auth)
+register_map_routes(app, scout=storm_orchestrator.scout, get_db=get_db, require_auth=require_auth)
+register_voice_control_routes(app, console=console, require_auth=require_auth)
 
 
 # ─────────────────────────────────────────────────────────────────────
@@ -299,3 +317,66 @@ async def shutdown():
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
+
+
+# ── Drafts approval + narrate stream + reply qualify ────────
+from fastapi import Depends, Body, HTTPException
+from fastapi.responses import StreamingResponse
+import asyncio as _asyncio
+import json as _json
+
+@app.get("/api/v1/drafts/pending")
+async def drafts_pending(limit: int = 50, auth: bool = Depends(require_auth)):
+    db = get_db()
+    r = db.table("email_drafts").select("*").eq("status", "pending").order("created_at", desc=True).limit(limit).execute()
+    return {"drafts": r.data or []}
+
+@app.post("/api/v1/drafts/{draft_id}/approve")
+async def drafts_approve(draft_id: str, auth: bool = Depends(require_auth)):
+    db = get_db()
+    r = db.table("email_drafts").select("*").eq("id", draft_id).limit(1).execute()
+    if not r.data:
+        raise HTTPException(404, "draft not found")
+    d = r.data[0]
+    if d.get("status") != "pending":
+        raise HTTPException(400, f"draft already {d.get('status')}")
+    # Send via the existing email engine
+    try:
+        result = await email_engine.send_direct(
+            to=d["to_email"], subject=d["subject"], body=d["body"],
+            meta={"draft_id": draft_id, "storm_event": d.get("storm_event")},
+        )
+    except AttributeError:
+        # If send_direct doesn't exist, enroll instead
+        result = await email_engine.enroll(
+            email=d["to_email"], target_addr=d.get("storm_area") or "",
+            sequence_type="storm_strike", meta={"draft_id": draft_id},
+        )
+    from datetime import datetime, timezone
+    db.table("email_drafts").update({
+        "status": "sent" if result and result.get("ok") else "approved",
+        "approved_at": datetime.now(timezone.utc).isoformat(),
+        "sent_at": datetime.now(timezone.utc).isoformat() if result and result.get("ok") else None,
+    }).eq("id", draft_id).execute()
+    return {"ok": True, "draft_id": draft_id, "result": result}
+
+@app.post("/api/v1/drafts/{draft_id}/reject")
+async def drafts_reject(draft_id: str, auth: bool = Depends(require_auth)):
+    from datetime import datetime, timezone
+    db = get_db()
+    db.table("email_drafts").update({
+        "status": "rejected",
+        "approved_at": datetime.now(timezone.utc).isoformat(),
+    }).eq("id", draft_id).execute()
+    return {"ok": True, "draft_id": draft_id}
+
+@app.get("/api/v1/narrate/recent")
+async def narrate_recent(auth: bool = Depends(require_auth)):
+    return narrator.snapshot()
+
+@app.post("/api/v1/reply/qualify")
+async def reply_qualify_route(payload: dict = Body(...), auth: bool = Depends(require_auth)):
+    text = payload.get("text") or ""
+    subject = payload.get("subject") or ""
+    return await reply_qualifier.qualify(text, subject)
+
