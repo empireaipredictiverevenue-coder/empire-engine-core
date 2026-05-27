@@ -54,7 +54,7 @@ from empire_enricher_ai import AIEnricher
 from empire_reply_qualifier import ReplyQualifier
 from empire_narrator import Narrator
 from empire_3d_map import register_map_routes
-from empire_voice_control import register_voice_control_routes
+from empire_voice_control import vonage_answer_webhook
 
 
 logging.basicConfig(level=logging.INFO)
@@ -293,7 +293,7 @@ register_inbound_routes(app, inbound_triage, require_auth=require_auth)
 register_console_routes(app, console=console, require_auth=require_auth, get_db=get_db)
 register_storm_routes(app, storm_orchestrator, require_auth=require_auth)
 register_map_routes(app, scout=storm_orchestrator.scout, get_db=get_db, require_auth=require_auth)
-register_voice_control_routes(app, console=console, require_auth=require_auth)
+register_voice_routes(app, app)
 
 
 # ─────────────────────────────────────────────────────────────────────

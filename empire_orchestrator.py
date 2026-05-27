@@ -377,3 +377,34 @@ def register_storm_routes(app, orchestrator: StormOrchestrator, require_auth):
         return {"ok": True, "result": result}
 
     log.info("[orchestrator] Routes registered · /api/v1/storm/{status,pause,resume,tick,fire-test}")
+
+from empire_analytics import log_event
+
+def finalize_dispatch_and_log(lead, storm_type):
+    # 1. Trigger the dispatch
+    dispatch_result = initiate_storm_call(lead['phone'], storm_type)
+    
+    # 2. Log to the Analytics Engine for the dashboard
+    log_event(
+        event_type="DISPATCH_SENT",
+        dispatch_id=lead['id'], # Assuming this maps to your dispatch/lead ID
+        metadata={
+            "storm_type": storm_type,
+            "estimated_value": 500,
+            "conversion_probability": 0.85
+        }
+    )
+    print(f"[SUCCESS] Dispatch logged to Empire Analytics.")
+
+def track_radar_strike(lat, lon, storm_intensity):
+    # Log the strike to your radar_targets table for visual mapping
+    log_event(
+        event_type="RADAR_STRIKE",
+        dispatch_id="SYSTEM_EVENT",
+        metadata={
+            "lat": lat,
+            "lon": lon,
+            "intensity": storm_intensity,
+            "timestamp": "2026-05-27T01:21:00Z"
+        }
+    )

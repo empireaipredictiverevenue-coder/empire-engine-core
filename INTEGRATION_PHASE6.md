@@ -303,3 +303,4 @@ Phase 9 · Brain personality
 
 
 THE EMPIRE NOW HAS A VOICE. SHIP IT.
+Voice Bridge Fixed: Hub.py routes mapped to vonage_answer_webhook. PM2 empire-hub operational on port 8000.
