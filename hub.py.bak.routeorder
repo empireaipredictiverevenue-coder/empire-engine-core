@@ -314,6 +314,10 @@ async def shutdown():
     log.info("Empire V49 · Shutting down")
 
 
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)
+
 
 # ── Drafts approval + narrate stream + reply qualify ────────
 from fastapi import Depends, Body, HTTPException
@@ -432,11 +436,4 @@ async def telemetry(lines: int = 20):
         "snapshot_count": len(snapshots),
         "action_count": len(actions),
     })
-
-
-
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
-
 
