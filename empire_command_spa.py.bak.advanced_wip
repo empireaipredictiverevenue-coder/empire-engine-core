@@ -206,26 +206,6 @@ _SPA_CSS = """
 .agi-row{display:grid;grid-template-columns:100px 1fr;gap:16px;padding:12px 20px;border-bottom:1px solid var(--empire-divider)}
 .agi-row-weight{font-family:var(--font-mono);font-size:18px;color:var(--strike-cyan)}
 .agi-row-reason{font-size:12px;color:var(--empire-mist)}
-.agi-approve-btn{margin-top:6px;display:inline-block;font-family:var(--font-mono);font-size:9px;letter-spacing:.1em;padding:4px 10px;border-radius:4px;border:1px solid #39FF14;background:transparent;color:#39FF14;cursor:pointer}
-.agi-approve-btn.done{background:rgba(57,255,20,0.15)}
-.agi-w-bar{height:3px;border-radius:2px;margin-top:4px;width:85%}
-.agi-w-hi .agi-w-bar,.agi-w-hi.agi-w-bar{background:#39FF14}
-.agi-w-mid .agi-w-bar,.agi-w-mid.agi-w-bar{background:#FFB800}
-.agi-w-lo .agi-w-bar,.agi-w-lo.agi-w-bar{background:#FF4444}
-.agi-w-bar{height:3px;border-radius:2px;margin-top:4px;width:85%}
-.agi-w-hi .agi-w-bar,.agi-w-hi.agi-w-bar{background:#39FF14}
-.agi-w-mid .agi-w-bar,.agi-w-mid.agi-w-bar{background:#FFB800}
-.agi-w-lo .agi-w-bar,.agi-w-lo.agi-w-bar{background:#FF4444}
-.agi-w-hi{color:#39FF14}
-.agi-w-mid{color:#FFB800}
-.agi-w-lo{color:#FF4444}
-.agi-w-hi{color:#39FF14}
-.agi-w-mid{color:#FFB800}
-.agi-w-lo{color:#FF4444}
-.agi-w-bar{height:3px;border-radius:2px;margin-top:4px;width:85%}
-.agi-w-hi .agi-w-bar{background:#39FF14}
-.agi-w-mid .agi-w-bar{background:#FFB800}
-.agi-w-lo .agi-w-bar{background:#FF4444}
 .agi-meta{font-family:var(--font-mono);font-size:10px;color:var(--empire-fog);margin-top:14px}
 """
 
@@ -265,7 +245,7 @@ const SECTIONS = [
   { id: 'console',     label: 'Console',     sub: 'Sovereign natural-language ops' },
   { id: 'audit',       label: 'Audit',       sub: 'Operator action history' },
   { id: 'operators',   label: 'Operators',   sub: 'Roster · roles · invites' },
-  { id: 'neural-core', label: 'Neural Core', sub: 'Live brain · autonomous decisions' },
+  { id: 'agi-loop',    label: 'AGI Loop',    sub: 'Self-optimizing brain · live telemetry' },
 ];
 
 function currentSection() {
@@ -781,7 +761,7 @@ function Audit() {
 // ── OPERATORS ─────────────────────────────────────────────────────────
 
 function Sparkline({points,color}){
-  return null;
+  if(!points||points.length<2)return null;
   const w=120,h=32,pad=2;
   const min=Math.min(...points),max=Math.max(...points),range=max-min||1;
   const xs=points.map((_,i)=>pad+(i/(points.length-1))*(w-pad*2));
@@ -795,9 +775,9 @@ function Sparkline({points,color}){
 function AgiLoop(){
   const [data,setData]=useState(null);
   const [err,setErr]=useState(null);
-  const [tick,setTick]=useState(0);const [approved,setApproved]=useState([]);
+  const [tick,setTick]=useState(0);
   const [approved,setApproved]=useState([]);
-  useEffect(()=>{const el=document.querySelector(".agi-decisions");if(el){const h=(e)=>{const b=e.target.closest(".agi-approve-btn");if(b){const i=parseInt(b.dataset.idx),w=b.dataset.weight;doApprove(i,w);}};el.addEventListener("click",h);return()=>el.removeEventListener("click",h);};},[approved]);useEffect(()=>{
+  useEffect(()=>{
     let alive=true;
     async function poll(){
       try{
@@ -811,11 +791,36 @@ function AgiLoop(){
     return()=>{alive=false;clearInterval(id);};
   },[]);
   const snap=data?.snapshots?.[0];
-  const doApprove=async(idx,w)=>{console.log("APPROVE",idx);if(approved.includes(idx))return;setApproved(p=>[...p,idx]);};const decisions=(data?.actions??[]).map(a=>({weight:a.new_weight?.toFixed(2),reason:a.reasoning}));
-  const doApprove=async(idx,w)=>{if(approved.includes(idx))return;setApproved(p=>[...p,idx]);};
-  return html`<div class="section-header"><div><div class="section-title">Neural Core</div><div class="section-sub">Self-optimizing brain · live telemetry · 5s refresh</div></div><div class="agi-meta">TICK ${tick} · LIVE</div></div><div class="agi-grid"><div class="agi-tile"><div class="agi-tile-label">LEAD VELOCITY</div><div class="agi-tile-val"><em>${snap?.lead_velocity??"--"}</em></div><div class="agi-tile-sub">leads/hr</div></div><div class="agi-tile"><div class="agi-tile-label">REVENUE PULSE</div><div class="agi-tile-val"><em>${snap?.revenue_pulse!=null?(snap.revenue_pulse*100).toFixed(1)+"%":"--"}</em></div><div class="agi-tile-sub">AI confidence</div></div><div class="agi-tile"><div class="agi-tile-label">PROXY HEALTH</div><div class="agi-tile-val"><em>${snap?.proxy_health!=null?(snap.proxy_health*100).toFixed(1)+"%":"--"}</em></div><div class="agi-tile-sub">network health</div></div><div class="agi-tile"><div class="agi-tile-label">AI CALLS</div><div class="agi-tile-val"><em>${snap?.ai_calls_today??"--"}</em></div><div class="agi-tile-sub">brain activations</div></div></div><div class="agi-decisions"><div class="agi-decisions-head"><div class="agi-decisions-title">Decision Log</div><div class="agi-decisions-count">${decisions.length} entries</div></div>${decisions.map((d,i)=>html`<div class="agi-row"><div class=${"agi-row-weight "+(parseFloat(d.weight)>=1.5?"agi-w-hi":parseFloat(d.weight)>=1.0?"agi-w-mid":"agi-w-lo")}>${d.weight??"·"}<div class="agi-w-bar"></div></div><div class="agi-row-reason">${d.reason??"·"}<button class=${approved.includes(i)?"agi-approve-btn done":"agi-approve-btn"} data-idx=${i} data-weight=${d.weight}>${approved.includes(i)?"✓ APPROVED":"AUTO-APPROVE"}</button></div></div>`)}</div>`;
+  const decisions=(data?.actions??[]).map(a=>({weight:a.new_weight?.toFixed(2),reason:a.reasoning}));
+  const autoApprove=async(idx,weight)=>{
+    if(approved.includes(idx))return;
+    setApproved(p=>[...p,idx]);
+    try{await apiFetch('/api/v1/storm/tick',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({auto_weight:parseFloat(weight),source:'agi-loop'})});}
+    catch(e){console.warn('auto-approve',e);}
+  };
+  const wc=(w)=>parseFloat(w)>=1.5?'#39FF14':parseFloat(w)>=1.0?'#FFB800':'#FF4444';
+  const ww=(w)=>Math.min(100,parseFloat(w||0)*57)+'%';
+`return html`
+    <div class="section-header">
+      <div><div class="section-title">AGI Loop</div><div class="section-sub">Self-optimizing brain · live telemetry · 5s refresh</div></div>
+      <div class="agi-meta">TICK ${tick} · LIVE</div>
+    </div>
+    <div class="agi-grid">
+      <div class="agi-tile"><div class="agi-tile-label">LEAD VELOCITY</div><div class="agi-tile-val"><em>${snap?.lead_velocity??'--'}</em></div><div class="agi-tile-sub">leads/hr</div></div>
+      <div class="agi-tile"><div class="agi-tile-label">REVENUE PULSE</div><div class="agi-tile-val"><em>${snap?.revenue_pulse!=null?(snap.revenue_pulse*100).toFixed(1)+'%':'--'}</em></div><div class="agi-tile-sub">AI confidence</div></div>
+      <div class="agi-tile"><div class="agi-tile-label">PROXY HEALTH</div><div class="agi-tile-val"><em>${snap?.proxy_health!=null?(snap.proxy_health*100).toFixed(1)+'%':'--'}</em></div><div class="agi-tile-sub">network health</div></div>
+      <div class="agi-tile"><div class="agi-tile-label">AI CALLS</div><div class="agi-tile-val"><em>${snap?.ai_calls_today??'--'}</em></div><div class="agi-tile-sub">brain activations</div></div>
+    </div>
+    <div class="agi-decisions">
+      <div class="agi-decisions-head"><div class="agi-decisions-title">Decision Log</div><div class="agi-decisions-count">${decisions.length} entries</div></div>
+      ${decisions.map((d,i)=>html`
+        <div class="agi-row">
+          <div class="agi-row-weight" style=${'color:'+wc(d.weight)}>${d.weight??'·'}<div style=${'height:3px;border-radius:2px;margin-top:4px;background:'+wc(d.weight)+';width:'+ww(d.weight)}></div></div>
+          <div class="agi-row-reason">${d.reason??'·'}</div>
+        </div>`)}
+    </div>
+`;
 }
-
 function Operators() {
   const [ops, setOps] = useState(null);
   const [err, setErr] = useState(null);
@@ -1005,7 +1010,7 @@ function App() {
             active.id === 'contractors' ? html`<${Contractors} />` :
             active.id === 'console'     ? html`<${Console} />` :
             active.id === 'audit'       ? html`<${Audit} />` :
-            active.id === 'neural-core'    ? html`<${AgiLoop} />` :
+            active.id === 'agi-loop'    ? html`<${AgiLoop} />` :
             active.id === 'operators'   ? html`<${Operators} />` :
             html`<${Stub} section=${active} />`
           }

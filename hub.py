@@ -5,6 +5,11 @@ Main FastAPI application. Wires all modules together.
 """
 
 import os
+try:
+    from dotenv import load_dotenv
+    load_dotenv("/root/.env")
+except ImportError:
+    pass
 import asyncio
 import logging
 from datetime import datetime, timezone
