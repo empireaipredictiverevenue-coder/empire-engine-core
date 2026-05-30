@@ -260,6 +260,26 @@ _SPA_CSS = """
 .gov-res-fill.gov-ok{background:#39FF14}
 .gov-res-fill.gov-warn{background:#FFB800}
 .gov-res-fill.gov-bad{background:#FF4444}
+.sf-meta{font-family:var(--font-mono);font-size:10px;color:var(--signal-teal);letter-spacing:.1em}
+.sf-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+.sf-card{background:var(--empire-surface);border:1px solid var(--empire-divider);border-radius:10px;padding:18px 20px;display:flex;flex-direction:column;gap:14px}
+.sf-card-h{display:flex;justify-content:space-between;align-items:center}
+.sf-card-name{font-family:var(--font-display);font-weight:300;font-size:20px;color:var(--empire-white)}
+.sf-badge{font-family:var(--font-mono);font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--empire-mist);border:1px solid var(--empire-divider);border-radius:4px;padding:3px 8px}
+.sf-status{font-family:var(--font-mono);font-size:11px;letter-spacing:.12em;display:flex;align-items:center;gap:8px}
+.sf-dot{width:8px;height:8px;border-radius:50%;background:currentColor;box-shadow:0 0 8px currentColor}
+.sf-ok{color:#39FF14}
+.sf-warn{color:#FFB800}
+.sf-bad{color:#FF4444}
+.sf-stats{display:grid;grid-template-columns:1fr 1fr;gap:12px;border-top:1px solid var(--empire-divider);border-bottom:1px solid var(--empire-divider);padding:14px 0}
+.sf-stat-val{font-family:var(--font-display);font-weight:200;font-size:24px;color:var(--empire-white)}
+.sf-stat-val.sf-stat-mono{font-family:var(--font-mono);font-size:14px}
+.sf-stat-lbl{font-family:var(--font-mono);font-size:9px;color:var(--empire-fog);letter-spacing:.12em;text-transform:uppercase;margin-top:4px}
+.sf-toggle{font-family:var(--font-mono);font-size:10px;letter-spacing:.12em;padding:8px 0;border-radius:6px;cursor:pointer;border:1px solid #555;background:transparent;text-transform:uppercase}
+.sf-toggle.on{border-color:#FF4444;color:#FF4444;background:rgba(255,68,68,0.06)}
+.sf-toggle.off{border-color:#39FF14;color:#39FF14;background:rgba(57,255,20,0.06)}
+.sf-toggle:hover{filter:brightness(1.3)}
+.sf-toggle:disabled{opacity:.5;cursor:default}
 """
 
 
@@ -300,6 +320,7 @@ const SECTIONS = [
   { id: 'operators',   label: 'Operators',   sub: 'Roster · roles · invites' },
   { id: 'neural-core', label: 'Neural Core', sub: 'Live brain · autonomous decisions' },
   { id: 'governor',    label: 'Governor',    sub: 'Autonomous control · self-healing · 60s watchdog' },
+  { id: 'sniper-fleet', label: 'Sniper Fleet', sub: 'Storm · Legal · Warehouse · Logistics · Reddit · LinkedIn agents' },
 ];
 
 function currentSection() {
@@ -948,6 +969,74 @@ function Governor() {
   `;
 }
 
+// ── SNIPER FLEET ──────────────────────────────────────────────────────
+
+function SniperFleet() {
+  const [agents, setAgents] = useState(null);
+  const [err, setErr] = useState(null);
+  const [busy, setBusy] = useState(null);   // id of the agent currently toggling
+  useEffect(() => {
+    let alive = true;
+    async function poll() {
+      try {
+        const r = await apiFetch("/api/agents/status");
+        const j = await r.json();
+        if (alive) { setAgents(j.agents ?? []); setErr(null); }
+      } catch (e) { if (alive) setErr(e.message); }
+    }
+    poll();
+    const id = setInterval(poll, 10000);
+    return () => { alive = false; clearInterval(id); };
+  }, []);
+  const toggle = async (id) => {
+    setBusy(id);
+    try {
+      const r = await apiFetch("/api/agents/" + id + "/toggle", { method: "POST" });
+      const j = await r.json();
+      setAgents(prev => (prev ?? []).map(a => a.id === id ? { ...a, ...j } : a));
+    } catch (e) { setErr(e.message); }
+    finally { setBusy(null); }
+  };
+  const stCls = (s) => s === "ACTIVE" ? "sf-ok" : s === "IDLE" ? "sf-warn" : "sf-bad";
+  const fmtPing = (ts) => {
+    if (!ts) return "never";
+    const t = new Date(ts).getTime();
+    if (isNaN(t)) return String(ts);
+    const secs = Math.max(0, Math.round((Date.now() - t) / 1000));
+    if (secs < 60) return secs + "s ago";
+    if (secs < 3600) return Math.floor(secs / 60) + "m ago";
+    if (secs < 86400) return Math.floor(secs / 3600) + "h ago";
+    return Math.floor(secs / 86400) + "d ago";
+  };
+  if (err) return html`<div class="stub"><div class="stub-body">${err}</div></div>`;
+  const list = agents ?? [];
+  return html`
+    <div>
+      <div class="section-h">
+        <div><div class="section-title">Sniper Fleet</div><div class="section-sub">Storm · Legal · Warehouse · Logistics · Reddit · LinkedIn agents</div></div>
+        <div class="sf-meta">${list.filter(a => a.status === "ACTIVE").length}/${list.length} ACTIVE</div>
+      </div>
+      ${!agents ? html`<div class="gov-empty">Loading…</div>` :
+        html`<div class="sf-grid">
+          ${list.map(a => html`<div class="sf-card" key=${a.id}>
+            <div class="sf-card-h">
+              <div class="sf-card-name">${a.name}</div>
+              <div class="sf-badge">${a.type || "—"}</div>
+            </div>
+            <div class=${"sf-status " + stCls(a.status)}><span class="sf-dot"></span>${a.status || "—"}</div>
+            <div class="sf-stats">
+              <div class="sf-stat"><div class="sf-stat-val">${a.leads_today ?? 0}</div><div class="sf-stat-lbl">Leads today</div></div>
+              <div class="sf-stat"><div class="sf-stat-val sf-stat-mono">${fmtPing(a.last_ping)}</div><div class="sf-stat-lbl">Last ping</div></div>
+            </div>
+            <button class=${"sf-toggle " + (a.enabled ? "on" : "off")} disabled=${busy === a.id} onClick=${() => toggle(a.id)}>
+              ${busy === a.id ? "…" : a.enabled ? "DISABLE" : "ENABLE"}
+            </button>
+          </div>`)}
+        </div>`}
+    </div>
+  `;
+}
+
 function Operators() {
   const [ops, setOps] = useState(null);
   const [err, setErr] = useState(null);
@@ -1119,6 +1208,7 @@ function App() {
             active.id === 'audit'       ? html`<${Audit} />` :
             active.id === 'neural-core'    ? html`<${AgiLoop} />` :
             active.id === 'governor'    ? html`<${Governor} />` :
+            active.id === 'sniper-fleet' ? html`<${SniperFleet} />` :
             active.id === 'operators'   ? html`<${Operators} />` :
             html`<div class="stub"><div class="stub-body">Unknown section: ${active.label}</div></div>`
           }

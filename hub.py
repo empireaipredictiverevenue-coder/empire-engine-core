@@ -656,6 +656,57 @@ async def _gov_start_watchdog():
     _gasync.create_task(_gov_watchdog_loop())
 
 
+# ─── /api/agents: Sniper Fleet (in-memory MOCK STUB — no real agent backend yet) ──
+from datetime import timedelta as _atd
+
+_AGENT_LEADS = {"storm": 47, "legal": 8, "warehouse": 0, "logistics": 0, "reddit": 23, "linkedin": 0}
+_AGENTS = [
+    {"id": "storm",     "name": "Storm",     "type": "Weather",    "enabled": True},
+    {"id": "legal",     "name": "Legal",     "type": "Compliance", "enabled": True},
+    {"id": "warehouse", "name": "Warehouse", "type": "Inventory",  "enabled": True},
+    {"id": "logistics", "name": "Logistics", "type": "Dispatch",   "enabled": False},
+    {"id": "reddit",    "name": "Reddit",    "type": "Social",     "enabled": True},
+    {"id": "linkedin",  "name": "LinkedIn",  "type": "Social",     "enabled": False},
+]
+# seed a plausible last_ping per agent (live for active, stale for idle/offline)
+_aseed = _gdt.utcnow()
+for _a in _AGENTS:
+    _l = _AGENT_LEADS.get(_a["id"], 0)
+    _a["last_ping"] = (_aseed if (_a["enabled"] and _l > 0)
+                       else _aseed - _atd(minutes=14) if _a["enabled"]
+                       else _aseed - _atd(hours=3)).isoformat(timespec="seconds")
+
+
+def _agent_view(a):
+    leads = _AGENT_LEADS.get(a["id"], 0)
+    if not a["enabled"]:
+        status = "OFFLINE"
+    elif leads > 0:
+        status = "ACTIVE"
+        a["last_ping"] = _gdt.utcnow().isoformat(timespec="seconds")  # live heartbeat
+    else:
+        status = "IDLE"
+    return {
+        "id": a["id"], "name": a["name"], "type": a["type"],
+        "enabled": a["enabled"], "status": status,
+        "leads_today": leads, "last_ping": a.get("last_ping"),
+    }
+
+
+@app.get("/api/agents/status")
+async def agents_status():
+    return JSONResponse({"agents": [_agent_view(a) for a in _AGENTS]})
+
+
+@app.post("/api/agents/{agent_id}/toggle")
+async def agents_toggle(agent_id: str):
+    for a in _AGENTS:
+        if a["id"] == agent_id:
+            a["enabled"] = not a["enabled"]
+            return JSONResponse(_agent_view(a))
+    return JSONResponse({"error": "unknown agent: " + agent_id}, status_code=404)
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
