@@ -440,6 +440,222 @@ async def telemetry(lines: int = 20):
 
 
 
+# ─── /api/governor: PM2 watchdog + self-heal ──────────────────────────
+# /heal performs a REAL restart of every PM2-managed service. The hub
+# restarts itself last via a detached process so the HTTP response can flush.
+import subprocess as _gsub, json as _gjson, time as _gtime
+from datetime import datetime as _gdt
+
+_GOV_LOG_FILE = "/root/empire-v49/governor_heal_log.jsonl"
+_GOV_HEAL_LOG = []   # in-memory mirror of the on-disk self-heal log
+_GOV_LOG_MAX = 500   # cap retained entries so the file can't grow unbounded
+
+# ── watchdog config — edit the allowlist to change which services are healed ──
+import asyncio as _gasync
+_GOV_WATCH = {"empire-orchestrator", "empire-live", "empire-voice"}  # auto-heal allowlist
+_GOV_WATCH_INTERVAL = 60     # seconds between health checks
+_GOV_MAX_ATTEMPTS = 3        # max auto-restarts per service…
+_GOV_ATTEMPT_WINDOW = 600    # …within this many seconds (10 min) before giving up
+_GOV_ATTEMPTS = {}           # name -> [epoch, …] recent auto-restart timestamps
+_GOV_GAVEUP = set()          # services we've already logged a give-up for (this down-streak)
+
+
+def _gov_log_append(entry):
+    """Append one heal entry to the in-memory log and persist it to disk (JSONL)."""
+    _GOV_HEAL_LOG.append(entry)
+    try:
+        with open(_GOV_LOG_FILE, "a") as f:
+            f.write(_gjson.dumps(entry) + "\n")
+    except Exception:
+        pass
+
+
+def _gov_log_load():
+    """Load the persisted heal log on startup, trimming to the retention cap."""
+    try:
+        with open(_GOV_LOG_FILE, "r") as f:
+            for ln in f:
+                ln = ln.strip()
+                if ln:
+                    _GOV_HEAL_LOG.append(_gjson.loads(ln))
+    except FileNotFoundError:
+        pass
+    except Exception:
+        pass
+    # trim + rewrite if the file has grown past the cap
+    if len(_GOV_HEAL_LOG) > _GOV_LOG_MAX:
+        del _GOV_HEAL_LOG[:-_GOV_LOG_MAX]
+        try:
+            with open(_GOV_LOG_FILE, "w") as f:
+                for e in _GOV_HEAL_LOG:
+                    f.write(_gjson.dumps(e) + "\n")
+        except Exception:
+            pass
+
+
+_gov_log_load()
+
+
+def _pm2_services():
+    """Return live PM2 process data (empty list if pm2 is unavailable)."""
+    try:
+        out = _gsub.run(["pm2", "jlist"], capture_output=True, text=True, timeout=5)
+        procs = _gjson.loads(out.stdout)
+        svcs = []
+        now_ms = _gtime.time() * 1000
+        for p in procs:
+            env = p.get("pm2_env", {})
+            mon = p.get("monit", {})
+            up = env.get("pm_uptime")
+            svcs.append({
+                "name": p.get("name", "?"),
+                "status": env.get("status", "unknown"),
+                "uptime_s": round((now_ms - up) / 1000) if up else None,
+                "restarts": env.get("restart_time", 0),
+                "mem_mb": round((mon.get("memory") or 0) / 1048576, 1),
+                "cpu_pct": float(mon.get("cpu") or 0),
+            })
+        return svcs
+    except Exception:
+        return []
+
+
+@app.get("/api/governor/status")
+async def governor_status():
+    svcs = _pm2_services()
+    healthy = sum(1 for s in svcs if s["status"] == "online")
+    return JSONResponse({
+        "services": svcs,
+        "watchdog": {
+            "interval_s": _GOV_WATCH_INTERVAL,
+            "last_check": _gdt.utcnow().isoformat(timespec="seconds"),
+            "healthy": healthy,
+            "total": len(svcs),
+            "watching": sorted(_GOV_WATCH),
+        },
+    })
+
+
+@app.get("/api/governor/log")
+async def governor_log(lines: int = 20):
+    return JSONResponse({"entries": _GOV_HEAL_LOG[-lines:][::-1]})
+
+
+_GOV_SELF_NAME = "empire-hub"  # the process serving this API
+
+
+@app.post("/api/governor/heal")
+async def governor_heal():
+    """Restart ALL PM2-managed services. Peers restart synchronously; the hub
+    self-restarts last via a detached process so this response can flush."""
+    svcs = _pm2_services()
+    targets = [s["name"] for s in svcs]
+    others = [n for n in targets if n != _GOV_SELF_NAME]
+    now = _gdt.utcnow().isoformat(timespec="seconds")
+    restarted, errors = [], []
+
+    # restart peer services synchronously
+    for n in others:
+        try:
+            r = _gsub.run(["pm2", "restart", n], capture_output=True, text=True, timeout=30)
+            if r.returncode == 0:
+                restarted.append(n)
+                _gov_log_append({"ts": now, "level": "info", "service": n, "action": "restart", "detail": "force-heal: restarted"})
+            else:
+                msg = (r.stderr or r.stdout or "non-zero exit").strip()[:200]
+                errors.append({"service": n, "error": msg})
+                _gov_log_append({"ts": now, "level": "error", "service": n, "action": "restart-failed", "detail": msg})
+        except Exception as e:
+            errors.append({"service": n, "error": str(e)})
+            _gov_log_append({"ts": now, "level": "error", "service": n, "action": "restart-failed", "detail": str(e)})
+
+    # restart the hub itself LAST, detached, so this response still returns
+    hub_scheduled = False
+    if _GOV_SELF_NAME in targets:
+        try:
+            _gsub.Popen(
+                ["bash", "-c", "sleep 1; pm2 restart " + _GOV_SELF_NAME],
+                start_new_session=True,
+                stdout=_gsub.DEVNULL, stderr=_gsub.DEVNULL,
+            )
+            hub_scheduled = True
+            _gov_log_append({"ts": now, "level": "warn", "service": _GOV_SELF_NAME, "action": "restart", "detail": "force-heal: self-restart scheduled (~1s)"})
+        except Exception as e:
+            errors.append({"service": _GOV_SELF_NAME, "error": str(e)})
+
+    parts = []
+    if restarted:
+        parts.append("restarted " + ", ".join(restarted))
+    if hub_scheduled:
+        parts.append(_GOV_SELF_NAME + " self-restart in ~1s")
+    if errors:
+        parts.append(str(len(errors)) + " failed")
+    return JSONResponse({
+        "ok": len(errors) == 0,
+        "triggered": len(restarted) + (1 if hub_scheduled else 0),
+        "restarted": restarted,
+        "self_restart_scheduled": hub_scheduled,
+        "errors": errors,
+        "message": "force-heal: " + ("; ".join(parts) if parts else "no services found"),
+    })
+
+
+def _gov_watchdog_tick():
+    """One health-check pass: auto-restart unhealthy allowlisted services, capped."""
+    now = _gtime.time()
+    now_iso = _gdt.utcnow().isoformat(timespec="seconds")
+    for s in _pm2_services():
+        name = s["name"]
+        if name not in _GOV_WATCH:
+            continue
+        if s["status"] == "online":
+            _GOV_GAVEUP.discard(name)   # recovered — re-arm give-up logging
+            continue
+        # prune restart attempts that fell outside the rolling window
+        attempts = [t for t in _GOV_ATTEMPTS.get(name, []) if now - t < _GOV_ATTEMPT_WINDOW]
+        if len(attempts) >= _GOV_MAX_ATTEMPTS:
+            _GOV_ATTEMPTS[name] = attempts
+            if name not in _GOV_GAVEUP:           # log give-up once per down-streak
+                _GOV_GAVEUP.add(name)
+                _gov_log_append({"ts": now_iso, "level": "error", "service": name, "action": "give-up",
+                                 "detail": "watchdog: %d restarts within %dm all failed — manual intervention needed"
+                                           % (_GOV_MAX_ATTEMPTS, _GOV_ATTEMPT_WINDOW // 60)})
+            continue
+        # under the cap → attempt an auto-restart
+        attempts.append(now)
+        _GOV_ATTEMPTS[name] = attempts
+        try:
+            r = _gsub.run(["pm2", "restart", name], capture_output=True, text=True, timeout=30)
+            if r.returncode == 0:
+                _gov_log_append({"ts": now_iso, "level": "info", "service": name, "action": "restart",
+                                 "detail": "watchdog: auto-restart (attempt %d/%d) after status=%s"
+                                           % (len(attempts), _GOV_MAX_ATTEMPTS, s["status"])})
+            else:
+                msg = (r.stderr or r.stdout or "non-zero exit").strip()[:200]
+                _gov_log_append({"ts": now_iso, "level": "error", "service": name,
+                                 "action": "restart-failed", "detail": "watchdog: " + msg})
+        except Exception as e:
+            _gov_log_append({"ts": now_iso, "level": "error", "service": name,
+                             "action": "restart-failed", "detail": "watchdog: " + str(e)})
+
+
+async def _gov_watchdog_loop():
+    await _gasync.sleep(_GOV_WATCH_INTERVAL)   # let the hub finish booting first
+    loop = _gasync.get_running_loop()
+    while True:
+        try:
+            # run the blocking pm2 work off the event loop
+            await loop.run_in_executor(None, _gov_watchdog_tick)
+        except Exception:
+            pass
+        await _gasync.sleep(_GOV_WATCH_INTERVAL)
+
+
+@app.on_event("startup")
+async def _gov_start_watchdog():
+    _gasync.create_task(_gov_watchdog_loop())
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)

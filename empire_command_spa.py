@@ -11,7 +11,7 @@ Architecture:
   - All API calls go through apiFetch() which attaches Authorization: Bearer.
   - WebSocket /ws/live for live event tail (uses same token in query string).
 
-Phase 1 wires Pulse end-to-end; other sections render a placeholder.
+All sections are wired end-to-end to their /api endpoints.
 """
 
 from empire_tokens import EMPIRE_FONTS, EMPIRE_TOKENS_CSS, EMPIRE_BASE_CSS
@@ -110,12 +110,11 @@ _SPA_CSS = """
 .event-body { color: var(--empire-silver); flex: 1; word-break: break-word; }
 .events-empty { color: var(--empire-fog); font-style: italic; padding: 28px 0; text-align: center; font-family: var(--font-ui); font-size: 12px; }
 
-/* ── STUB SECTIONS ────────────────────────────────────────────────── */
+/* ── LOADING / ERROR STATES ──────────────────────────────────────────── */
 .stub { background: var(--empire-surface); border: 1px dashed var(--empire-border); padding: 64px 32px; text-align: center; }
 .stub-title { font-weight: 200; font-size: 22px; letter-spacing: -0.02em; margin-bottom: 10px; }
 .stub-title em { font-style: italic; color: var(--strike-cyan); font-weight: 500; }
 .stub-body { color: var(--empire-mist); font-size: 13px; max-width: 440px; margin: 0 auto; line-height: 1.7; }
-.stub-tag { display: inline-block; margin-top: 18px; font-family: var(--font-mono); font-size: 10px; color: var(--signal-teal); letter-spacing: 0.18em; text-transform: uppercase; border: 1px solid var(--signal-teal-soft); padding: 6px 14px; border-radius: var(--radius-pill); }
 
 /* ── DENIED ───────────────────────────────────────────────────────── */
 .denied { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; padding: 40px; text-align: center; }
@@ -226,7 +225,41 @@ _SPA_CSS = """
 .agi-w-hi .agi-w-bar{background:#39FF14}
 .agi-w-mid .agi-w-bar{background:#FFB800}
 .agi-w-lo .agi-w-bar{background:#FF4444}
+.agi-replay-btn{margin-left:6px;padding:2px 8px;border-radius:3px;font-size:10px;font-family:var(--font-mono);cursor:pointer;border:1px solid #555;background:transparent;color:inherit}.agi-replay-btn.active{border-color:#39FF14;background:rgba(57,255,20,0.1)}
 .agi-meta{font-family:var(--font-mono);font-size:10px;color:var(--empire-fog);margin-top:14px}
+.gov-meta{font-family:var(--font-mono);font-size:10px;color:var(--empire-fog);display:flex;align-items:center;gap:8px}
+.gov-wd-dot{width:8px;height:8px;border-radius:50%;display:inline-block;background:#FFB800}
+.gov-wd-dot.gov-ok{background:#39FF14;box-shadow:0 0 8px rgba(57,255,20,0.6)}
+.gov-heal-btn{margin-left:10px;padding:5px 14px;border-radius:4px;font-size:10px;font-family:var(--font-mono);letter-spacing:.1em;cursor:pointer;border:1px solid #FF4444;background:rgba(255,68,68,0.08);color:#FF4444;text-transform:uppercase}
+.gov-heal-btn:hover{background:rgba(255,68,68,0.18)}
+.gov-heal-btn:disabled{opacity:.5;cursor:default}
+.gov-healmsg{font-family:var(--font-mono);font-size:11px;color:#39FF14;border:1px solid var(--empire-divider);background:var(--empire-surface);border-radius:6px;padding:10px 14px;margin-bottom:16px}
+.gov-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px}
+.gov-panel{background:var(--empire-surface);border:1px solid var(--empire-divider);border-radius:10px;overflow:hidden}
+.gov-panel-h{display:flex;justify-content:space-between;align-items:baseline;padding:14px 18px;border-bottom:1px solid var(--empire-divider)}
+.gov-panel-title{font-size:14px;color:var(--empire-white)}
+.gov-panel-tag{font-family:var(--font-mono);font-size:10px;color:var(--signal-teal);letter-spacing:.1em;text-transform:uppercase}
+.gov-empty{padding:28px;text-align:center;color:var(--empire-fog);font-size:12px;font-family:var(--font-mono)}
+.gov-badge{font-family:var(--font-mono);font-size:9px;letter-spacing:.1em;padding:3px 8px;border-radius:4px;border:1px solid currentColor}
+.gov-ok{color:#39FF14}
+.gov-warn{color:#FFB800}
+.gov-bad{color:#FF4444}
+.gov-log{max-height:340px;overflow-y:auto;font-family:var(--font-mono);font-size:11px}
+.gov-log-row{display:flex;gap:10px;padding:9px 18px;border-bottom:1px solid var(--empire-divider);align-items:baseline}
+.gov-log-time{color:var(--empire-fog);flex-shrink:0;min-width:54px}
+.gov-log-lvl{flex-shrink:0;min-width:44px;font-size:9px;letter-spacing:.08em}
+.gov-log-svc{color:var(--signal-teal);flex-shrink:0;min-width:96px}
+.gov-log-detail{color:var(--empire-mist)}
+.gov-res{padding:8px 0}
+.gov-res-row{display:grid;grid-template-columns:160px 1fr;gap:16px;align-items:center;padding:10px 18px;border-bottom:1px solid var(--empire-divider)}
+.gov-res-name{font-family:var(--font-mono);font-size:12px;color:var(--empire-silver)}
+.gov-res-bars{display:flex;flex-direction:column;gap:8px}
+.gov-res-bar-label{font-family:var(--font-mono);font-size:9px;color:var(--empire-fog);margin-bottom:3px;letter-spacing:.08em}
+.gov-res-track{height:6px;background:var(--empire-divider);border-radius:3px;overflow:hidden}
+.gov-res-fill{height:100%;border-radius:3px;transition:width .3s}
+.gov-res-fill.gov-ok{background:#39FF14}
+.gov-res-fill.gov-warn{background:#FFB800}
+.gov-res-fill.gov-bad{background:#FF4444}
 """
 
 
@@ -266,6 +299,7 @@ const SECTIONS = [
   { id: 'audit',       label: 'Audit',       sub: 'Operator action history' },
   { id: 'operators',   label: 'Operators',   sub: 'Roster · roles · invites' },
   { id: 'neural-core', label: 'Neural Core', sub: 'Live brain · autonomous decisions' },
+  { id: 'governor',    label: 'Governor',    sub: 'Autonomous control · self-healing · 60s watchdog' },
 ];
 
 function currentSection() {
@@ -795,9 +829,10 @@ function Sparkline({points,color}){
 function AgiLoop(){
   const [data,setData]=useState(null);
   const [err,setErr]=useState(null);
-  const [tick,setTick]=useState(0);const [approved,setApproved]=useState([]);
+  const [tick,setTick]=useState(0);
   const [approved,setApproved]=useState([]);
-  useEffect(()=>{const el=document.querySelector(".agi-decisions");if(el){const h=(e)=>{const b=e.target.closest(".agi-approve-btn");if(b){const i=parseInt(b.dataset.idx),w=b.dataset.weight;doApprove(i,w);}};el.addEventListener("click",h);return()=>el.removeEventListener("click",h);};},[approved]);useEffect(()=>{
+  const [replayIdx,setReplayIdx]=useState(null);
+  useEffect(()=>{
     let alive=true;
     async function poll(){
       try{
@@ -810,10 +845,107 @@ function AgiLoop(){
     const id=setInterval(()=>{poll();setTick(t=>t+1);},5000);
     return()=>{alive=false;clearInterval(id);};
   },[]);
-  const snap=data?.snapshots?.[0];
-  const doApprove=async(idx,w)=>{console.log("APPROVE",idx);if(approved.includes(idx))return;setApproved(p=>[...p,idx]);};const decisions=(data?.actions??[]).map(a=>({weight:a.new_weight?.toFixed(2),reason:a.reasoning}));
-  const doApprove=async(idx,w)=>{if(approved.includes(idx))return;setApproved(p=>[...p,idx]);};
-  return html`<div class="section-header"><div><div class="section-title">Neural Core</div><div class="section-sub">Self-optimizing brain · live telemetry · 5s refresh</div></div><div class="agi-meta">TICK ${tick} · LIVE</div></div><div class="agi-grid"><div class="agi-tile"><div class="agi-tile-label">LEAD VELOCITY</div><div class="agi-tile-val"><em>${snap?.lead_velocity??"--"}</em></div><div class="agi-tile-sub">leads/hr</div></div><div class="agi-tile"><div class="agi-tile-label">REVENUE PULSE</div><div class="agi-tile-val"><em>${snap?.revenue_pulse!=null?(snap.revenue_pulse*100).toFixed(1)+"%":"--"}</em></div><div class="agi-tile-sub">AI confidence</div></div><div class="agi-tile"><div class="agi-tile-label">PROXY HEALTH</div><div class="agi-tile-val"><em>${snap?.proxy_health!=null?(snap.proxy_health*100).toFixed(1)+"%":"--"}</em></div><div class="agi-tile-sub">network health</div></div><div class="agi-tile"><div class="agi-tile-label">AI CALLS</div><div class="agi-tile-val"><em>${snap?.ai_calls_today??"--"}</em></div><div class="agi-tile-sub">brain activations</div></div></div><div class="agi-decisions"><div class="agi-decisions-head"><div class="agi-decisions-title">Decision Log</div><div class="agi-decisions-count">${decisions.length} entries</div></div>${decisions.map((d,i)=>html`<div class="agi-row"><div class=${"agi-row-weight "+(parseFloat(d.weight)>=1.5?"agi-w-hi":parseFloat(d.weight)>=1.0?"agi-w-mid":"agi-w-lo")}>${d.weight??"·"}<div class="agi-w-bar"></div></div><div class="agi-row-reason">${d.reason??"·"}<button class=${approved.includes(i)?"agi-approve-btn done":"agi-approve-btn"} data-idx=${i} data-weight=${d.weight}>${approved.includes(i)?"✓ APPROVED":"AUTO-APPROVE"}</button></div></div>`)}</div>`;
+  const hist=data?.snapshots??[]; const live=replayIdx===null; const snap=live?hist[0]:hist[replayIdx];
+  const doApprove=(idx,w)=>{if(approved.includes(idx))return;setApproved(p=>[...p,idx]);apiFetch("/api/v1/storm/tick",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({auto_weight:parseFloat(w),source:"neural-core"})}).catch(e=>console.warn(e));};
+  const decisions=(data?.actions??[]).map(a=>({weight:a.new_weight?.toFixed(2),reason:a.reasoning}));
+  return html`<div class="section-header"><div><div class="section-title">Neural Core</div><div class="section-sub">Live brain · autonomous decisions · 5s refresh</div></div><div class="agi-meta">TICK ${tick} · LIVE<button class=${live?"agi-replay-btn active":"agi-replay-btn"} onClick=${()=>setReplayIdx(null)}>LIVE</button><button class="agi-replay-btn" onClick=${()=>setReplayIdx(r=>r===null?1:Math.min(r+1,hist.length-1))}>PREV</button><button class="agi-replay-btn" onClick=${()=>setReplayIdx(r=>r===null?null:r<=1?null:r-1)}>NEXT</button></div></div><div class="agi-grid"><div class="agi-tile"><div class="agi-tile-label">LEAD VELOCITY</div><div class="agi-tile-val"><em>${snap?.lead_velocity??"--"}</em></div><div class="agi-tile-sub">leads/hr</div></div><div class="agi-tile"><div class="agi-tile-label">REVENUE PULSE</div><div class="agi-tile-val"><em>${snap?.revenue_pulse!=null?(snap.revenue_pulse*100).toFixed(1)+"%":"--"}</em></div><div class="agi-tile-sub">AI confidence</div></div><div class="agi-tile"><div class="agi-tile-label">PROXY HEALTH</div><div class="agi-tile-val"><em>${snap?.proxy_health!=null?(snap.proxy_health*100).toFixed(1)+"%":"--"}</em></div><div class="agi-tile-sub">network health</div></div><div class="agi-tile"><div class="agi-tile-label">AI CALLS</div><div class="agi-tile-val"><em>${snap?.ai_calls_today??"--"}</em></div><div class="agi-tile-sub">brain activations</div></div></div><div class="agi-decisions"><div class="agi-decisions-head"><div class="agi-decisions-title">Decision Log</div><div class="agi-decisions-count">${decisions.length} entries</div></div>${decisions.map((d,i)=>html`<div class="agi-row"><div class=${"agi-row-weight "+(parseFloat(d.weight)>=1.5?"agi-w-hi":parseFloat(d.weight)>=1.0?"agi-w-mid":"agi-w-lo")}>${d.weight??"·"}<div class="agi-w-bar"></div></div><div class="agi-row-reason">${d.reason??"·"}<button class=${approved.includes(i)?"agi-approve-btn done":"agi-approve-btn"} onClick=${()=>doApprove(i,d.weight)}>${approved.includes(i)?"✓ APPROVED":"AUTO-APPROVE"}</button></div></div>`)}</div>`;
+}
+
+// ── GOVERNOR ──────────────────────────────────────────────────────────
+
+function Governor() {
+  const [status, setStatus] = useState(null);
+  const [log, setLog] = useState(null);
+  const [err, setErr] = useState(null);
+  const [healing, setHealing] = useState(false);
+  const [healMsg, setHealMsg] = useState(null);
+  useEffect(() => {
+    let alive = true;
+    async function poll() {
+      try {
+        const [sr, lr] = await Promise.all([
+          apiFetch("/api/governor/status"),
+          apiFetch("/api/governor/log?lines=20"),
+        ]);
+        const sj = await sr.json();
+        const lj = await lr.json();
+        if (alive) { setStatus(sj); setLog(lj); setErr(null); }
+      } catch (e) { if (alive) setErr(e.message); }
+    }
+    poll();
+    const id = setInterval(poll, 10000);
+    return () => { alive = false; clearInterval(id); };
+  }, []);
+  const forceHeal = async () => {
+    setHealing(true); setHealMsg(null);
+    try {
+      const r = await apiFetch("/api/governor/heal", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
+      const j = await r.json();
+      setHealMsg(j.message || "Heal triggered");
+    } catch (e) { setHealMsg("Error: " + e.message); }
+    finally { setHealing(false); }
+  };
+  const svcCls = (s) => s === "online" ? "gov-ok" : (s === "stopped" || s === "errored" || s === "offline") ? "gov-bad" : "gov-warn";
+  const fmtUp = (s) => { if (s == null) return "--"; const d=Math.floor(s/86400), h=Math.floor((s%86400)/3600), m=Math.floor((s%3600)/60); return d>0?(d+"d "+h+"h"):h>0?(h+"h "+m+"m"):(m+"m"); };
+  const services = status?.services ?? [];
+  const wd = status?.watchdog ?? {};
+  if (err) return html`<div class="stub"><div class="stub-body">${err}</div></div>`;
+  return html`
+    <div>
+      <div class="section-h">
+        <div><div class="section-title">Governor</div><div class="section-sub">Autonomous control · self-healing · 60s watchdog</div></div>
+        <div class="gov-meta">
+          <span class=${"gov-wd-dot " + (wd.healthy === wd.total ? "gov-ok" : "gov-warn")}></span>
+          ${wd.healthy ?? "--"}/${wd.total ?? "--"} HEALTHY · WATCHDOG ${wd.interval_s ?? 60}s
+          <button class="gov-heal-btn" disabled=${healing} onClick=${forceHeal}>${healing ? "HEALING…" : "FORCE HEAL"}</button>
+        </div>
+      </div>
+      ${healMsg ? html`<div class="gov-healmsg">${healMsg}</div>` : null}
+      <div class="gov-grid">
+        <div class="gov-panel">
+          <div class="gov-panel-h"><div class="gov-panel-title">PM2 Services</div><div class="gov-panel-tag">${services.length} processes</div></div>
+          ${!status ? html`<div class="gov-empty">Loading…</div>` :
+            html`<table class="tbl"><thead><tr><th>Service</th><th>Status</th><th>Uptime</th><th>↺</th><th>Memory</th></tr></thead><tbody>
+              ${services.map(s => html`<tr key=${s.name}>
+                <td class="tbl-mono">${s.name}</td>
+                <td><span class=${"gov-badge " + svcCls(s.status)}>${(s.status || "?").toUpperCase()}</span></td>
+                <td class="tbl-mono">${fmtUp(s.uptime_s)}</td>
+                <td class=${"tbl-mono " + ((s.restarts ?? 0) >= 10 ? "gov-warn" : "")}>${s.restarts ?? 0}</td>
+                <td class="tbl-mono">${s.mem_mb != null ? (s.mem_mb.toFixed(1) + " MB") : "--"}</td>
+              </tr>`)}
+            </tbody></table>`}
+        </div>
+        <div class="gov-panel">
+          <div class="gov-panel-h"><div class="gov-panel-title">Self-Heal Log</div><div class="gov-panel-tag">${(log?.entries ?? []).length} entries</div></div>
+          <div class="gov-log">
+            ${(log?.entries ?? []).length === 0 ? html`<div class="gov-empty">No heal actions recorded.</div>` :
+              log.entries.map((e, i) => html`<div class="gov-log-row" key=${i}>
+                <span class="gov-log-time">${(e.ts || "").slice(11, 19)}</span>
+                <span class=${"gov-log-lvl " + (e.level === "error" ? "gov-bad" : e.level === "warn" ? "gov-warn" : "gov-ok")}>${(e.level || "info").toUpperCase()}</span>
+                <span class="gov-log-svc">${e.service || "—"}</span>
+                <span class="gov-log-detail">${(e.action ? (e.action + " · ") : "") + (e.detail || "")}</span>
+              </div>`)}
+          </div>
+        </div>
+      </div>
+      <div class="gov-panel">
+        <div class="gov-panel-h"><div class="gov-panel-title">Resource Allocation</div><div class="gov-panel-tag">CPU · RAM per service</div></div>
+        ${!status ? html`<div class="gov-empty">Loading…</div>` :
+          html`<div class="gov-res">${services.map(s => {
+            const cpu = s.cpu_pct ?? 0, mem = s.mem_mb ?? 0;
+            const cpuCls = cpu >= 80 ? "gov-bad" : cpu >= 50 ? "gov-warn" : "gov-ok";
+            const memCls = mem >= 600 ? "gov-bad" : mem >= 300 ? "gov-warn" : "gov-ok";
+            return html`<div class="gov-res-row" key=${s.name}>
+              <div class="gov-res-name">${s.name}</div>
+              <div class="gov-res-bars">
+                <div class="gov-res-bar"><div class="gov-res-bar-label">CPU ${cpu.toFixed(0)}%</div><div class="gov-res-track"><div class=${"gov-res-fill " + cpuCls} style=${"width:" + Math.min(cpu, 100) + "%"}></div></div></div>
+                <div class="gov-res-bar"><div class="gov-res-bar-label">RAM ${mem.toFixed(0)}MB</div><div class="gov-res-track"><div class=${"gov-res-fill " + memCls} style=${"width:" + Math.min(mem / 8, 100) + "%"}></div></div></div>
+              </div>
+            </div>`;
+          })}</div>`}
+      </div>
+    </div>
+  `;
 }
 
 function Operators() {
@@ -878,26 +1010,6 @@ function Operators() {
   `;
 }
 
-// ── STUB SECTION (other tabs) ────────────────────────────────────────
-function Stub({ section }) {
-  return html`
-    <div>
-      <div class="section-h">
-        <div>
-          <div class="section-title">${section.label}</div>
-          <div class="section-sub">${section.sub}</div>
-        </div>
-      </div>
-      <div class="stub">
-        <div class="stub-title">Coming in <em>Phase 2</em></div>
-        <div class="stub-body">
-          The ${section.label.toLowerCase()} section is wired to existing /api/v1 endpoints and ready to render. Phase 2 brings the full UI for this section.
-        </div>
-        <div class="stub-tag">Phase 2 · Next PR</div>
-      </div>
-    </div>
-  `;
-}
 
 // ── APP SHELL ────────────────────────────────────────────────────────
 function App() {
@@ -1006,8 +1118,9 @@ function App() {
             active.id === 'console'     ? html`<${Console} />` :
             active.id === 'audit'       ? html`<${Audit} />` :
             active.id === 'neural-core'    ? html`<${AgiLoop} />` :
+            active.id === 'governor'    ? html`<${Governor} />` :
             active.id === 'operators'   ? html`<${Operators} />` :
-            html`<${Stub} section=${active} />`
+            html`<div class="stub"><div class="stub-body">Unknown section: ${active.label}</div></div>`
           }
         </section>
       </main>
