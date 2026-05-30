@@ -938,8 +938,8 @@ function Governor() {
             return html`<div class="gov-res-row" key=${s.name}>
               <div class="gov-res-name">${s.name}</div>
               <div class="gov-res-bars">
-                <div class="gov-res-bar"><div class="gov-res-bar-label">CPU ${cpu.toFixed(0)}%</div><div class="gov-res-track"><div class=${"gov-res-fill " + cpuCls} style=${"width:" + Math.min(cpu, 100) + "%"}></div></div></div>
-                <div class="gov-res-bar"><div class="gov-res-bar-label">RAM ${mem.toFixed(0)}MB</div><div class="gov-res-track"><div class=${"gov-res-fill " + memCls} style=${"width:" + Math.min(mem / 8, 100) + "%"}></div></div></div>
+                <div class="gov-res-bar"><div class="gov-res-bar-label">CPU ${cpu.toFixed(0)}%</div><div class="gov-res-track"><div class=${"gov-res-fill " + cpuCls} style=${{width: Math.min(cpu, 100) + "%"}}></div></div></div>
+                <div class="gov-res-bar"><div class="gov-res-bar-label">RAM ${mem.toFixed(0)}MB</div><div class="gov-res-track"><div class=${"gov-res-fill " + memCls} style=${{width: Math.min(mem / 8, 100) + "%"}}></div></div></div>
               </div>
             </div>`;
           })}</div>`}
