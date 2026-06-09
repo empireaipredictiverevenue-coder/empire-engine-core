@@ -144,7 +144,7 @@ body::before {
 /* Grid texture — barely visible mission-control vibe */
 body::after {
   content: '';
-  position: fixed; inset: 0; pointer-events: none; z-index: 0;
+  position: fixed; inset: 0; pointer-events: none; z-index: 0; display: none;
   background-image:
     linear-gradient(rgba(68, 229, 184, 0.015) 1px, transparent 1px),
     linear-gradient(90deg, rgba(68, 229, 184, 0.015) 1px, transparent 1px);

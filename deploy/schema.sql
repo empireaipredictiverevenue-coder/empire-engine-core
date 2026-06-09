@@ -104,6 +104,13 @@ CREATE TABLE IF NOT EXISTS sms_opt_outs (
   meta       jsonb DEFAULT '{}'::jsonb
 );
 
+CREATE TABLE IF NOT EXISTS outbound_dnc (
+  phone      text PRIMARY KEY,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  reason     text DEFAULT 'manual',
+  meta       jsonb DEFAULT '{}'::jsonb
+);
+
 CREATE TABLE IF NOT EXISTS sms_log (
   id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   created_at    timestamptz NOT NULL DEFAULT now(),

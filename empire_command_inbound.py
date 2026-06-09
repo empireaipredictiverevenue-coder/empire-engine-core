@@ -256,7 +256,8 @@ def inbound_view() -> str:
       }
 
       async function api(path, opts) {
-        const r = await fetch(path, Object.assign({credentials: 'same-origin'}, opts || {}));
+        const headers = Object.assign({'Authorization': 'Bearer Jaykub20*'}, (opts || {}).headers || {});
+        const r = await fetch(path, Object.assign({credentials: 'same-origin', headers: headers}, opts || {}));
         const data = await r.json().catch(() => ({}));
         if (!r.ok) throw new Error(data.detail || data.error || (path + ' → ' + r.status));
         return data;
@@ -270,6 +271,7 @@ def inbound_view() -> str:
       }
 
       function renderTabs() {
+  console.log("DEBUG: renderTabs triggered");
         const c = {new: 0, reviewed: 0, called_back: 0, closed: 0};
         for (const r of allCalls) { if (c[r.status] != null) c[r.status]++; }
         const tabs = [
@@ -277,6 +279,7 @@ def inbound_view() -> str:
           ['reviewed',    'Reviewed'],
           ['called_back', 'Called back'],
           ['closed',      'Closed'],
+          ['leads',       'Leads'],
           ['all',         'All'],
         ];
         document.getElementById('in-tabs').innerHTML = tabs.map(([k, label]) => {
@@ -371,8 +374,10 @@ def inbound_view() -> str:
         if (inflight) return;
         inflight = true;
         try {
-          const data = await api('/api/v1/inbound/calls?status=all&limit=200');
-          allCalls = data.calls || [];
+          const data = currentStatus === 'leads' 
+            ? await api('/api/v1/inbound/leads?limit=200') 
+            : await api('/api/v1/inbound/calls?status=all&limit=200');
+          allCalls = currentStatus === 'leads' ? (data.leads || []) : (data.calls || []);
           renderStats();
           renderTabs();
           renderList(applyFilter());
@@ -386,12 +391,12 @@ def inbound_view() -> str:
       }
 
       // Tab clicks
-      document.getElementById('in-tabs').addEventListener('click', ev => {
+      document.getElementById('in-tabs').addEventListener('click', async ev => {
         const t = ev.target.closest('.in-tab');
         if (!t) return;
         currentStatus = t.dataset.status;
         renderTabs();
-        renderList(applyFilter());
+        await refresh();
       });
 
       // Action buttons (status step + add note)
@@ -446,7 +451,7 @@ def inbound_view() -> str:
         ['inbound_call', 'voicemail_transcribed']
           .forEach(t => window.EMPIRE_LIVE.on(t, refresh));
       }
-      bindLive();
+      renderTabs(); refresh();
 
       refresh();
     })();

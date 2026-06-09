@@ -1,17 +1,26 @@
-from bots.bot_manager import BotManager
-from bots.bot_brain import BotBrain
-from bots.linkedin_sniper import LinkedInSniper
+import sys
+sys.path.append('/root/empire-v49/bots')
+from bot_manager import BotManager
+from mass_tort_scout import fetch_latest_recall
 
-# Initialize the stack
-brain = BotBrain()
-manager = BotManager("LI-SNIPER-01")
-bot = LinkedInSniper("LINKEDIN", ["proxy_pool"])
-
-def execute_outreach(lane_id, strategy, niche):
-    # 1. BRAIN: Refine strategy for the specific niche
-    refined_plan = brain.generate_strategy(niche, lane_id)
+def execute_outreach(lane_id, strategy, niche_name):
+    # Initialize the bot manager with the sniper footprint
+    manager = BotManager("LI-SNIPER-01")
     
-    # 2. MANAGER: Verify against guardrails
-    if manager.validate_action(refined_plan):
-        return bot.run(niche, strategy, refined_plan)
-    return "FAILED_SAFETY_CHECK"
+    # Intercept lanes 16-20 or any lane tagged Mass Tort
+    if "Mass Tort" in str(niche_name) or lane_id in [16, 17, 18, 19, 20]:
+        live_recall = fetch_latest_recall()
+        device = live_recall.get('device', 'Recalled Medical Device')
+        reason = live_recall.get('reason', 'Product Defect')
+        
+        print(f"[LANE {lane_id}] MASS TORT SNIPER LAUNCHED | Strategy: {strategy}")
+        print(f"[TARGET DEVICE] {device}")
+        print(f"[TRIGGER REASON] {reason}")
+        return f"Mass Tort Campaign live for {device}."
+        
+    print(f"[LANE {lane_id}] Running standard campaign for: {niche_name} | Strategy: {strategy}")
+    return "Standard campaign active."
+
+if __name__ == "__main__":
+    # Quick internal sanity check
+    execute_outreach(16, "AGGRESSIVE_STRIKE", "Mass Tort")

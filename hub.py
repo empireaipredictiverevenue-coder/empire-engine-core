@@ -21,6 +21,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.middleware.cors import CORSMiddleware
 
 from supabase import create_client, Client
+from empire_switchboard import _sb
 
 # Empire modules
 from empire_tokens import EMPIRE_TOKENS_CSS, EMPIRE_FONTS
@@ -59,7 +60,8 @@ from empire_enricher_ai import AIEnricher
 from empire_reply_qualifier import ReplyQualifier
 from empire_narrator import Narrator
 from empire_3d_map import register_map_routes
-from empire_voice_control import vonage_answer_webhook
+from empire_switchboard import register_switchboard_routes
+from empire_partner_onboarding import register_partner_routes
 
 
 logging.basicConfig(level=logging.INFO)
@@ -285,7 +287,14 @@ async def market_pulse():
 
 
 register_live_routes(app, live_broadcaster, hub_token=HUB_TOKEN, auth_engine=auth_engine)
-register_voice_routes(app, voice_router)
+register_voice_routes(
+    app, voice_router,
+    require_auth=require_auth,
+    get_db=get_db,
+    ntfy_topic=NTFY_TOPIC,
+    ntfy_token=NTFY_TOKEN,
+    broadcaster=live_broadcaster,
+)
 register_sms_routes(app, sms_engine, require_auth=require_auth)
 register_contractor_routes(app, require_auth=require_auth, get_db=get_db, sign_token=_hub_sign_token, verify_token=_hub_verify_token, send_email=_send_email, public_base_url=PUBLIC_BASE_URL, broadcaster=live_broadcaster)
 register_attribution_routes(app, require_auth=require_auth, get_db=get_db)
@@ -298,7 +307,8 @@ register_inbound_routes(app, inbound_triage, require_auth=require_auth)
 register_console_routes(app, console=console, require_auth=require_auth, get_db=get_db)
 register_storm_routes(app, storm_orchestrator, require_auth=require_auth)
 register_map_routes(app, scout=storm_orchestrator.scout, get_db=get_db, require_auth=require_auth)
-register_voice_routes(app, app)
+register_switchboard_routes(app, require_auth=require_auth)
+register_partner_routes(app, require_auth=require_auth)
 
 
 # ─────────────────────────────────────────────────────────────────────
@@ -656,10 +666,196 @@ async def _gov_start_watchdog():
     _gasync.create_task(_gov_watchdog_loop())
 
 
+# ─── /api/v1/compliance/stats: Compliance dashboard data ──────────────────
+from datetime import datetime as _cdt, timezone as _ctz
+from supabase import create_client as _cc
+import os as _cos
+
+@app.get("/api/v1/compliance/stats")
+async def compliance_stats(auth: bool = Depends(require_auth)):
+    """Return compliance dashboard data: recent blocks, DNC table counts, call window."""
+    db = get_db()
+    now = _cdt.now(_ctz.utc)
+    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
+
+    # 1. Count today's blocked calls
+    blocked_count = 0
+    try:
+        r = db.table("compliance_audit_logs").select("*", count="exact") \
+            .eq("action", "outbound_call_blocked") \
+            .gte("created_at", today_start) \
+            .execute()
+        blocked_count = getattr(r, "count", len(r.data or []))
+    except Exception:
+        pass
+
+    # 2. Recent blocks (last 10)
+    recent_blocks = []
+    try:
+        r = db.table("compliance_audit_logs").select("*") \
+            .eq("action", "outbound_call_blocked") \
+            .order("created_at", desc=True).limit(10).execute()
+        for e in (r.data or []):
+            det = e.get("details", {}) or {}
+            recent_blocks.append({
+                "ts": (e.get("created_at") or "")[:19],
+                "rule": det.get("rule", "") if isinstance(det, dict) else "",
+                "phone": e.get("entity_id", "") or det.get("phone", "") if isinstance(det, dict) else "",
+            })
+    except Exception:
+        pass
+
+    # 3. DNC table counts
+    sms_opt_outs = 0
+    outbound_dnc_count = 0
+    try:
+        r = db.table("sms_opt_outs").select("*", count="exact").limit(1).execute()
+        sms_opt_outs = getattr(r, "count", 0)
+    except Exception:
+        pass
+    try:
+        r = db.table("outbound_dnc").select("*", count="exact").limit(1).execute()
+        outbound_dnc_count = getattr(r, "count", 0)
+    except Exception:
+        pass
+
+    # 4. Call window status (using same logic as empire_outbound_dialer)
+    from zoneinfo import ZoneInfo as _zi
+    tz_name = "America/Chicago"  # default
+    try:
+        h = _cdt.now(_zi(tz_name)).hour
+    except Exception:
+        h = now.hour
+    within_hours = 8 <= h < 21
+    window_start = "08:00"
+    window_end = "21:00"
+    local_hour = h
+
+    return {
+        "blocked_today": blocked_count,
+        "recent_blocks": recent_blocks,
+        "sms_opt_outs": sms_opt_outs,
+        "outbound_dnc": outbound_dnc_count,
+        "call_window": {
+            "open": within_hours,
+            "local_hour": local_hour,
+            "window": f"{window_start}-{window_end} {tz_name}",
+        },
+    }
+
+
+# ─── /api/v1/health/mesh: Agent mesh status + system health ──────────
+import requests as _hreq
+
+@app.get("/api/v1/health/mesh")
+async def health_mesh(auth: bool = Depends(require_auth)):
+    """Aggregate health data: agent_registry, brain status, funnel, PM2, storm forecasts."""
+    db = get_db()
+    now = _cdt.now(_ctz.utc)
+    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
+
+    # 1. Agent registry
+    agents = []
+    try:
+        r = db.table("agent_registry").select("agent_name,status,last_ping,enabled").execute()
+        for row in (r.data or []):
+            age_min = None
+            lp = row.get("last_ping")
+            if lp:
+                try:
+                    age_min = round((now - _cdt.fromisoformat(str(lp).replace("Z", "+00:00"))).total_seconds() / 60, 1)
+                except Exception:
+                    pass
+            agents.append({
+                "agent_name": row.get("agent_name"),
+                "status": row.get("status"),
+                "enabled": row.get("enabled", True),
+                "last_ping": lp,
+                "ping_age_min": age_min,
+            })
+    except Exception as e:
+        agents = [{"error": str(e)[:80]}]
+
+    # 2. Brain (Ollama) status
+    brain_up = False
+    try:
+        r = _hreq.get("http://localhost:11434/api/tags", timeout=3)
+        brain_up = r.status_code == 200
+    except Exception:
+        pass
+
+    # 3. Funnel stats
+    calls_today = 0
+    qualified_today = 0
+    try:
+        r = db.table("call_logs").select("qualified", count="exact").gte("created_at", today_start).execute()
+        calls_today = r.count or 0
+        qualified_today = sum(1 for row in (r.data or []) if row.get("qualified"))
+    except Exception:
+        pass
+
+    # 4. Storm forecasts count
+    storm_count = 0
+    try:
+        r = db.table("storm_forecasts").select("id", count="exact").execute()
+        storm_count = r.count or 0
+    except Exception:
+        pass
+
+    # 5. PM2 health (reuses existing _pm2_services)
+    pm2_svcs = _pm2_services()
+    pm2_healthy = sum(1 for s in pm2_svcs if s["status"] == "online")
+
+    # 6. Latest system_health from overseer
+    latest_overseer = None
+    try:
+        r = db.table("system_health").select("*").order("created_at", desc=True).limit(1).execute()
+        if r.data:
+            latest_overseer = r.data[0]
+    except Exception:
+        pass
+
+    return JSONResponse({
+        "agents": agents,
+        "brain_up": brain_up,
+        "funnel": {"calls_today": calls_today, "qualified_today": qualified_today},
+        "storm_forecasts_count": storm_count,
+        "pm2": {"services": pm2_svcs, "healthy": pm2_healthy, "total": len(pm2_svcs)},
+        "overseer": latest_overseer,
+        "ts": now.isoformat(),
+    })
+
+
 # ─── /api/agents: Sniper Fleet (in-memory MOCK STUB — no real agent backend yet) ──
 from datetime import timedelta as _atd
 
-_AGENT_LEADS = {"storm": 47, "legal": 8, "warehouse": 0, "logistics": 0, "reddit": 23, "linkedin": 0}
+def _get_agent_leads():
+    leads = {"storm": 0, "legal": 0, "warehouse": 0, "logistics": 0, "reddit": 0, "linkedin": 0}
+    try:
+        today = _gdt.utcnow().date().isoformat()
+        res = _sb.table("radar_targets").select("source").gte("created_at", today).execute()
+        for row in (res.data or []):
+            s = (row.get("source") or "").lower()
+            if "storm" in s or "weather" in s: leads["storm"] += 1
+            elif "reddit" in s: leads["reddit"] += 1
+    except Exception as e:
+        print(f"[agents] leads error: {e}")
+    return leads
+
+def _get_agent_leads():
+    leads = {"storm":0,"legal":0,"warehouse":0,"logistics":0,"reddit":0,"linkedin":0}
+    try:
+        today = _gdt.utcnow().date().isoformat()
+        res = _sb.table("radar_targets").select("source").gte("created_at", today).execute()
+        for row in (res.data or []):
+            s = (row.get("source") or "").lower()
+            if "storm" in s or "weather" in s: leads["storm"] += 1
+            elif "reddit" in s: leads["reddit"] += 1
+    except Exception as e:
+        print(f"[agents] leads error: {e}")
+    return leads
+
+_AGENT_LEADS = _get_agent_leads()
 _AGENTS = [
     {"id": "storm",     "name": "Storm",     "type": "Weather",    "enabled": True},
     {"id": "legal",     "name": "Legal",     "type": "Compliance", "enabled": True},
@@ -697,6 +893,14 @@ def _agent_view(a):
 async def agents_status():
     return JSONResponse({"agents": [_agent_view(a) for a in _AGENTS]})
 
+@app.get("/api/revenue/forecast")
+async def revenue_forecast():
+    try:
+        from bots import predictive_revenue
+        return JSONResponse(predictive_revenue.pipeline_forecast())
+    except Exception as e:
+        return JSONResponse({"error": str(e), "lead_count": 0, "pipeline_value": 0, "forecasted_revenue": 0})
+
 
 @app.post("/api/agents/{agent_id}/toggle")
 async def agents_toggle(agent_id: str):
@@ -706,6 +910,183 @@ async def agents_toggle(agent_id: str):
             return JSONResponse(_agent_view(a))
     return JSONResponse({"error": "unknown agent: " + agent_id}, status_code=404)
 
+
+
+
+# ─── Notes activity endpoint ──────────────────────────────────────
+@app.get("/api/v1/notes/activity")
+async def notes_activity(limit: int = 100, auth: bool = Depends(require_auth)):
+    """Return all notes across all leads as a flat reverse-chronological feed."""
+    from fastapi.responses import JSONResponse as _jr
+    db = get_db()
+    try:
+        r = db.table("inbound_leads").select("id,name,notes,created_at").not_.is_("notes", "null").order("created_at", desc=True).limit(limit).execute()
+    except Exception:
+        try:
+            r = db.table("inbound_leads").select("id,name,notes,created_at").not_.is_("notes", "null").execute()
+        except Exception as e:
+            return _jr({"entries": [], "error": str(e)[:80]})
+    entries = []
+    for lead in (r.data or []):
+        raw = lead.get("notes")
+        note_list = []
+        if raw:
+            if isinstance(raw, list):
+                note_list = raw
+            elif isinstance(raw, str):
+                try:
+                    p = _gjson.loads(raw)
+                    if isinstance(p, list):
+                        note_list = p
+                    else:
+                        note_list = [{"text": raw}]
+                except Exception:
+                    note_list = [{"text": raw}]
+        for n in note_list:
+            n["lead_id"] = lead.get("id")
+            n["lead_name"] = lead.get("name") or "—"
+            entries.append(n)
+    entries.sort(key=lambda e: e.get("timestamp") or "", reverse=True)
+    return _jr({"entries": entries[:limit]})
+
+
+# ─── Leads delete-note endpoint ────────────────────────────────────
+@app.post("/api/v1/inbound/leads/delete-note")
+async def delete_inbound_lead_note(request: Request, auth: bool = Depends(require_auth)):
+    try:
+        body = await request.json()
+    except Exception:
+        raise HTTPException(400, "Invalid JSON")
+    lead_id = body.get("lead_id")
+    timestamp = body.get("timestamp")
+    if not lead_id or not timestamp:
+        raise HTTPException(400, "lead_id and timestamp required")
+    from fastapi.responses import JSONResponse as _jr
+    db = get_db()
+    try:
+        r = db.table("inbound_leads").select("notes").eq("id", lead_id).limit(1).execute()
+        if not r.data:
+            return _jr({"ok": False, "error": "lead not found"})
+        raw = r.data[0].get("notes")
+        entries = []
+        if raw:
+            if isinstance(raw, list):
+                entries = raw
+            elif isinstance(raw, str):
+                try:
+                    parsed = _gjson.loads(raw)
+                    if isinstance(parsed, list):
+                        entries = parsed
+                except Exception:
+                    pass
+        before = len(entries)
+        entries = [e for e in entries if e.get("timestamp") != timestamp]
+        if len(entries) == before:
+            return _jr({"ok": False, "error": "note not found"})
+        db.table("inbound_leads").update({"notes": _gjson.dumps(entries, ensure_ascii=False)}).eq("id", lead_id).execute()
+        return _jr({"ok": True})
+    except Exception as e:
+        raise HTTPException(500, str(e))
+
+
+# ─── Leads update endpoint ─────────────────────────────────────────
+@app.post("/api/v1/inbound/leads/update")
+async def update_inbound_lead(request: Request, auth: bool = Depends(require_auth)):
+    try:
+        body = await request.json()
+    except Exception:
+        raise HTTPException(400, "Invalid JSON")
+    lead_id = body.get("lead_id")
+    if not lead_id:
+        raise HTTPException(400, "lead_id required")
+    from fastapi.responses import JSONResponse as _jr
+    db = get_db()
+    update = {}
+    if "status" in body:
+        update["status"] = body["status"][:50]
+    if "notes" in body and body["notes"] is not None:
+        # Notes history: store as JSON array [{text, operator, timestamp}, ...]
+        operator_name = "operator"
+        try:
+            if isinstance(auth, dict):
+                operator_name = auth.get("name") or auth.get("email", "operator")
+        except Exception:
+            pass
+        new_text = str(body["notes"])[:1000].strip()
+        if new_text:
+            # Fetch existing notes
+            existing = []
+            try:
+                r = db.table("inbound_leads").select("notes").eq("id", lead_id).limit(1).execute()
+                if r.data and r.data[0].get("notes"):
+                    raw = r.data[0]["notes"]
+                    if isinstance(raw, list):
+                        existing = raw
+                    elif isinstance(raw, str):
+                        try:
+                            parsed = _gjson.loads(raw)
+                            if isinstance(parsed, list):
+                                existing = parsed
+                            else:
+                                existing = [{"text": raw, "operator": "system", "timestamp": _gdt.utcnow().isoformat(timespec="seconds")}]
+                        except Exception:
+                            existing = [{"text": raw, "operator": "system", "timestamp": _gdt.utcnow().isoformat(timespec="seconds")}]
+            except Exception:
+                pass
+            entry = {
+                "text": new_text,
+                "operator": operator_name,
+                "timestamp": _gdt.utcnow().isoformat(timespec="seconds"),
+            }
+            existing.append(entry)
+            update["notes"] = _gjson.dumps(existing, ensure_ascii=False)
+    try:
+        if update:
+            db.table("inbound_leads").update(update).eq("id", lead_id).execute()
+        return _jr({"ok": True})
+    except Exception as e:
+        raise HTTPException(500, str(e))
+
+import fastapi
+
+@app.post("/webhook/lead")
+async def webhook_lead(request: fastapi.Request, x_empire_secret: str = fastapi.Header(None)):
+    import os
+    from fastapi.responses import JSONResponse
+    from supabase import create_client
+    
+    expected_secret = os.environ.get("WEBHOOK_SECRET", "empire_v49_secret")
+    if x_empire_secret != expected_secret:
+        return JSONResponse({"error": "Unauthorized"}, status_code=401)
+        
+    try:
+        data = await request.json()
+    except Exception:
+        return JSONResponse({"error": "Invalid JSON payload"}, status_code=400)
+        
+    name = data.get("name")
+    if not name:
+        return JSONResponse({"error": "Missing required field: name"}, status_code=400)
+        
+    try:
+        supabase_url = os.environ.get("SUPABASE_URL")
+        supabase_key = os.environ.get("SUPABASE_SERVICE_KEY")
+        if not supabase_url or not supabase_key:
+            return JSONResponse({"error": "Supabase config missing"}, status_code=500)
+            
+        client = create_client(supabase_url, supabase_key)
+        payload = {
+            "name": name,
+            "phone": data.get("phone"),
+            "email": data.get("email"),
+            "metro": data.get("metro"),
+            "source": data.get("source", "web"),
+            "raw_jsonb": data
+        }
+        client.table("inbound_leads").insert(payload).execute()
+        return JSONResponse({"status": "success"})
+    except Exception as e:
+        return JSONResponse({"error": f'Database write error: {str(e)}'}, status_code=500)
 
 if __name__ == "__main__":
     import uvicorn

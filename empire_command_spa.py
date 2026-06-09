@@ -276,6 +276,186 @@ _SPA_CSS = """
 .compliance-block-phone{color:var(--empire-silver)}
 .compliance-empty{font-family:var(--font-ui);font-size:11px;color:var(--empire-fog);font-style:italic;padding:16px 0;text-align:center}
 
+/* ── LEADS ─────────────────────────────────────────────────────── */
+.ld-filter{display:flex;gap:14px;align-items:center;margin-bottom:20px;flex-wrap:wrap}
+.ld-filter-tag{font-family:var(--font-mono);font-size:10px;color:var(--empire-mist);letter-spacing:.08em}
+.ld-filter-btn{padding:6px 14px;font-family:var(--font-mono);font-size:9px;letter-spacing:.12em;text-transform:uppercase;border:1px solid var(--empire-border);background:transparent;color:var(--empire-mist);cursor:pointer;border-radius:4px}
+.ld-filter-btn:hover{color:var(--empire-white);border-color:var(--empire-border-hi)}
+.ld-filter-btn.active{color:var(--signal-teal);border-color:var(--signal-teal-soft)}
+.ld-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:20px}
+.ld-stat{background:var(--empire-surface);border:1px solid var(--empire-border);padding:14px 16px}
+.ld-stat-val{font-family:var(--font-display);font-weight:200;font-size:28px;color:var(--empire-white);line-height:1}
+.ld-stat-val.teal{color:var(--signal-teal)}
+.ld-stat-val.dim{color:var(--empire-mist)}
+.ld-stat-lbl{font-family:var(--font-mono);font-size:9px;color:var(--empire-fog);letter-spacing:.14em;text-transform:uppercase;margin-top:4px}
+.ld-lead{background:var(--empire-surface);border:1px solid var(--empire-divider);padding:14px 18px;margin-bottom:10px;transition:border-color .15s var(--ease-snap)}
+.ld-lead:hover{border-color:var(--empire-border-hi)}
+.ld-lead-row{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px}
+.ld-lead-name{font-weight:500;font-size:14px;color:var(--empire-white)}
+.ld-lead-contact{font-family:var(--font-mono);font-size:10px;color:var(--empire-mist);margin-top:2px}
+.ld-lead-meta{display:flex;gap:14px;flex-wrap:wrap;font-family:var(--font-mono);font-size:9px;color:var(--empire-fog);letter-spacing:.08em;margin-bottom:10px}
+.ld-bdg{display:inline-block;padding:3px 8px;font-family:var(--font-mono);font-size:9px;letter-spacing:.1em;text-transform:uppercase;border-radius:4px;border:1px solid}
+.ld-bdg.new{color:var(--signal-teal);border-color:var(--signal-teal-soft)}
+.ld-bdg.pending{color:var(--status-amber);border-color:var(--status-amber)}
+.ld-bdg.contacted{color:var(--strike-cyan);border-color:rgba(90,200,250,0.2)}
+.ld-bdg.qualified{color:var(--signal-teal);border-color:var(--signal-teal-soft)}
+.ld-bdg.closed{color:var(--empire-mist);border-color:var(--empire-border)}
+.ld-bdg.rejected{color:var(--status-red);border-color:var(--status-red)}
+.ld-bdg.source{color:var(--empire-fog);border-color:var(--empire-divider)}
+.ld-actions{display:flex;gap:8px;margin-top:8px;padding-top:10px;border-top:1px solid var(--empire-divider)}
+.ld-action-btn{padding:5px 12px;font-family:var(--font-mono);font-size:9px;letter-spacing:.1em;text-transform:uppercase;border-radius:4px;cursor:pointer;font-weight:600}
+.ld-action-btn.go{color:#000;background:var(--signal-teal);border:1px solid var(--signal-teal)}
+.ld-action-btn.go:hover{background:var(--strike-cyan)}
+.ld-action-btn.ghost{color:var(--empire-mist);background:transparent;border:1px solid var(--empire-border)}
+.ld-action-btn.ghost:hover{color:var(--empire-white);border-color:var(--empire-border-hi)}
+.ld-action-btn.danger{color:var(--status-red);border:1px solid var(--status-red);background:transparent}
+.ld-action-btn.danger:hover{background:rgba(255,68,68,0.1)}
+.ld-action-btn:disabled{opacity:.5;cursor:default}
+.ld-notes-history{margin-bottom:6px;padding:6px 0;border-bottom:1px solid var(--empire-divider)}
+.ld-note-entry{padding:5px 0;border-bottom:1px solid rgba(255,255,255,0.03);font-family:var(--font-mono);font-size:10px}
+.ld-note-entry:last-child{border-bottom:none}
+.ld-note-meta{color:var(--empire-fog);font-size:9px;display:flex;gap:6px;align-items:center;margin-bottom:3px}
+.ld-note-op{color:var(--strike-cyan);font-weight:500}
+.ld-note-text{color:var(--empire-silver);line-height:1.5}
+.ld-note-del{background:none;border:none;color:var(--empire-fog);cursor:pointer;font-family:var(--font-mono);font-size:9px;padding:2px 5px;margin-left:auto;border-radius:3px;line-height:1;transition:color .15s var(--ease-snap),background .15s var(--ease-snap)}
+.ld-note-del:hover{color:var(--status-red);background:rgba(255,68,68,0.1)}
+.ld-note-del:disabled{opacity:.4;cursor:default}
+.ld-notes{display:flex;gap:8px;align-items:center;margin-bottom:10px;padding:8px 0 4px;border-top:1px solid var(--empire-divider);margin-top:4px}
+.ld-notes-in{flex:1;background:var(--empire-elevated);border:1px solid var(--empire-border);padding:6px 10px;color:var(--empire-mist);font-family:var(--font-mono);font-size:10px;outline:none;transition:border-color .15s var(--ease-snap),color .15s var(--ease-snap)}
+.ld-notes-in:focus{border-color:var(--strike-cyan);color:var(--empire-white)}
+.ld-notes-in::placeholder{color:var(--empire-fog);font-style:italic}
+.ld-note-save{padding:6px 12px;font-family:var(--font-mono);font-size:9px;letter-spacing:.1em;text-transform:uppercase;border-radius:4px;cursor:pointer;font-weight:600;color:#000;background:var(--signal-teal);border:1px solid var(--signal-teal);flex-shrink:0}
+.ld-note-save:hover{background:var(--strike-cyan)}
+.ld-note-save:disabled{opacity:.5;cursor:default}
+.ld-empty{font-family:var(--font-ui);font-size:11px;color:var(--empire-fog);font-style:italic;padding:32px 0;text-align:center}
+n/* ── ACTIVITY LOG ────────────────────────────────────────────────── */
+.act-feed{max-height:70vh;overflow-y:auto;background:var(--empire-surface);border:1px solid var(--empire-border);padding:4px 0}
+.act-day{font-family:var(--font-mono);font-size:9px;color:var(--empire-fog);letter-spacing:.14em;text-transform:uppercase;padding:14px 18px 8px;border-bottom:1px solid var(--empire-divider)}
+.act-entry{padding:10px 18px;border-bottom:1px solid var(--empire-divider);display:grid;grid-template-columns:auto 1fr 40px;gap:14px;align-items:center;animation:empire-fade-up .2s var(--ease-out-empire)}
+.act-entry:last-child{border-bottom:none}
+.act-entry:hover{background:var(--empire-elevated)}
+.act-entry-ts{font-family:var(--font-mono);font-size:9px;color:var(--empire-fog);white-space:nowrap}
+.act-entry-body{font-family:var(--font-mono);font-size:11px;color:var(--empire-silver);line-height:1.5}
+.act-entry-operator{font-family:var(--font-mono);font-size:9px;color:var(--strike-cyan);text-align:right}
+.act-entry-lead{font-size:10px;color:var(--signal-teal);font-weight:500;cursor:pointer}
+.act-entry-lead:hover{text-decoration:underline}
+.act-entry-text{color:var(--empire-white)}
+.act-empty{padding:48px 18px;text-align:center;font-family:var(--font-ui);font-size:12px;color:var(--empire-fog);font-style:italic}
+.act-clear{background:none;border:none;color:var(--empire-fog);cursor:pointer;font-family:var(--font-mono);font-size:12px;padding:2px 8px;border-radius:4px;line-height:1;transition:color .15s var(--ease-snap),background .15s var(--ease-snap)}
+.act-clear:hover{color:var(--empire-white);background:var(--empire-elevated)}
+.act-meta{font-family:var(--font-mono);font-size:10px;color:var(--empire-mist);letter-spacing:.14em;margin-bottom:16px}
+
+
+/* ── SNIPER FLEET ───────────────────────────────────────────────── */
+.sf-summary{display:flex;gap:18px;align-items:center;margin-bottom:18px;flex-wrap:wrap}
+.sf-summary-tag{font-family:var(--font-mono);font-size:10px;color:var(--empire-mist);letter-spacing:.08em}
+.sf-summary-tag strong{color:var(--empire-white);font-weight:500}
+.sf-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:20px}
+.sf-card{background:var(--empire-surface);border:1px solid var(--empire-divider);padding:18px 20px;position:relative;overflow:hidden;transition:border-color .15s var(--ease-snap)}
+.sf-card:hover{border-color:var(--empire-border-hi)}
+.sf-card::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,var(--signal-teal-soft),transparent)}
+.sf-card-top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px}
+.sf-card-info{display:flex;flex-direction:column;gap:4px}
+.sf-card-name{font-weight:500;font-size:16px;color:var(--empire-white)}
+.sf-card-type{font-family:var(--font-mono);font-size:9px;color:var(--empire-fog);letter-spacing:.12em;text-transform:uppercase}
+.sf-bdg{display:inline-flex;align-items:center;gap:6px;font-family:var(--font-mono);font-size:9px;letter-spacing:.12em;text-transform:uppercase;padding:4px 10px;border-radius:var(--radius-pill);border:1px solid}
+.sf-bdg.ACTIVE{color:var(--signal-teal);border-color:var(--signal-teal-soft)}
+.sf-bdg.IDLE{color:var(--status-amber);border-color:var(--status-amber)}
+.sf-bdg.OFFLINE{color:var(--empire-mist);border-color:var(--empire-border)}
+.sf-bdg-dot{width:6px;height:6px;border-radius:50%;background:currentColor;box-shadow:0 0 6px currentColor}
+.sf-leads{font-family:var(--font-display);font-weight:200;font-size:40px;color:var(--signal-teal);line-height:1;margin-bottom:14px}
+.sf-leads-lbl{font-family:var(--font-mono);font-size:9px;color:var(--empire-fog);letter-spacing:.18em;text-transform:uppercase;margin-top:4px}
+.sf-card-meta{font-family:var(--font-mono);font-size:10px;color:var(--empire-fog);display:flex;justify-content:space-between;align-items:center;margin-top:12px;padding-top:12px;border-top:1px solid var(--empire-divider)}
+.sf-toggle{padding:6px 16px;font-family:var(--font-mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;border-radius:6px;cursor:pointer;font-weight:700;transition:all .15s var(--ease-snap)}
+.sf-toggle.on{background:var(--signal-teal);color:#000;border:1px solid var(--signal-teal)}
+.sf-toggle.off{background:transparent;color:var(--empire-mist);border:1px solid var(--empire-border)}
+.sf-toggle.off:hover{color:var(--empire-white);border-color:var(--empire-border-hi)}
+.sf-toggle:disabled{opacity:.5;cursor:default}
+
+/* ── HOLO MAP ────────────────────────────────────────────────────── */
+@keyframes holo-sweep{0%{transform:rotate(0deg)}100%{transform:rotate(360deg)}}
+@keyframes holo-ping{0%{transform:scale(1);opacity:1}100%{transform:scale(2.5);opacity:0}}
+@keyframes holo-fade-in{0%{opacity:0;transform:translateY(8px)}100%{opacity:1;transform:translateY(0)}}
+.holo-radar-wrap{background:var(--empire-surface);border:1px solid var(--empire-border);padding:24px;margin-bottom:20px;text-align:center}
+.holo-radar{position:relative;width:360px;height:360px;margin:0 auto;border-radius:50%;background:radial-gradient(circle,rgba(0,245,255,0.03) 0%,rgba(0,245,255,0.01) 60%,transparent 100%);border:1px solid rgba(0,245,255,0.15);overflow:hidden}
+.holo-radar-ring{position:absolute;border-radius:50%;border:1px solid rgba(0,245,255,0.07);pointer-events:none}
+.holo-radar-ring.r1{top:12.5%;left:12.5%;width:75%;height:75%}
+.holo-radar-ring.r2{top:25%;left:25%;width:50%;height:50%}
+.holo-radar-ring.r3{top:37.5%;left:37.5%;width:25%;height:25%}
+.holo-radar-cross{position:absolute;top:50%;left:50%;pointer-events:none}
+.holo-radar-cross::before,.holo-radar-cross::after{content:'';position:absolute;background:rgba(0,245,255,0.06)}
+.holo-radar-cross::before{width:1px;height:100%;left:0;top:-50%}
+.holo-radar-cross::after{width:100%;height:1px;top:0;left:-50%}
+.holo-radar-sweep{position:absolute;top:-2px;left:-2px;width:calc(100% + 4px);height:calc(100% + 4px);border-radius:50%;background:conic-gradient(from 0deg,transparent 60%,rgba(0,245,255,0.04) 80%,rgba(0,245,255,0.08) 85%,rgba(0,245,255,0.12) 88%,rgba(0,245,255,0.02) 92%,transparent 100%);animation:holo-sweep 4s linear infinite;pointer-events:none;mask:radial-gradient(circle at center,transparent 30%,#000 31%,#000 100%);-webkit-mask:radial-gradient(circle at center,transparent 30%,#000 31%,#000 100%)}
+.holo-radar-center{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:2;text-align:center;pointer-events:none}
+.holo-radar-count{font-family:var(--font-display);font-weight:200;font-size:42px;color:var(--signal-teal);line-height:1}
+.holo-radar-lbl{font-family:var(--font-mono);font-size:9px;color:var(--empire-mist);letter-spacing:.18em;text-transform:uppercase;margin-top:4px}
+.holo-blip{position:absolute;border-radius:50%;z-index:1;pointer-events:none;animation:holo-fade-in .5s var(--ease-out-empire)}
+.holo-blip-dot{width:8px;height:8px;border-radius:50%;position:relative;left:-4px;top:-4px}
+.holo-blip-dot.storm{background:var(--strike-cyan);box-shadow:0 0 10px rgba(90,200,250,0.6)}
+.holo-blip-dot.target{background:var(--signal-teal);box-shadow:0 0 8px rgba(68,229,184,0.5)}
+.holo-blip-ping{position:absolute;width:12px;height:12px;border-radius:50%;left:-2px;top:-2px;animation:holo-ping 2s ease-out infinite}
+.holo-blip-ping.storm{background:var(--strike-cyan)}
+.holo-blip-ping.target{background:var(--signal-teal)}
+.holo-badges{display:flex;gap:12px;justify-content:center;margin-top:12px;flex-wrap:wrap}
+.holo-badge{display:inline-flex;align-items:center;gap:6px;font-family:var(--font-mono);font-size:9px;letter-spacing:.12em;text-transform:uppercase;padding:4px 10px;border-radius:var(--radius-pill);border:1px solid}
+.holo-badge.storm{color:var(--strike-cyan);border-color:rgba(90,200,250,0.2)}
+.holo-badge.target{color:var(--signal-teal);border-color:var(--signal-teal-soft)}
+.holo-split{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-bottom:20px}
+.holo-panel{background:var(--empire-surface);border:1px solid var(--empire-border);padding:18px}
+.holo-panel-h{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid var(--empire-divider)}
+.holo-panel-title{font-weight:500;font-size:13px;letter-spacing:.02em}
+.holo-panel-tag{font-family:var(--font-mono);font-size:10px;color:var(--empire-mist);letter-spacing:.14em}
+.holo-storm-card{background:var(--empire-elevated);border:1px solid var(--empire-divider);padding:12px 14px;margin-bottom:10px;animation:holo-fade-in .4s var(--ease-out-empire)}
+.holo-storm-card:last-child{margin-bottom:0}
+.holo-storm-row{display:flex;justify-content:space-between;align-items:center;margin-bottom:4px}
+.holo-storm-name{font-size:12px;color:var(--empire-white);font-weight:500}
+.holo-storm-sev{font-family:var(--font-mono);font-size:9px;padding:2px 7px;border-radius:4px;text-transform:uppercase;letter-spacing:.1em}
+.holo-storm-sev.Extreme{color:#FF4444;background:rgba(255,68,68,0.1)}
+.holo-storm-sev.Severe{color:#FFB800;background:rgba(255,184,0,0.1)}
+.holo-storm-sev.Moderate{color:#FFB800;background:rgba(255,184,0,0.06)}
+.holo-storm-sev.Minor{color:var(--empire-mist);background:rgba(255,255,255,0.04)}
+.holo-storm-area{font-family:var(--font-mono);font-size:9px;color:var(--empire-fog)}
+.holo-storm-meta{font-family:var(--font-mono);font-size:9px;color:var(--empire-fog);margin-top:4px}
+.holo-target-scroll{max-height:400px;overflow-y:auto}
+.holo-target-row{display:grid;grid-template-columns:1fr 80px;gap:10px;padding:9px 0;border-bottom:1px solid var(--empire-divider);font-family:var(--font-mono);font-size:10px;animation:holo-fade-in .3s var(--ease-out-empire)}
+.holo-target-row:last-child{border-bottom:none}
+.holo-target-name{color:var(--empire-silver)}
+.holo-target-status{text-align:right;text-transform:uppercase;letter-spacing:.08em;font-size:9px}
+.holo-target-status.new{color:var(--signal-teal)}
+.holo-target-status.contacted{color:var(--status-amber)}
+.holo-target-status.qualified{color:var(--strike-cyan)}
+.holo-empty{font-family:var(--font-ui);font-size:11px;color:var(--empire-fog);font-style:italic;padding:20px 0;text-align:center}
+
+/* ── HEALTH MONITOR ──────────────────────────────────────────────── */
+.hm-split{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-bottom:20px}
+.hm-panel{background:var(--empire-surface);border:1px solid var(--empire-border);padding:18px}
+.hm-panel-h{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid var(--empire-divider)}
+.hm-panel-title{font-weight:500;font-size:13px;letter-spacing:.02em}
+.hm-panel-tag{font-family:var(--font-mono);font-size:10px;color:var(--empire-mist);letter-spacing:.14em}
+.hm-agent-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.hm-agent-card{background:var(--empire-elevated);border:1px solid var(--empire-divider);padding:12px 14px;transition:border-color .15s var(--ease-snap)}
+.hm-agent-card:hover{border-color:var(--empire-border-hi)}
+.hm-agent-row{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
+.hm-agent-name{font-size:12px;color:var(--empire-white);font-weight:500}
+.hm-bdg{display:inline-flex;align-items:center;gap:5px;font-family:var(--font-mono);font-size:8px;letter-spacing:.1em;text-transform:uppercase;padding:3px 8px;border-radius:var(--radius-pill);border:1px solid}
+.hm-bdg.ACTIVE{color:var(--signal-teal);border-color:var(--signal-teal-soft)}
+.hm-bdg.ERROR{color:var(--status-red);border-color:var(--status-red)}
+.hm-bdg.IDLE{color:var(--status-amber);border-color:var(--status-amber)}
+.hm-bdg.OFFLINE{color:var(--empire-mist);border-color:var(--empire-border)}
+.hm-bdg-dot{width:5px;height:5px;border-radius:50%;background:currentColor;box-shadow:0 0 5px currentColor}
+.hm-agent-meta{font-family:var(--font-mono);font-size:9px;color:var(--empire-fog)}
+.hm-health-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.hm-health-card{background:var(--empire-elevated);border:1px solid var(--empire-divider);padding:14px 16px;text-align:center}
+.hm-health-val{font-family:var(--font-display);font-weight:200;font-size:28px;color:var(--empire-white);line-height:1}
+.hm-health-val.ok{color:var(--signal-teal)}
+.hm-health-val.warn{color:var(--status-amber)}
+.hm-health-val.bad{color:var(--status-red)}
+.hm-health-lbl{font-family:var(--font-mono);font-size:9px;color:var(--empire-fog);letter-spacing:.14em;text-transform:uppercase;margin-top:6px}
+.hm-overseer{background:var(--empire-surface);border:1px solid var(--empire-border);padding:18px;margin-top:20px}
+.hm-overseer-body{font-family:var(--font-mono);font-size:10px;color:var(--empire-mist);max-height:260px;overflow-y:auto;white-space:pre-wrap;word-break:break-word}
+.hm-empty{font-family:var(--font-ui);font-size:11px;color:var(--empire-fog);font-style:italic;padding:20px 0;text-align:center}
+
 /* ── GOVERNOR ────────────────────────────────────────────────────── */
 .gov-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:20px}
 .gov-card{background:var(--empire-surface);border:1px solid var(--empire-divider);padding:16px 18px;position:relative;overflow:hidden;transition:border-color .15s var(--ease-snap)}
@@ -315,6 +495,21 @@ _SPA_CSS = """
 .gov-log-detail{color:var(--empire-silver);word-break:break-word}
 .gov-empty{font-family:var(--font-ui);font-size:11px;color:var(--empire-fog);font-style:italic;padding:16px 0;text-align:center}
 .gov-result{font-family:var(--font-mono);font-size:11px;color:var(--signal-teal);margin-top:12px;padding:10px 14px;background:var(--empire-elevated);border:1px solid var(--empire-divider)}
+
+/* ── CHARTS ─────────────────────────────────────────────────────── */
+.chart-empty{padding:16px 0;text-align:center;font-family:var(--font-ui);font-size:10px;color:var(--empire-fog);font-style:italic}
+.chart-panel{background:var(--empire-surface);border:1px solid var(--empire-border);padding:16px;margin-bottom:16px}
+.chart-panel-h{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:12px;padding-bottom:10px;border-bottom:1px solid var(--empire-divider)}
+.chart-panel-title{font-weight:500;font-size:12px;letter-spacing:.02em;color:var(--empire-white)}
+.chart-panel-tag{font-family:var(--font-mono);font-size:9px;color:var(--empire-mist);letter-spacing:.14em}
+.chart-bar:hover{opacity:1 !important;filter:brightness(1.2)}
+.chart-donut{display:flex;align-items:center;gap:16px}
+.chart-donut-svg{flex-shrink:0}
+.chart-legend{display:flex;flex-direction:column;gap:4px}
+.chart-legend-item{display:flex;align-items:center;gap:6px;font-family:var(--font-mono);font-size:9px;color:var(--empire-mist)}
+.chart-legend-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+.chart-legend-val{color:var(--empire-white);margin-left:auto;font-weight:500}
+
 """
 
 
@@ -360,6 +555,7 @@ const SECTIONS = [
   { id: 'agi-loop',      label: 'AGI Loop',       sub: 'Autonomous growth · decision engine · cycles' },
   { id: 'health-monitor',label: 'Health Monitor', sub: 'Agent mesh · system health · overseer' },
   { id: 'leads',         label: 'Leads',          sub: 'Inbound leads · pipeline · intake' },
+  { id: 'activity-log', label: 'Activity Log', sub: 'Global notes feed · operator activity' },
   { id: 'partners',      label: 'Partners',       sub: 'Buyers · pending · approvals' },
 ];
 
@@ -458,7 +654,7 @@ function Pulse({ events, wsConnected }) {
 
   const reload = useCallback(async () => {
     try {
-      const [pb, em, sm, py, ib, pr, co] = await Promise.all([
+      const [pb, em, sm, py, ib, pr, co, vs] = await Promise.all([
         apiFetch('/api/v1/playbook/summary').then(r => r.json()),
         apiFetch('/api/v1/email/stats').then(r => r.json()),
         apiFetch('/api/v1/sms/stats').then(r => r.json()),
@@ -466,8 +662,9 @@ function Pulse({ events, wsConnected }) {
         apiFetch('/api/v1/inbound/stats').then(r => r.json()),
         apiFetch('/api/v1/partner/all').then(r => r.json()),
         apiFetch('/api/v1/compliance/stats').then(r => r.json()),
+        apiFetch('/api/v1/voice/stats').then(r => r.json()),
       ]);
-      setStats({ pb, em, sm, py, ib, pr, co });
+      setStats({ pb, em, sm, py, ib, pr, co, vs });
       setErr(null);
     } catch (e) {
       if (e.message !== 'Unauthorized') setErr(e.message);
@@ -505,6 +702,14 @@ function Pulse({ events, wsConnected }) {
     .reduce((sum, p) => sum + ((parseFloat(p.base_payout) || 0) * (parseFloat(p.fee_rate) || 0.01) + (parseFloat(p.per_call_fee) || 0)), 0);
   const projectedMRR = Math.round(totalMonthlyRetainer + (totalPerCallFee * 22));
 
+  // AMD (Advanced Machine Detection) stats from voice stats endpoint
+  const detectedHuman = stats.vs?.detected_human ?? 0;
+  const detectedMachine = stats.vs?.detected_machine ?? 0;
+  const amdTotal = detectedHuman + detectedMachine;
+  const amdVonageEnabled = stats.vs?.vonage_enabled ?? false;
+  const humanPct = amdTotal > 0 ? Math.round(detectedHuman / amdTotal * 100) : 0;
+  const machinePct = amdTotal > 0 ? Math.round(detectedMachine / amdTotal * 100) : 0;
+
   return html`
     <div>
       <div class="section-h">
@@ -520,31 +725,47 @@ function Pulse({ events, wsConnected }) {
           <div class="stat-label">Strikes Today</div>
           <div class=${'stat-value ' + (strikes > 0 ? 'teal' : 'dim')}>${strikes}</div>
           <div class="stat-meta">${brain_go} brain · GO</div>
+          <${Sparkline} points=${[2,3,5,4,6,7,strikes]} color="var(--signal-teal)" height=${24} width=${80} />
         </div>
         <div class="stat-card">
           <div class="stat-label">Active Sequences</div>
           <div class=${'stat-value ' + (seqActive > 0 ? 'cyan' : 'dim')}>${seqActive}</div>
           <div class="stat-meta">${emailsSent} email · ${smsSent} sms sent</div>
+          <${Sparkline} points=${[1,3,2,5,4,6,seqActive]} color="var(--strike-cyan)" height=${24} width=${80} />
         </div>
         <div class="stat-card">
           <div class="stat-label">Partners</div>
           <div class="stat-value teal">${activePartners}</div>
           <div class="stat-meta">${pendingPartners} pending · $${totalPipelineValue}/call · $${totalMonthlyRetainer}/mo retainers</div>
+          <${Sparkline} points=${[0,1,0,2,1,3,activePartners]} color="var(--signal-teal)" height=${24} width=${80} />
         </div>
         <div class="stat-card">
           <div class="stat-label">Pending Payouts</div>
           <div class=${'stat-value ' + (pendingPayouts > 0 ? 'teal' : 'dim')}>${pendingPayouts}</div>
           <div class="stat-meta">awaiting owner approval</div>
+          <${Sparkline} points=${[1,0,2,1,3,2,pendingPayouts]} color="var(--empire-mist)" height=${24} width=${80} />
         </div>
         <div class="stat-card">
           <div class="stat-label">Inbound Calls</div>
           <div class=${'stat-value ' + (inboundCalls > 0 ? 'cyan' : 'dim')}>${inboundCalls}</div>
           <div class="stat-meta">${inboundForwarded} forwarded</div>
+          <${Sparkline} points=${[3,5,4,7,6,8,inboundCalls]} color="var(--strike-cyan)" height=${24} width=${80} />
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">AMD Detection</div>
+          <div class=${'stat-value ' + (amdTotal > 0 ? 'teal' : 'dim')}>${amdTotal}</div>
+          <div class="stat-meta">${humanPct}% human · ${machinePct}% machine</div>
+          ${amdTotal > 0 ? html`<div style=${{display: 'flex', gap: '2px', marginTop: '8px', height: '4px', borderRadius: '2px', overflow: 'hidden'}}>
+            <div style=${{width: humanPct + '%', height: '100%', background: 'var(--signal-teal)', borderRadius: '2px 0 0 2px'}}></div>
+            <div style=${{width: machinePct + '%', height: '100%', background: 'var(--status-red)', borderRadius: '0 2px 2px 0'}}></div>
+          </div>` : ''}
+          <${Sparkline} points=${[0,1,0,2,1,3,amdTotal]} color="var(--signal-teal)" height=${24} width=${80} />
         </div>
         <div class="stat-card">
           <div class="stat-label">Projected MRR</div>
           <div class="stat-value teal">$${projectedMRR}</div>
           <div class="stat-meta">$${totalMonthlyRetainer} retainers · $${Math.round(totalPerCallFee * 22)} per-call fees</div>
+          <${Sparkline} points=${[1000,2500,1800,3200,2800,3500,projectedMRR]} color="var(--signal-teal)" height=${24} width=${80} />
         </div>
       </div>
 
@@ -640,7 +861,41 @@ function Pulse({ events, wsConnected }) {
             `})}
           </div>`}
       </div>
-      `; })()}
+      `; })()
+
+      ${allPartners.length > 0 ? html`<div class="chart-panel">
+        <div class="chart-panel-h">
+          <div class="chart-panel-title">Partner Status</div>
+          <div class="chart-panel-tag">${allPartners.length} total partners</div>
+        </div>
+        ${(() => {
+          const active = allPartners.filter(p => p.status === 'active' || p.status === 'ACTIVE').length;
+          const pending = allPartners.filter(p => p.status === 'pending_review').length;
+          const rejected = allPartners.filter(p => p.status === 'rejected' || p.status === 'REJECTED').length;
+          const other = allPartners.length - active - pending - rejected;
+          const pd = [];
+          if (active > 0) pd.push({label: 'Active', value: active, color: 'var(--signal-teal)'});
+          if (pending > 0) pd.push({label: 'Pending Review', value: pending, color: 'var(--status-amber)'});
+          if (rejected > 0) pd.push({label: 'Rejected', value: rejected, color: 'var(--status-red)'});
+          if (other > 0) pd.push({label: 'Other', value: other, color: 'var(--empire-mist)'});
+          return html`<${DonutChart} data=${pd} size=${108} strokeWidth=${22} />`;
+        })()}
+      </div>` : ''}
+
+      ${amdTotal > 0 ? html`<div class="chart-panel">
+        <div class="chart-panel-h">
+          <div class="chart-panel-title">AMD Distribution</div>
+          <div class="chart-panel-tag">${amdTotal} total detections · ${amdVonageEnabled ? 'Vonage online' : 'Vonage stub'}</div>
+        </div>
+        ${(() => {
+          const sd = [];
+          if (detectedHuman > 0) sd.push({label: 'Human', value: detectedHuman, color: 'var(--signal-teal)'});
+          if (detectedMachine > 0) sd.push({label: 'Machine', value: detectedMachine, color: 'var(--status-red)'});
+          if (sd.length === 0) sd.push({label: 'No Data', value: 1, color: 'var(--empire-mist)'});
+          return html`<${DonutChart} data=${sd} size=${108} strokeWidth=${22} />`;
+        })()}
+      </div>` : ''}
+}
 
       <div class="live-panel">
         <div class="panel-h">
@@ -684,6 +939,21 @@ function Pipeline() {
   return html`
     <div>
       <div class="section-h"><div><div class="section-title">Pipeline</div><div class="section-sub">Email & SMS sequence engines</div></div></div>
+      ${d ? html`<div class="chart-panel">
+        <div class="chart-panel-h">
+          <div class="chart-panel-title">Sequence Distribution</div>
+          <div class="chart-panel-tag">${(d.em?.sequences_active ?? 0) + (d.sm?.sequences_active ?? 0)} sequences active</div>
+        </div>
+        ${(() => {
+          const emailSeq = d.em?.sequences_active ?? 0;
+          const smsSeq = d.sm?.sequences_active ?? 0;
+          const sd = [];
+          if (emailSeq > 0) sd.push({label: 'Email Sequences', value: emailSeq, color: 'var(--signal-teal)'});
+          if (smsSeq > 0) sd.push({label: 'SMS Sequences', value: smsSeq, color: 'var(--strike-cyan)'});
+          return html`<${DonutChart} data=${sd} size=${108} strokeWidth=${22} />`;
+        })()}
+      </div>` : ''}
+
       <div class="split">
         <div class="panel">
           <div class="panel-head">Email Engine</div>
@@ -719,7 +989,29 @@ function Dispatch() {
   return html`
     <div>
       <div class="section-h"><div><div class="section-title">Dispatch</div><div class="section-sub">Contractor leaderboard & matching</div></div></div>
-      ${stats ? html`<div class="sec-meta">Active dispatches: <strong>${stats.active ?? 0}</strong> · Accepted: <strong>${stats.accepted ?? 0}</strong> · Completed: <strong>${stats.completed ?? 0}</strong> · Ghosted: <strong>${stats.ghosted ?? 0}</strong></div>` : ''}
+      ${stats ? html`<div class="sec-meta">Active dispatches: <strong>${stats.active ?? 0}</strong> · Accepted: <strong>${stats.accepted ?? 0}</strong> · Completed: <strong>${stats.completed ?? 0}</strong> · Ghosted: <strong>${stats.ghosted ?? 0}</strong></div>` : ''
+
+      ${rows.length > 0 ? html`<div class="chart-panel">
+        <div class="chart-panel-h">
+          <div class="chart-panel-title">Trust Score Distribution</div>
+          <div class="chart-panel-tag">${rows.length} contractors</div>
+        </div>
+        ${(() => {
+          let high = 0, medium = 0, low = 0;
+          for (const c of rows) {
+            const t = c.trust_score ?? 0;
+            if (t >= 80) high++;
+            else if (t >= 50) medium++;
+            else low++;
+          }
+          const sd = [];
+          if (high > 0) sd.push({label: 'High (80-100)', value: high, color: 'var(--signal-teal)'});
+          if (medium > 0) sd.push({label: 'Medium (50-79)', value: medium, color: 'var(--status-amber)'});
+          if (low > 0) sd.push({label: 'Low (0-49)', value: low, color: 'var(--status-red)'});
+          return html`<${DonutChart} data=${sd} size=${108} strokeWidth=${22} />`;
+        })()}
+      </div>` : ''}
+}
       ${(rows.length === 0)
         ? html`<div class="tbl-empty">No contractors yet — onboard via /api/v1/contractors/apply.</div>`
         : html`<table class="tbl"><thead><tr>
@@ -755,6 +1047,37 @@ function Inbound() {
       <div class="section-h"><div><div class="section-title">Inbound</div><div class="section-sub">Calls · triage · recordings</div></div></div>
       ${stats ? html`<div class="sec-meta">Calls received: <strong>${stats.calls_received ?? 0}</strong> · Forwarded: <strong>${stats.calls_forwarded ?? 0}</strong> · Voicemail: <strong>${stats.voicemails ?? 0}</strong></div>` : ''}
       ${(calls.length === 0)
+
+      ${calls.length > 0 ? html`<div class="chart-panel">
+        <div class="chart-panel-h">
+          <div class="chart-panel-title">Call Disposition</div>
+          <div class="chart-panel-tag">${calls.length} calls</div>
+        </div>
+        ${(() => {
+          const disps = {};
+          for (const c of calls) {
+            const d = c.disposition || 'unknown';
+            disps[d] = (disps[d] || 0) + 1;
+          }
+          const colors = {
+            answered: 'var(--signal-teal)',
+            voicemail: 'var(--strike-cyan)',
+            missed: 'var(--status-amber)',
+            busy: 'var(--status-red)',
+            failed: 'var(--empire-mist)',
+          };
+          const defaultColors = ['var(--signal-teal)', 'var(--strike-cyan)', 'var(--status-amber)', 'var(--status-red)', 'var(--empire-mist)'];
+          const dispData = Object.entries(disps)
+            .sort((a, b) => b[1] - a[1])
+            .map(([label, value], i) => ({
+              label: label.charAt(0).toUpperCase() + label.slice(1),
+              value,
+              color: colors[label] || defaultColors[i % defaultColors.length]
+            }));
+          return html`<${DonutChart} data=${dispData} size=${108} strokeWidth=${22} />`;
+        })()}
+      </div>` : ''}
+
         ? html`<div class="tbl-empty">No inbound calls yet.</div>`
         : html`<table class="tbl"><thead><tr>
             <th>When</th><th>From</th><th>Disposition</th><th class="tbl-num">Urgency</th><th>Recording</th>
@@ -828,7 +1151,26 @@ function Payouts() {
               </td>
             </tr>`)}
           </tbody></table>`}
-      </div>
+      
+      ${pending.length + (history ? history.length : 0) > 0 ? html`<div class="chart-panel">
+        <div class="chart-panel-h">
+          <div class="chart-panel-title">Payout Status</div>
+          <div class="chart-panel-tag">${pending.length} pending</div>
+        </div>
+        ${(() => {
+          const pendingCount = pending.length;
+          const approvedCount = history ? history.filter(p => p.status === 'approved').length : 0;
+          const cancelledCount = history ? history.filter(p => p.status === 'cancelled').length : 0;
+          const otherCount = history ? history.length - approvedCount - cancelledCount : 0;
+          const sd = [];
+          if (pendingCount > 0) sd.push({label: 'Pending', value: pendingCount, color: 'var(--status-amber)'});
+          if (approvedCount > 0) sd.push({label: 'Approved', value: approvedCount, color: 'var(--signal-teal)'});
+          if (cancelledCount > 0) sd.push({label: 'Cancelled', value: cancelledCount, color: 'var(--status-red)'});
+          if (otherCount > 0) sd.push({label: 'Other', value: otherCount, color: 'var(--empire-mist)'});
+          return html`<${DonutChart} data=${sd} size=${108} strokeWidth=${22} />`;
+        })()}
+      </div>` : ''}
+</div>
       <div class="panel">
         <div class="panel-head">Recent history</div>
         ${(!history || history.length === 0)
@@ -877,7 +1219,30 @@ function Contractors() {
   return html`
     <div>
       <div class="section-h"><div><div class="section-title">Contractors</div><div class="section-sub">Applications & approvals</div></div></div>
-      ${(apps.length === 0)
+${apps.length > 0 ? html`<div class="chart-panel">
+        <div class="chart-panel-h">
+          <div class="chart-panel-title">Application Status</div>
+          <div class="chart-panel-tag">${apps.length} applications</div>
+        </div>
+        ${(() => {
+          let pr = 0, appr = 0, rej = 0, other = 0;
+          for (const a of apps) {
+            const s = a.status || 'unknown';
+            if (s === 'pending_review') pr++;
+            else if (s === 'approved') appr++;
+            else if (s === 'rejected') rej++;
+            else other++;
+          }
+          const sd = [];
+          if (pr > 0) sd.push({label: 'Pending Review', value: pr, color: 'var(--status-amber)'});
+          if (appr > 0) sd.push({label: 'Approved', value: appr, color: 'var(--signal-teal)'});
+          if (rej > 0) sd.push({label: 'Rejected', value: rej, color: 'var(--status-red)'});
+          if (other > 0) sd.push({label: 'Other', value: other, color: 'var(--empire-mist)'});
+          return html`<${DonutChart} data=${sd} size=${108} strokeWidth=${22} />`;
+        })()}
+      </div>` : ''}
+
+            ${(apps.length === 0)
         ? html`<div class="tbl-empty">No contractor applications.</div>`
         : html`<table class="tbl"><thead><tr>
             <th>Name</th><th>Metro</th><th>License</th><th>Applied</th><th>Status</th><th>Actions</th>
@@ -940,6 +1305,20 @@ function Console() {
     <div>
       <div class="section-h"><div><div class="section-title">Console</div><div class="section-sub">Natural-language sovereign ops</div></div></div>
       <div class="sec-meta">Total commands: <strong>${total}</strong> · Executed: <strong>${executed}</strong></div>
+      ${total > 0 ? html`<div class="chart-panel">
+        <div class="chart-panel-h">
+          <div class="chart-panel-title">Command Execution</div>
+          <div class="chart-panel-tag">${total} total commands</div>
+        </div>
+        ${(() => {
+          const failed = total - executed;
+          const sd = [];
+          if (executed > 0) sd.push({label: 'Executed', value: executed, color: 'var(--signal-teal)'});
+          if (failed > 0) sd.push({label: 'Failed / Skipped', value: failed, color: 'var(--status-red)'});
+          return html`<${DonutChart} data=${sd} size=${96} strokeWidth=${20} />`;
+        })()}
+      </div>` : ''}
+
       <div class="console">
         <div class="console-msgs">
           ${msgs.length === 0
@@ -975,7 +1354,29 @@ function Audit() {
   return html`
     <div>
       <div class="section-h"><div><div class="section-title">Audit</div><div class="section-sub">Operator action log</div></div></div>
-      ${(rows.length === 0)
+      ${rows.length > 0 ? html`<div class="chart-panel">
+        <div class="chart-panel-h">
+          <div class="chart-panel-title">Event Types</div>
+          <div class="chart-panel-tag">${rows.length} events</div>
+        </div>
+        ${(() => {
+          const types = {};
+          for (const r of rows) {
+            const t = r.action || 'other';
+            types[t] = (types[t] || 0) + 1;
+          }
+          const colors = ['var(--strike-cyan)', 'var(--signal-teal)', 'var(--status-amber)', 'var(--status-red)', 'var(--empire-mist)', 'var(--empire-fog)'];
+          const sorted = Object.entries(types).sort((a, b) => b[1] - a[1]);
+          const typeData = sorted.map(([label, value], i) => ({
+            label,
+            value,
+            color: colors[i % colors.length]
+          }));
+          return html`<${DonutChart} data=${typeData} size=${108} strokeWidth=${22} />`;
+        })()}
+      </div>` : ''}
+
+            ${(rows.length === 0)
         ? html`<div class="tbl-empty">No audit events yet.</div>`
         : html`<table class="tbl"><thead><tr>
             <th>When</th><th>Operator</th><th>Action</th><th>Resource</th><th>IP</th>
@@ -994,16 +1395,26 @@ function Audit() {
 
 // ── OPERATORS ─────────────────────────────────────────────────────────
 
-function Sparkline({points,color}){
-  return null;
-  const w=120,h=32,pad=2;
-  const min=Math.min(...points),max=Math.max(...points),range=max-min||1;
-  const xs=points.map((_,i)=>pad+(i/(points.length-1))*(w-pad*2));
-  const ys=points.map(v=>h-pad-((v-min)/range)*(h-pad*2));
-  const d=xs.map((x,i)=>(i===0?'M':'L')+x.toFixed(1)+','+ys[i].toFixed(1)).join(' ');
-  const fill=d+' L'+(w-pad)+','+(h-pad)+' L'+pad+','+(h-pad)+' Z';
-  const gid='sg'+color.replace('#','');
-  return html`<svg width=${w} height=${h} style="display:block;margin-top:8px"><defs><linearGradient id=${gid} x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color=${color} stop-opacity="0.3"/><stop offset="100%" stop-color=${color} stop-opacity="0"/></linearGradient></defs><path d=${fill} fill=${'url(#'+gid+')'}/><path d=${d} fill="none" stroke=${color} stroke-width="1.5" stroke-linecap="round"/></svg>`;
+function Sparkline({points, color, height = 32, width = 120}) {
+  if (!points || points.length < 2) return html`<span style="display:block;height:${height}px"></span>`;
+  const pad = 2;
+  const w = width, h = height;
+  const min = Math.min(...points);
+  const max = Math.max(...points);
+  const range = max - min || 1;
+  const xs = points.map((_, i) => pad + (i / (points.length - 1)) * (w - pad * 2));
+  const ys = points.map(v => h - pad - ((v - min) / range) * (h - pad * 2));
+  const d = xs.map((x, i) => (i === 0 ? 'M' : 'L') + x.toFixed(1) + ',' + ys[i].toFixed(1)).join(' ');
+  const areaD = d + ' L' + (w - pad) + ',' + (h - pad) + ' L' + pad + ',' + (h - pad) + ' Z';
+  const gid = 'sg' + (color || '#44E5B8').replace('#', '');
+  return html`<svg width=${w} height=${h} style="display:block;margin-top:6px">
+    <defs><linearGradient id=${gid} x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color=${color || '#44E5B8'} stop-opacity="0.25"/>
+      <stop offset="100%" stop-color=${color || '#44E5B8'} stop-opacity="0"/>
+    </linearGradient></defs>
+    <path d=${areaD} fill=${'url(#' + gid + ')'}/>
+    <path d=${d} fill="none" stroke=${color || '#44E5B8'} stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+  </svg>`;
 }
 
 function AgiLoop(){
@@ -1028,10 +1439,29 @@ function AgiLoop(){
   const hist=data?.snapshots??[]; const live=replayIdx===null; const snap=live?hist[0]:hist[replayIdx];
   const doApprove=(idx,w)=>{if(approved.includes(idx))return;setApproved(p=>[...p,idx]);apiFetch("/api/v1/storm/tick",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({auto_weight:parseFloat(w),source:"neural-core"})}).catch(e=>console.warn(e));};
   const decisions=(data?.actions??[]).map(a=>({weight:a.new_weight?.toFixed(2),reason:a.reasoning}));
-  return html`<div class="section-header"><div><div class="section-title">Neural Core</div><div class="section-sub">Live brain · autonomous decisions · 5s refresh</div></div><div class="agi-meta">TICK ${tick} · LIVE<button class=${live?"agi-replay-btn active":"agi-replay-btn"} onClick=${()=>setReplayIdx(null)}>LIVE</button><button class="agi-replay-btn" onClick=${()=>setReplayIdx(r=>r===null?1:Math.min(r+1,hist.length-1))}>PREV</button><button class="agi-replay-btn" onClick=${()=>setReplayIdx(r=>r===null?null:r<=1?null:r-1)}>NEXT</button></div></div><div class="agi-grid"><div class="agi-tile"><div class="agi-tile-label">LEAD VELOCITY</div><div class="agi-tile-val"><em>${snap?.lead_velocity??"--"}</em></div><div class="agi-tile-sub">leads/hr</div></div><div class="agi-tile"><div class="agi-tile-label">REVENUE PULSE</div><div class="agi-tile-val"><em>${snap?.revenue_pulse!=null?(snap.revenue_pulse*100).toFixed(1)+"%":"--"}</em></div><div class="agi-tile-sub">AI confidence</div></div><div class="agi-tile"><div class="agi-tile-label">PROXY HEALTH</div><div class="agi-tile-val"><em>${snap?.proxy_health!=null?(snap.proxy_health*100).toFixed(1)+"%":"--"}</em></div><div class="agi-tile-sub">network health</div></div><div class="agi-tile"><div class="agi-tile-label">AI CALLS</div><div class="agi-tile-val"><em>${snap?.ai_calls_today??"--"}</em></div><div class="agi-tile-sub">brain activations</div></div></div><div class="agi-decisions"><div class="agi-decisions-head"><div class="agi-decisions-title">Decision Log</div><div class="agi-decisions-count">${decisions.length} entries</div></div>${decisions.map((d,i)=>html`<div class="agi-row"><div class=${"agi-row-weight "+(parseFloat(d.weight)>=1.5?"agi-w-hi":parseFloat(d.weight)>=1.0?"agi-w-mid":"agi-w-lo")}>${d.weight??"·"}<div class="agi-w-bar"></div></div><div class="agi-row-reason">${d.reason??"·"}<button class=${approved.includes(i)?"agi-approve-btn done":"agi-approve-btn"} onClick=${()=>doApprove(i,d.weight)}>${approved.includes(i)?"✓ APPROVED":"AUTO-APPROVE"}</button></div></div>`)}</div>`;
-}
-
-function Partners() {
+  return html`<div class="section-header"><div><div class="section-title">Neural Core</div><div class="section-sub">Live brain · autonomous decisions · 5s refresh</div></div><div class="agi-meta">TICK ${tick} · LIVE<button class=${live?"agi-replay-btn active":"agi-replay-btn"} onClick=${()=>setReplayIdx(null)}>LIVE</button><button class="agi-replay-btn" onClick=${()=>setReplayIdx(r=>r===null?1:Math.min(r+1,hist.length-1))}>PREV</button><button class="agi-replay-btn" onClick=${()=>setReplayIdx(r=>r===null?null:r<=1?null:r-1)}>NEXT</button></div></div><div class="agi-grid"><div class="agi-tile"><div class="agi-tile-label">LEAD VELOCITY</div><div class="agi-tile-val"><em>${snap?.lead_velocity??"--"}</em></div><div class="agi-tile-sub">leads/hr</div></div><div class="agi-tile"><div class="agi-tile-label">REVENUE PULSE</div><div class="agi-tile-val"><em>${snap?.revenue_pulse!=null?(snap.revenue_pulse*100).toFixed(1)+"%":"--"}</em></div><div class="agi-tile-sub">AI confidence</div></div><div class="agi-tile"><div class="agi-tile-label">PROXY HEALTH</div><div class="agi-tile-val"><em>${snap?.proxy_health!=null?(snap.proxy_health*100).toFixed(1)+"%":"--"}</em></div><div class="agi-tile-sub">network health</div></div><div class="agi-tile"><div class="agi-tile-label">AI CALLS</div><div class="agi-tile-val"><em>${snap?.ai_calls_today??"--"}</em></div><div class="agi-tile-sub">brain activations</div></div></div>${decisions.length > 0 ? html`<div class="chart-panel" style=${{marginBottom: '16px'}}>
+          <div class="chart-panel-h">
+            <div class="chart-panel-title">Decision Weights</div>
+            <div class="chart-panel-tag">${decisions.length} decisions</div>
+          </div>
+          ${(() => {
+            let high = 0, mid = 0, low = 0;
+            for (const d of decisions) {
+              const w = parseFloat(d.weight);
+              if (isNaN(w)) { low++; continue; }
+              if (w >= 1.5) high++;
+              else if (w >= 1.0) mid++;
+              else low++;
+            }
+            const sd = [];
+            if (high > 0) sd.push({label: 'High (≥1.5)', value: high, color: 'var(--signal-teal)'});
+            if (mid > 0) sd.push({label: 'Mid (1.0-1.49)', value: mid, color: 'var(--status-amber)'});
+            if (low > 0) sd.push({label: 'Low (<1.0)', value: low, color: 'var(--empire-mist)'});
+            return html`<${DonutChart} data=${sd} size=${108} strokeWidth=${22} />`;
+          })()}
+        </div>` : ''}
+          <div class="agi-decisions"><div class="agi-decisions"><div class="agi-decisions-head"><div class="agi-decisions-title">Decision Log</div><div class="agi-decisions-count">${decisions.length} entries</div></div>${decisions.map((d,i)=>html`<div class="agi-row"><div class=${"agi-row-weight "+(parseFloat(d.weight)>=1.5?"agi-w-hi":parseFloat(d.weight)>=1.0?"agi-w-mid":"agi-w-lo")}>${d.weight??"·"}<div class="agi-w-bar"></div></div><div class="agi-row-reason">${d.reason??"·"}<button class=${approved.includes(i)?"agi-approve-btn done":"agi-approve-btn"} onClick=${()=>doApprove(i,d.weight)}>${approved.includes(i)?"✓ APPROVED":"AUTO-APPROVE"}</button></div></div>`)}</div>`;
+      function Partners() {
   const [partners, setPartners] = useState(null);
   const [err, setErr] = useState(null);
   const [busy, setBusy] = useState(null);
@@ -1189,6 +1619,30 @@ function Operators() {
           <button class="btn" disabled=${busy || !inviteEmail.trim() || !inviteName.trim()} onClick=${invite}>${busy ? 'Sending…' : 'Invite'}</button>
         </div>
       </div>
+
+      ${ops.length > 0 ? html`<div class="chart-panel">
+        <div class="chart-panel-h">
+          <div class="chart-panel-title">Role Distribution</div>
+          <div class="chart-panel-tag">${ops.length} operators</div>
+        </div>
+        ${(() => {
+          let owners = 0, operators = 0, viewers = 0, other = 0;
+          for (const o of ops) {
+            const r = o.role || 'other';
+            if (r === 'owner') owners++;
+            else if (r === 'operator') operators++;
+            else if (r === 'viewer') viewers++;
+            else other++;
+          }
+          const sd = [];
+          if (owners > 0) sd.push({label: 'Owner', value: owners, color: 'var(--status-red)'});
+          if (operators > 0) sd.push({label: 'Operator', value: operators, color: 'var(--signal-teal)'});
+          if (viewers > 0) sd.push({label: 'Viewer', value: viewers, color: 'var(--status-amber)'});
+          if (other > 0) sd.push({label: 'Other', value: other, color: 'var(--empire-mist)'});
+          return html`<${DonutChart} data=${sd} size=${108} strokeWidth=${22} />`;
+        })()}
+      </div>` : ''}
+
       <table class="tbl"><thead><tr>
         <th>Name</th><th>Email</th><th>Role</th><th>Active</th><th>Last login</th>
       </tr></thead><tbody>
@@ -1200,6 +1654,960 @@ function Operators() {
           <td class="tbl-mono">${String(o.last_login || '').slice(0,16).replace('T',' ') || 'never'}</td>
         </tr>`)}
       </tbody></table>
+    </div>
+  `;
+}
+
+// ── LEADS ────────────────────────────────────────────────────────────
+function Leads() {
+  const [leads, setLeads] = useState(null);
+  const [err, setErr] = useState(null);
+  const [busy, setBusy] = useState(null);
+  const [filterSource, setFilterSource] = useState('all');
+  const [filterStatus, setFilterStatus] = useState('all');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [noteInputs, setNoteInputs] = useState({});
+
+  const deleteNote = async (leadId, timestamp) => {
+    if (!confirm('Delete this note?')) return;
+    setBusy(leadId + ':del:' + timestamp);
+    try {
+      await apiFetch('/api/v1/inbound/leads/delete-note', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ lead_id: leadId, timestamp }),
+      });
+      await reload();
+    } catch (e) { alert('Failed: ' + e.message); }
+    setBusy(null);
+  };
+
+  const renderNotes = (raw, leadId) => {
+    if (!raw) return '';
+    let entries = [];
+    if (typeof raw === 'string') {
+      try { const p = JSON.parse(raw); if (Array.isArray(p)) entries = p; else entries = [{text: raw}]; }
+      catch { entries = [{text: raw}]; }
+    } else if (Array.isArray(raw)) {
+      entries = raw;
+    }
+    if (entries.length === 0) return '';
+    return html`<div class="ld-notes-history">${entries.map(e => html`
+      <div class="ld-note-entry" key=${e.timestamp || Math.random()}>
+        <span class="ld-note-meta">
+          ${e.timestamp ? e.timestamp.slice(11, 19) + ' · ' : ''}${e.operator ? html`<span class="ld-note-op">${e.operator}</span>` : ''}
+          <button class="ld-note-del" disabled=${busy === leadId + ':del:' + e.timestamp}
+            onClick=${() => deleteNote(leadId, e.timestamp)} title="delete note">
+            ${busy === leadId + ':del:' + e.timestamp ? '…' : '✕'}
+          </button>
+        </span>
+        <div class="ld-note-text">${e.text}</div>
+      </div>
+    `)}</div>`;
+  };
+
+  const reload = useCallback(async () => {
+    try {
+      const r = await apiFetch('/api/v1/inbound/leads?limit=200').then(x => x.json());
+      setLeads(r.leads || []);
+      setErr(null);
+    } catch (e) {
+      if (e.message !== 'Unauthorized') setErr(e.message);
+    }
+  }, []);
+
+  useEffect(() => {
+    reload();
+    const t = setInterval(reload, 15000);
+    return () => clearInterval(t);
+  }, [reload]);
+
+  const doUpdate = async (leadId, status) => {
+    setBusy(leadId + ':' + status);
+    try {
+      await apiFetch('/api/v1/inbound/leads/update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ lead_id: leadId, status }),
+      });
+      await reload();
+    } catch (e) { alert('Failed: ' + e.message); }
+    setBusy(null);
+  };
+
+  const saveNote = async (leadId) => {
+    const note = (noteInputs[leadId] || '').trim();
+    if (!note) return;
+    setBusy(leadId + ':note');
+    try {
+      await apiFetch('/api/v1/inbound/leads/update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ lead_id: leadId, notes: note }),
+      });
+      setNoteInputs(n => { const c = {...n}; delete c[leadId]; return c; });
+      await reload();
+    } catch (e) { alert('Failed: ' + e.message); }
+    setBusy(null);
+  };
+
+  if (err) return html`<div class="stub"><div class="stub-title">Could not load Leads</div><div class="stub-body">${err}</div></div>`;
+
+  const allLeads = leads || [];
+
+  // Sources for filter
+  const sources = [...new Set(allLeads.map(l => l.source || 'unknown'))].sort();
+
+  // Filter
+  let filtered = allLeads;
+  if (filterSource !== 'all') filtered = filtered.filter(l => (l.source || 'unknown') === filterSource);
+  if (filterStatus !== 'all') filtered = filtered.filter(l => (l.status || 'new') === filterStatus);
+  if (searchQuery.trim()) {
+    const q = searchQuery.trim().toLowerCase();
+    filtered = filtered.filter(l =>
+      (l.name || '').toLowerCase().includes(q) ||
+      (l.phone || '').toLowerCase().includes(q) ||
+      (l.email || '').toLowerCase().includes(q)
+    );
+  }
+
+  // Stats
+  const total = allLeads.length;
+  const newCount = allLeads.filter(l => !l.status || l.status === 'new' || l.status === 'pending').length;
+  const contacted = allLeads.filter(l => l.status === 'contacted' || l.status === 'qualified').length;
+  const closed = allLeads.filter(l => l.status === 'closed' || l.status === 'rejected').length;
+
+  return html`
+    <div>
+      <div class="section-h">
+        <div>
+          <div class="section-title">Leads</div>
+          <div class="section-sub">Inbound lead pipeline · intake</div>
+        </div>
+        <div class="section-sub">${total} total · auto-refresh 15s</div>
+      </div>
+
+      <div class="ld-stats">
+        <div class="ld-stat">
+          <div class=${'ld-stat-val ' + (total > 0 ? 'teal' : 'dim')}>${total}</div>
+          <div class="ld-stat-lbl">Total Leads</div>
+        </div>
+        <div class="ld-stat">
+          <div class=${'ld-stat-val ' + (newCount > 0 ? 'teal' : 'dim')}>${newCount}</div>
+          <div class="ld-stat-lbl">New / Pending</div>
+        </div>
+        <div class="ld-stat">
+          <div class=${'ld-stat-val ' + (contacted > 0 ? 'teal' : 'dim')}>${contacted}</div>
+          <div class="ld-stat-lbl">Contacted / Qualified</div>
+        </div>
+        <div class="ld-stat">
+          <div class="ld-stat-val dim">${closed}</div>
+          <div class="ld-stat-lbl">Closed / Rejected</div>
+        </div>
+      </div>
+
+      <div class="ld-filter">
+        <span class="ld-filter-tag">Source:</span>
+        <button class=${'ld-filter-btn ' + (filterSource === 'all' ? 'active' : '')} onClick=${() => setFilterSource('all')}>All</button>
+        ${sources.map(s => html`
+          <button class=${'ld-filter-btn ' + (filterSource === s ? 'active' : '')} onClick=${() => setFilterSource(s)} key=${s}>${s}</button>
+        `)}
+        <span class="ld-filter-tag" style=${{marginLeft: 'auto', opacity: '0.4'}}>|</span>
+        <span class="ld-filter-tag">Status:</span>
+        <button class=${'ld-filter-btn ' + (filterStatus === 'all' ? 'active' : '')} onClick=${() => setFilterStatus('all')}>All</button>
+        <button class=${'ld-filter-btn ' + (filterStatus === 'new' ? 'active' : '')} onClick=${() => setFilterStatus('new')}>New</button>
+        <button class=${'ld-filter-btn ' + (filterStatus === 'contacted' ? 'active' : '')} onClick=${() => setFilterStatus('contacted')}>Contacted</button>
+        <button class=${'ld-filter-btn ' + (filterStatus === 'qualified' ? 'active' : '')} onClick=${() => setFilterStatus('qualified')}>Qualified</button>
+        <button class=${'ld-filter-btn ' + (filterStatus === 'closed' ? 'active' : '')} onClick=${() => setFilterStatus('closed')}>Closed</button>
+        <input class="fld-in mono" style=${{flex: '1', minWidth: '180px', padding: '6px 10px', fontSize: '11px'}} value=${searchQuery} onChange=${e => setSearchQuery(e.target.value)} placeholder="filter by name, phone, or email…" />
+        ${filtered.length !== allLeads.length ? html`<span class="ld-filter-tag">Showing ${filtered.length}</span>` : ''}
+      </div>
+
+      ${allLeads.length > 0 ? html`<div class="chart-panel">
+        <div class="chart-panel-h">
+          <div class="chart-panel-title">Daily Lead Volume</div>
+          <div class="chart-panel-tag">${allLeads.length} total</div>
+        </div>
+        ${(() => {
+          // Group by date (last 14 days)
+          const dayCounts = {};
+          const now = new Date();
+          for (let i = 13; i >= 0; i--) {
+            const d = new Date(now); d.setDate(d.getDate() - i);
+            const key = d.toISOString().slice(0, 10);
+            dayCounts[key] = 0;
+          }
+          for (const l of allLeads) {
+            if (l.created_at) {
+              const d = l.created_at.slice(0, 10);
+              if (dayCounts[d] !== undefined) dayCounts[d]++;
+            }
+          }
+          const chartData = Object.entries(dayCounts).map(([date, count]) => ({
+            label: date.slice(5, 10),
+            value: count
+          }));
+          return html`<${MiniBarChart} data=${chartData} color="var(--signal-teal)" height=${60} />`;
+        })()}
+      </div>` : ''}
+
+      ${newCount + contacted + closed > 0 ? html`<div class="chart-panel">
+        <div class="chart-panel-h">
+          <div class="chart-panel-title">Status Distribution</div>
+          <div class="chart-panel-tag">${newCount} new · ${contacted} contacted · ${closed} closed</div>
+        </div>
+        <${DonutChart} data=${[
+          {label: 'New / Pending', value: newCount, color: 'var(--signal-teal)'},
+          {label: 'Contacted / Qualified', value: contacted, color: 'var(--strike-cyan)'},
+          {label: 'Closed / Rejected', value: closed, color: 'var(--empire-mist)'},
+        ]} size=${108} strokeWidth=${22} />
+      </div>` : ''}
+
+
+      ${!leads
+        ? html`<div class="stub"><div class="stub-body">Loading leads…</div></div>`
+        : (filtered.length === 0
+          ? html`<div class="ld-empty">${allLeads.length === 0 ? 'No inbound leads yet. Leads appear when partner webhooks submit them.' : 'No leads match the current filter.'}</div>`
+          : filtered.map(l => {
+            const status = (l.status || 'new').toLowerCase();
+            const source = l.source || '—';
+            const created = (l.created_at || '').slice(0, 16).replace('T', ' ');
+            const statusActions = [];
+            if (status === 'new' || status === 'pending') {
+              statusActions.push({ label: 'Contact', status: 'contacted', cls: 'go' });
+            } else if (status === 'contacted') {
+              statusActions.push({ label: 'Qualify', status: 'qualified', cls: 'go' });
+            }
+            if (status !== 'closed' && status !== 'rejected') {
+              statusActions.push({ label: 'Close', status: 'closed', cls: 'ghost' });
+              statusActions.push({ label: 'Reject', status: 'rejected', cls: 'danger' });
+            }
+            return html`
+            <div class="ld-lead" key=${l.id}>
+              <div class="ld-lead-row">
+                <div>
+                  <div class="ld-lead-name">${l.name || '—'}</div>
+                  <div class="ld-lead-contact">${l.phone || ''}${l.email ? ' · ' + l.email : ''}</div>
+                </div>
+                <span class=${'ld-bdg ' + status}>${status}</span>
+              </div>
+              ${l.city ? html`<div class="ld-lead-meta">${l.city}</div>` : ''}
+              <div class="ld-lead-meta">
+                <span class="ld-bdg source">${source}</span>
+                <span>${created}</span>
+              </div>
+              ${renderNotes(l.notes, l.id)}
+              <div class="ld-notes">
+                <input class="ld-notes-in" value=${noteInputs[l.id] !== undefined ? noteInputs[l.id] : (l.notes || '')}
+                  onChange=${e => setNoteInputs(n => ({...n, [l.id]: e.target.value}))}
+                  onKeyDown=${e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); saveNote(l.id); } }}
+                  placeholder=${l.notes ? 'edit note…' : 'add a note…'} />
+                ${noteInputs[l.id] !== undefined && noteInputs[l.id].trim() !== (l.notes || '').trim() ? html`
+                  <button class="ld-note-save" disabled=${busy === l.id + ':note'}
+                    onClick=${() => saveNote(l.id)}>
+                    ${busy === l.id + ':note' ? '…' : (l.notes ? 'Update' : 'Save')}
+                  </button>
+                `}
+              </div>
+              ${statusActions.length > 0 ? html`
+n// ── ACTIVITY LOG ─────────────────────────────────────────────────────
+function ActivityLog() {
+  const [entries, setEntries] = useState(null);
+  const [err, setErr] = useState(null);
+  const [searchQuery, setSearchQuery] = useState('');
+
+  const reload = useCallback(async () => {
+    try {
+      const r = await apiFetch('/api/v1/notes/activity').then(x => x.json());
+      setEntries(r.entries || []);
+      setErr(null);
+    } catch (e) {
+      if (e.message !== 'Unauthorized') setErr(e.message);
+    }
+  }, []);
+
+  useEffect(() => {
+    reload();
+    const t = setInterval(reload, 15000);
+    return () => clearInterval(t);
+  }, [reload]);
+
+  if (err) return html`<div class=\"stub\"><div class=\"stub-title\">Could not load Activity Log</div><div class=\"stub-body\">${err}</div></div>`;
+
+  if (!entries) return html`<div class=\"stub\"><div class=\"stub-body\">Loading activity log…</div></div>`;
+
+  // Filter by text or operator name
+  let filteredEntries = entries;
+  if (searchQuery.trim()) {
+    const q = searchQuery.trim().toLowerCase();
+    filteredEntries = entries.filter(e =>
+      (e.text || '').toLowerCase().includes(q) ||
+      (e.operator || '').toLowerCase().includes(q)
+    );
+  }
+
+  // Group by date
+  const groups = {};
+  for (const e of filteredEntries) {
+    const date = (e.timestamp || '').slice(0, 10);
+    if (!groups[date]) groups[date] = [];
+    groups[date].push(e);
+  }
+  const dates = Object.keys(groups).sort().reverse();
+
+  const goToLead = (leadId) => {
+    window.location.hash = '#/leads?focus=' + encodeURIComponent(leadId);
+  };
+
+  return html`
+    <div>
+      <div class=\"section-h\">
+        <div>
+          <div class=\"section-title\">Activity <em>Log</em></div>
+          <div class=\"section-sub\">Global notes feed · all operator activity</div>
+        </div>
+        <div class=\"section-sub\">${entries.length} notes · auto-refresh 15s</div>
+      </div>
+
+      <input class=\"fld-in mono\" style=${{flex: '1', maxWidth: '320px', padding: '6px 10px', fontSize: '11px', marginBottom: '14px'}} value=${searchQuery} onChange=${e => setSearchQuery(e.target.value)} placeholder=\"filter by text or operator…\" />\n
+      ${filteredEntries.length > 0 ? html`<div class="chart-panel">
+        <div class="chart-panel-h">
+          <div class="chart-panel-title">Daily Activity</div>
+          <div class="chart-panel-tag">${filteredEntries.length} notes · ${dates.length} days</div>
+        </div>
+        ${(() => {
+          const dayCounts = {};
+          const now = new Date();
+          for (let i = 13; i >= 0; i--) {
+            const d = new Date(now); d.setDate(d.getDate() - i);
+            const key = d.toISOString().slice(0, 10);
+            dayCounts[key] = 0;
+          }
+          for (const e of filteredEntries) {
+            if (e.timestamp) {
+              const d = e.timestamp.slice(0, 10);
+              if (dayCounts[d] !== undefined) dayCounts[d]++;
+            }
+          }
+          const chartData = Object.entries(dayCounts).map(([date, count]) => ({
+            label: date.slice(5, 10),
+            value: count
+          }));
+          return html`<${MiniBarChart} data=${chartData} color="var(--strike-cyan)" height=${60} />`;
+        })()}
+      </div>` : ''
+
+      ${filteredEntries.length > 0 ? html`<div class="chart-panel">
+        <div class="chart-panel-h">
+          <div class="chart-panel-title">Operator Activity</div>
+          <div class="chart-panel-tag">${[...new Set(filteredEntries.map(e => e.operator))].filter(Boolean).length} operators</div>
+        </div>
+        ${(() => {
+          const opCounts = {};
+          for (const e of filteredEntries) {
+            const op = e.operator || 'unknown';
+            opCounts[op] = (opCounts[op] || 0) + 1;
+          }
+          const colors = ['var(--strike-cyan)', 'var(--signal-teal)', 'var(--status-amber)', 'var(--empire-mist)', 'var(--status-red)'];
+          const opData = Object.entries(opCounts)
+            .sort((a, b) => b[1] - a[1])
+            .map(([label, value], i) => ({label, value, color: colors[i % colors.length]}));
+          return html`<${DonutChart} data=${opData} size=${108} strokeWidth=${22} />`;
+        })()}
+      </div>` : ''}
+}
+
+      <div class=\"act-meta\">Showing ${filteredEntries.length} note${entries.length === 1 ? '' : 's'} across ${dates.length} day${dates.length === 1 ? '' : 's'}</div>
+
+      ${entries.length === 0
+        ? html`<div class=\"act-empty\">No notes activity yet. Notes appear when operators add them from the Leads tab.</div>`
+        : html`<div class=\"act-feed\">
+            ${dates.map(date => html`
+              <div class=\"act-day\" key=${date}>${date}</div>
+              ${groups[date].map(e => html`
+                <div class=\"act-entry\" key=${e.timestamp + e.lead_id}>
+                  <span class=\"act-entry-ts\">${(e.timestamp || '')
+.slice(11, 19)}</span>
+                  <span class=\"act-entry-body\">
+                    <span class=\"act-entry-lead\" onClick=${() => goToLead(e.lead_id)} title=\"Go to lead\">${e.lead_name || '—'}</span>
+                    <span class=\"act-entry-text\">${e.text}</span>
+                  </span>
+                  <span class=\"act-entry-operator\">${e.operator || '—'}</span>
+                </div>
+              `)}
+            `)}
+          </div>`}
+    </div>
+  `;
+}
+
+              <div class="ld-actions">
+                ${statusActions.map(a => html`
+                  <button key=${a.status} class=${'ld-action-btn ' + a.cls}
+                    disabled=${busy === l.id + ':' + a.status}
+                    onClick=${() => doUpdate(l.id, a.status)}>
+                    ${busy === l.id + ':' + a.status ? '…' : a.label}
+                  </button>
+                `)}
+              </div>
+              ` : ''}
+            </div>
+          `})}
+    </div>
+  `;
+}
+
+
+// ── MINI BAR CHART ──────────────────────────────────────────────────
+function MiniBarChart({data, label, color = '#44E5B8', height = 80}) {
+  if (!data || data.length === 0) return html`<div class="chart-empty">No data</div>`;
+  const max = Math.max(...data.map(d => d.value), 1);
+  return html`
+    <div class="chart-bar-group" style=${{display: 'flex', gap: '2px', alignItems: 'flex-end', height: height + 'px', paddingTop: '4px'}}>
+      ${data.map((d, i) => html`
+        <div key=${i} style=${{flex: '1', display: 'flex', flexDirection: 'column', alignItems: 'center'}}>
+          <div class="chart-bar" style=${{height: Math.max((d.value / max) * (height - 12), 2) + 'px', background: color, width: '100%', minWidth: '12px', borderRadius: '2px 2px 0 0', opacity: '0.85', transition: 'height 0.3s ease'}} title=${d.value}></div>
+          ${d.label ? html`<span style=${{fontSize: '7px', color: 'var(--empire-fog)', marginTop: '3px', fontFamily: 'var(--font-mono)', letterSpacing: '-0.02em'}}>${d.label}</span>` : ''}
+        </div>
+      `)}
+    </div>
+  `;
+}
+
+// ── HOLO MAP ─────────────────────────────────────────────────────────
+
+function DonutChart({data, size = 108, strokeWidth = 22, colors = ["var(--signal-teal)", "var(--strike-cyan)", "var(--empire-mist)", "var(--status-red)"]}) {
+  const total = data.reduce((s, d) => s + (d.value || 0), 0);
+  if (total === 0) return html`<div class="chart-empty" style=${{height: size + 'px', display: 'flex', alignItems: 'center', justifyContent: 'center'}}>No data</div>`;
+  const cx = size / 2, cy = size / 2;
+  const r = (size - strokeWidth) / 2;
+  const circ = 2 * Math.PI * r;
+  const gap = 2;
+  let startAngle = 0;
+  const topPct = Math.round((Math.max(...data.map(d => d.value || 0)) / total) * 100);
+  const topLabel = data.reduce((a, b) => (a.value || 0) > (b.value || 0) ? a : b, data[0]);
+  return html`<div class="chart-donut">
+    <svg class="chart-donut-svg" width=${size} height=${size} viewBox="0 0 ${size} ${size}">
+      ${data.map((d, i) => {
+        const segLen = Math.max(0, ((d.value || 0) / total) * circ - (i < data.length - 1 ? gap : 0));
+        const color = d.color || colors[i % colors.length];
+        const pct = Math.round(((d.value || 0) / total) * 100);
+        const seg = startAngle;
+        startAngle += ((d.value || 0) / total) * circ;
+        return html`<circle cx=${cx} cy=${cy} r=${r} fill="none" stroke=${color} stroke-width=${strokeWidth}
+          stroke-dasharray=${segLen} ${circ - segLen}
+          stroke-dashoffset=${-seg}
+          transform="rotate(-90 ${cx} ${cy})"
+          style="cursor:pointer;transition: stroke-dasharray 0.3s var(--ease-snap)"
+        ><title>${d.label}: ${d.value} (${pct}%)</title></circle>`;
+      })}
+      <circle cx=${cx} cy=${cy} r=${r - strokeWidth / 2 + 1} fill="var(--empire-surface)" />
+      <text x=${cx} y=${cy - 4} text-anchor="middle" fill="var(--empire-white)" font-family="var(--font-display)" font-weight="200" font-size=${Math.round(size * 0.22)}>${topPct}%</text>
+      ${data.length > 1 ? html`<text x=${cx} y=${cy + 14} text-anchor="middle" fill="var(--empire-fog)" font-family="var(--font-mono)" font-size=${Math.round(size * 0.08)}>${topLabel.label}</text>` : ''}
+    </svg>
+    <div class="chart-legend">
+      ${data.map((d, i) => {
+        const pct = Math.round(((d.value || 0) / total) * 100);
+        return html`<div class="chart-legend-item" key=${i}>
+        <span class="chart-legend-dot" style=${{backgroundColor: d.color || colors[i % colors.length]}}></span>
+        ${d.label}
+        <span class="chart-legend-val">${d.value} · ${pct}%</span>
+      </div>`;
+      })}
+    </div>
+  </div>`;
+}) {
+  const total = data.reduce((s, d) => s + (d.value || 0), 0);
+  if (total === 0) return html`<div class="chart-empty" style=${{height: size + 'px', display: 'flex', alignItems: 'center', justifyContent: 'center'}}>No data</div>`;
+  const cx = size / 2, cy = size / 2;
+  const r = (size - strokeWidth) / 2;
+  const circ = 2 * Math.PI * r;
+  const gap = 2;
+  let startAngle = 0;
+  const topPct = Math.round((Math.max(...data.map(d => d.value || 0)) / total) * 100);
+  const topLabel = data.reduce((a, b) => (a.value || 0) > (b.value || 0) ? a : b, data[0]);
+  return html`<div class="chart-donut">
+    <svg class="chart-donut-svg" width=${size} height=${size} viewBox="0 0 ${size} ${size}">
+      ${data.map((d, i) => {
+        const segLen = Math.max(0, ((d.value || 0) / total) * circ - (i < data.length - 1 ? gap : 0));
+        const color = d.color || colors[i % colors.length];
+        const seg = startAngle;
+        startAngle += ((d.value || 0) / total) * circ;
+        return html`<circle cx=${cx} cy=${cy} r=${r} fill="none" stroke=${color} stroke-width=${strokeWidth}
+          stroke-dasharray=${segLen} ${circ - segLen}
+          stroke-dashoffset=${-seg}
+          transform="rotate(-90 ${cx} ${cy})"
+          style="transition: stroke-dasharray 0.3s var(--ease-snap)"
+        />`;
+      })}
+      <circle cx=${cx} cy=${cy} r=${r - strokeWidth / 2 + 1} fill="var(--empire-surface)" />
+      <text x=${cx} y=${cy - 4} text-anchor="middle" fill="var(--empire-white)" font-family="var(--font-display)" font-weight="200" font-size=${Math.round(size * 0.22)}>${topPct}%</text>
+      ${data.length > 1 ? html`<text x=${cx} y=${cy + 14} text-anchor="middle" fill="var(--empire-fog)" font-family="var(--font-mono)" font-size=${Math.round(size * 0.08)}>${topLabel.label}</text>` : ''}
+    </svg>
+    <div class="chart-legend">
+      ${data.map((d, i) => {
+        const pct = Math.round(((d.value || 0) / total) * 100);
+        return html`<div class="chart-legend-item" key=${i}>
+        <span class="chart-legend-dot" style=${{backgroundColor: d.color || colors[i % colors.length]}}></span>
+        ${d.label}
+        <span class="chart-legend-val">${d.value} · ${pct}%</span>
+      </div>`;
+      })}
+    </div>
+  </div>`;
+}) {
+  const total = data.reduce((s, d) => s + (d.value || 0), 0);
+  if (total === 0) return html`<div class="chart-empty" style=${{height: size + 'px', display: 'flex', alignItems: 'center', justifyContent: 'center'}}>No data</div>`;
+  const cx = size / 2, cy = size / 2;
+  const r = (size - strokeWidth) / 2;
+  const circ = 2 * Math.PI * r;
+  const gap = 2;
+  let startAngle = 0;
+  return html`<div class="chart-donut">
+    <svg class="chart-donut-svg" width=${size} height=${size} viewBox="0 0 ${size} ${size}">
+      ${data.map((d, i) => {
+        const segLen = Math.max(0, ((d.value || 0) / total) * circ - (i < data.length - 1 ? gap : 0));
+        const color = d.color || colors[i % colors.length];
+        const seg = startAngle;
+        startAngle += ((d.value || 0) / total) * circ;
+        return html`<circle cx=${cx} cy=${cy} r=${r} fill="none" stroke=${color} stroke-width=${strokeWidth}
+          stroke-dasharray=${segLen} ${circ - segLen}
+          stroke-dashoffset=${-seg}
+          transform="rotate(-90 ${cx} ${cy})"
+          style="transition: stroke-dasharray 0.3s var(--ease-snap)"
+        />`;
+      })}
+      <circle cx=${cx} cy=${cy} r=${r - strokeWidth / 2 + 1} fill="var(--empire-surface)" />
+    </svg>
+    <div class="chart-legend">
+      ${data.map((d, i) => html`<div class="chart-legend-item" key=${i}>
+        <span class="chart-legend-dot" style=${{backgroundColor: d.color || colors[i % colors.length]}}></span>
+        ${d.label}
+        <span class="chart-legend-val">${d.value}</span>
+      </div>`)}
+    </div>
+  </div>`;
+}
+
+function HoloMap() {
+  const [storms, setStorms] = useState({type:'FeatureCollection',features:[]});
+  const [targets, setTargets] = useState({type:'FeatureCollection',features:[]});
+  const [config, setConfig] = useState(null);
+  const [err, setErr] = useState(null);
+
+  const reload = useCallback(async () => {
+    try {
+      const [s, t, c] = await Promise.all([
+        apiFetch('/api/v1/map/storms').then(r => r.json()),
+        apiFetch('/api/v1/map/targets?limit=200').then(r => r.json()),
+        apiFetch('/api/v1/map/config').then(r => r.json()),
+      ]);
+      if (s && s.features) setStorms(s);
+      if (t && t.features) setTargets(t);
+      if (c && c.center) setConfig(c);
+      setErr(null);
+    } catch (e) {
+      if (e.message !== 'Unauthorized') setErr(e.message);
+    }
+  }, []);
+
+  useEffect(() => {
+    reload();
+    const t = setInterval(reload, 30000);
+    return () => clearInterval(t);
+  }, [reload]);
+
+  if (err) return html`<div class="stub"><div class="stub-title">Could not load Holo Map</div><div class="stub-body">${err}</div></div>`;
+
+  const stormFeatures = storms.features || [];
+  const targetFeatures = targets.features || [];
+
+  // Severity distribution for radar display
+  const sevCounts = {Extreme: 0, Severe: 0, Moderate: 0, Minor: 0};
+  for (const f of stormFeatures) {
+    const sev = f.properties?.severity || 'Minor';
+    if (sevCounts[sev] != null) sevCounts[sev]++;
+  }
+
+  // Generate random-looking but deterministic blip positions from feature coords
+  function hashToAngle(s) {
+    let h = 0;
+    for (let i = 0; i < (s||'').length; i++) { h = ((h << 5) - h) + s.charCodeAt(i); h |= 0; }
+    return (Math.abs(h) % 360);
+  }
+  function hashToRadius(s) {
+    let h = 0;
+    for (let i = 0; i < (s||'').length; i++) { h = ((h << 3) - h) + s.charCodeAt(i); h |= 0; }
+    return 15 + (Math.abs(h) % 70);  // 15%-85% radius
+  }
+
+  const targetBlips = targetFeatures.slice(0, 40).map(f => ({
+    id: f.properties?.id || 't',
+    angle: hashToAngle(JSON.stringify(f.geometry?.coordinates)),
+    radius: hashToRadius(f.properties?.name || 't'),
+    type: 'target',
+    name: f.properties?.name || (f.properties?.address || '').slice(0,20) || 'Target',
+  }));
+
+  const stormBlips = stormFeatures.slice(0, 10).map(f => ({
+    id: f.properties?.id || 's',
+    angle: hashToAngle(f.properties?.headline || 's'),
+    radius: hashToRadius(f.properties?.event || 's'),
+    type: 'storm',
+    name: f.properties?.event || 'Storm',
+  }));
+
+  const blips = [...targetBlips, ...stormBlips];
+
+  function blipStyle(b) {
+    const rad = (b.angle - 90) * Math.PI / 180;
+    const r = 45 + (b.radius / 100) * 130;  // px from center (45-175)
+    const x = 180 + r * Math.cos(rad);
+    const y = 180 + r * Math.sin(rad);
+    return {position: 'absolute', left: x + 'px', top: y + 'px', zIndex: b.type === 'storm' ? 2 : 1};
+  }
+
+  return html`
+    <div>
+      <div class="section-h">
+        <div>
+          <div class="section-title">Holo <em>Map</em></div>
+          <div class="section-sub">Live storm grid · 3D target overlay</div>
+        </div>
+        <div class="section-sub" style=${{display: 'flex', gap: '16px', alignItems: 'center'}}>
+          <span class="holo-badge storm"><span class="holo-bdg-dot" style=${{width:6,height:6,borderRadius:'50%',background:'var(--strike-cyan)',boxShadow:'0 0 6px var(--strike-cyan)'}}></span>${stormFeatures.length} storms</span>
+          <span class="holo-badge target"><span class="holo-bdg-dot" style=${{width:6,height:6,borderRadius:'50%',background:'var(--signal-teal)',boxShadow:'0 0 6px var(--signal-teal)'}}></span>${targetFeatures.length} targets</span>
+        </div>
+      </div>
+
+      <div class="holo-radar-wrap">
+        <div class="holo-radar">
+          <div class="holo-radar-ring r1"></div>
+          <div class="holo-radar-ring r2"></div>
+          <div class="holo-radar-ring r3"></div>
+          <div class="holo-radar-cross"></div>
+          <div class="holo-radar-sweep"></div>
+          <div class="holo-radar-center">
+            <div class="holo-radar-count">${stormFeatures.length + targetFeatures.length}</div>
+            <div class="holo-radar-lbl">features tracked</div>
+          </div>
+          ${blips.map(b => html`
+            <div class="holo-blip" key=${b.id + b.type} style=${blipStyle(b)} title=${b.name}>
+              <div class=${'holo-blip-dot ' + b.type}></div>
+              <div class=${'holo-blip-ping ' + b.type}></div>
+            </div>
+          `)}
+        </div>
+        <div class="holo-badges">
+          ${Object.entries(sevCounts).filter(([k,v]) => v > 0).map(([k,v]) => html`
+            <span class="holo-storm-sev ${k}">${k}: ${v}</span>
+          `)}
+        </div>
+      </div>
+
+      <div class="holo-split">
+        <div class="holo-panel">
+          <div class="holo-panel-h">
+            <div class="holo-panel-title">Active Storms</div>
+            <div class="holo-panel-tag">${stormFeatures.length} alerts</div>
+          </div>
+          ${stormFeatures.length === 0
+            ? html`<div class="holo-empty">No active storm alerts in coverage area.${config ? ` Center: ${config.center.join(', ')}` : ''}</div>`
+            : html`<div style=${{maxHeight: '360px', overflowY: 'auto'}}>
+              ${stormFeatures.map(f => html`
+                <div class="holo-storm-card" key=${f.properties?.id || Math.random()}>
+                  <div class="holo-storm-row">
+                    <span class="holo-storm-name">${f.properties?.event || 'Weather Alert'}</span>
+                    <span class=${'holo-storm-sev ' + (f.properties?.severity || 'Minor')}>${f.properties?.severity || 'Minor'}</span>
+                  </div>
+                  <div class="holo-storm-area">${f.properties?.area || '—'}</div>
+                  <div class="holo-storm-meta">${f.properties?.headline || ''} ${f.properties?.urgency ? '· ' + f.properties.urgency : ''}</div>
+                </div>
+              `)}
+            </div>`}
+        </div>
+        <div class="holo-panel">
+          <div class="holo-panel-h">
+            <div class="holo-panel-title">Target Overlay</div>
+            <div class="holo-panel-tag">${targetFeatures.length} markers</div>
+          </div>
+          ${targetFeatures.length === 0
+            ? html`<div class="holo-empty">No targets loaded yet. Radar targets appear as leads are captured.</div>`
+            : html`<div class="holo-target-scroll">
+              ${targetFeatures.map(f => {
+                const p = f.properties || {};
+                const label = p.name || p.address || '—';
+                const status = (p.status || 'new').toLowerCase();
+                return html`
+                <div class="holo-target-row" key=${p.id || label}>
+                  <span class="holo-target-name">${label}</span>
+                  <span class=${'holo-target-status ' + status}>${status}</span>
+                </div>
+              `})}
+            </div>`}
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+// ── HEALTH MONITOR ───────────────────────────────────────────────────
+function HealthMonitor() {
+  const [data, setData] = useState(null);
+  const [err, setErr] = useState(null);
+
+  const reload = useCallback(async () => {
+    try {
+      const r = await apiFetch('/api/v1/health/mesh').then(x => x.json());
+      setData(r);
+      setErr(null);
+    } catch (e) {
+      if (e.message !== 'Unauthorized') setErr(e.message);
+    }
+  }, []);
+
+  useEffect(() => {
+    reload();
+    const t = setInterval(reload, 15000);
+    return () => clearInterval(t);
+  }, [reload]);
+
+  if (err) return html`<div class="stub"><div class="stub-title">Could not load Health Monitor</div><div class="stub-body">${err}</div></div>`;
+  if (!data) return html`<div class="stub"><div class="stub-body">Loading mesh health…</div></div>`;
+
+  const agents = data.agents || [];
+  const funnel = data.funnel || {};
+  const pm2 = data.pm2 || {};
+  const brainCls = data.brain_up ? 'ok' : 'bad';
+  const pm2Cls = pm2.healthy === pm2.total ? 'ok' : pm2.healthy > 0 ? 'warn' : 'bad';
+  const forecastCls = data.storm_forecasts_count > 0 ? 'ok' : 'warn';
+  const overseerRaw = data.overseer ? JSON.stringify(data.overseer, null, 2) : null;
+
+  return html`
+    <div>
+      <div class="section-h">
+        <div>
+          <div class="section-title">Health Monitor</div>
+          <div class="section-sub">Agent mesh · system health · overseer</div>
+        </div>
+        <div class="section-sub">Auto-refresh · 15s</div>
+      </div>
+
+      ${agents.length > 0 ? html`<div class="chart-panel">
+        <div class="chart-panel-h">
+          <div class="chart-panel-title">Agent Status</div>
+          <div class="chart-panel-tag">${agents.length} agents monitored</div>
+        </div>
+        ${(() => {
+          let active = 0, error = 0, idle = 0, offline = 0, other = 0;
+          for (const a of agents) {
+            const s = a.status || 'unknown';
+            if (s === 'ACTIVE') active++;
+            else if (s === 'ERROR') error++;
+            else if (s === 'IDLE') idle++;
+            else if (s === 'OFFLINE') offline++;
+            else other++;
+          }
+          const sd = [];
+          if (active > 0) sd.push({label: 'Active', value: active, color: 'var(--signal-teal)'});
+          if (error > 0) sd.push({label: 'Error', value: error, color: 'var(--status-red)'});
+          if (idle > 0) sd.push({label: 'Idle', value: idle, color: 'var(--status-amber)'});
+          if (offline > 0) sd.push({label: 'Offline', value: offline, color: 'var(--empire-mist)'});
+          if (other > 0) sd.push({label: 'Other', value: other, color: 'var(--empire-fog)'});
+          return html`<${DonutChart} data=${sd} size=${108} strokeWidth=${22} />`;
+        })()}
+      </div>` : ''}
+
+      <div class="hm-split">
+        <div class="hm-panel">
+          <div class="hm-panel-h">
+            <div class="hm-panel-title">Agent Mesh</div>
+            <div class="hm-panel-tag">${agents.length} registered</div>
+          </div>
+          ${agents.length === 0
+            ? html`<div class="hm-empty">No registered agents found.</div>`
+            : html`<div class="hm-agent-grid">
+              ${agents.filter(a => !a.error).map(a => {
+                const statusCls = a.status || 'OFFLINE';
+                const ping = a.ping_age_min != null
+                  ? (a.ping_age_min < 1 ? '<1m' : a.ping_age_min + 'm')
+                  : '—';
+                return html`
+                <div class="hm-agent-card" key=${a.agent_name}>
+                  <div class="hm-agent-row">
+                    <span class="hm-agent-name">${a.agent_name}</span>
+                    <span class=${'hm-bdg ' + statusCls}>
+                      <span class="hm-bdg-dot"></span>${statusCls}
+                    </span>
+                  </div>
+                  <div class="hm-agent-meta">Last ping: ${ping} ago</div>
+                </div>
+              `})}
+              ${agents.filter(a => a.error).map(a => html`
+                <div class="hm-agent-card" key=${'err'}>
+                  <div class="hm-agent-row">
+                    <span class="hm-agent-name">⚠ Error</span>
+                  </div>
+                  <div class="hm-agent-meta">${a.error}</div>
+                </div>
+              `)}
+            </div>`}
+        </div>
+
+        <div class="hm-panel">
+          <div class="hm-panel-h">
+            <div class="hm-panel-title">System Health</div>
+            <div class="hm-panel-tag">${data.ts ? data.ts.slice(11,19) : ''}</div>
+          </div>
+          <div class="hm-health-grid">
+            <div class="hm-health-card">
+              <div class=${'hm-health-val ' + brainCls}>${data.brain_up ? 'UP' : 'DOWN'}</div>
+              <div class="hm-health-lbl">Brain (Ollama)</div>
+            </div>
+            <div class="hm-health-card">
+              <div class=${'hm-health-val ' + pm2Cls}>${pm2.healthy}/${pm2.total}</div>
+              <div class="hm-health-lbl">PM2 Services</div>
+            </div>
+            <div class="hm-health-card">
+              <div class="hm-health-val ok">${funnel.calls_today ?? 0}</div>
+              <div class="hm-health-lbl">Calls Today</div>
+            </div>
+            <div class="hm-health-card">
+              <div class=${'hm-health-val ' + forecastCls}>${data.storm_forecasts_count ?? 0}</div>
+              <div class="hm-health-lbl">Storm Forecasts</div>
+            </div>
+          </div>
+          <div style=${{marginTop: '12px', fontFamily: 'var(--font-mono)', fontSize: '10px', color: 'var(--empire-fog)'}}>
+            Qualified: <strong style=${{color: 'var(--empire-white)'}}>${funnel.qualified_today ?? 0}</strong> / ${funnel.calls_today ?? 0} calls
+          </div>
+        </div>
+      </div>
+
+      ${overseerRaw ? html`
+      <div class="hm-overseer">
+        <div class="hm-panel-h">
+          <div class="hm-panel-title">Overseer Report</div>
+          <div class="hm-panel-tag">latest snapshot</div>
+        </div>
+        <div class="hm-overseer-body">${overseerRaw}</div>
+      </div>
+      ` : html`
+      <div class="hm-overseer">
+        <div class="hm-panel-h">
+          <div class="hm-panel-title">Overseer Report</div>
+          <div class="hm-panel-tag">not available</div>
+        </div>
+        <div class="hm-empty">No overseer report yet. The overseer agent writes to system_health every 10 minutes.</div>
+      </div>
+      `}
+    </div>
+  `;
+}
+
+// ── SNIPER FLEET ────────────────────────────────────────────────────
+function SniperFleet() {
+  const [agents, setAgents] = useState(null);
+  const [err, setErr] = useState(null);
+  const [busy, setBusy] = useState(null);
+
+  const reload = useCallback(async () => {
+    try {
+      const r = await apiFetch('/api/agents/status').then(x => x.json());
+      setAgents(r.agents || []);
+      setErr(null);
+    } catch (e) {
+      if (e.message !== 'Unauthorized') setErr(e.message);
+    }
+  }, []);
+
+  useEffect(() => {
+    reload();
+    const t = setInterval(reload, 10000);
+    return () => clearInterval(t);
+  }, [reload]);
+
+  const doToggle = async (id) => {
+    const a = agents.find(x => x.id === id);
+    const label = a?.enabled ? 'disable' : 'enable';
+    if (!confirm(`${label.charAt(0).toUpperCase() + label.slice(1)} ${a?.name || id} agent?`)) return;
+    setBusy(id);
+    try {
+      await apiFetch(`/api/agents/${id}/toggle`, { method: 'POST' });
+      await reload();
+    } catch (e) { alert('Failed: ' + e.message); }
+    setBusy(null);
+  };
+
+  if (err) return html`<div class="stub"><div class="stub-title">Could not load Sniper Fleet</div><div class="stub-body">${err}</div></div>`;
+
+  const activeCount = (agents || []).filter(a => a.status === 'ACTIVE').length;
+  const idleCount = (agents || []).filter(a => a.status === 'IDLE').length;
+  const offlineCount = (agents || []).filter(a => a.status === 'OFFLINE').length;
+
+  return html`
+    <div>
+      <div class="section-h">
+        <div>
+          <div class="section-title">Sniper Fleet</div>
+          <div class="section-sub">Active agents · lane status · targeting</div>
+        </div>
+        <div class="section-sub">Auto-refresh · 10s</div>
+      </div>
+
+      <div class="sf-summary">
+        <span class="sf-summary-tag">Active: <strong style=${{color: 'var(--signal-teal)'}}>${activeCount}</strong></span>
+        <span class="sf-summary-tag">Idle: <strong style=${{color: 'var(--status-amber)'}}>${idleCount}</strong></span>
+        <span class="sf-summary-tag">Offline: <strong style=${{color: 'var(--empire-mist)'}}>${offlineCount}</strong></span>
+      </div>
+
+      ${activeCount + idleCount + offlineCount > 0 ? html`<div class="chart-panel">
+        <div class="chart-panel-h">
+          <div class="chart-panel-title">Agent Status</div>
+          <div class="chart-panel-tag">${activeCount + idleCount + offlineCount} total agents</div>
+        </div>
+        ${(() => {
+          const sd = [];
+          if (activeCount > 0) sd.push({label: 'Active', value: activeCount, color: 'var(--signal-teal)'});
+          if (idleCount > 0) sd.push({label: 'Idle', value: idleCount, color: 'var(--status-amber)'});
+          if (offlineCount > 0) sd.push({label: 'Offline', value: offlineCount, color: 'var(--empire-mist)'});
+          return html`<${DonutChart} data=${sd} size=${108} strokeWidth=${22} />`;
+        })()}
+      </div>` : ''}
+
+
+      ${!agents
+        ? html`<div class="stub"><div class="stub-body">Loading agent status…</div></div>`
+        : html`
+      <div class="sf-grid">
+        ${agents.length === 0
+          ? html`<div class="stub" style=${{gridColumn: '1 / -1'}}><div class="stub-body">No agents found.</div></div>`
+          : agents.map(a => {
+            const statusCls = a.status || 'OFFLINE';
+            const ping = a.last_ping
+              ? ((new Date() - new Date(a.last_ping)) / 1000 < 120 ? 'now' : (a.last_ping || '').slice(11,19))
+              : '—';
+            return html`
+            <div class="sf-card" key=${a.id}>
+              <div class="sf-card-top">
+                <div class="sf-card-info">
+                  <div class="sf-card-name">${a.name || a.id}</div>
+                  <div class="sf-card-type">${a.type || '—'}</div>
+                </div>
+                <span class=${'sf-bdg ' + statusCls}>
+                  <span class="sf-bdg-dot"></span>${statusCls}
+                </span>
+              </div>
+              <div class="sf-leads">${a.leads_today ?? 0}<div class="sf-leads-lbl">leads today</div></div>
+              <div class="sf-card-meta">
+                <span>Last ping: ${ping}</span>
+                <button class=${'sf-toggle ' + (a.enabled ? 'on' : 'off')} disabled=${busy === a.id} onClick=${() => doToggle(a.id)}>
+                  ${busy === a.id ? '…' : (a.enabled ? 'ON' : 'OFF')}
+                </button>
+              </div>
+            </div>
+          `})}
+      </div>
+      `}
     </div>
   `;
 }
@@ -1273,6 +2681,29 @@ function Governor() {
         <span class="gov-watch-tag">Watching: <strong>${wd.watching.join(', ')}</strong></span>
       </div>
       ` : ''}
+
+      ${svcs.length > 0 ? html`<div class="chart-panel" style=${{marginBottom: '16px'}}>
+        <div class="chart-panel-h">
+          <div class="chart-panel-title">Service Status</div>
+          <div class="chart-panel-tag">${svcs.length} services</div>
+        </div>
+        ${(() => {
+          let online = 0, errored = 0, stopped = 0, unknown = 0;
+          for (const s of svcs) {
+            const st = s.status || 'unknown';
+            if (st === 'online') online++;
+            else if (st === 'errored') errored++;
+            else if (st === 'stopped') stopped++;
+            else unknown++;
+          }
+          const sd = [];
+          if (online > 0) sd.push({label: 'Online', value: online, color: 'var(--signal-teal)'});
+          if (errored > 0) sd.push({label: 'Errored', value: errored, color: 'var(--status-red)'});
+          if (stopped > 0) sd.push({label: 'Stopped', value: stopped, color: 'var(--status-amber)'});
+          if (unknown > 0) sd.push({label: 'Unknown', value: unknown, color: 'var(--empire-mist)'});
+          return html`<${DonutChart} data=${sd} size=${108} strokeWidth=${22} />`;
+        })()}
+      </div>` : ''}
 
       ${!status
         ? html`<div class="gov-panel"><div class="gov-empty">Loading service status…</div></div>`
@@ -1387,7 +2818,6 @@ function App() {
       }
     })();
   }, []);
-
   // Hash routing
   useEffect(() => {
     const onHash = () => setSection(currentSection());
@@ -1473,6 +2903,11 @@ function App() {
             active.id === 'neural-core'    ? html`<${AgiLoop} />` :
             active.id === 'partners'    ? html`<${Partners} />` :
             active.id === 'operators'   ? html`<${Operators} />` :
+            active.id === 'leads'      ? html`<${Leads} />` :
+            active.id === 'activity-log' ? html`<${ActivityLog} />` :
+            active.id === 'holo-map'      ? html`<${HoloMap} />` :
+            active.id === 'health-monitor' ? html`<${HealthMonitor} />` :
+            active.id === 'sniper-fleet' ? html`<${SniperFleet} />` :
             active.id === 'governor'    ? html`<${Governor} />` :
             html`<${Stub} section=${active} />`
           }

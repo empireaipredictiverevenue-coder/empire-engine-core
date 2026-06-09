@@ -54,7 +54,7 @@ from typing import Optional
 from enum import Enum
 
 import httpx
-from fastapi import FastAPI, Request, HTTPException, Depends
+from fastapi import FastAPI, Request, HTTPException, Depends, BackgroundTasks
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.responses import JSONResponse, PlainTextResponse
 
@@ -106,6 +106,12 @@ class VonageAdapter:
         self.private_key  = self._load_private_key(private_key_path)
         self.from_number  = from_number
         self.enabled      = bool(api_key and api_secret and app_id and self.private_key)
+        # Cached JWT — reused across calls to avoid RSA signing on every request
+        self._cached_token: Optional[str] = None
+        self._cached_token_expiry: float = 0.0
+        # Persistent httpx clients — connection pooling eliminates TLS handshake per call
+        self._async_client: Optional[httpx.AsyncClient] = None
+        self._sync_client: Optional[httpx.Client] = None
 
         if self.enabled:
             log.info(f"[vonage] Adapter ONLINE · DID {from_number}")
@@ -123,19 +129,31 @@ class VonageAdapter:
             return None
 
     def _generate_jwt(self) -> Optional[str]:
-        """Generate a short-lived JWT for the Vonage API."""
+        """Generate a short-lived JWT for the Vonage API. Cached for reuse."""
         if not self.enabled:
             return None
+
+        import time
+        now = time.time()
+
+        # Return cached token if it still has ≥60s of life remaining
+        if self._cached_token is not None and self._cached_token_expiry > now + 60:
+            return self._cached_token
+
         try:
             import jwt
-            import time
+            exp = int(now) + 3600
             payload = {
-                "iat": int(time.time()),
-                "exp": int(time.time()) + 3600,
-                "jti": f"empire-{int(time.time() * 1000)}",
+                "iat": int(now),
+                "exp": exp,
+                "jti": f"empire-{int(now * 1000)}",
                 "application_id": self.app_id,
             }
-            return jwt.encode(payload, self.private_key, algorithm="RS256")
+            token = jwt.encode(payload, self.private_key, algorithm="RS256")
+            # Cache the token with its expiry timestamp
+            self._cached_token = token
+            self._cached_token_expiry = float(exp)
+            return token
         except ImportError:
             log.error("[vonage] PyJWT not installed · pip install pyjwt[crypto]")
             return None
@@ -170,34 +188,100 @@ class VonageAdapter:
             "to":   [{"type": "phone", "number": to_number.lstrip("+")}],
             "from": {"type": "phone", "number": self.from_number.lstrip("+")},
             "ncco": ncco,
+            # Advanced machine detection — async mode means NO silence at call start.
+            # Detection runs in the background while the NCCO plays immediately.
+            # The event webhook receives machine/human events as they're determined.
+            "advanced_machine_detection": {
+                "behavior": "continue",
+                "mode": "default",
+            },
         }
         if event_webhook:
             payload["event_url"] = [event_webhook]
 
         try:
-            async with httpx.AsyncClient(timeout=10.0) as client:
-                r = await client.post(
-                    "https://api.nexmo.com/v1/calls",
-                    json=payload,
-                    headers={
-                        "Authorization": f"Bearer {token}",
-                        "Content-Type":  "application/json",
-                    },
-                )
-                if r.status_code in (200, 201):
-                    data = r.json()
-                    return {
-                        "ok":     True,
-                        "uuid":   data.get("uuid"),
-                        "status": data.get("status", "queued"),
-                    }
-                else:
-                    return {
-                        "ok":    False,
-                        "error": f"HTTP {r.status_code}: {r.text[:200]}",
-                    }
+            if self._async_client is None:
+                self._async_client = httpx.AsyncClient(timeout=10.0)
+            r = await self._async_client.post(
+                "https://api.nexmo.com/v1/calls",
+                json=payload,
+                headers={
+                    "Authorization": f"Bearer {token}",
+                    "Content-Type":  "application/json",
+                },
+            )
+            if r.status_code in (200, 201):
+                data = r.json()
+                return {
+                    "ok":     True,
+                    "uuid":   data.get("uuid"),
+                    "status": data.get("status", "queued"),
+                }
+            else:
+                return {
+                    "ok":    False,
+                    "error": f"HTTP {r.status_code}: {r.text[:200]}",
+                }
         except Exception as e:
             log.error(f"[vonage] place_call error: {e}")
+            return {"ok": False, "error": str(e)}
+
+    def place_call_sync(
+        self,
+        to_number: str,
+        ncco: list,
+        event_webhook: str = "",
+    ) -> dict:
+        """
+        Synchronous version of place_call(). Shares JWT cache + connection pool
+        with the async path. Used by scripts without an event loop (bots, cron).
+        Returns: {ok, uuid, status, error?}
+        """
+        if not self.enabled:
+            log.info(f"[vonage] STUB · would call {to_number}")
+            return {"ok": True, "uuid": "stub-uuid", "status": "stub", "stub": True}
+
+        token = self._generate_jwt()
+        if not token:
+            return {"ok": False, "error": "JWT generation failed"}
+
+        payload = {
+            "to":   [{"type": "phone", "number": to_number.lstrip("+")}],
+            "from": {"type": "phone", "number": self.from_number.lstrip("+")},
+            "ncco": ncco,
+            "advanced_machine_detection": {
+                "behavior": "continue",
+                "mode": "default",
+            },
+        }
+        if event_webhook:
+            payload["event_url"] = [event_webhook]
+
+        try:
+            if self._sync_client is None:
+                self._sync_client = httpx.Client(timeout=10.0)
+            r = self._sync_client.post(
+                "https://api.nexmo.com/v1/calls",
+                json=payload,
+                headers={
+                    "Authorization": f"Bearer {token}",
+                    "Content-Type":  "application/json",
+                },
+            )
+            if r.status_code in (200, 201):
+                data = r.json()
+                return {
+                    "ok":     True,
+                    "uuid":   data.get("uuid"),
+                    "status": data.get("status", "queued"),
+                }
+            else:
+                return {
+                    "ok":    False,
+                    "error": f"HTTP {r.status_code}: {r.text[:200]}",
+                }
+        except Exception as e:
+            log.error(f"[vonage] place_call_sync error: {e}")
             return {"ok": False, "error": str(e)}
 
     async def send_sms(self, to_number: str, message: str) -> dict:
@@ -221,25 +305,26 @@ class VonageAdapter:
         }
 
         try:
-            async with httpx.AsyncClient(timeout=10.0) as client:
-                r = await client.post(
-                    "https://api.nexmo.com/v1/messages",
-                    json=payload,
-                    headers={
-                        "Authorization": f"Bearer {token}",
-                        "Content-Type":  "application/json",
-                    },
-                )
-                if r.status_code in (200, 202):
-                    return {
-                        "ok":           True,
-                        "message_uuid": r.json().get("message_uuid"),
-                    }
-                else:
-                    return {
-                        "ok":    False,
-                        "error": f"HTTP {r.status_code}: {r.text[:200]}",
-                    }
+            if self._async_client is None:
+                self._async_client = httpx.AsyncClient(timeout=10.0)
+            r = await self._async_client.post(
+                "https://api.nexmo.com/v1/messages",
+                json=payload,
+                headers={
+                    "Authorization": f"Bearer {token}",
+                    "Content-Type":  "application/json",
+                },
+            )
+            if r.status_code in (200, 202):
+                return {
+                    "ok":           True,
+                    "message_uuid": r.json().get("message_uuid"),
+                }
+            else:
+                return {
+                    "ok":    False,
+                    "error": f"HTTP {r.status_code}: {r.text[:200]}",
+                }
         except Exception as e:
             log.error(f"[vonage] send_sms error: {e}")
             return {"ok": False, "error": str(e)}
@@ -312,9 +397,26 @@ def ncco_outbound_strike(
     operator_number: str = "",
 ) -> list:
     """
-    NCCO for outbound strikes. Brief identification, value pitch, then
-    bridge to an operator OR to recording for callback.
+    NCCO for outbound strikes. Warm-forward: connect immediately when an
+    operator is available (skips TTS preamble for human-answered calls).
+    Falls back to the talk script when connect times out or no operator.
     """
+    ncco: list = []
+
+    if operator_number:
+        # Connect first — when a human answers, they're bridged immediately
+        # without a TTS preamble (saves 2-5s per answered call).
+        # If connect fails/timeouts, the talk action plays as voicemail.
+        ncco.append({
+            "action":   "connect",
+            "endpoint": [{
+                "type":   "phone",
+                "number": operator_number.lstrip("+"),
+            }],
+            "timeout":  30,
+            "limit":    1800,
+        })
+
     fee = round(asset_value * 0.01, 0)
     pitch = (
         "This is Empire AI Predictive Cloud. "
@@ -328,24 +430,13 @@ def ncco_outbound_strike(
         )
     pitch += "Please hold while we connect you to a specialist."
 
-    ncco: list = [
-        {
-            "action":    "talk",
-            "text":      pitch,
-            "voiceName": "Amy",
-        },
-    ]
-
-    if operator_number:
-        ncco.append({
-            "action":   "connect",
-            "endpoint": [{
-                "type":   "phone",
-                "number": operator_number.lstrip("+"),
-            }],
-            "timeout":  30,
-            "limit":    1800,
-        })
+    # Talk plays only when there's no operator, or when the connect action
+    # fails/times out (e.g., voicemail that doesn't answer quickly enough).
+    ncco.append({
+        "action":    "talk",
+        "text":      pitch,
+        "voiceName": "Amy",
+    })
 
     return ncco
 
@@ -378,11 +469,13 @@ class VoiceRouter:
         )
         self.public_base_url = public_base_url.rstrip("/") if public_base_url else ""
         self.stats = {
-            "outbound_placed":   0,
-            "inbound_received":  0,
-            "sms_sent":          0,
-            "calls_completed":   0,
-            "calls_failed":      0,
+            "outbound_placed":    0,
+            "inbound_received":   0,
+            "sms_sent":           0,
+            "calls_completed":    0,
+            "calls_failed":       0,
+            "detected_human":     0,
+            "detected_machine":   0,
         }
 
     def _pick_adapter(self, to_number: str, direction: CallDirection):
@@ -471,32 +564,19 @@ def register_voice_routes(
       Event URL:  https://empire-ai.co.uk/api/v1/voice/events
     """
 
-    # ── INBOUND ANSWER WEBHOOK ──────────────────────────────────────────
-    @app.get("/api/v1/voice/answer")
-    @app.post("/api/v1/voice/answer")
-    async def voice_answer(request: Request):
-        """
-        Vonage hits this when a call comes in. We return an NCCO that
-        Vonage executes (talk, connect, record, etc).
-        """
-        # Vonage sends params as query string OR JSON depending on the version
-        params = dict(request.query_params)
-        if request.method == "POST":
-            try:
-                body = await request.json()
-                params.update(body)
-            except Exception:
-                pass
-
-        from_number = params.get("from", "unknown")
-        to_number   = params.get("to", "")
-        call_uuid   = params.get("uuid", "")
-
-        router.stats["inbound_received"] += 1
-
-        # Try to enrich with radar_targets lookup
+    # ── DEFERRED INBOUND EVENT PROCESSOR ──────────────────────────────
+    async def _post_inbound_event(
+        from_number: str,
+        to_number: str,
+        call_uuid: str,
+        conversation_uuid: str,
+    ):
+        """Run enrichment, broadcast, ntfy, and A/B update in the background
+        so the NCCO is returned to Vonage without delay."""
         target_address = ""
         severity = ""
+
+        # 1. Enrich with radar_targets lookup
         if get_db:
             try:
                 db = get_db()
@@ -510,7 +590,7 @@ def register_voice_routes(
             except Exception as e:
                 log.debug(f"[voice] enrichment failed: {e}")
 
-        # Push to live dashboards
+        # 2. Broadcast to live dashboards
         if broadcaster:
             try:
                 await broadcaster.broadcast({
@@ -524,7 +604,7 @@ def register_voice_routes(
             except Exception:
                 pass
 
-        # Ntfy the operator
+        # 3. Ntfy the operator
         if ntfy_topic:
             try:
                 headers = {
@@ -548,22 +628,54 @@ def register_voice_routes(
             except Exception:
                 pass
 
-        # Mark this caller as converted in A/B (they called us)
+        # 4. Mark this caller as converted in A/B (they called us)
         if get_db:
             try:
                 db = get_db()
                 db.table("ab_assignments").update({
                     "converted":    True,
                     "converted_at": datetime.now(timezone.utc).isoformat(),
-                }).eq("visitor_ip", params.get("conversation_uuid", "")).execute()
+                }).eq("visitor_ip", conversation_uuid).execute()
             except Exception:
                 pass
 
-        # Build the NCCO
+    # ── INBOUND ANSWER WEBHOOK ──────────────────────────────────────────
+    @app.get("/api/v1/voice/answer")
+    @app.post("/api/v1/voice/answer")
+    async def voice_answer(request: Request, background_tasks: BackgroundTasks):
+        """
+        Vonage hits this when a call comes in. Returns NCCO immediately;
+        enrichment, broadcast, and ntfy run in the background.
+        """
+        # Vonage sends params as query string OR JSON depending on the version
+        params = dict(request.query_params)
+        if request.method == "POST":
+            try:
+                body = await request.json()
+                params.update(body)
+            except Exception:
+                pass
+
+        from_number = params.get("from", "unknown")
+        to_number   = params.get("to", "")
+        call_uuid   = params.get("uuid", "")
+
+        router.stats["inbound_received"] += 1
+
+        # Schedule enrichment, broadcast, ntfy, and A/B update as background
+        # tasks so the NCCO is returned to Vonage immediately.
+        background_tasks.add_task(
+            _post_inbound_event,
+            from_number, to_number, call_uuid,
+            params.get("conversation_uuid", ""),
+        )
+
+        # Build and return NCCO right away — enrichment data will be
+        # processed after the response is sent.
         operator_number = os.environ.get("EMPIRE_OPERATOR_NUMBER", "")
         ncco = ncco_inbound_strike(
-            target_address=target_address,
-            severity=severity,
+            target_address="",
+            severity="",
             forward_to=operator_number,
         )
 
@@ -574,7 +686,9 @@ def register_voice_routes(
     async def voice_events(request: Request):
         """
         Vonage posts call lifecycle events here: ringing, answered,
-        completed, etc. We log them and push to the live dashboard.
+        completed, etc. Also receives advanced_machine_detection results
+        (status = "human" | "machine"). We log AMD results to track
+        detection rates and push to the live dashboard.
         """
         try:
             event = await request.json()
@@ -586,37 +700,61 @@ def register_voice_routes(
         direction  = event.get("direction", "")
         duration   = event.get("duration", 0)
 
-        # Update stats
+        # ── Update stats ────────────────────────────────────────────
         if status == "completed":
             router.stats["calls_completed"] += 1
         elif status in ("failed", "rejected", "busy", "timeout"):
             router.stats["calls_failed"] += 1
+        elif status == "human":
+            router.stats["detected_human"] += 1
+            log.info(
+                f"[voice] AMD: human detected on {call_uuid} · "
+                f"from {event.get('from', '?')}"
+            )
+        elif status == "machine":
+            router.stats["detected_machine"] += 1
+            sub = event.get("sub_state", "unknown")
+            log.info(
+                f"[voice] AMD: machine detected on {call_uuid} · "
+                f"sub_state={sub} · from {event.get('from', '?')}"
+            )
 
-        # Persist to call_events table if Supabase is wired
+        # ── Persist to call_events table ────────────────────────────
         if get_db:
             try:
                 db = get_db()
+                meta = dict(event)
+                # Normalize call identifiers so human/machine events
+                # can be joined with their parent call record
                 db.table("call_events").insert({
                     "call_uuid":  call_uuid,
                     "status":     status,
                     "direction":  direction,
                     "duration":   int(duration) if duration else 0,
-                    "meta":       event,
+                    "meta":       meta,
                 }).execute()
             except Exception as e:
                 # call_events table optional; warn but don't fail
                 log.debug(f"[voice] call_events insert: {e}")
 
-        # Push to live dashboards
+        # ── Push to live dashboards ──────────────────────────────────
         if broadcaster:
             try:
-                await broadcaster.broadcast({
+                payload = {
                     "type":      "call_event",
                     "status":    status,
                     "uuid":      call_uuid,
                     "direction": direction,
                     "duration":  duration,
-                })
+                }
+                # Include AMD detail when present so the dashboard
+                # can surface machine/human detection in real-time
+                if status in ("human", "machine"):
+                    payload["amd"] = {
+                        "result":    status,
+                        "sub_state": event.get("sub_state", ""),
+                    }
+                await broadcaster.broadcast(payload)
             except Exception:
                 pass
 

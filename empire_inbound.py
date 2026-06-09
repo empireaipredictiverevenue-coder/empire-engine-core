@@ -695,7 +695,22 @@ def register_inbound_routes(
         except Exception as e:
             raise HTTPException(500, str(e))
 
-    # ── OPERATOR: STATS ────────────────────────────────────────────────
+        # ── OPERATOR: LIST WEBHOOK LEADS ─────────────────────────────────────
+    @app.get("/api/v1/inbound/leads")
+    async def list_inbound_leads(
+        limit: int = Query(50, ge=1, le=200),
+        auth: bool = Depends(require_auth),
+    ):
+        try:
+            db = triage.get_db()
+            data = db.table("inbound_leads").select("*") \
+                .order("created_at", desc=True) \
+                .limit(limit).execute().data
+            return {"leads": data or []}
+        except Exception as e:
+            raise HTTPException(500, str(e))
+
+# ── OPERATOR: STATS ────────────────────────────────────────────────
     @app.get("/api/v1/inbound/stats")
     async def inbound_stats(auth: bool = Depends(require_auth)):
         return triage.stats

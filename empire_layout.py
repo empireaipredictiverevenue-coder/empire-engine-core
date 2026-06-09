@@ -38,6 +38,7 @@ MODULES = [
     ("pipeline",    "02", "Pipeline",    "ti-line-dotted",        "ops"),
     ("dispatch",    "03", "Dispatch",    "ti-route",              "ops"),
     ("inbound",     "04", "Inbound",     "ti-phone-incoming",     "ops"),
+    ("leads", "04.5", "Leads", "ti-target", "ops"),
     ("payouts",     "05", "Payouts",     "ti-coin",               "ops"),
     ("contractors", "06", "Contractors", "ti-users-group",        "ops"),
     ("console",     "07", "Console",     "ti-terminal-2",         "sov"),
