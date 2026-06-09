@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Storm Damage Roof Repair — Wichita, KS | Free Inspection</title>
+<style>
+  :root{
+    --ink:#10151c; --paper:#f7f4ee; --alarm:#e8401f; --alarm-deep:#b82c10;
+    --steel:#26313d; --sky:#3a5a7a; --line:rgba(16,21,28,.12);
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{
+    font-family:'Helvetica Neue',Arial,sans-serif;
+    background:var(--paper); color:var(--ink); line-height:1.5;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:680px;margin:0 auto;padding:0 20px}
+
+  /* Urgency bar */
+  .alert-bar{
+    background:var(--alarm); color:#fff; text-align:center;
+    padding:10px 16px; font-weight:700; font-size:14px; letter-spacing:.02em;
+    position:sticky; top:0; z-index:50;
+  }
+  .alert-bar .pulse{display:inline-block;width:8px;height:8px;background:#fff;border-radius:50%;margin-right:8px;animation:pulse 1.4s infinite}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+
+  /* Hero */
+  .hero{padding:44px 0 36px;text-align:center}
+  .eyebrow{
+    display:inline-block;background:var(--steel);color:#fff;font-size:12px;
+    font-weight:700;letter-spacing:.12em;text-transform:uppercase;
+    padding:6px 14px;border-radius:2px;margin-bottom:22px;
+  }
+  h1{
+    font-family:Georgia,'Times New Roman',serif;
+    font-size:clamp(30px,7vw,46px); line-height:1.08; font-weight:800;
+    letter-spacing:-.02em; margin-bottom:18px;
+  }
+  h1 .hit{color:var(--alarm);font-style:italic}
+  .sub{font-size:clamp(16px,4vw,19px);color:var(--steel);max-width:520px;margin:0 auto 30px}
+
+  /* Call button */
+  .call{
+    display:block;background:var(--alarm);color:#fff;text-decoration:none;
+    font-size:clamp(22px,6vw,28px);font-weight:800;letter-spacing:.01em;
+    padding:22px 24px;border-radius:6px;text-align:center;
+    box-shadow:0 8px 0 var(--alarm-deep),0 14px 26px rgba(184,44,16,.32);
+    transition:transform .08s,box-shadow .08s; position:relative;
+  }
+  .call:active{transform:translateY(6px);box-shadow:0 2px 0 var(--alarm-deep),0 6px 14px rgba(184,44,16,.3)}
+  .call small{display:block;font-size:13px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;opacity:.9;margin-bottom:4px}
+  .call-note{text-align:center;font-size:13px;color:var(--steel);margin-top:12px;font-weight:600}
+
+  /* Pain points */
+  .pains{padding:34px 0 10px}
+  .pains h2{font-family:Georgia,serif;font-size:24px;text-align:center;margin-bottom:24px}
+  .pain{
+    display:flex;gap:14px;align-items:flex-start;
+    background:#fff;border:1px solid var(--line);border-left:4px solid var(--alarm);
+    padding:16px 18px;border-radius:4px;margin-bottom:12px;
+  }
+  .pain .x{color:var(--alarm);font-size:22px;font-weight:800;line-height:1.2;flex-shrink:0}
+  .pain p{font-size:15.5px}
+  .pain strong{display:block;margin-bottom:2px;font-size:16px}
+
+  /* Trust */
+  .trust{background:var(--steel);color:#fff;margin-top:34px;padding:34px 0;text-align:center;border-radius:6px}
+  .trust .row{display:flex;justify-content:center;gap:30px;flex-wrap:wrap;margin-top:8px}
+  .trust .stat{padding:10px 0}
+  .trust .num{font-family:Georgia,serif;font-size:32px;font-weight:800;color:#fff}
+  .trust .lbl{font-size:12px;letter-spacing:.1em;text-transform:uppercase;opacity:.8}
+  .trust h3{font-family:Georgia,serif;font-size:22px;margin-bottom:6px}
+
+  /* How */
+  .how{padding:38px 0}
+  .how h2{font-family:Georgia,serif;font-size:24px;text-align:center;margin-bottom:26px}
+  .step{display:flex;gap:16px;align-items:center;margin-bottom:18px}
+  .step .n{width:38px;height:38px;flex-shrink:0;background:var(--alarm);color:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:17px}
+  .step p{font-size:16px}
+
+  /* Final CTA */
+  .final{text-align:center;padding:10px 0 50px}
+  .final h2{font-family:Georgia,serif;font-size:clamp(24px,6vw,32px);margin-bottom:8px}
+  .final p{color:var(--steel);margin-bottom:24px}
+
+  footer{border-top:1px solid var(--line);padding:24px 0 40px;text-align:center;font-size:12px;color:var(--steel)}
+
+  .float{position:fixed;left:16px;right:16px;bottom:16px;z-index:60;display:none}
+  @media(max-width:600px){.float{display:block}.final .call{margin-bottom:70px}}
+</style>
+</head>
+<body>
+  <div class="alert-bar"><span class="pulse"></span>ACTIVE STORM ALERT — WICHITA &amp; SEDGWICK COUNTY</div>
+
+  <div class="wrap">
+    <section class="hero">
+      <span class="eyebrow">Free Roof Inspection · Local Crews</span>
+      <h1>Storm just <span class="hit">hit your roof?</span><br>Don't wait for the leak.</h1>
+      <p class="sub">Hail and high winds cause hidden damage that turns into ceiling leaks, mold, and a denied insurance claim if you wait too long. Get a free inspection from a local Wichita roofer — today.</p>
+      <a class="call" id="callBtn" href="#"><small>Tap to call now — free inspection</small><span id="callNum">Call Now</span></a>
+      <p class="call-note">✓ No cost · ✓ No obligation · ✓ Local crews standing by</p>
+    </section>
+
+    <section class="pains">
+      <h2>Storm damage doesn't wait. Neither should you.</h2>
+      <div class="pain"><span class="x">!</span><p><strong>That small leak becomes a big bill.</strong>Water gets behind the shingles and rots the decking. A $400 repair today is a $6,000 one next month.</p></div>
+      <div class="pain"><span class="x">!</span><p><strong>Insurance claims have a clock.</strong>Most policies require you to report storm damage quickly. Miss the window and you pay out of pocket.</p></div>
+      <div class="pain"><span class="x">!</span><p><strong>The damage you can't see is the worst kind.</strong>Lifted shingles and cracked seals look fine from the ground — until the next rain finds them.</p></div>
+      <div class="pain"><span class="x">!</span><p><strong>Storm-chasers are already knocking.</strong>Out-of-town crews flood in after every storm. Talk to a real local roofer instead.</p></div>
+    </section>
+
+    <section class="trust">
+      <div class="wrap">
+        <h3>Connected to trusted local roofers</h3>
+        <p style="opacity:.85;font-size:15px">We connect you directly with established Wichita-area contractors — not a call center.</p>
+        <div class="row">
+          <div class="stat"><div class="num">Free</div><div class="lbl">Inspection</div></div>
+          <div class="stat"><div class="num">Local</div><div class="lbl">Wichita Crews</div></div>
+          <div class="stat"><div class="num">Fast</div><div class="lbl">Same-Day Calls</div></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="how">
+      <h2>How it works</h2>
+      <div class="step"><div class="n">1</div><p><strong>Tap call.</strong> You're connected straight to a local Wichita roofer — no forms, no waiting.</p></div>
+      <div class="step"><div class="n">2</div><p><strong>Free inspection.</strong> They check your roof for storm and hail damage at no cost.</p></div>
+      <div class="step"><div class="n">3</div><p><strong>You decide.</strong> Get the assessment and your options. No pressure, no obligation.</p></div>
+    </section>
+
+    <section class="final">
+      <h2>Get your free inspection now</h2>
+      <p>Local crews are taking calls. Don't let hidden damage cost you.</p>
+      <a class="call" href="#" onclick="fireCall(event)"><small>Tap to call now</small><span id="callNum2">Call Now</span></a>
+    </section>
+  </div>
+
+  <div class="float"><a class="call" href="#" onclick="fireCall(event)"><small>Free inspection — tap to call</small><span id="callNum3">Call Now</span></a></div>
+
+  <footer>
+    <div class="wrap">
+      Empire AI connects Wichita homeowners with local licensed roofing contractors.<br>
+      This is a free connection service. You are under no obligation.
+    </div>
+  </footer>
+
+<script>
+  // ====== PASTE YOUR REAL VONAGE NUMBER HERE (once) ======
+  var EMPIRE_PHONE = "PASTE_VONAGE_NUMBER_HERE"; // e.g. "+13165551234"
+  // =======================================================
+  var display = EMPIRE_PHONE.replace(/^\+1/,'').replace(/(\d{3})(\d{3})(\d{4})/,'($1) $2-$3');
+  ["callNum","callNum2","callNum3"].forEach(function(id){
+    var el=document.getElementById(id); if(el) el.textContent = display || "Call Now";
+  });
+  document.getElementById("callBtn").href = "tel:"+EMPIRE_PHONE;
+  function fireCall(e){ e.preventDefault(); window.location.href="tel:"+EMPIRE_PHONE; }
+</script>
+</body>
+</html>

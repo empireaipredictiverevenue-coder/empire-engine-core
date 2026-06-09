@@ -1,0 +1,9 @@
+[
+    {
+        "id": "TEST-001",
+        "phone": "+12142277528",
+        "device": "Medical-Device-X",
+        "double_opt_in": true,
+        "clicked_magnet": true
+    }
+]

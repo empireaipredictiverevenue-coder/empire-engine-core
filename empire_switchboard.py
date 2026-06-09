@@ -130,6 +130,7 @@ def register_switchboard_routes(app, require_auth=None):
                 "buyer_id": buyer["id"] if buyer else None,
                 "niche": niche, "caller_state": state, "caller_number": caller,
                 "status": "routed" if buyer else "fallback",
+                "payout_value": float(buyer.get("base_payout", 0)) if buyer else 0.0,
                 "source": payload.get("source","direct"),
             }).execute()
         except Exception as e:

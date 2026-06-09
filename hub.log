@@ -1,0 +1,59 @@
+nohup: ignoring input
+INFO:empire.voice:[vonage] Adapter ONLINE · DID +12142277528
+WARNING:empire.payouts:[payouts] Engine in DRY-RUN mode (no signing key/wallet configured)
+WARNING:empire.brain.memory:[brain.memory] OPENAI_API_KEY not set · running in NOOP mode
+INFO:empire.voice:[voice] Routes registered · /api/v1/voice/{answer,events,strike,stats}
+INFO:empire.sms:[sms] Routes registered · /api/v1/sms/{inbound,enroll,bulk-enroll,stats}
+INFO:empire.contractors:[contractors] Routes registered · /contractors/{signup,verify,thanks} · /api/v1/contractors/{apply,applications,approve,reject}
+INFO:empire.email:[email] Routes registered · /email/unsubscribe · /api/v1/email/{enroll,bulk-enroll,stats,webhook}
+INFO:empire.matching:[matching] Routes registered · /dispatch/accept · /api/v1/matching/{preview,dispatch,stats,leaderboard}
+INFO:empire.payouts:[payouts] Routes registered · /api/v1/payouts/{pending,approve,attribute,cancel,stats,history}
+INFO:empire.auth:[auth] Routes registered · /auth/{login,verify} · /api/v1/auth/{login,logout,me,invite,operators,audit}
+INFO:empire.inbound:[inbound] Routes registered · /api/v1/inbound/{dtmf,recording,calls,stats}
+INFO:empire.console:[console] Routes registered · /api/v1/console/{parse,execute,actions,stats}
+INFO:empire.orchestrator:[orchestrator] Routes registered · /api/v1/storm/{status,pause,resume,tick,fire-test}
+INFO:empire.map:[map] Routes registered - /api/v1/map/{storms,targets,config}
+INFO:empire.switchboard:[switchboard] routes registered
+INFO:empire.voice:[voice] Routes registered · /api/v1/voice/{answer,events,strike,stats}
+/root/empire-v49/hub.py:310: DeprecationWarning: 
+        on_event is deprecated, use lifespan event handlers instead.
+
+        Read more about it in the
+        [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+        
+  @app.on_event("startup")
+/root/empire-v49/hub.py:320: DeprecationWarning: 
+        on_event is deprecated, use lifespan event handlers instead.
+
+        Read more about it in the
+        [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+        
+  @app.on_event("shutdown")
+/root/empire-v49/hub.py:657: DeprecationWarning: 
+        on_event is deprecated, use lifespan event handlers instead.
+
+        Read more about it in the
+        [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+        
+  @app.on_event("startup")
+INFO:httpx:HTTP Request: GET https://owbeinlfcfdtwcwrttjy.supabase.co/rest/v1/radar_targets?select=source&created_at=gte.2026-06-08 "HTTP/2 200 OK"
+INFO:     Started server process [1711176]
+INFO:     Waiting for application startup.
+INFO:empire.hub:Empire V49 · Starting up
+INFO:empire.hub:Empire V49 · Operational
+INFO:empire.brain.learning:[brain.learning] Nightly tuner ONLINE · 24h tick
+INFO:httpx:HTTP Request: GET https://owbeinlfcfdtwcwrttjy.supabase.co/rest/v1/brain_memory?select=city%2Cseverity%2Casset_value%2Curgency%2Coutcome%2Cactual_fee&outcome=not.is.null&outcome=neq.pending&created_at=gte.2026-03-10T22%3A31%3A53.906598%2B00%3A00 "HTTP/2 200 OK"
+INFO:empire.sms:[sms] Dispatcher ONLINE · max 6/min
+INFO:httpx:HTTP Request: GET https://owbeinlfcfdtwcwrttjy.supabase.co/rest/v1/sms_sequences?select=%2A&status=eq.active&next_send_at=lte.2026-06-08T22%3A31%3A54.133466%2B00%3A00&limit=6 "HTTP/2 200 OK"
+INFO:empire.email:[email] Dispatcher ONLINE · max 12/min
+INFO:httpx:HTTP Request: GET https://owbeinlfcfdtwcwrttjy.supabase.co/rest/v1/email_sequences?select=%2A&status=eq.active&next_send_at=lte.2026-06-08T22%3A31%3A54.326114%2B00%3A00&limit=12 "HTTP/2 200 OK"
+INFO:empire.orchestrator:[orchestrator] ONLINE · 300s interval · 6 lanes
+INFO:httpx:HTTP Request: PATCH https://owbeinlfcfdtwcwrttjy.supabase.co/rest/v1/storm_state?id=eq.1 "HTTP/2 200 OK"
+INFO:httpx:HTTP Request: GET https://owbeinlfcfdtwcwrttjy.supabase.co/rest/v1/storm_state?select=%2A&id=eq.1&limit=1 "HTTP/2 200 OK"
+INFO:httpx:HTTP Request: GET https://owbeinlfcfdtwcwrttjy.supabase.co/rest/v1/email_log?select=id&created_at=gte.2026-06-07T22%3A31%3A54.924186%2B00%3A00&direction=eq.outbound "HTTP/2 200 OK"
+INFO:httpx:HTTP Request: GET https://owbeinlfcfdtwcwrttjy.supabase.co/rest/v1/email_log?select=id&created_at=gte.2026-06-07T22%3A31%3A54.924186%2B00%3A00&direction=eq.bounce "HTTP/2 200 OK"
+INFO:     Application startup complete.
+ERROR:    [Errno 98] error while attempting to bind on address ('0.0.0.0', 8000): address already in use
+INFO:     Waiting for application shutdown.
+INFO:empire.hub:Empire V49 · Shutting down
+INFO:     Application shutdown complete.

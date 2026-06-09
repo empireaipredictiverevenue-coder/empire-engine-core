@@ -167,6 +167,7 @@ CREATE TABLE IF NOT EXISTS call_events (
   status      text,
   direction   text,
   duration    int DEFAULT 0,
+  sub_state   text,          -- AMD detection sub_state: beep_start, beep_timeout
   meta        jsonb DEFAULT '{}'::jsonb
 );
 CREATE INDEX IF NOT EXISTS call_events_uuid_idx ON call_events (call_uuid);
