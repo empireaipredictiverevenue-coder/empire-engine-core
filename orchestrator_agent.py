@@ -23,9 +23,19 @@ from dotenv import load_dotenv
 load_dotenv("/root/.env")
 
 from supabase import create_client
+from supabase.lib.client_options import SyncClientOptions
+
 SUPABASE_URL = os.environ.get("SUPABASE_URL")
 SUPABASE_KEY = os.environ.get("SUPABASE_SERVICE_KEY")
-db = create_client(SUPABASE_URL, SUPABASE_KEY)
+db = create_client(
+    SUPABASE_URL,
+    SUPABASE_KEY,
+    options=SyncClientOptions(
+        postgrest_client_timeout=10,   # seconds — fail fast on Supabase latency spikes
+        storage_client_timeout=10,
+        function_client_timeout=10,
+    ),
+)
 
 
 def emit(line: str):
@@ -77,30 +87,28 @@ def get_real_stats() -> dict:
         stats["proxy_health"] = 1.0
         stats["_health_err"] = str(e)[:80]
 
-    # lead_velocity: radar_targets created in last hour
+    # lead_velocity: real calls received in last hour (REAL funnel)
     try:
-        leads = db.table("radar_targets") \
+        recent_calls = db.table("call_logs") \
             .select("id", count="exact") \
             .gte("created_at", one_hour_ago) \
             .execute()
-        stats["lead_velocity"] = leads.count or 0
+        stats["lead_velocity"] = recent_calls.count or 0
     except Exception as e:
         stats["lead_velocity"] = 0
         stats["_velocity_err"] = str(e)[:80]
 
-    # conversion_rate: approved drafts / total drafts today
+    # conversion_rate: qualified calls / total calls today (REAL funnel)
     try:
-        drafts = db.table("email_drafts") \
-            .select("status", count="exact") \
+        calls = db.table("call_logs") \
+            .select("qualified", count="exact") \
             .gte("created_at", today_start) \
             .execute()
-        total_drafts = drafts.count or 0
-        approved = sum(
-            1 for r in (drafts.data or [])
-            if r.get("status") in ("approved", "sent")
-        )
-        stats["conversion_rate"] = round(approved / total_drafts, 4) if total_drafts > 0 else 0.0
-        stats["drafts_today"] = total_drafts
+        total_calls = calls.count or 0
+        qualified = sum(1 for r in (calls.data or []) if r.get("qualified"))
+        stats["conversion_rate"] = round(qualified / total_calls, 4) if total_calls > 0 else 0.0
+        stats["calls_today"] = total_calls
+        stats["qualified_today"] = qualified
     except Exception as e:
         stats["conversion_rate"] = 0.0
         stats["_conv_err"] = str(e)[:80]
@@ -118,12 +126,33 @@ async def ask_llama_for_weight(stats: dict) -> dict:
         return {"new_weight": 1.0, "_error": str(e)[:120]}
 
 
+# corridor throttle: only render at most once per hour even though loop is 5-min
+_last_corridor_run = [0.0]
+CORRIDOR_MIN_INTERVAL = 3600  # seconds (1 hour)
+
+async def maybe_run_corridor():
+    """Ride-along: check demand + run corridor, but gate the expensive render to 1x/hour."""
+    import time
+    now = time.time()
+    if now - _last_corridor_run[0] < CORRIDOR_MIN_INTERVAL:
+        return  # throttled
+    _last_corridor_run[0] = now
+    try:
+        import corridor
+        # dry_run=False so it actually renders when demand is triggered; corridor itself
+        # stands down if there's no triggered demand, so this is safe + cheap when quiet
+        await corridor.run_corridor("roofing", dry_run=False)
+    except Exception as e:
+        emit(f"[CORRIDOR] error: {e}")
+
 async def agentic_loop_once():
     stats = get_real_stats()
     emit(f"[AGI] Stats Snapshot: {stats}")
     config = await ask_llama_for_weight(stats)
     emit(f"[AGI] System self-optimized based on real-time revenue pulse.")
     emit(f"[ACTION] Applying optimized configuration: {config}")
+    # ride-along: autonomous demand->creative corridor (throttled to 1x/hour)
+    await maybe_run_corridor()
 
 
 async def main():

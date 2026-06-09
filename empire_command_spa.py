@@ -11,7 +11,7 @@ Architecture:
   - All API calls go through apiFetch() which attaches Authorization: Bearer.
   - WebSocket /ws/live for live event tail (uses same token in query string).
 
-All sections are wired end-to-end to their /api endpoints.
+Phase 1 wires Pulse end-to-end; other sections render a placeholder.
 """
 
 from empire_tokens import EMPIRE_FONTS, EMPIRE_TOKENS_CSS, EMPIRE_BASE_CSS
@@ -110,11 +110,12 @@ _SPA_CSS = """
 .event-body { color: var(--empire-silver); flex: 1; word-break: break-word; }
 .events-empty { color: var(--empire-fog); font-style: italic; padding: 28px 0; text-align: center; font-family: var(--font-ui); font-size: 12px; }
 
-/* ── LOADING / ERROR STATES ──────────────────────────────────────────── */
+/* ── STUB SECTIONS ────────────────────────────────────────────────── */
 .stub { background: var(--empire-surface); border: 1px dashed var(--empire-border); padding: 64px 32px; text-align: center; }
 .stub-title { font-weight: 200; font-size: 22px; letter-spacing: -0.02em; margin-bottom: 10px; }
 .stub-title em { font-style: italic; color: var(--strike-cyan); font-weight: 500; }
 .stub-body { color: var(--empire-mist); font-size: 13px; max-width: 440px; margin: 0 auto; line-height: 1.7; }
+.stub-tag { display: inline-block; margin-top: 18px; font-family: var(--font-mono); font-size: 10px; color: var(--signal-teal); letter-spacing: 0.18em; text-transform: uppercase; border: 1px solid var(--signal-teal-soft); padding: 6px 14px; border-radius: var(--radius-pill); }
 
 /* ── DENIED ───────────────────────────────────────────────────────── */
 .denied { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; padding: 40px; text-align: center; }
@@ -147,6 +148,7 @@ _SPA_CSS = """
 .bdg.replied  { color: var(--strike-cyan); border-color: var(--strike-cyan); }
 .bdg.complete { color: var(--empire-mist); border-color: var(--empire-border); }
 .bdg.pending  { color: var(--status-amber); border-color: var(--status-amber); }
+.bdg.pending_review { color: var(--status-amber); border-color: var(--status-amber); }
 .bdg.approved { color: var(--signal-teal); border-color: var(--signal-teal-soft); }
 .bdg.rejected { color: var(--status-red); border-color: var(--status-red); }
 .bdg.failed   { color: var(--status-red); border-color: var(--status-red); }
@@ -227,59 +229,92 @@ _SPA_CSS = """
 .agi-w-lo .agi-w-bar{background:#FF4444}
 .agi-replay-btn{margin-left:6px;padding:2px 8px;border-radius:3px;font-size:10px;font-family:var(--font-mono);cursor:pointer;border:1px solid #555;background:transparent;color:inherit}.agi-replay-btn.active{border-color:#39FF14;background:rgba(57,255,20,0.1)}
 .agi-meta{font-family:var(--font-mono);font-size:10px;color:var(--empire-fog);margin-top:14px}
-.gov-meta{font-family:var(--font-mono);font-size:10px;color:var(--empire-fog);display:flex;align-items:center;gap:8px}
-.gov-wd-dot{width:8px;height:8px;border-radius:50%;display:inline-block;background:#FFB800}
-.gov-wd-dot.gov-ok{background:#39FF14;box-shadow:0 0 8px rgba(57,255,20,0.6)}
-.gov-heal-btn{margin-left:10px;padding:5px 14px;border-radius:4px;font-size:10px;font-family:var(--font-mono);letter-spacing:.1em;cursor:pointer;border:1px solid #FF4444;background:rgba(255,68,68,0.08);color:#FF4444;text-transform:uppercase}
-.gov-heal-btn:hover{background:rgba(255,68,68,0.18)}
+
+/* ── PIPELINE BREAKDOWN ──────────────────────────────────────────── */
+.pipeline-breakdown{background:var(--empire-surface);border:1px solid var(--empire-border);padding:20px;margin-bottom:24px}
+.pipeline-h{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:16px;padding-bottom:14px;border-bottom:1px solid var(--empire-divider)}
+.pipeline-title{font-weight:500;font-size:13px;letter-spacing:.02em}
+.pipeline-total{font-family:var(--font-mono);font-size:11px;color:var(--signal-teal);letter-spacing:.04em}
+.pipeline-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px}
+.pipeline-card{background:var(--empire-elevated);border:1px solid var(--empire-divider);padding:14px 16px;transition:border-color .15s var(--ease-snap)}
+.pipeline-card:hover{border-color:var(--empire-border-hi)}
+.pipeline-card-name{font-weight:500;font-size:14px;color:var(--empire-white);margin-bottom:4px}
+.pipeline-card-detail{font-family:var(--font-mono);font-size:10px;color:var(--empire-mist);letter-spacing:.04em;margin-bottom:10px}
+.pipeline-card-payout{font-family:var(--font-mono);font-size:18px;color:var(--signal-teal);font-weight:500}
+.pipeline-card-per{font-size:10px;color:var(--empire-fog);font-weight:400;margin-left:4px}
+.pipeline-card-fees{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px}
+.pipeline-fee-tag{font-family:var(--font-mono);font-size:9px;color:var(--signal-teal);letter-spacing:.06em;padding:3px 7px;background:rgba(68,229,184,0.06);border:1px solid rgba(68,229,184,0.2);border-radius:4px}
+.pipeline-fee-tag.retainer{color:var(--strike-cyan);border-color:rgba(90,200,250,0.2);background:rgba(90,200,250,0.06)}
+.pipeline-card-monthly{font-family:var(--font-mono);font-size:11px;color:var(--empire-white);font-weight:500}
+
+/* ── COMPLIANCE PANEL ────────────────────────────────────────────── */
+.compliance-panel{background:var(--empire-surface);border:1px solid var(--empire-border);padding:20px;margin-bottom:24px}
+.compliance-h{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:16px;padding-bottom:14px;border-bottom:1px solid var(--empire-divider)}
+.compliance-title{font-weight:500;font-size:13px;letter-spacing:.02em}
+.compliance-tag{font-family:var(--font-mono);font-size:10px;color:var(--empire-mist);letter-spacing:.14em;text-transform:uppercase}
+.compliance-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px}
+.compliance-card{background:var(--empire-elevated);border:1px solid var(--empire-divider);padding:14px 16px}
+.compliance-card-label{font-family:var(--font-mono);font-size:9px;color:var(--empire-mist);letter-spacing:.18em;text-transform:uppercase;margin-bottom:8px}
+.compliance-card-value{font-family:var(--font-mono);font-weight:500;font-size:24px;color:var(--empire-white);line-height:1}
+.compliance-card-value.warn{color:var(--status-amber)}
+.compliance-card-value.bad{color:var(--status-red)}
+.compliance-card-value.ok{color:var(--signal-teal)}
+.compliance-card-value.dim{color:var(--empire-mist)}
+.compliance-card-meta{font-family:var(--font-mono);font-size:9px;color:var(--empire-fog);margin-top:6px}
+.compliance-window-open{display:inline-flex;align-items:center;gap:8px;font-family:var(--font-mono);font-size:10px}
+.compliance-window-dot{width:8px;height:8px;border-radius:50%;display:inline-block}
+.compliance-window-dot.open{background:var(--signal-teal);box-shadow:0 0 8px rgba(68,229,184,0.6)}
+.compliance-window-dot.closed{background:var(--status-red);box-shadow:0 0 8px rgba(255,68,68,0.4)}
+.compliance-blocks{max-height:200px;overflow-y:auto}
+.compliance-block-row{display:grid;grid-template-columns:100px 80px 1fr;gap:12px;padding:8px 0;border-bottom:1px solid var(--empire-divider);font-family:var(--font-mono);font-size:10px;color:var(--empire-mist)}
+.compliance-block-row:last-child{border-bottom:none}
+.compliance-block-ts{color:var(--empire-fog)}
+.compliance-block-rule{text-transform:uppercase;letter-spacing:.08em}
+.compliance-block-rule.hours{color:var(--status-amber)}
+.compliance-block-rule.dnc{color:var(--status-red)}
+.compliance-block-rule.format{color:var(--empire-mist)}
+.compliance-block-phone{color:var(--empire-silver)}
+.compliance-empty{font-family:var(--font-ui);font-size:11px;color:var(--empire-fog);font-style:italic;padding:16px 0;text-align:center}
+
+/* ── GOVERNOR ────────────────────────────────────────────────────── */
+.gov-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:20px}
+.gov-card{background:var(--empire-surface);border:1px solid var(--empire-divider);padding:16px 18px;position:relative;overflow:hidden;transition:border-color .15s var(--ease-snap)}
+.gov-card:hover{border-color:var(--empire-border-hi)}
+.gov-card::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,var(--signal-teal-soft),transparent)}
+.gov-card-row{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+.gov-card-name{font-weight:500;font-size:14px;color:var(--empire-white)}
+.gov-bdg{display:inline-flex;align-items:center;gap:6px;font-family:var(--font-mono);font-size:9px;letter-spacing:.12em;text-transform:uppercase;padding:4px 10px;border-radius:var(--radius-pill);border:1px solid}
+.gov-bdg.online{color:var(--signal-teal);border-color:var(--signal-teal-soft)}
+.gov-bdg.errored{color:var(--status-red);border-color:var(--status-red)}
+.gov-bdg.stopped{color:var(--status-amber);border-color:var(--status-amber)}
+.gov-bdg.unknown{color:var(--empire-mist);border-color:var(--empire-border)}
+.gov-bdg-dot{width:6px;height:6px;border-radius:50%;background:currentColor;box-shadow:0 0 6px currentColor}
+.gov-card-stats{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.gov-stat{font-family:var(--font-mono)}
+.gov-stat-val{font-size:16px;color:var(--empire-white);font-weight:500}
+.gov-stat-lbl{font-size:9px;color:var(--empire-fog);letter-spacing:.12em;text-transform:uppercase;margin-top:2px}
+.gov-watchdog{display:flex;align-items:center;gap:18px;flex-wrap:wrap}
+.gov-watch-tag{font-family:var(--font-mono);font-size:10px;color:var(--empire-mist);letter-spacing:.08em}
+.gov-watch-tag strong{color:var(--empire-white);font-weight:500}
+.gov-heal-btn{padding:8px 18px;font-family:var(--font-mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;border:1px solid var(--status-red);background:transparent;color:var(--status-red);cursor:pointer;border-radius:6px;font-weight:700}
+.gov-heal-btn:hover{background:rgba(255,68,68,0.1)}
 .gov-heal-btn:disabled{opacity:.5;cursor:default}
-.gov-healmsg{font-family:var(--font-mono);font-size:11px;color:#39FF14;border:1px solid var(--empire-divider);background:var(--empire-surface);border-radius:6px;padding:10px 14px;margin-bottom:16px}
-.gov-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px}
-.gov-panel{background:var(--empire-surface);border:1px solid var(--empire-divider);border-radius:10px;overflow:hidden}
-.gov-panel-h{display:flex;justify-content:space-between;align-items:baseline;padding:14px 18px;border-bottom:1px solid var(--empire-divider)}
-.gov-panel-title{font-size:14px;color:var(--empire-white)}
-.gov-panel-tag{font-family:var(--font-mono);font-size:10px;color:var(--signal-teal);letter-spacing:.1em;text-transform:uppercase}
-.gov-empty{padding:28px;text-align:center;color:var(--empire-fog);font-size:12px;font-family:var(--font-mono)}
-.gov-badge{font-family:var(--font-mono);font-size:9px;letter-spacing:.1em;padding:3px 8px;border-radius:4px;border:1px solid currentColor}
-.gov-ok{color:#39FF14}
-.gov-warn{color:#FFB800}
-.gov-bad{color:#FF4444}
-.gov-log{max-height:340px;overflow-y:auto;font-family:var(--font-mono);font-size:11px}
-.gov-log-row{display:flex;gap:10px;padding:9px 18px;border-bottom:1px solid var(--empire-divider);align-items:baseline}
-.gov-log-time{color:var(--empire-fog);flex-shrink:0;min-width:54px}
-.gov-log-lvl{flex-shrink:0;min-width:44px;font-size:9px;letter-spacing:.08em}
-.gov-log-svc{color:var(--signal-teal);flex-shrink:0;min-width:96px}
-.gov-log-detail{color:var(--empire-mist)}
-.gov-res{padding:8px 0}
-.gov-res-row{display:grid;grid-template-columns:160px 1fr;gap:16px;align-items:center;padding:10px 18px;border-bottom:1px solid var(--empire-divider)}
-.gov-res-name{font-family:var(--font-mono);font-size:12px;color:var(--empire-silver)}
-.gov-res-bars{display:flex;flex-direction:column;gap:8px}
-.gov-res-bar-label{font-family:var(--font-mono);font-size:9px;color:var(--empire-fog);margin-bottom:3px;letter-spacing:.08em}
-.gov-res-track{height:6px;background:var(--empire-divider);border-radius:3px;overflow:hidden}
-.gov-res-fill{height:100%;border-radius:3px;transition:width .3s}
-.gov-res-fill.gov-ok{background:#39FF14}
-.gov-res-fill.gov-warn{background:#FFB800}
-.gov-res-fill.gov-bad{background:#FF4444}
-.sf-meta{font-family:var(--font-mono);font-size:10px;color:var(--signal-teal);letter-spacing:.1em}
-.sf-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
-.sf-card{background:var(--empire-surface);border:1px solid var(--empire-divider);border-radius:10px;padding:18px 20px;display:flex;flex-direction:column;gap:14px}
-.sf-card-h{display:flex;justify-content:space-between;align-items:center}
-.sf-card-name{font-family:var(--font-display);font-weight:300;font-size:20px;color:var(--empire-white)}
-.sf-badge{font-family:var(--font-mono);font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--empire-mist);border:1px solid var(--empire-divider);border-radius:4px;padding:3px 8px}
-.sf-status{font-family:var(--font-mono);font-size:11px;letter-spacing:.12em;display:flex;align-items:center;gap:8px}
-.sf-dot{width:8px;height:8px;border-radius:50%;background:currentColor;box-shadow:0 0 8px currentColor}
-.sf-ok{color:#39FF14}
-.sf-warn{color:#FFB800}
-.sf-bad{color:#FF4444}
-.sf-stats{display:grid;grid-template-columns:1fr 1fr;gap:12px;border-top:1px solid var(--empire-divider);border-bottom:1px solid var(--empire-divider);padding:14px 0}
-.sf-stat-val{font-family:var(--font-display);font-weight:200;font-size:24px;color:var(--empire-white)}
-.sf-stat-val.sf-stat-mono{font-family:var(--font-mono);font-size:14px}
-.sf-stat-lbl{font-family:var(--font-mono);font-size:9px;color:var(--empire-fog);letter-spacing:.12em;text-transform:uppercase;margin-top:4px}
-.sf-toggle{font-family:var(--font-mono);font-size:10px;letter-spacing:.12em;padding:8px 0;border-radius:6px;cursor:pointer;border:1px solid #555;background:transparent;text-transform:uppercase}
-.sf-toggle.on{border-color:#FF4444;color:#FF4444;background:rgba(255,68,68,0.06)}
-.sf-toggle.off{border-color:#39FF14;color:#39FF14;background:rgba(57,255,20,0.06)}
-.sf-toggle:hover{filter:brightness(1.3)}
-.sf-toggle:disabled{opacity:.5;cursor:default}
+.gov-panel{background:var(--empire-surface);border:1px solid var(--empire-border);padding:18px;margin-top:20px}
+.gov-panel-h{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid var(--empire-divider)}
+.gov-panel-title{font-weight:500;font-size:13px;letter-spacing:.02em}
+.gov-panel-tag{font-family:var(--font-mono);font-size:10px;color:var(--empire-mist);letter-spacing:.14em}
+.gov-log{max-height:300px;overflow-y:auto;font-family:var(--font-mono);font-size:11px}
+.gov-log-row{display:grid;grid-template-columns:100px 56px 100px 1fr;gap:12px;padding:9px 0;border-bottom:1px solid var(--empire-divider);align-items:baseline}
+.gov-log-row:last-child{border-bottom:none}
+.gov-log-ts{color:var(--empire-fog);min-width:60px}
+.gov-log-lvl{font-size:9px;letter-spacing:.1em;text-transform:uppercase}
+.gov-log-lvl.info{color:var(--signal-teal)}
+.gov-log-lvl.warn{color:var(--status-amber)}
+.gov-log-lvl.error{color:var(--status-red)}
+.gov-log-svc{color:var(--strike-cyan)}
+.gov-log-detail{color:var(--empire-silver);word-break:break-word}
+.gov-empty{font-family:var(--font-ui);font-size:11px;color:var(--empire-fog);font-style:italic;padding:16px 0;text-align:center}
+.gov-result{font-family:var(--font-mono);font-size:11px;color:var(--signal-teal);margin-top:12px;padding:10px 14px;background:var(--empire-elevated);border:1px solid var(--empire-divider)}
 """
 
 
@@ -309,18 +344,23 @@ async function apiFetch(path, opts = {}) {
 
 // ── ROUTING ───────────────────────────────────────────────────────────
 const SECTIONS = [
-  { id: 'pulse',       label: 'Pulse',       sub: 'Live overview' },
-  { id: 'pipeline',    label: 'Pipeline',    sub: 'Email & SMS · state machine' },
-  { id: 'dispatch',    label: 'Dispatch',    sub: 'Contractor matching' },
-  { id: 'inbound',     label: 'Inbound',     sub: 'Calls · triage · recordings' },
-  { id: 'payouts',     label: 'Payouts',     sub: 'Pending · approvals · history' },
-  { id: 'contractors', label: 'Contractors', sub: 'Applications & approvals' },
-  { id: 'console',     label: 'Console',     sub: 'Sovereign natural-language ops' },
-  { id: 'audit',       label: 'Audit',       sub: 'Operator action history' },
-  { id: 'operators',   label: 'Operators',   sub: 'Roster · roles · invites' },
-  { id: 'neural-core', label: 'Neural Core', sub: 'Live brain · autonomous decisions' },
-  { id: 'governor',    label: 'Governor',    sub: 'Autonomous control · self-healing · 60s watchdog' },
-  { id: 'sniper-fleet', label: 'Sniper Fleet', sub: 'Storm · Legal · Warehouse · Logistics · Reddit · LinkedIn agents' },
+  { id: 'pulse',         label: 'Pulse',         sub: 'Live overview' },
+  { id: 'pipeline',      label: 'Pipeline',       sub: 'Email & SMS · state machine' },
+  { id: 'dispatch',      label: 'Dispatch',       sub: 'Contractor matching' },
+  { id: 'inbound',       label: 'Inbound',        sub: 'Calls · triage · recordings' },
+  { id: 'payouts',       label: 'Payouts',        sub: 'Pending · approvals · history' },
+  { id: 'contractors',   label: 'Contractors',    sub: 'Applications & approvals' },
+  { id: 'console',       label: 'Console',        sub: 'Sovereign natural-language ops' },
+  { id: 'audit',         label: 'Audit',          sub: 'Operator action history' },
+  { id: 'operators',     label: 'Operators',      sub: 'Roster · roles · invites' },
+  { id: 'neural-core',   label: 'Neural Core',    sub: 'Live brain · autonomous decisions · 5s refresh' },
+  { id: 'holo-map',      label: 'Holo Map',       sub: 'Live storm grid · 3D target overlay' },
+  { id: 'governor',      label: 'Governor',       sub: 'AGI governor · weight control · guardrails' },
+  { id: 'sniper-fleet',  label: 'Sniper Fleet',   sub: 'Active agents · lane status · targeting' },
+  { id: 'agi-loop',      label: 'AGI Loop',       sub: 'Autonomous growth · decision engine · cycles' },
+  { id: 'health-monitor',label: 'Health Monitor', sub: 'Agent mesh · system health · overseer' },
+  { id: 'leads',         label: 'Leads',          sub: 'Inbound leads · pipeline · intake' },
+  { id: 'partners',      label: 'Partners',       sub: 'Buyers · pending · approvals' },
 ];
 
 function currentSection() {
@@ -418,14 +458,16 @@ function Pulse({ events, wsConnected }) {
 
   const reload = useCallback(async () => {
     try {
-      const [pb, em, sm, py, ib] = await Promise.all([
+      const [pb, em, sm, py, ib, pr, co] = await Promise.all([
         apiFetch('/api/v1/playbook/summary').then(r => r.json()),
         apiFetch('/api/v1/email/stats').then(r => r.json()),
         apiFetch('/api/v1/sms/stats').then(r => r.json()),
         apiFetch('/api/v1/payouts/pending').then(r => r.json()),
         apiFetch('/api/v1/inbound/stats').then(r => r.json()),
+        apiFetch('/api/v1/partner/all').then(r => r.json()),
+        apiFetch('/api/v1/compliance/stats').then(r => r.json()),
       ]);
-      setStats({ pb, em, sm, py, ib });
+      setStats({ pb, em, sm, py, ib, pr, co });
       setErr(null);
     } catch (e) {
       if (e.message !== 'Unauthorized') setErr(e.message);
@@ -450,6 +492,19 @@ function Pulse({ events, wsConnected }) {
   const inboundCalls = stats.ib?.calls_received ?? 0;
   const inboundForwarded = stats.ib?.calls_forwarded ?? 0;
 
+  // Partner stats from partner/all endpoint
+  const allPartners = stats.pr?.partners || [];
+  const activePartnersList = allPartners.filter(p => p.status === 'active' || p.status === 'ACTIVE');
+  const activePartners = activePartnersList.length;
+  const pendingPartners = allPartners.filter(p => p.status === 'pending_review').length;
+  const totalPipelineValue = activePartnersList
+    .reduce((sum, p) => sum + (parseFloat(p.base_payout) || 0), 0);
+  const totalMonthlyRetainer = activePartnersList
+    .reduce((sum, p) => sum + (parseFloat(p.monthly_retainer) || 0), 0);
+  const totalPerCallFee = activePartnersList
+    .reduce((sum, p) => sum + ((parseFloat(p.base_payout) || 0) * (parseFloat(p.fee_rate) || 0.01) + (parseFloat(p.per_call_fee) || 0)), 0);
+  const projectedMRR = Math.round(totalMonthlyRetainer + (totalPerCallFee * 22));
+
   return html`
     <div>
       <div class="section-h">
@@ -472,6 +527,11 @@ function Pulse({ events, wsConnected }) {
           <div class="stat-meta">${emailsSent} email · ${smsSent} sms sent</div>
         </div>
         <div class="stat-card">
+          <div class="stat-label">Partners</div>
+          <div class="stat-value teal">${activePartners}</div>
+          <div class="stat-meta">${pendingPartners} pending · $${totalPipelineValue}/call · $${totalMonthlyRetainer}/mo retainers</div>
+        </div>
+        <div class="stat-card">
           <div class="stat-label">Pending Payouts</div>
           <div class=${'stat-value ' + (pendingPayouts > 0 ? 'teal' : 'dim')}>${pendingPayouts}</div>
           <div class="stat-meta">awaiting owner approval</div>
@@ -481,7 +541,106 @@ function Pulse({ events, wsConnected }) {
           <div class=${'stat-value ' + (inboundCalls > 0 ? 'cyan' : 'dim')}>${inboundCalls}</div>
           <div class="stat-meta">${inboundForwarded} forwarded</div>
         </div>
+        <div class="stat-card">
+          <div class="stat-label">Projected MRR</div>
+          <div class="stat-value teal">$${projectedMRR}</div>
+          <div class="stat-meta">$${totalMonthlyRetainer} retainers · $${Math.round(totalPerCallFee * 22)} per-call fees</div>
+        </div>
       </div>
+
+      ${activePartnersList.length > 0 ? html`
+      <div class="pipeline-breakdown">
+        <div class="pipeline-h">
+          <div class="pipeline-title">Pipeline Breakdown</div>
+          <div class="pipeline-total">$${totalPipelineValue}/call · $${totalMonthlyRetainer}/mo retainers</div>
+        </div>
+        <div class="pipeline-grid">
+          ${activePartnersList.map(p => {
+            const payout = parseFloat(p.base_payout) || 0;
+            const feeRate = parseFloat(p.fee_rate) || 0.01;
+            const perCallFee = parseFloat(p.per_call_fee) || 0;
+            const retainer = parseFloat(p.monthly_retainer) || 0;
+            const empireFeePerCall = Math.round((payout * feeRate + perCallFee) * 100) / 100;
+            const monthlyPotential = retainer + (empireFeePerCall * 22);
+            const states = Array.isArray(p.state_coverage) ? p.state_coverage.join(', ') : (p.state_coverage || '—');
+            return html`
+              <div class="pipeline-card" onClick=${() => window.location.hash = '#/partners?focus=' + encodeURIComponent(p.id)} style=${{cursor: 'pointer'}}>
+                <div class="pipeline-card-name">${p.buyer_name || '—'}</div>
+                <div class="pipeline-card-detail">${p.niche || '—'} · ${states}</div>
+                <div class="pipeline-card-payout">$${payout}<span class="pipeline-card-per">/call</span></div>
+                <div class="pipeline-card-fees">
+                  <span class="pipeline-fee-tag">$${empireFeePerCall}/call fee</span>
+                  ${retainer > 0 ? html`<span class="pipeline-fee-tag retainer">$${retainer}/mo retainer</span>` : ''}
+                </div>
+                <div class="pipeline-card-monthly">~$${monthlyPotential}/mo projected</div>
+              </div>
+            `;
+          })}
+        </div>
+      </div>
+      ` : ''}
+
+      ${(() => {
+        const co = stats.co;
+        if (!co) return '';
+        const blockedToday = co.blocked_today || 0;
+        const smsOptOuts = co.sms_opt_outs || 0;
+        const outboundDnc = co.outbound_dnc || 0;
+        const windowOpen = co.call_window && co.call_window.open;
+        const windowLabel = co.call_window ? co.call_window.window : '—';
+        const blocks = co.recent_blocks || [];
+        return html`
+      <div class="compliance-panel">
+        <div class="compliance-h">
+          <div class="compliance-title">Compliance</div>
+          <div class="compliance-tag">
+            <span class="compliance-window-open">
+              <span class=${'compliance-window-dot ' + (windowOpen ? 'open' : 'closed')}></span>
+              ${windowOpen ? 'Call window OPEN' : 'Call window CLOSED'} · ${windowLabel}
+            </span>
+          </div>
+        </div>
+        <div class="compliance-grid">
+          <div class="compliance-card">
+            <div class="compliance-card-label">Blocks Today</div>
+            <div class=${'compliance-card-value ' + (blockedToday > 0 ? 'bad' : 'ok')}>${blockedToday}</div>
+            <div class="compliance-card-meta">outbound calls stopped</div>
+          </div>
+          <div class="compliance-card">
+            <div class="compliance-card-label">SMS Opt-Outs</div>
+            <div class=${'compliance-card-value ' + (smsOptOuts > 0 ? 'warn' : 'ok')}>${smsOptOuts}</div>
+            <div class="compliance-card-meta">STOP keyword entries</div>
+          </div>
+          <div class="compliance-card">
+            <div class="compliance-card-label">DNC List</div>
+            <div class="compliance-card-value dim">${outboundDnc}</div>
+            <div class="compliance-card-meta">manual blocks</div>
+          </div>
+          <div class="compliance-card">
+            <div class="compliance-card-label">Total DNC</div>
+            <div class="compliance-card-value dim">${smsOptOuts + outboundDnc}</div>
+            <div class="compliance-card-meta">combined protection</div>
+          </div>
+        </div>
+        <div class="panel-head" style=${{fontSize: '10px', marginBottom: '8px'}}>Recent blocks</div>
+        ${blocks.length === 0
+          ? html`<div class="compliance-empty">No blocked calls today.</div>`
+          : html`<div class="compliance-blocks">
+            ${blocks.map(b => {
+              let ruleCls = 'hours';
+              if (b.rule === 'dnc_opt_out') ruleCls = 'dnc';
+              else if (b.rule === 'invalid_phone') ruleCls = 'format';
+              else if (b.rule === 'outside_call_hours') ruleCls = 'hours';
+              return html`
+              <div class="compliance-block-row">
+                <span class="compliance-block-ts">${b.ts ? b.ts.slice(11, 19) : '—'}</span>
+                <span class=${'compliance-block-rule ' + ruleCls}>${b.rule || '—'}</span>
+                <span class="compliance-block-phone">${b.phone || '—'}</span>
+              </div>
+            `})}
+          </div>`}
+      </div>
+      `; })()}
 
       <div class="live-panel">
         <div class="panel-h">
@@ -872,167 +1031,113 @@ function AgiLoop(){
   return html`<div class="section-header"><div><div class="section-title">Neural Core</div><div class="section-sub">Live brain · autonomous decisions · 5s refresh</div></div><div class="agi-meta">TICK ${tick} · LIVE<button class=${live?"agi-replay-btn active":"agi-replay-btn"} onClick=${()=>setReplayIdx(null)}>LIVE</button><button class="agi-replay-btn" onClick=${()=>setReplayIdx(r=>r===null?1:Math.min(r+1,hist.length-1))}>PREV</button><button class="agi-replay-btn" onClick=${()=>setReplayIdx(r=>r===null?null:r<=1?null:r-1)}>NEXT</button></div></div><div class="agi-grid"><div class="agi-tile"><div class="agi-tile-label">LEAD VELOCITY</div><div class="agi-tile-val"><em>${snap?.lead_velocity??"--"}</em></div><div class="agi-tile-sub">leads/hr</div></div><div class="agi-tile"><div class="agi-tile-label">REVENUE PULSE</div><div class="agi-tile-val"><em>${snap?.revenue_pulse!=null?(snap.revenue_pulse*100).toFixed(1)+"%":"--"}</em></div><div class="agi-tile-sub">AI confidence</div></div><div class="agi-tile"><div class="agi-tile-label">PROXY HEALTH</div><div class="agi-tile-val"><em>${snap?.proxy_health!=null?(snap.proxy_health*100).toFixed(1)+"%":"--"}</em></div><div class="agi-tile-sub">network health</div></div><div class="agi-tile"><div class="agi-tile-label">AI CALLS</div><div class="agi-tile-val"><em>${snap?.ai_calls_today??"--"}</em></div><div class="agi-tile-sub">brain activations</div></div></div><div class="agi-decisions"><div class="agi-decisions-head"><div class="agi-decisions-title">Decision Log</div><div class="agi-decisions-count">${decisions.length} entries</div></div>${decisions.map((d,i)=>html`<div class="agi-row"><div class=${"agi-row-weight "+(parseFloat(d.weight)>=1.5?"agi-w-hi":parseFloat(d.weight)>=1.0?"agi-w-mid":"agi-w-lo")}>${d.weight??"·"}<div class="agi-w-bar"></div></div><div class="agi-row-reason">${d.reason??"·"}<button class=${approved.includes(i)?"agi-approve-btn done":"agi-approve-btn"} onClick=${()=>doApprove(i,d.weight)}>${approved.includes(i)?"✓ APPROVED":"AUTO-APPROVE"}</button></div></div>`)}</div>`;
 }
 
-// ── GOVERNOR ──────────────────────────────────────────────────────────
-
-function Governor() {
-  const [status, setStatus] = useState(null);
-  const [log, setLog] = useState(null);
+function Partners() {
+  const [partners, setPartners] = useState(null);
   const [err, setErr] = useState(null);
-  const [healing, setHealing] = useState(false);
-  const [healMsg, setHealMsg] = useState(null);
-  useEffect(() => {
-    let alive = true;
-    async function poll() {
-      try {
-        const [sr, lr] = await Promise.all([
-          apiFetch("/api/governor/status"),
-          apiFetch("/api/governor/log?lines=20"),
-        ]);
-        const sj = await sr.json();
-        const lj = await lr.json();
-        if (alive) { setStatus(sj); setLog(lj); setErr(null); }
-      } catch (e) { if (alive) setErr(e.message); }
-    }
-    poll();
-    const id = setInterval(poll, 10000);
-    return () => { alive = false; clearInterval(id); };
-  }, []);
-  const forceHeal = async () => {
-    setHealing(true); setHealMsg(null);
+  const [busy, setBusy] = useState(null);
+  const [filter, setFilter] = useState('all');
+  const [focusId, setFocusId] = useState(null);
+
+  function getFocusParam() {
+    const hash = window.location.hash;
+    const idx = hash.indexOf('?');
+    if (idx === -1) return null;
+    try { return new URLSearchParams(hash.slice(idx + 1)).get('focus') || null; } catch { return null; }
+  }
+
+  const reload = async () => {
     try {
-      const r = await apiFetch("/api/governor/heal", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
-      const j = await r.json();
-      setHealMsg(j.message || "Heal triggered");
-    } catch (e) { setHealMsg("Error: " + e.message); }
-    finally { setHealing(false); }
+      const endpoint = f === 'pending'
+        ? '/api/v1/partner/pending'
+        : '/api/v1/partner/all';
+      const r = await apiFetch(endpoint).then(x => x.json());
+      setPartners(r.partners || (Array.isArray(r) ? r : []));
+    } catch (e) { setErr(e.message); }
   };
-  const svcCls = (s) => s === "online" ? "gov-ok" : (s === "stopped" || s === "errored" || s === "offline") ? "gov-bad" : "gov-warn";
-  const fmtUp = (s) => { if (s == null) return "--"; const d=Math.floor(s/86400), h=Math.floor((s%86400)/3600), m=Math.floor((s%3600)/60); return d>0?(d+"d "+h+"h"):h>0?(h+"h "+m+"m"):(m+"m"); };
-  const services = status?.services ?? [];
-  const wd = status?.watchdog ?? {};
-  if (err) return html`<div class="stub"><div class="stub-body">${err}</div></div>`;
-  return html`
-    <div>
-      <div class="section-h">
-        <div><div class="section-title">Governor</div><div class="section-sub">Autonomous control · self-healing · 60s watchdog</div></div>
-        <div class="gov-meta">
-          <span class=${"gov-wd-dot " + (wd.healthy === wd.total ? "gov-ok" : "gov-warn")}></span>
-          ${wd.healthy ?? "--"}/${wd.total ?? "--"} HEALTHY · WATCHDOG ${wd.interval_s ?? 60}s
-          <button class="gov-heal-btn" disabled=${healing} onClick=${forceHeal}>${healing ? "HEALING…" : "FORCE HEAL"}</button>
-        </div>
-      </div>
-      ${healMsg ? html`<div class="gov-healmsg">${healMsg}</div>` : null}
-      <div class="gov-grid">
-        <div class="gov-panel">
-          <div class="gov-panel-h"><div class="gov-panel-title">PM2 Services</div><div class="gov-panel-tag">${services.length} processes</div></div>
-          ${!status ? html`<div class="gov-empty">Loading…</div>` :
-            html`<table class="tbl"><thead><tr><th>Service</th><th>Status</th><th>Uptime</th><th>↺</th><th>Memory</th></tr></thead><tbody>
-              ${services.map(s => html`<tr key=${s.name}>
-                <td class="tbl-mono">${s.name}</td>
-                <td><span class=${"gov-badge " + svcCls(s.status)}>${(s.status || "?").toUpperCase()}</span></td>
-                <td class="tbl-mono">${fmtUp(s.uptime_s)}</td>
-                <td class=${"tbl-mono " + ((s.restarts ?? 0) >= 10 ? "gov-warn" : "")}>${s.restarts ?? 0}</td>
-                <td class="tbl-mono">${s.mem_mb != null ? (s.mem_mb.toFixed(1) + " MB") : "--"}</td>
-              </tr>`)}
-            </tbody></table>`}
-        </div>
-        <div class="gov-panel">
-          <div class="gov-panel-h"><div class="gov-panel-title">Self-Heal Log</div><div class="gov-panel-tag">${(log?.entries ?? []).length} entries</div></div>
-          <div class="gov-log">
-            ${(log?.entries ?? []).length === 0 ? html`<div class="gov-empty">No heal actions recorded.</div>` :
-              log.entries.map((e, i) => html`<div class="gov-log-row" key=${i}>
-                <span class="gov-log-time">${(e.ts || "").slice(11, 19)}</span>
-                <span class=${"gov-log-lvl " + (e.level === "error" ? "gov-bad" : e.level === "warn" ? "gov-warn" : "gov-ok")}>${(e.level || "info").toUpperCase()}</span>
-                <span class="gov-log-svc">${e.service || "—"}</span>
-                <span class="gov-log-detail">${(e.action ? (e.action + " · ") : "") + (e.detail || "")}</span>
-              </div>`)}
-          </div>
-        </div>
-      </div>
-      <div class="gov-panel">
-        <div class="gov-panel-h"><div class="gov-panel-title">Resource Allocation</div><div class="gov-panel-tag">CPU · RAM per service</div></div>
-        ${!status ? html`<div class="gov-empty">Loading…</div>` :
-          html`<div class="gov-res">${services.map(s => {
-            const cpu = s.cpu_pct ?? 0, mem = s.mem_mb ?? 0;
-            const cpuCls = cpu >= 80 ? "gov-bad" : cpu >= 50 ? "gov-warn" : "gov-ok";
-            const memCls = mem >= 600 ? "gov-bad" : mem >= 300 ? "gov-warn" : "gov-ok";
-            return html`<div class="gov-res-row" key=${s.name}>
-              <div class="gov-res-name">${s.name}</div>
-              <div class="gov-res-bars">
-                <div class="gov-res-bar"><div class="gov-res-bar-label">CPU ${cpu.toFixed(0)}%</div><div class="gov-res-track"><div class=${"gov-res-fill " + cpuCls} style=${{width: Math.min(cpu, 100) + "%"}}></div></div></div>
-                <div class="gov-res-bar"><div class="gov-res-bar-label">RAM ${mem.toFixed(0)}MB</div><div class="gov-res-track"><div class=${"gov-res-fill " + memCls} style=${{width: Math.min(mem / 8, 100) + "%"}}></div></div></div>
-              </div>
-            </div>`;
-          })}</div>`}
-      </div>
-    </div>
-  `;
-}
 
-// ── SNIPER FLEET ──────────────────────────────────────────────────────
+  useEffect(() => { reload(); }, [filter]);
 
-function SniperFleet() {
-  const [agents, setAgents] = useState(null);
-  const [err, setErr] = useState(null);
-  const [busy, setBusy] = useState(null);   // id of the agent currently toggling
+  // Read focus param from hash on mount and on hash change
   useEffect(() => {
-    let alive = true;
-    async function poll() {
-      try {
-        const r = await apiFetch("/api/agents/status");
-        const j = await r.json();
-        if (alive) { setAgents(j.agents ?? []); setErr(null); }
-      } catch (e) { if (alive) setErr(e.message); }
-    }
-    poll();
-    const id = setInterval(poll, 10000);
-    return () => { alive = false; clearInterval(id); };
+    const onHash = () => setFocusId(getFocusParam());
+    onHash();
+    window.addEventListener('hashchange', onHash);
+    return () => window.removeEventListener('hashchange', onHash);
   }, []);
-  const toggle = async (id) => {
+
+  const displayedPartners = partners && focusId
+    ? partners.filter(p => p.id === focusId)
+    : partners;
+
+  const clearFocus = () => {
+    window.location.hash = '#/partners';
+    setFocusId(null);
+  };
+
+  const act = async (id, action) => {
+    const label = action === 'approve' ? 'Approve' : 'Reject';
+    if (!confirm(`${label} partner ${id.slice(0,8)}?`)) return;
     setBusy(id);
     try {
-      const r = await apiFetch("/api/agents/" + id + "/toggle", { method: "POST" });
-      const j = await r.json();
-      setAgents(prev => (prev ?? []).map(a => a.id === id ? { ...a, ...j } : a));
-    } catch (e) { setErr(e.message); }
-    finally { setBusy(null); }
+      const body = action === 'reject'
+        ? JSON.stringify({ reason: prompt('Rejection reason (optional):') || '' })
+        : '{}';
+      await apiFetch(`/api/v1/partner/${id}/${action}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body,
+      });
+      await reload();
+    } catch (e) { alert('Failed: ' + e.message); }
+    setBusy(null);
   };
-  const stCls = (s) => s === "ACTIVE" ? "sf-ok" : s === "IDLE" ? "sf-warn" : "sf-bad";
-  const fmtPing = (ts) => {
-    if (!ts) return "never";
-    const t = new Date(ts).getTime();
-    if (isNaN(t)) return String(ts);
-    const secs = Math.max(0, Math.round((Date.now() - t) / 1000));
-    if (secs < 60) return secs + "s ago";
-    if (secs < 3600) return Math.floor(secs / 60) + "m ago";
-    if (secs < 86400) return Math.floor(secs / 3600) + "h ago";
-    return Math.floor(secs / 86400) + "d ago";
-  };
+
   if (err) return html`<div class="stub"><div class="stub-body">${err}</div></div>`;
-  const list = agents ?? [];
+  if (!partners) return html`<div class="stub"><div class="stub-body">Loading…</div></div>`;
+
   return html`
     <div>
       <div class="section-h">
-        <div><div class="section-title">Sniper Fleet</div><div class="section-sub">Storm · Legal · Warehouse · Logistics · Reddit · LinkedIn agents</div></div>
-        <div class="sf-meta">${list.filter(a => a.status === "ACTIVE").length}/${list.length} ACTIVE</div>
+        <div>
+          <div class="section-title">Partners</div>
+          <div class="section-sub">Buyer pipeline · approvals</div>
+        </div>
+        <div style=${{display: 'flex', gap: '10px', alignItems: 'center'}}>
+          <button class=${'tbl-action ' + (filter === 'pending' ? 'go' : '')} onClick=${() => setFilter('pending')}>Pending only</button>
+          <button class=${'tbl-action ' + (filter === 'all' ? 'go' : '')} onClick=${() => setFilter('all')}>All</button>
+          <span class="section-sub">${displayedPartners.length} partner${displayedPartners.length === 1 ? '' : 's'}${focusId ? ' · filtered' : ''}</span>
+          ${focusId ? html`<button class="tbl-action go" onClick=${clearFocus}>Back to all</button>` : ''}
+        </div>
       </div>
-      ${!agents ? html`<div class="gov-empty">Loading…</div>` :
-        html`<div class="sf-grid">
-          ${list.map(a => html`<div class="sf-card" key=${a.id}>
-            <div class="sf-card-h">
-              <div class="sf-card-name">${a.name}</div>
-              <div class="sf-badge">${a.type || "—"}</div>
-            </div>
-            <div class=${"sf-status " + stCls(a.status)}><span class="sf-dot"></span>${a.status || "—"}</div>
-            <div class="sf-stats">
-              <div class="sf-stat"><div class="sf-stat-val">${a.leads_today ?? 0}</div><div class="sf-stat-lbl">Leads today</div></div>
-              <div class="sf-stat"><div class="sf-stat-val sf-stat-mono">${fmtPing(a.last_ping)}</div><div class="sf-stat-lbl">Last ping</div></div>
-            </div>
-            <button class=${"sf-toggle " + (a.enabled ? "on" : "off")} disabled=${busy === a.id} onClick=${() => toggle(a.id)}>
-              ${busy === a.id ? "…" : a.enabled ? "DISABLE" : "ENABLE"}
-            </button>
-          </div>`)}
-        </div>`}
+      ${displayedPartners.length === 0
+        ? html`<div class="tbl-empty">No partners found.</div>`
+        : html`<table class="tbl"><thead><tr>
+            <th>Business</th><th>Contact</th><th>Niche</th><th>State</th><th>Applied</th><th>Status</th><th>Actions</th>
+          </tr></thead><tbody>
+          ${displayedPartners.map(p => html`<tr key=${p.id}>
+            <td>
+              <strong>${p.buyer_name || '—'}</strong>
+              ${p.email ? html`<br/><span class="tbl-mono">${p.email}</span>` : ''}
+            </td>
+            <td>
+              ${p.contact_name || '—'}
+              ${p.destination_phone ? html`<br/><span class="tbl-mono">${p.destination_phone}</span>` : ''}
+            </td>
+            <td class="tbl-mono">${p.niche || '—'}</td>
+            <td class="tbl-mono">${Array.isArray(p.state_coverage) ? p.state_coverage.join(', ') : (p.state_coverage || '—')}</td>
+            <td class="tbl-mono">${(p.created_at || '').slice(0,10)}</td>
+            <td><span class=${'bdg ' + (p.status || 'unknown')}>${p.status || '—'}</span></td>
+            <td>
+              ${p.status === 'pending_review' ? html`
+                <button class="tbl-action go" disabled=${busy === p.id} onClick=${() => act(p.id, 'approve')}>Approve</button>
+                <button class="tbl-action danger" disabled=${busy === p.id} onClick=${() => act(p.id, 'reject')}>Reject</button>
+              ` : html`
+                ${p.status === 'active' ? html`<span class="tbl-mono" style=${{color: 'var(--signal-teal)'}}>✓ Active</span>` : ''}
+                ${p.status === 'rejected' ? html`<span class="tbl-mono" style=${{color: 'var(--status-red)'}}>✗ Rejected</span>` : ''}
+              `}
+            </td>
+          </tr>`)}
+        </tbody></table>`}
     </div>
   `;
 }
@@ -1099,6 +1204,165 @@ function Operators() {
   `;
 }
 
+// ── GOVERNOR ───────────────────────────────────────────────────────────
+function Governor() {
+  const [status, setStatus] = useState(null);
+  const [log, setLog] = useState(null);
+  const [err, setErr] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState(null);
+
+  const reload = useCallback(async () => {
+    try {
+      const [s, l] = await Promise.all([
+        apiFetch('/api/governor/status').then(r => r.json()),
+        apiFetch('/api/governor/log?lines=20').then(r => r.json()),
+      ]);
+      setStatus(s);
+      setLog(l.entries || []);
+      setErr(null);
+    } catch (e) {
+      if (e.message !== 'Unauthorized') setErr(e.message);
+    }
+  }, []);
+
+  useEffect(() => {
+    reload();
+    const t = setInterval(reload, 10000);
+    return () => clearInterval(t);
+  }, [reload]);
+
+  const doHeal = async () => {
+    if (!confirm('⚠️ Force-restart ALL PM2 services? The hub will self-restart last (this page will reload).')) return;
+    setBusy(true);
+    setResult(null);
+    try {
+      const r = await apiFetch('/api/governor/heal', { method: 'POST' });
+      const j = await r.json();
+      setResult(j);
+    } catch (e) {
+      setResult({ ok: false, message: e.message });
+    }
+    setBusy(false);
+  };
+
+  if (err) return html`<div class="stub"><div class="stub-title">Could not load Governor</div><div class="stub-body">${err}</div></div>`;
+
+  const svcs = status?.services || [];
+  const wd = status?.watchdog;
+
+  return html`
+    <div>
+      <div class="section-h">
+        <div>
+          <div class="section-title">Governor</div>
+          <div class="section-sub">PM2 watchdog · self-heal · service health</div>
+        </div>
+        <div class="section-sub" style=${{display: 'flex', alignItems: 'center', gap: '16px'}}>
+          ${wd ? html`
+            <span class="gov-watch-tag">Check: <strong>every ${wd.interval_s}s</strong></span>
+            <span class="gov-watch-tag">Healthy: <strong>${wd.healthy}/${wd.total}</strong></span>
+          ` : ''}
+          <button class="gov-heal-btn" disabled=${busy} onClick=${doHeal}>${busy ? 'Healing…' : 'Heal All'}</button>
+        </div>
+      </div>
+
+      ${wd ? html`
+      <div class="gov-watchdog" style=${{marginBottom: '16px'}}>
+        <span class="gov-watch-tag">Last check: <strong>${(wd.last_check || '').slice(11,19)}</strong></span>
+        <span class="gov-watch-tag">Watching: <strong>${wd.watching.join(', ')}</strong></span>
+      </div>
+      ` : ''}
+
+      ${!status
+        ? html`<div class="gov-panel"><div class="gov-empty">Loading service status…</div></div>`
+        : html`
+      <div class="gov-grid">
+        ${svcs.length === 0
+          ? html`<div class="gov-empty" style=${{gridColumn: '1 / -1'}}>No PM2 services found.</div>`
+          : svcs.map(s => {
+            const statusCls = s.status === 'online' ? 'online' : s.status === 'errored' ? 'errored' : s.status === 'stopped' ? 'stopped' : 'unknown';
+            const uptime = s.uptime_s != null
+              ? (s.uptime_s >= 86400 ? Math.round(s.uptime_s / 86400) + 'd'
+                : s.uptime_s >= 3600 ? Math.round(s.uptime_s / 3600) + 'h'
+                : s.uptime_s >= 60 ? Math.round(s.uptime_s / 60) + 'm'
+                : s.uptime_s + 's')
+              : '—';
+            return html`
+            <div class="gov-card" key=${s.name}>
+              <div class="gov-card-row">
+                <div class="gov-card-name">${s.name}</div>
+                <span class=${'gov-bdg ' + statusCls}>
+                  <span class="gov-bdg-dot"></span>${s.status}
+                </span>
+              </div>
+              <div class="gov-card-stats">
+                <div class="gov-stat">
+                  <div class="gov-stat-val">${uptime}</div>
+                  <div class="gov-stat-lbl">uptime</div>
+                </div>
+                <div class="gov-stat">
+                  <div class="gov-stat-val">${s.restarts}</div>
+                  <div class="gov-stat-lbl">restarts</div>
+                </div>
+                <div class="gov-stat">
+                  <div class="gov-stat-val">${s.mem_mb ?? '—'}</div>
+                  <div class="gov-stat-lbl">mem (mb)</div>
+                </div>
+                <div class="gov-stat">
+                  <div class="gov-stat-val">${s.cpu_pct ?? '—'}%</div>
+                  <div class="gov-stat-lbl">cpu</div>
+                </div>
+              </div>
+            </div>
+          `})}
+      </div>
+      `}
+
+      ${result ? html`<div class="gov-result">${result.message || (result.ok ? 'Heal complete' : 'Heal failed')}${result.errors && result.errors.length ? ' · ' + result.errors.length + ' error(s)' : ''}</div>` : ''}
+
+      <div class="gov-panel">
+        <div class="gov-panel-h">
+          <div class="gov-panel-title">Heal Log</div>
+          <div class="gov-panel-tag">${log.length} entries</div>
+        </div>
+        ${log.length === 0
+          ? html`<div class="gov-empty">No heal log entries yet.</div>`
+          : html`<div class="gov-log">
+            ${log.map(e => html`
+              <div class="gov-log-row" key=${e.ts + e.service + e.action}>
+                <span class="gov-log-ts">${(e.ts || '').slice(11,19)}</span>
+                <span class=${'gov-log-lvl ' + (e.level || 'info')}>${e.level || '—'}</span>
+                <span class="gov-log-svc">${e.service || '—'}</span>
+                <span class="gov-log-detail">${e.detail || e.action || '—'}</span>
+              </div>
+            `)}
+          </div>`}
+      </div>
+    </div>
+  `;
+}
+
+// ── STUB SECTION (other tabs) ────────────────────────────────────────
+function Stub({ section }) {
+  return html`
+    <div>
+      <div class="section-h">
+        <div>
+          <div class="section-title">${section.label}</div>
+          <div class="section-sub">${section.sub}</div>
+        </div>
+      </div>
+      <div class="stub">
+        <div class="stub-title">Coming in <em>Phase 2</em></div>
+        <div class="stub-body">
+          The ${section.label.toLowerCase()} section is wired to existing /api/v1 endpoints and ready to render. Phase 2 brings the full UI for this section.
+        </div>
+        <div class="stub-tag">Phase 2 · Next PR</div>
+      </div>
+    </div>
+  `;
+}
 
 // ── APP SHELL ────────────────────────────────────────────────────────
 function App() {
@@ -1207,10 +1471,10 @@ function App() {
             active.id === 'console'     ? html`<${Console} />` :
             active.id === 'audit'       ? html`<${Audit} />` :
             active.id === 'neural-core'    ? html`<${AgiLoop} />` :
-            active.id === 'governor'    ? html`<${Governor} />` :
-            active.id === 'sniper-fleet' ? html`<${SniperFleet} />` :
+            active.id === 'partners'    ? html`<${Partners} />` :
             active.id === 'operators'   ? html`<${Operators} />` :
-            html`<div class="stub"><div class="stub-body">Unknown section: ${active.label}</div></div>`
+            active.id === 'governor'    ? html`<${Governor} />` :
+            html`<${Stub} section=${active} />`
           }
         </section>
       </main>
