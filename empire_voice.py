@@ -681,6 +681,78 @@ def register_voice_routes(
 
         return JSONResponse(content=ncco)
 
+    # ── BILLABLE-SECONDS THRESHOLD ─────────────────────────────────────
+    _BILLABLE_SECONDS = 90   # minimum call duration (seconds) to qualify as billable
+
+    # ── CALL BILLING PROCESSOR ─────────────────────────────────────────
+    async def _process_call_billing(call_uuid: str, duration: int, event: dict):
+        """
+        Process billing for a completed call. Must meet the minimum
+        duration threshold (90s) to be billable.
+
+        Lookup flow:
+          1. Find the call_logs record by vonage_call_id
+          2. If the call had a buyer assigned, compute fee_earned
+          3. Mark is_billable on the call_logs record
+          4. Increment the buyer's calls_accepted counter
+          5. Invalidate the switchboard's buyers cache
+        """
+        if duration < _BILLABLE_SECONDS:
+            return
+        if not get_db:
+            return
+        try:
+            db = get_db()
+
+            # 1. Find the call_logs record (created by switchboard at route time)
+            cl_res = db.table("call_logs").select("id,buyer_id,payout_value,niche,status") \
+                .eq("vonage_call_id", call_uuid).limit(1).execute()
+            if not cl_res.data:
+                return  # no routing record for this call_uuid
+            cl = cl_res.data[0]
+            buyer_id = cl.get("buyer_id")
+            payout_value = float(cl.get("payout_value") or 0)
+
+            # 2. If buyer assigned, get their fee_rate for fee computation
+            fee_rate = 0.01  # default 1% fee
+            if buyer_id:
+                buyer_res = db.table("buyers").select("fee_rate").eq("id", buyer_id).limit(1).execute()
+                if buyer_res.data:
+                    fee_rate = float(buyer_res.data[0].get("fee_rate") or 0.01)
+
+            # 3. Compute fee_earned
+            fee_earned = round(payout_value * fee_rate, 2)
+
+            # 4. Update call_logs with billing info
+            db.table("call_logs").update({
+                "is_billable": True,
+                "fee_earned": fee_earned,
+                "status": "completed",
+            }).eq("id", cl["id"]).execute()
+
+            # 5. Update buyer's calls_accepted counter
+            if buyer_id:
+                buyer_update = db.table("buyers").select("calls_accepted").eq("id", buyer_id).limit(1).execute()
+                if buyer_update.data:
+                    cur = int(buyer_update.data[0].get("calls_accepted") or 0)
+                    db.table("buyers").update({"calls_accepted": cur + 1}).eq("id", buyer_id).execute()
+
+            # 6. Invalidate switchboard's buyers cache so next route picks fresh data
+            try:
+                from empire_switchboard import _invalidate_buyers_cache
+                _invalidate_buyers_cache()
+            except Exception:
+                pass
+
+            log.info(
+                f"[voice] billing: call {call_uuid} · "
+                f"duration={duration}s · fee=${fee_earned} · "
+                f"buyer={'yes' if buyer_id else 'no'}"
+            )
+
+        except Exception as e:
+            log.warning(f"[voice] billing error: {e}")
+
     # ── EVENT WEBHOOK ───────────────────────────────────────────────────
     @app.post("/api/v1/voice/events")
     async def voice_events(request: Request):
@@ -703,6 +775,9 @@ def register_voice_routes(
         # ── Update stats ────────────────────────────────────────────
         if status == "completed":
             router.stats["calls_completed"] += 1
+            # Fire-and-forget billing processor (background task so the
+            # event response is returned to Vonage without delay)
+            asyncio.ensure_future(_process_call_billing(call_uuid, duration, event))
         elif status in ("failed", "rejected", "busy", "timeout"):
             router.stats["calls_failed"] += 1
         elif status == "human":
@@ -731,6 +806,7 @@ def register_voice_routes(
                     "status":     status,
                     "direction":  direction,
                     "duration":   int(duration) if duration else 0,
+                    "sub_state":  event.get("sub_state", None),
                     "meta":       meta,
                 }).execute()
             except Exception as e:
