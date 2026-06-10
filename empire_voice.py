@@ -821,8 +821,34 @@ def register_voice_routes(
                             except Exception:
                                 pass
 
+                        # ── Retrieve similar past decisions for few-shot learning ──
+                        memory_context = ""
+                        if brain_memory is not None:
+                            try:
+                                asset_val = float(row.get("asset_value") or 0)
+                                similar = await brain_memory.retrieve_similar(
+                                    address=target_address or "unknown",
+                                    city=city or "unknown",
+                                    severity=severity or "Moderate",
+                                    asset_value=asset_val,
+                                    urgency_signal=alert_summary.get("event", ""),
+                                    k=5,
+                                    only_with_outcomes=True,
+                                )
+                                if similar:
+                                    memory_context = _render_few_shot(similar)
+                                    log.info(
+                                        f"[voice] brain memory: {len(similar)} similar past leads "
+                                        f"retrieved for {city or 'unknown'}"
+                                    )
+                            except Exception as e:
+                                log.debug(f"[voice] memory retrieval: {e}")
+
                         try:
-                            brain_decision = await brain_decider.decide(target, alert_summary)
+                            brain_decision = await brain_decider.decide(
+                                target, alert_summary,
+                                memory_context=memory_context,
+                            )
                             log.info(
                                 f"[voice] brain: {brain_decision.get('decision')} · "
                                 f"confidence={brain_decision.get('confidence', 0)} · "
@@ -1062,5 +1088,10 @@ def register_voice_routes(
                 **router.stats,
                 "vonage_enabled": router.vonage.enabled,
             }
+
+    # Import render_few_shot here (module-level import unsafe due to potential
+    # circular deps at import time — brain_memory doesn't import voice, but
+    # we keep it local to the registration function for clarity).
+    from empire_brain_memory import render_few_shot as _render_few_shot
 
     log.info("[voice] Routes registered · /api/v1/voice/{answer,events,strike,stats}")

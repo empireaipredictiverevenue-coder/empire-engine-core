@@ -37,7 +37,7 @@ class BrainDecider:
     def __init__(self, router: AIRouter):
         self.router = router
 
-    async def decide(self, target: Dict, alert_summary: Dict) -> Dict:
+    async def decide(self, target: Dict, alert_summary: Dict, memory_context: str = "") -> Dict:
         name = target.get("warehouse_name") or "Unknown"
         addr = target.get("address") or "no address"
         phone = target.get("phone") or "no phone"
@@ -47,6 +47,8 @@ class BrainDecider:
         types = raw.get("types") if isinstance(raw, dict) else []
         if not isinstance(types, list):
             types = []
+
+        memory_block = f"\n{memory_context}\n" if memory_context else ""
 
         prompt = f"""STORM:
   Event: {alert_summary.get("event")}
@@ -61,7 +63,7 @@ TARGET:
   Email: {email}
   Website: {website}
   Type tags: {", ".join(types) if types else "unknown"}
-
+{memory_block}
 Decide: should we enroll this target in storm-strike outreach?
 Return JSON only."""
 
