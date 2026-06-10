@@ -861,7 +861,7 @@ function Pulse({ events, wsConnected }) {
             `})}
           </div>`}
       </div>
-      `; })()
+      `; })()}
 
       ${allPartners.length > 0 ? html`<div class="chart-panel">
         <div class="chart-panel-h">
@@ -989,7 +989,7 @@ function Dispatch() {
   return html`
     <div>
       <div class="section-h"><div><div class="section-title">Dispatch</div><div class="section-sub">Contractor leaderboard & matching</div></div></div>
-      ${stats ? html`<div class="sec-meta">Active dispatches: <strong>${stats.active ?? 0}</strong> · Accepted: <strong>${stats.accepted ?? 0}</strong> · Completed: <strong>${stats.completed ?? 0}</strong> · Ghosted: <strong>${stats.ghosted ?? 0}</strong></div>` : ''
+      ${stats ? html`<div class="sec-meta">Active dispatches: <strong>${stats.active ?? 0}</strong> · Accepted: <strong>${stats.accepted ?? 0}</strong> · Completed: <strong>${stats.completed ?? 0}</strong> · Ghosted: <strong>${stats.ghosted ?? 0}</strong></div>` : ''}
 
       ${rows.length > 0 ? html`<div class="chart-panel">
         <div class="chart-panel-h">
@@ -1046,7 +1046,6 @@ function Inbound() {
     <div>
       <div class="section-h"><div><div class="section-title">Inbound</div><div class="section-sub">Calls · triage · recordings</div></div></div>
       ${stats ? html`<div class="sec-meta">Calls received: <strong>${stats.calls_received ?? 0}</strong> · Forwarded: <strong>${stats.calls_forwarded ?? 0}</strong> · Voicemail: <strong>${stats.voicemails ?? 0}</strong></div>` : ''}
-      ${(calls.length === 0)
 
       ${calls.length > 0 ? html`<div class="chart-panel">
         <div class="chart-panel-h">
@@ -1078,7 +1077,7 @@ function Inbound() {
         })()}
       </div>` : ''}
 
-        ? html`<div class="tbl-empty">No inbound calls yet.</div>`
+      ${calls.length === 0 ? html`<div class="tbl-empty">No inbound calls yet.</div>`
         : html`<table class="tbl"><thead><tr>
             <th>When</th><th>From</th><th>Disposition</th><th class="tbl-num">Urgency</th><th>Recording</th>
           </tr></thead><tbody>
@@ -1907,7 +1906,7 @@ function Leads() {
                     onClick=${() => saveNote(l.id)}>
                     ${busy === l.id + ':note' ? '…' : (l.notes ? 'Update' : 'Save')}
                   </button>
-                `}
+                ` : ''}
               </div>
               ${statusActions.length > 0 ? html`
 n// ── ACTIVITY LOG ─────────────────────────────────────────────────────
@@ -2499,7 +2498,7 @@ function HealthMonitor() {
         </div>
         <div class="hm-empty">No overseer report yet. The overseer agent writes to system_health every 10 minutes.</div>
       </div>
-      `}
+      ` : ''}
     </div>
   `;
 }
@@ -2607,7 +2606,7 @@ function SniperFleet() {
             </div>
           `})}
       </div>
-      `}
+      ` : ''}
     </div>
   `;
 }
@@ -2748,7 +2747,7 @@ function Governor() {
             </div>
           `})}
       </div>
-      `}
+      ` : ''}
 
       ${result ? html`<div class="gov-result">${result.message || (result.ok ? 'Heal complete' : 'Heal failed')}${result.errors && result.errors.length ? ' · ' + result.errors.length + ' error(s)' : ''}</div>` : ''}
 
