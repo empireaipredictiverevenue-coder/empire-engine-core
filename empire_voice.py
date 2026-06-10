@@ -442,6 +442,97 @@ def ncco_outbound_strike(
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# DYNAMIC NCCO — brain-decided call scripts
+# ─────────────────────────────────────────────────────────────────────────────
+def ncco_dynamic_inbound(
+    target_address: str = "",
+    severity: str = "",
+    brain_decision: Optional[dict] = None,
+    forward_to: str = "",
+) -> list:
+    """
+    Dynamic NCCO based on the brain's GO/NO-GO decision.
+    GO + high confidence → confident storm pitch
+    GO + low confidence → softer weather mention
+    NO_GO or no brain → generic greeting (fallback)
+    """
+    operator_number = forward_to or os.environ.get("EMPIRE_OPERATOR_NUMBER", "")
+
+    if brain_decision and brain_decision.get("decision") == "GO":
+        confidence = float(brain_decision.get("confidence", 0))
+        reasoning = brain_decision.get("reasoning", "")
+
+        if confidence >= 0.7:
+            # High-confidence GO — confident storm strike pitch
+            pitch = (
+                "This is Empire AI. Our predictive system detected severe weather "
+            )
+            if target_address:
+                pitch += f"in the area of {target_address}. "
+            pitch += (
+                "We are dispatching commercial property outreach on behalf of our client. "
+                "This is a paid commercial dispatch service. "
+            )
+            short_reason = reasoning[:100].rstrip(".") if reasoning else ""
+            if len(short_reason) > 10:
+                pitch += f"Our assessment indicates {short_reason}. "
+            pitch += "Please hold for a specialist."
+        else:
+            # Lower-confidence GO — softer pitch
+            pitch = (
+                "This is Empire AI. This is a paid commercial dispatch service. "
+            )
+            if target_address:
+                pitch += f"Our system has noted weather activity near {target_address}. "
+            pitch += "Please hold while we connect you to a specialist."
+    else:
+        # NO_GO or no brain — generic greeting
+        pitch = (
+            "Thank you for calling Empire AI. "
+            "This is a paid commercial dispatch service. "
+        )
+        if target_address:
+            pitch += f"We detected weather activity near {target_address}. "
+        pitch += "Please hold while we connect you."
+
+    ncco: list = [
+        {
+            "action": "talk",
+            "text": pitch,
+            "voiceName": "Amy",
+            "level": 0,
+        },
+    ]
+
+    if operator_number:
+        ncco.append({
+            "action": "connect",
+            "from": "",
+            "endpoint": [{
+                "type": "phone",
+                "number": operator_number.lstrip("+"),
+            }],
+            "timeout": 30,
+            "limit": 1800,
+        })
+    else:
+        ncco.append({
+            "action": "record",
+            "eventUrl": [],
+            "endOnSilence": 3,
+            "endOnKey": "#",
+            "timeOut": 120,
+            "beepStart": True,
+        })
+        ncco.append({
+            "action": "talk",
+            "text": "Thank you. An operator will follow up within one business day.",
+        })
+
+    return ncco
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # VOICE ROUTER — the smart traffic cop. Hybrid Vonage + future SIP.
 # ─────────────────────────────────────────────────────────────────────────────
 class VoiceRouter:
@@ -555,6 +646,8 @@ def register_voice_routes(
     ntfy_topic: str = "",
     ntfy_token: str = "",
     broadcaster=None,
+    brain_decider=None,
+    brain_memory=None,
 ):
     """
     Register the voice webhooks with the FastAPI app. Call this once during
@@ -570,14 +663,18 @@ def register_voice_routes(
         to_number: str,
         call_uuid: str,
         conversation_uuid: str,
+        target_address: str = "",
+        severity: str = "",
     ):
-        """Run enrichment, broadcast, ntfy, and A/B update in the background
-        so the NCCO is returned to Vonage without delay."""
-        target_address = ""
-        severity = ""
+        """Run broadcast, ntfy, and A/B update in the background
+        so the NCCO is returned to Vonage without delay.
 
-        # 1. Enrich with radar_targets lookup
-        if get_db:
+        target_address and severity can be pre-resolved by the voice_answer
+        route (Phase 7 brain integration) to avoid a duplicate DB lookup.
+        If empty, falls back to a quick radar_targets lookup.
+        """
+        # 1. Enrich with radar_targets lookup (only if not already resolved)
+        if not target_address and get_db:
             try:
                 db = get_db()
                 res = db.table("radar_targets") \
@@ -646,6 +743,11 @@ def register_voice_routes(
         """
         Vonage hits this when a call comes in. Returns NCCO immediately;
         enrichment, broadcast, and ntfy run in the background.
+
+        Phase 7: Brain-decided dynamic NCCO — the BrainDecider evaluates the
+        caller's context (radar_targets + storm_forecasts) and selects the
+        appropriate script (GO/NO_GO with confidence weighting). Decision is
+        recorded in BrainMemory for future few-shot learning.
         """
         # Vonage sends params as query string OR JSON depending on the version
         params = dict(request.query_params)
@@ -662,20 +764,108 @@ def register_voice_routes(
 
         router.stats["inbound_received"] += 1
 
-        # Schedule enrichment, broadcast, ntfy, and A/B update as background
-        # tasks so the NCCO is returned to Vonage immediately.
+        # ── Enrich caller + consult the brain (synchronous DB + LLM) ──
+        target_address = ""
+        severity = ""
+        city = ""
+        lead_id = None
+        brain_decision = None
+
+        if get_db:
+            try:
+                db = get_db()
+                clean_phone = from_number.lstrip("+1").lstrip("+").strip()
+                res = db.table("radar_targets") \
+                    .select("id, warehouse_name, address, city, state, damage_severity, asset_value") \
+                    .or_(f"phone.ilike.%{clean_phone[-10:]},phone2.ilike.%{clean_phone[-10:]}") \
+                    .limit(1).execute()
+                if res.data:
+                    row = res.data[0]
+                    target_address = row.get("address", "") or ""
+                    city = row.get("city", "") or ""
+                    severity = row.get("damage_severity", "") or ""
+                    state = row.get("state", "") or ""
+                    lead_id = row.get("id")
+
+                    # If brain_decider is wired, build target + alert and decide
+                    if brain_decider is not None:
+                        target = {
+                            "warehouse_name": row.get("warehouse_name") or "Caller",
+                            "address": target_address or "unknown",
+                            "city": city,
+                            "phone": from_number,
+                            "email": "",
+                            "website": "",
+                            "raw_tags": {"types": ["commercial"]},
+                        }
+                        alert_summary = {
+                            "event": "Inbound Call",
+                            "severity": severity or "Moderate",
+                            "urgency": "",
+                            "area": f"{city}, {state}" if city else "",
+                        }
+
+                        # Enrich with storm_forecast if city is known
+                        if city:
+                            try:
+                                storm_res = db.table("storm_forecasts") \
+                                    .select("event, severity, urgency, area") \
+                                    .ilike("area", f"%{city}%") \
+                                    .order("created_at", desc=True) \
+                                    .limit(1).execute()
+                                if storm_res.data:
+                                    s = storm_res.data[0]
+                                    alert_summary["event"] = s.get("event") or alert_summary["event"]
+                                    alert_summary["severity"] = s.get("severity") or alert_summary["severity"]
+                                    alert_summary["area"] = s.get("area") or alert_summary["area"]
+                            except Exception:
+                                pass
+
+                        try:
+                            brain_decision = await brain_decider.decide(target, alert_summary)
+                            log.info(
+                                f"[voice] brain: {brain_decision.get('decision')} · "
+                                f"confidence={brain_decision.get('confidence', 0)} · "
+                                f"reasoning={brain_decision.get('reasoning', '')[:80]}"
+                            )
+                        except Exception as e:
+                            log.warning(f"[voice] brain.decide() failed: {e}")
+
+                        # Record the decision in brain_memory for future few-shot learning
+                        if brain_decision is not None and brain_memory is not None and lead_id:
+                            try:
+                                urgency = round(float(brain_decision.get("confidence", 0)) * 10)
+                                await brain_memory.record_decision(
+                                    lead_id=lead_id,
+                                    decision=brain_decision.get("decision", "NO_GO"),
+                                    urgency=min(urgency, 10),
+                                    reasoning=brain_decision.get("reasoning", "")[:500],
+                                    address=target_address or "unknown",
+                                    city=city or "unknown",
+                                    severity=severity or "Moderate",
+                                    asset_value=float(row.get("asset_value") or 0),
+                                )
+                            except Exception as e:
+                                log.debug(f"[voice] brain_memory record: {e}")
+            except Exception as e:
+                log.debug(f"[voice] caller enrichment failed: {e}")
+
+        # Schedule background tasks (broadcast, ntfy, AB update)
+        # Pass pre-resolved target_address + severity to avoid duplicate DB lookup
         background_tasks.add_task(
             _post_inbound_event,
             from_number, to_number, call_uuid,
             params.get("conversation_uuid", ""),
+            target_address,
+            severity,
         )
 
-        # Build and return NCCO right away — enrichment data will be
-        # processed after the response is sent.
+        # Build dynamic NCCO based on brain decision
         operator_number = os.environ.get("EMPIRE_OPERATOR_NUMBER", "")
-        ncco = ncco_inbound_strike(
-            target_address="",
-            severity="",
+        ncco = ncco_dynamic_inbound(
+            target_address=target_address,
+            severity=severity,
+            brain_decision=brain_decision,
             forward_to=operator_number,
         )
 

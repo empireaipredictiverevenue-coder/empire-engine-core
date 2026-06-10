@@ -294,6 +294,8 @@ register_voice_routes(
     ntfy_topic=NTFY_TOPIC,
     ntfy_token=NTFY_TOKEN,
     broadcaster=live_broadcaster,
+    brain_decider=brain_decider,
+    brain_memory=brain_memory,
 )
 register_sms_routes(app, sms_engine, require_auth=require_auth)
 register_contractor_routes(app, require_auth=require_auth, get_db=get_db, sign_token=_hub_sign_token, verify_token=_hub_verify_token, send_email=_send_email, public_base_url=PUBLIC_BASE_URL, broadcaster=live_broadcaster)
