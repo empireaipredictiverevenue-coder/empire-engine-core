@@ -552,10 +552,7 @@ const SECTIONS = [
   { id: 'holo-map',      label: 'Holo Map',       sub: 'Live storm grid · 3D target overlay' },
   { id: 'governor',      label: 'Governor',       sub: 'AGI governor · weight control · guardrails' },
   { id: 'sniper-fleet',  label: 'Sniper Fleet',   sub: 'Active agents · lane status · targeting' },
-  { id: 'agi-loop',      label: 'AGI Loop',       sub: 'Autonomous growth · decision engine · cycles' },
   { id: 'health-monitor',label: 'Health Monitor', sub: 'Agent mesh · system health · overseer' },
-  { id: 'leads',         label: 'Leads',          sub: 'Inbound leads · pipeline · intake' },
-  { id: 'activity-log', label: 'Activity Log', sub: 'Global notes feed · operator activity' },
   { id: 'partners',      label: 'Partners',       sub: 'Buyers · pending · approvals' },
 ];
 
@@ -654,7 +651,7 @@ function Pulse({ events, wsConnected }) {
 
   const reload = useCallback(async () => {
     try {
-      const [pb, em, sm, py, ib, pr, co, vs] = await Promise.all([
+      const [pb, em, sm, py, ib, pr, co] = await Promise.all([
         apiFetch('/api/v1/playbook/summary').then(r => r.json()),
         apiFetch('/api/v1/email/stats').then(r => r.json()),
         apiFetch('/api/v1/sms/stats').then(r => r.json()),
@@ -662,9 +659,8 @@ function Pulse({ events, wsConnected }) {
         apiFetch('/api/v1/inbound/stats').then(r => r.json()),
         apiFetch('/api/v1/partner/all').then(r => r.json()),
         apiFetch('/api/v1/compliance/stats').then(r => r.json()),
-        apiFetch('/api/v1/voice/stats').then(r => r.json()),
       ]);
-      setStats({ pb, em, sm, py, ib, pr, co, vs });
+      setStats({ pb, em, sm, py, ib, pr, co });
       setErr(null);
     } catch (e) {
       if (e.message !== 'Unauthorized') setErr(e.message);
@@ -702,14 +698,6 @@ function Pulse({ events, wsConnected }) {
     .reduce((sum, p) => sum + ((parseFloat(p.base_payout) || 0) * (parseFloat(p.fee_rate) || 0.01) + (parseFloat(p.per_call_fee) || 0)), 0);
   const projectedMRR = Math.round(totalMonthlyRetainer + (totalPerCallFee * 22));
 
-  // AMD (Advanced Machine Detection) stats from voice stats endpoint
-  const detectedHuman = stats.vs?.detected_human ?? 0;
-  const detectedMachine = stats.vs?.detected_machine ?? 0;
-  const amdTotal = detectedHuman + detectedMachine;
-  const amdVonageEnabled = stats.vs?.vonage_enabled ?? false;
-  const humanPct = amdTotal > 0 ? Math.round(detectedHuman / amdTotal * 100) : 0;
-  const machinePct = amdTotal > 0 ? Math.round(detectedMachine / amdTotal * 100) : 0;
-
   return html`
     <div>
       <div class="section-h">
@@ -725,47 +713,31 @@ function Pulse({ events, wsConnected }) {
           <div class="stat-label">Strikes Today</div>
           <div class=${'stat-value ' + (strikes > 0 ? 'teal' : 'dim')}>${strikes}</div>
           <div class="stat-meta">${brain_go} brain · GO</div>
-          <${Sparkline} points=${[2,3,5,4,6,7,strikes]} color="var(--signal-teal)" height=${24} width=${80} />
         </div>
         <div class="stat-card">
           <div class="stat-label">Active Sequences</div>
           <div class=${'stat-value ' + (seqActive > 0 ? 'cyan' : 'dim')}>${seqActive}</div>
           <div class="stat-meta">${emailsSent} email · ${smsSent} sms sent</div>
-          <${Sparkline} points=${[1,3,2,5,4,6,seqActive]} color="var(--strike-cyan)" height=${24} width=${80} />
         </div>
         <div class="stat-card">
           <div class="stat-label">Partners</div>
           <div class="stat-value teal">${activePartners}</div>
           <div class="stat-meta">${pendingPartners} pending · $${totalPipelineValue}/call · $${totalMonthlyRetainer}/mo retainers</div>
-          <${Sparkline} points=${[0,1,0,2,1,3,activePartners]} color="var(--signal-teal)" height=${24} width=${80} />
         </div>
         <div class="stat-card">
           <div class="stat-label">Pending Payouts</div>
           <div class=${'stat-value ' + (pendingPayouts > 0 ? 'teal' : 'dim')}>${pendingPayouts}</div>
           <div class="stat-meta">awaiting owner approval</div>
-          <${Sparkline} points=${[1,0,2,1,3,2,pendingPayouts]} color="var(--empire-mist)" height=${24} width=${80} />
         </div>
         <div class="stat-card">
           <div class="stat-label">Inbound Calls</div>
           <div class=${'stat-value ' + (inboundCalls > 0 ? 'cyan' : 'dim')}>${inboundCalls}</div>
           <div class="stat-meta">${inboundForwarded} forwarded</div>
-          <${Sparkline} points=${[3,5,4,7,6,8,inboundCalls]} color="var(--strike-cyan)" height=${24} width=${80} />
-        </div>
-        <div class="stat-card">
-          <div class="stat-label">AMD Detection</div>
-          <div class=${'stat-value ' + (amdTotal > 0 ? 'teal' : 'dim')}>${amdTotal}</div>
-          <div class="stat-meta">${humanPct}% human · ${machinePct}% machine</div>
-          ${amdTotal > 0 ? html`<div style=${{display: 'flex', gap: '2px', marginTop: '8px', height: '4px', borderRadius: '2px', overflow: 'hidden'}}>
-            <div style=${{width: humanPct + '%', height: '100%', background: 'var(--signal-teal)', borderRadius: '2px 0 0 2px'}}></div>
-            <div style=${{width: machinePct + '%', height: '100%', background: 'var(--status-red)', borderRadius: '0 2px 2px 0'}}></div>
-          </div>` : ''}
-          <${Sparkline} points=${[0,1,0,2,1,3,amdTotal]} color="var(--signal-teal)" height=${24} width=${80} />
         </div>
         <div class="stat-card">
           <div class="stat-label">Projected MRR</div>
           <div class="stat-value teal">$${projectedMRR}</div>
           <div class="stat-meta">$${totalMonthlyRetainer} retainers · $${Math.round(totalPerCallFee * 22)} per-call fees</div>
-          <${Sparkline} points=${[1000,2500,1800,3200,2800,3500,projectedMRR]} color="var(--signal-teal)" height=${24} width=${80} />
         </div>
       </div>
 
@@ -863,40 +835,6 @@ function Pulse({ events, wsConnected }) {
       </div>
       `; })()}
 
-      ${allPartners.length > 0 ? html`<div class="chart-panel">
-        <div class="chart-panel-h">
-          <div class="chart-panel-title">Partner Status</div>
-          <div class="chart-panel-tag">${allPartners.length} total partners</div>
-        </div>
-        ${(() => {
-          const active = allPartners.filter(p => p.status === 'active' || p.status === 'ACTIVE').length;
-          const pending = allPartners.filter(p => p.status === 'pending_review').length;
-          const rejected = allPartners.filter(p => p.status === 'rejected' || p.status === 'REJECTED').length;
-          const other = allPartners.length - active - pending - rejected;
-          const pd = [];
-          if (active > 0) pd.push({label: 'Active', value: active, color: 'var(--signal-teal)'});
-          if (pending > 0) pd.push({label: 'Pending Review', value: pending, color: 'var(--status-amber)'});
-          if (rejected > 0) pd.push({label: 'Rejected', value: rejected, color: 'var(--status-red)'});
-          if (other > 0) pd.push({label: 'Other', value: other, color: 'var(--empire-mist)'});
-          return html`<${DonutChart} data=${pd} size=${108} strokeWidth=${22} />`;
-        })()}
-      </div>` : ''}
-
-      ${amdTotal > 0 ? html`<div class="chart-panel">
-        <div class="chart-panel-h">
-          <div class="chart-panel-title">AMD Distribution</div>
-          <div class="chart-panel-tag">${amdTotal} total detections · ${amdVonageEnabled ? 'Vonage online' : 'Vonage stub'}</div>
-        </div>
-        ${(() => {
-          const sd = [];
-          if (detectedHuman > 0) sd.push({label: 'Human', value: detectedHuman, color: 'var(--signal-teal)'});
-          if (detectedMachine > 0) sd.push({label: 'Machine', value: detectedMachine, color: 'var(--status-red)'});
-          if (sd.length === 0) sd.push({label: 'No Data', value: 1, color: 'var(--empire-mist)'});
-          return html`<${DonutChart} data=${sd} size=${108} strokeWidth=${22} />`;
-        })()}
-      </div>` : ''}
-}
-
       <div class="live-panel">
         <div class="panel-h">
           <div class="panel-title">Live event tail</div>
@@ -939,21 +877,6 @@ function Pipeline() {
   return html`
     <div>
       <div class="section-h"><div><div class="section-title">Pipeline</div><div class="section-sub">Email & SMS sequence engines</div></div></div>
-      ${d ? html`<div class="chart-panel">
-        <div class="chart-panel-h">
-          <div class="chart-panel-title">Sequence Distribution</div>
-          <div class="chart-panel-tag">${(d.em?.sequences_active ?? 0) + (d.sm?.sequences_active ?? 0)} sequences active</div>
-        </div>
-        ${(() => {
-          const emailSeq = d.em?.sequences_active ?? 0;
-          const smsSeq = d.sm?.sequences_active ?? 0;
-          const sd = [];
-          if (emailSeq > 0) sd.push({label: 'Email Sequences', value: emailSeq, color: 'var(--signal-teal)'});
-          if (smsSeq > 0) sd.push({label: 'SMS Sequences', value: smsSeq, color: 'var(--strike-cyan)'});
-          return html`<${DonutChart} data=${sd} size=${108} strokeWidth=${22} />`;
-        })()}
-      </div>` : ''}
-
       <div class="split">
         <div class="panel">
           <div class="panel-head">Email Engine</div>
@@ -990,28 +913,6 @@ function Dispatch() {
     <div>
       <div class="section-h"><div><div class="section-title">Dispatch</div><div class="section-sub">Contractor leaderboard & matching</div></div></div>
       ${stats ? html`<div class="sec-meta">Active dispatches: <strong>${stats.active ?? 0}</strong> · Accepted: <strong>${stats.accepted ?? 0}</strong> · Completed: <strong>${stats.completed ?? 0}</strong> · Ghosted: <strong>${stats.ghosted ?? 0}</strong></div>` : ''}
-
-      ${rows.length > 0 ? html`<div class="chart-panel">
-        <div class="chart-panel-h">
-          <div class="chart-panel-title">Trust Score Distribution</div>
-          <div class="chart-panel-tag">${rows.length} contractors</div>
-        </div>
-        ${(() => {
-          let high = 0, medium = 0, low = 0;
-          for (const c of rows) {
-            const t = c.trust_score ?? 0;
-            if (t >= 80) high++;
-            else if (t >= 50) medium++;
-            else low++;
-          }
-          const sd = [];
-          if (high > 0) sd.push({label: 'High (80-100)', value: high, color: 'var(--signal-teal)'});
-          if (medium > 0) sd.push({label: 'Medium (50-79)', value: medium, color: 'var(--status-amber)'});
-          if (low > 0) sd.push({label: 'Low (0-49)', value: low, color: 'var(--status-red)'});
-          return html`<${DonutChart} data=${sd} size=${108} strokeWidth=${22} />`;
-        })()}
-      </div>` : ''}
-}
       ${(rows.length === 0)
         ? html`<div class="tbl-empty">No contractors yet — onboard via /api/v1/contractors/apply.</div>`
         : html`<table class="tbl"><thead><tr>
@@ -1046,38 +947,8 @@ function Inbound() {
     <div>
       <div class="section-h"><div><div class="section-title">Inbound</div><div class="section-sub">Calls · triage · recordings</div></div></div>
       ${stats ? html`<div class="sec-meta">Calls received: <strong>${stats.calls_received ?? 0}</strong> · Forwarded: <strong>${stats.calls_forwarded ?? 0}</strong> · Voicemail: <strong>${stats.voicemails ?? 0}</strong></div>` : ''}
-
-      ${calls.length > 0 ? html`<div class="chart-panel">
-        <div class="chart-panel-h">
-          <div class="chart-panel-title">Call Disposition</div>
-          <div class="chart-panel-tag">${calls.length} calls</div>
-        </div>
-        ${(() => {
-          const disps = {};
-          for (const c of calls) {
-            const d = c.disposition || 'unknown';
-            disps[d] = (disps[d] || 0) + 1;
-          }
-          const colors = {
-            answered: 'var(--signal-teal)',
-            voicemail: 'var(--strike-cyan)',
-            missed: 'var(--status-amber)',
-            busy: 'var(--status-red)',
-            failed: 'var(--empire-mist)',
-          };
-          const defaultColors = ['var(--signal-teal)', 'var(--strike-cyan)', 'var(--status-amber)', 'var(--status-red)', 'var(--empire-mist)'];
-          const dispData = Object.entries(disps)
-            .sort((a, b) => b[1] - a[1])
-            .map(([label, value], i) => ({
-              label: label.charAt(0).toUpperCase() + label.slice(1),
-              value,
-              color: colors[label] || defaultColors[i % defaultColors.length]
-            }));
-          return html`<${DonutChart} data=${dispData} size=${108} strokeWidth=${22} />`;
-        })()}
-      </div>` : ''}
-
-      ${calls.length === 0 ? html`<div class="tbl-empty">No inbound calls yet.</div>`
+      ${(calls.length === 0)
+        ? html`<div class="tbl-empty">No inbound calls yet.</div>`
         : html`<table class="tbl"><thead><tr>
             <th>When</th><th>From</th><th>Disposition</th><th class="tbl-num">Urgency</th><th>Recording</th>
           </tr></thead><tbody>
@@ -1150,26 +1021,7 @@ function Payouts() {
               </td>
             </tr>`)}
           </tbody></table>`}
-      
-      ${pending.length + (history ? history.length : 0) > 0 ? html`<div class="chart-panel">
-        <div class="chart-panel-h">
-          <div class="chart-panel-title">Payout Status</div>
-          <div class="chart-panel-tag">${pending.length} pending</div>
-        </div>
-        ${(() => {
-          const pendingCount = pending.length;
-          const approvedCount = history ? history.filter(p => p.status === 'approved').length : 0;
-          const cancelledCount = history ? history.filter(p => p.status === 'cancelled').length : 0;
-          const otherCount = history ? history.length - approvedCount - cancelledCount : 0;
-          const sd = [];
-          if (pendingCount > 0) sd.push({label: 'Pending', value: pendingCount, color: 'var(--status-amber)'});
-          if (approvedCount > 0) sd.push({label: 'Approved', value: approvedCount, color: 'var(--signal-teal)'});
-          if (cancelledCount > 0) sd.push({label: 'Cancelled', value: cancelledCount, color: 'var(--status-red)'});
-          if (otherCount > 0) sd.push({label: 'Other', value: otherCount, color: 'var(--empire-mist)'});
-          return html`<${DonutChart} data=${sd} size=${108} strokeWidth=${22} />`;
-        })()}
-      </div>` : ''}
-</div>
+      </div>
       <div class="panel">
         <div class="panel-head">Recent history</div>
         ${(!history || history.length === 0)
@@ -1218,30 +1070,7 @@ function Contractors() {
   return html`
     <div>
       <div class="section-h"><div><div class="section-title">Contractors</div><div class="section-sub">Applications & approvals</div></div></div>
-${apps.length > 0 ? html`<div class="chart-panel">
-        <div class="chart-panel-h">
-          <div class="chart-panel-title">Application Status</div>
-          <div class="chart-panel-tag">${apps.length} applications</div>
-        </div>
-        ${(() => {
-          let pr = 0, appr = 0, rej = 0, other = 0;
-          for (const a of apps) {
-            const s = a.status || 'unknown';
-            if (s === 'pending_review') pr++;
-            else if (s === 'approved') appr++;
-            else if (s === 'rejected') rej++;
-            else other++;
-          }
-          const sd = [];
-          if (pr > 0) sd.push({label: 'Pending Review', value: pr, color: 'var(--status-amber)'});
-          if (appr > 0) sd.push({label: 'Approved', value: appr, color: 'var(--signal-teal)'});
-          if (rej > 0) sd.push({label: 'Rejected', value: rej, color: 'var(--status-red)'});
-          if (other > 0) sd.push({label: 'Other', value: other, color: 'var(--empire-mist)'});
-          return html`<${DonutChart} data=${sd} size=${108} strokeWidth=${22} />`;
-        })()}
-      </div>` : ''}
-
-            ${(apps.length === 0)
+      ${(apps.length === 0)
         ? html`<div class="tbl-empty">No contractor applications.</div>`
         : html`<table class="tbl"><thead><tr>
             <th>Name</th><th>Metro</th><th>License</th><th>Applied</th><th>Status</th><th>Actions</th>
@@ -1304,20 +1133,6 @@ function Console() {
     <div>
       <div class="section-h"><div><div class="section-title">Console</div><div class="section-sub">Natural-language sovereign ops</div></div></div>
       <div class="sec-meta">Total commands: <strong>${total}</strong> · Executed: <strong>${executed}</strong></div>
-      ${total > 0 ? html`<div class="chart-panel">
-        <div class="chart-panel-h">
-          <div class="chart-panel-title">Command Execution</div>
-          <div class="chart-panel-tag">${total} total commands</div>
-        </div>
-        ${(() => {
-          const failed = total - executed;
-          const sd = [];
-          if (executed > 0) sd.push({label: 'Executed', value: executed, color: 'var(--signal-teal)'});
-          if (failed > 0) sd.push({label: 'Failed / Skipped', value: failed, color: 'var(--status-red)'});
-          return html`<${DonutChart} data=${sd} size=${96} strokeWidth=${20} />`;
-        })()}
-      </div>` : ''}
-
       <div class="console">
         <div class="console-msgs">
           ${msgs.length === 0
@@ -1353,29 +1168,7 @@ function Audit() {
   return html`
     <div>
       <div class="section-h"><div><div class="section-title">Audit</div><div class="section-sub">Operator action log</div></div></div>
-      ${rows.length > 0 ? html`<div class="chart-panel">
-        <div class="chart-panel-h">
-          <div class="chart-panel-title">Event Types</div>
-          <div class="chart-panel-tag">${rows.length} events</div>
-        </div>
-        ${(() => {
-          const types = {};
-          for (const r of rows) {
-            const t = r.action || 'other';
-            types[t] = (types[t] || 0) + 1;
-          }
-          const colors = ['var(--strike-cyan)', 'var(--signal-teal)', 'var(--status-amber)', 'var(--status-red)', 'var(--empire-mist)', 'var(--empire-fog)'];
-          const sorted = Object.entries(types).sort((a, b) => b[1] - a[1]);
-          const typeData = sorted.map(([label, value], i) => ({
-            label,
-            value,
-            color: colors[i % colors.length]
-          }));
-          return html`<${DonutChart} data=${typeData} size=${108} strokeWidth=${22} />`;
-        })()}
-      </div>` : ''}
-
-            ${(rows.length === 0)
+      ${(rows.length === 0)
         ? html`<div class="tbl-empty">No audit events yet.</div>`
         : html`<table class="tbl"><thead><tr>
             <th>When</th><th>Operator</th><th>Action</th><th>Resource</th><th>IP</th>
@@ -1393,28 +1186,6 @@ function Audit() {
 }
 
 // ── OPERATORS ─────────────────────────────────────────────────────────
-
-function Sparkline({points, color, height = 32, width = 120}) {
-  if (!points || points.length < 2) return html`<span style="display:block;height:${height}px"></span>`;
-  const pad = 2;
-  const w = width, h = height;
-  const min = Math.min(...points);
-  const max = Math.max(...points);
-  const range = max - min || 1;
-  const xs = points.map((_, i) => pad + (i / (points.length - 1)) * (w - pad * 2));
-  const ys = points.map(v => h - pad - ((v - min) / range) * (h - pad * 2));
-  const d = xs.map((x, i) => (i === 0 ? 'M' : 'L') + x.toFixed(1) + ',' + ys[i].toFixed(1)).join(' ');
-  const areaD = d + ' L' + (w - pad) + ',' + (h - pad) + ' L' + pad + ',' + (h - pad) + ' Z';
-  const gid = 'sg' + (color || '#44E5B8').replace('#', '');
-  return html`<svg width=${w} height=${h} style="display:block;margin-top:6px">
-    <defs><linearGradient id=${gid} x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color=${color || '#44E5B8'} stop-opacity="0.25"/>
-      <stop offset="100%" stop-color=${color || '#44E5B8'} stop-opacity="0"/>
-    </linearGradient></defs>
-    <path d=${areaD} fill=${'url(#' + gid + ')'}/>
-    <path d=${d} fill="none" stroke=${color || '#44E5B8'} stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-  </svg>`;
-}
 
 function AgiLoop(){
   const [data,setData]=useState(null);
@@ -1438,29 +1209,10 @@ function AgiLoop(){
   const hist=data?.snapshots??[]; const live=replayIdx===null; const snap=live?hist[0]:hist[replayIdx];
   const doApprove=(idx,w)=>{if(approved.includes(idx))return;setApproved(p=>[...p,idx]);apiFetch("/api/v1/storm/tick",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({auto_weight:parseFloat(w),source:"neural-core"})}).catch(e=>console.warn(e));};
   const decisions=(data?.actions??[]).map(a=>({weight:a.new_weight?.toFixed(2),reason:a.reasoning}));
-  return html`<div class="section-header"><div><div class="section-title">Neural Core</div><div class="section-sub">Live brain · autonomous decisions · 5s refresh</div></div><div class="agi-meta">TICK ${tick} · LIVE<button class=${live?"agi-replay-btn active":"agi-replay-btn"} onClick=${()=>setReplayIdx(null)}>LIVE</button><button class="agi-replay-btn" onClick=${()=>setReplayIdx(r=>r===null?1:Math.min(r+1,hist.length-1))}>PREV</button><button class="agi-replay-btn" onClick=${()=>setReplayIdx(r=>r===null?null:r<=1?null:r-1)}>NEXT</button></div></div><div class="agi-grid"><div class="agi-tile"><div class="agi-tile-label">LEAD VELOCITY</div><div class="agi-tile-val"><em>${snap?.lead_velocity??"--"}</em></div><div class="agi-tile-sub">leads/hr</div></div><div class="agi-tile"><div class="agi-tile-label">REVENUE PULSE</div><div class="agi-tile-val"><em>${snap?.revenue_pulse!=null?(snap.revenue_pulse*100).toFixed(1)+"%":"--"}</em></div><div class="agi-tile-sub">AI confidence</div></div><div class="agi-tile"><div class="agi-tile-label">PROXY HEALTH</div><div class="agi-tile-val"><em>${snap?.proxy_health!=null?(snap.proxy_health*100).toFixed(1)+"%":"--"}</em></div><div class="agi-tile-sub">network health</div></div><div class="agi-tile"><div class="agi-tile-label">AI CALLS</div><div class="agi-tile-val"><em>${snap?.ai_calls_today??"--"}</em></div><div class="agi-tile-sub">brain activations</div></div></div>${decisions.length > 0 ? html`<div class="chart-panel" style=${{marginBottom: '16px'}}>
-          <div class="chart-panel-h">
-            <div class="chart-panel-title">Decision Weights</div>
-            <div class="chart-panel-tag">${decisions.length} decisions</div>
-          </div>
-          ${(() => {
-            let high = 0, mid = 0, low = 0;
-            for (const d of decisions) {
-              const w = parseFloat(d.weight);
-              if (isNaN(w)) { low++; continue; }
-              if (w >= 1.5) high++;
-              else if (w >= 1.0) mid++;
-              else low++;
-            }
-            const sd = [];
-            if (high > 0) sd.push({label: 'High (≥1.5)', value: high, color: 'var(--signal-teal)'});
-            if (mid > 0) sd.push({label: 'Mid (1.0-1.49)', value: mid, color: 'var(--status-amber)'});
-            if (low > 0) sd.push({label: 'Low (<1.0)', value: low, color: 'var(--empire-mist)'});
-            return html`<${DonutChart} data=${sd} size=${108} strokeWidth=${22} />`;
-          })()}
-        </div>` : ''}
-          <div class="agi-decisions"><div class="agi-decisions"><div class="agi-decisions-head"><div class="agi-decisions-title">Decision Log</div><div class="agi-decisions-count">${decisions.length} entries</div></div>${decisions.map((d,i)=>html`<div class="agi-row"><div class=${"agi-row-weight "+(parseFloat(d.weight)>=1.5?"agi-w-hi":parseFloat(d.weight)>=1.0?"agi-w-mid":"agi-w-lo")}>${d.weight??"·"}<div class="agi-w-bar"></div></div><div class="agi-row-reason">${d.reason??"·"}<button class=${approved.includes(i)?"agi-approve-btn done":"agi-approve-btn"} onClick=${()=>doApprove(i,d.weight)}>${approved.includes(i)?"✓ APPROVED":"AUTO-APPROVE"}</button></div></div>`)}</div>`;
-      function Partners() {
+  return html`<div class="section-header"><div><div class="section-title">Neural Core</div><div class="section-sub">Live brain · autonomous decisions · 5s refresh</div></div><div class="agi-meta">TICK ${tick} · LIVE<button class=${live?"agi-replay-btn active":"agi-replay-btn"} onClick=${()=>setReplayIdx(null)}>LIVE</button><button class="agi-replay-btn" onClick=${()=>setReplayIdx(r=>r===null?1:Math.min(r+1,hist.length-1))}>PREV</button><button class="agi-replay-btn" onClick=${()=>setReplayIdx(r=>r===null?null:r<=1?null:r-1)}>NEXT</button></div></div><div class="agi-grid"><div class="agi-tile"><div class="agi-tile-label">LEAD VELOCITY</div><div class="agi-tile-val"><em>${snap?.lead_velocity??"--"}</em></div><div class="agi-tile-sub">leads/hr</div></div><div class="agi-tile"><div class="agi-tile-label">REVENUE PULSE</div><div class="agi-tile-val"><em>${snap?.revenue_pulse!=null?(snap.revenue_pulse*100).toFixed(1)+"%":"--"}</em></div><div class="agi-tile-sub">AI confidence</div></div><div class="agi-tile"><div class="agi-tile-label">PROXY HEALTH</div><div class="agi-tile-val"><em>${snap?.proxy_health!=null?(snap.proxy_health*100).toFixed(1)+"%":"--"}</em></div><div class="agi-tile-sub">network health</div></div><div class="agi-tile"><div class="agi-tile-label">AI CALLS</div><div class="agi-tile-val"><em>${snap?.ai_calls_today??"--"}</em></div><div class="agi-tile-sub">brain activations</div></div></div><div class="agi-decisions"><div class="agi-decisions-head"><div class="agi-decisions-title">Decision Log</div><div class="agi-decisions-count">${decisions.length} entries</div></div>${decisions.map((d,i)=>html`<div class="agi-row"><div class=${"agi-row-weight "+(parseFloat(d.weight)>=1.5?"agi-w-hi":parseFloat(d.weight)>=1.0?"agi-w-mid":"agi-w-lo")}>${d.weight??"·"}<div class="agi-w-bar"></div></div><div class="agi-row-reason">${d.reason??"·"}<button class=${approved.includes(i)?"agi-approve-btn done":"agi-approve-btn"} onClick=${()=>doApprove(i,d.weight)}>${approved.includes(i)?"✓ APPROVED":"AUTO-APPROVE"}</button></div></div>`)}</div>`;
+}
+
+function Partners() {
   const [partners, setPartners] = useState(null);
   const [err, setErr] = useState(null);
   const [busy, setBusy] = useState(null);
@@ -1618,30 +1370,6 @@ function Operators() {
           <button class="btn" disabled=${busy || !inviteEmail.trim() || !inviteName.trim()} onClick=${invite}>${busy ? 'Sending…' : 'Invite'}</button>
         </div>
       </div>
-
-      ${ops.length > 0 ? html`<div class="chart-panel">
-        <div class="chart-panel-h">
-          <div class="chart-panel-title">Role Distribution</div>
-          <div class="chart-panel-tag">${ops.length} operators</div>
-        </div>
-        ${(() => {
-          let owners = 0, operators = 0, viewers = 0, other = 0;
-          for (const o of ops) {
-            const r = o.role || 'other';
-            if (r === 'owner') owners++;
-            else if (r === 'operator') operators++;
-            else if (r === 'viewer') viewers++;
-            else other++;
-          }
-          const sd = [];
-          if (owners > 0) sd.push({label: 'Owner', value: owners, color: 'var(--status-red)'});
-          if (operators > 0) sd.push({label: 'Operator', value: operators, color: 'var(--signal-teal)'});
-          if (viewers > 0) sd.push({label: 'Viewer', value: viewers, color: 'var(--status-amber)'});
-          if (other > 0) sd.push({label: 'Other', value: other, color: 'var(--empire-mist)'});
-          return html`<${DonutChart} data=${sd} size=${108} strokeWidth=${22} />`;
-        })()}
-      </div>` : ''}
-
       <table class="tbl"><thead><tr>
         <th>Name</th><th>Email</th><th>Role</th><th>Active</th><th>Last login</th>
       </tr></thead><tbody>
@@ -1657,58 +1385,22 @@ function Operators() {
   `;
 }
 
-// ── LEADS ────────────────────────────────────────────────────────────
-function Leads() {
-  const [leads, setLeads] = useState(null);
+// ── GOVERNOR ───────────────────────────────────────────────────────────
+function Governor() {
+  const [status, setStatus] = useState(null);
+  const [log, setLog] = useState(null);
   const [err, setErr] = useState(null);
-  const [busy, setBusy] = useState(null);
-  const [filterSource, setFilterSource] = useState('all');
-  const [filterStatus, setFilterStatus] = useState('all');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [noteInputs, setNoteInputs] = useState({});
-
-  const deleteNote = async (leadId, timestamp) => {
-    if (!confirm('Delete this note?')) return;
-    setBusy(leadId + ':del:' + timestamp);
-    try {
-      await apiFetch('/api/v1/inbound/leads/delete-note', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ lead_id: leadId, timestamp }),
-      });
-      await reload();
-    } catch (e) { alert('Failed: ' + e.message); }
-    setBusy(null);
-  };
-
-  const renderNotes = (raw, leadId) => {
-    if (!raw) return '';
-    let entries = [];
-    if (typeof raw === 'string') {
-      try { const p = JSON.parse(raw); if (Array.isArray(p)) entries = p; else entries = [{text: raw}]; }
-      catch { entries = [{text: raw}]; }
-    } else if (Array.isArray(raw)) {
-      entries = raw;
-    }
-    if (entries.length === 0) return '';
-    return html`<div class="ld-notes-history">${entries.map(e => html`
-      <div class="ld-note-entry" key=${e.timestamp || Math.random()}>
-        <span class="ld-note-meta">
-          ${e.timestamp ? e.timestamp.slice(11, 19) + ' · ' : ''}${e.operator ? html`<span class="ld-note-op">${e.operator}</span>` : ''}
-          <button class="ld-note-del" disabled=${busy === leadId + ':del:' + e.timestamp}
-            onClick=${() => deleteNote(leadId, e.timestamp)} title="delete note">
-            ${busy === leadId + ':del:' + e.timestamp ? '…' : '✕'}
-          </button>
-        </span>
-        <div class="ld-note-text">${e.text}</div>
-      </div>
-    `)}</div>`;
-  };
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState(null);
 
   const reload = useCallback(async () => {
     try {
-      const r = await apiFetch('/api/v1/inbound/leads?limit=200').then(x => x.json());
-      setLeads(r.leads || []);
+      const [s, l] = await Promise.all([
+        apiFetch('/api/governor/status').then(r => r.json()),
+        apiFetch('/api/governor/log?lines=20').then(r => r.json()),
+      ]);
+      setStatus(s);
+      setLog(l.entries || []);
       setErr(null);
     } catch (e) {
       if (e.message !== 'Unauthorized') setErr(e.message);
@@ -1717,364 +1409,122 @@ function Leads() {
 
   useEffect(() => {
     reload();
-    const t = setInterval(reload, 15000);
+    const t = setInterval(reload, 10000);
     return () => clearInterval(t);
   }, [reload]);
 
-  const doUpdate = async (leadId, status) => {
-    setBusy(leadId + ':' + status);
+  const doHeal = async () => {
+    if (!confirm('⚠️ Force-restart ALL PM2 services? The hub will self-restart last (this page will reload).')) return;
+    setBusy(true);
+    setResult(null);
     try {
-      await apiFetch('/api/v1/inbound/leads/update', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ lead_id: leadId, status }),
-      });
-      await reload();
-    } catch (e) { alert('Failed: ' + e.message); }
-    setBusy(null);
+      const r = await apiFetch('/api/governor/heal', { method: 'POST' });
+      const j = await r.json();
+      setResult(j);
+    } catch (e) {
+      setResult({ ok: false, message: e.message });
+    }
+    setBusy(false);
   };
 
-  const saveNote = async (leadId) => {
-    const note = (noteInputs[leadId] || '').trim();
-    if (!note) return;
-    setBusy(leadId + ':note');
-    try {
-      await apiFetch('/api/v1/inbound/leads/update', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ lead_id: leadId, notes: note }),
-      });
-      setNoteInputs(n => { const c = {...n}; delete c[leadId]; return c; });
-      await reload();
-    } catch (e) { alert('Failed: ' + e.message); }
-    setBusy(null);
-  };
+  if (err) return html`<div class="stub"><div class="stub-title">Could not load Governor</div><div class="stub-body">${err}</div></div>`;
 
-  if (err) return html`<div class="stub"><div class="stub-title">Could not load Leads</div><div class="stub-body">${err}</div></div>`;
-
-  const allLeads = leads || [];
-
-  // Sources for filter
-  const sources = [...new Set(allLeads.map(l => l.source || 'unknown'))].sort();
-
-  // Filter
-  let filtered = allLeads;
-  if (filterSource !== 'all') filtered = filtered.filter(l => (l.source || 'unknown') === filterSource);
-  if (filterStatus !== 'all') filtered = filtered.filter(l => (l.status || 'new') === filterStatus);
-  if (searchQuery.trim()) {
-    const q = searchQuery.trim().toLowerCase();
-    filtered = filtered.filter(l =>
-      (l.name || '').toLowerCase().includes(q) ||
-      (l.phone || '').toLowerCase().includes(q) ||
-      (l.email || '').toLowerCase().includes(q)
-    );
-  }
-
-  // Stats
-  const total = allLeads.length;
-  const newCount = allLeads.filter(l => !l.status || l.status === 'new' || l.status === 'pending').length;
-  const contacted = allLeads.filter(l => l.status === 'contacted' || l.status === 'qualified').length;
-  const closed = allLeads.filter(l => l.status === 'closed' || l.status === 'rejected').length;
+  const svcs = status?.services || [];
+  const wd = status?.watchdog;
 
   return html`
     <div>
       <div class="section-h">
         <div>
-          <div class="section-title">Leads</div>
-          <div class="section-sub">Inbound lead pipeline · intake</div>
+          <div class="section-title">Governor</div>
+          <div class="section-sub">PM2 watchdog · self-heal · service health</div>
         </div>
-        <div class="section-sub">${total} total · auto-refresh 15s</div>
-      </div>
-
-      <div class="ld-stats">
-        <div class="ld-stat">
-          <div class=${'ld-stat-val ' + (total > 0 ? 'teal' : 'dim')}>${total}</div>
-          <div class="ld-stat-lbl">Total Leads</div>
-        </div>
-        <div class="ld-stat">
-          <div class=${'ld-stat-val ' + (newCount > 0 ? 'teal' : 'dim')}>${newCount}</div>
-          <div class="ld-stat-lbl">New / Pending</div>
-        </div>
-        <div class="ld-stat">
-          <div class=${'ld-stat-val ' + (contacted > 0 ? 'teal' : 'dim')}>${contacted}</div>
-          <div class="ld-stat-lbl">Contacted / Qualified</div>
-        </div>
-        <div class="ld-stat">
-          <div class="ld-stat-val dim">${closed}</div>
-          <div class="ld-stat-lbl">Closed / Rejected</div>
+        <div class="section-sub" style=${{display: 'flex', alignItems: 'center', gap: '16px'}}>
+          ${wd ? html`
+            <span class="gov-watch-tag">Check: <strong>every ${wd.interval_s}s</strong></span>
+            <span class="gov-watch-tag">Healthy: <strong>${wd.healthy}/${wd.total}</strong></span>
+          ` : ''}
+          <button class="gov-heal-btn" disabled=${busy} onClick=${doHeal}>${busy ? 'Healing…' : 'Heal All'}</button>
         </div>
       </div>
 
-      <div class="ld-filter">
-        <span class="ld-filter-tag">Source:</span>
-        <button class=${'ld-filter-btn ' + (filterSource === 'all' ? 'active' : '')} onClick=${() => setFilterSource('all')}>All</button>
-        ${sources.map(s => html`
-          <button class=${'ld-filter-btn ' + (filterSource === s ? 'active' : '')} onClick=${() => setFilterSource(s)} key=${s}>${s}</button>
-        `)}
-        <span class="ld-filter-tag" style=${{marginLeft: 'auto', opacity: '0.4'}}>|</span>
-        <span class="ld-filter-tag">Status:</span>
-        <button class=${'ld-filter-btn ' + (filterStatus === 'all' ? 'active' : '')} onClick=${() => setFilterStatus('all')}>All</button>
-        <button class=${'ld-filter-btn ' + (filterStatus === 'new' ? 'active' : '')} onClick=${() => setFilterStatus('new')}>New</button>
-        <button class=${'ld-filter-btn ' + (filterStatus === 'contacted' ? 'active' : '')} onClick=${() => setFilterStatus('contacted')}>Contacted</button>
-        <button class=${'ld-filter-btn ' + (filterStatus === 'qualified' ? 'active' : '')} onClick=${() => setFilterStatus('qualified')}>Qualified</button>
-        <button class=${'ld-filter-btn ' + (filterStatus === 'closed' ? 'active' : '')} onClick=${() => setFilterStatus('closed')}>Closed</button>
-        <input class="fld-in mono" style=${{flex: '1', minWidth: '180px', padding: '6px 10px', fontSize: '11px'}} value=${searchQuery} onChange=${e => setSearchQuery(e.target.value)} placeholder="filter by name, phone, or email…" />
-        ${filtered.length !== allLeads.length ? html`<span class="ld-filter-tag">Showing ${filtered.length}</span>` : ''}
+      ${wd ? html`
+      <div class="gov-watchdog" style=${{marginBottom: '16px'}}>
+        <span class="gov-watch-tag">Last check: <strong>${(wd.last_check || '').slice(11,19)}</strong></span>
+        <span class="gov-watch-tag">Watching: <strong>${wd.watching.join(', ')}</strong></span>
       </div>
+      ` : ''}
 
-      ${allLeads.length > 0 ? html`<div class="chart-panel">
-        <div class="chart-panel-h">
-          <div class="chart-panel-title">Daily Lead Volume</div>
-          <div class="chart-panel-tag">${allLeads.length} total</div>
-        </div>
-        ${(() => {
-          // Group by date (last 14 days)
-          const dayCounts = {};
-          const now = new Date();
-          for (let i = 13; i >= 0; i--) {
-            const d = new Date(now); d.setDate(d.getDate() - i);
-            const key = d.toISOString().slice(0, 10);
-            dayCounts[key] = 0;
-          }
-          for (const l of allLeads) {
-            if (l.created_at) {
-              const d = l.created_at.slice(0, 10);
-              if (dayCounts[d] !== undefined) dayCounts[d]++;
-            }
-          }
-          const chartData = Object.entries(dayCounts).map(([date, count]) => ({
-            label: date.slice(5, 10),
-            value: count
-          }));
-          return html`<${MiniBarChart} data=${chartData} color="var(--signal-teal)" height=${60} />`;
-        })()}
-      </div>` : ''}
-
-      ${newCount + contacted + closed > 0 ? html`<div class="chart-panel">
-        <div class="chart-panel-h">
-          <div class="chart-panel-title">Status Distribution</div>
-          <div class="chart-panel-tag">${newCount} new · ${contacted} contacted · ${closed} closed</div>
-        </div>
-        <${DonutChart} data=${[
-          {label: 'New / Pending', value: newCount, color: 'var(--signal-teal)'},
-          {label: 'Contacted / Qualified', value: contacted, color: 'var(--strike-cyan)'},
-          {label: 'Closed / Rejected', value: closed, color: 'var(--empire-mist)'},
-        ]} size=${108} strokeWidth=${22} />
-      </div>` : ''}
-
-
-      ${!leads
-        ? html`<div class="stub"><div class="stub-body">Loading leads…</div></div>`
-        : (filtered.length === 0
-          ? html`<div class="ld-empty">${allLeads.length === 0 ? 'No inbound leads yet. Leads appear when partner webhooks submit them.' : 'No leads match the current filter.'}</div>`
-          : filtered.map(l => {
-            const status = (l.status || 'new').toLowerCase();
-            const source = l.source || '—';
-            const created = (l.created_at || '').slice(0, 16).replace('T', ' ');
-            const statusActions = [];
-            if (status === 'new' || status === 'pending') {
-              statusActions.push({ label: 'Contact', status: 'contacted', cls: 'go' });
-            } else if (status === 'contacted') {
-              statusActions.push({ label: 'Qualify', status: 'qualified', cls: 'go' });
-            }
-            if (status !== 'closed' && status !== 'rejected') {
-              statusActions.push({ label: 'Close', status: 'closed', cls: 'ghost' });
-              statusActions.push({ label: 'Reject', status: 'rejected', cls: 'danger' });
-            }
+      ${!status
+        ? html`<div class="gov-panel"><div class="gov-empty">Loading service status…</div></div>`
+        : html`
+      <div class="gov-grid">
+        ${svcs.length === 0
+          ? html`<div class="gov-empty" style=${{gridColumn: '1 / -1'}}>No PM2 services found.</div>`
+          : svcs.map(s => {
+            const statusCls = s.status === 'online' ? 'online' : s.status === 'errored' ? 'errored' : s.status === 'stopped' ? 'stopped' : 'unknown';
+            const uptime = s.uptime_s != null
+              ? (s.uptime_s >= 86400 ? Math.round(s.uptime_s / 86400) + 'd'
+                : s.uptime_s >= 3600 ? Math.round(s.uptime_s / 3600) + 'h'
+                : s.uptime_s >= 60 ? Math.round(s.uptime_s / 60) + 'm'
+                : s.uptime_s + 's')
+              : '—';
             return html`
-            <div class="ld-lead" key=${l.id}>
-              <div class="ld-lead-row">
-                <div>
-                  <div class="ld-lead-name">${l.name || '—'}</div>
-                  <div class="ld-lead-contact">${l.phone || ''}${l.email ? ' · ' + l.email : ''}</div>
+            <div class="gov-card" key=${s.name}>
+              <div class="gov-card-row">
+                <div class="gov-card-name">${s.name}</div>
+                <span class=${'gov-bdg ' + statusCls}>
+                  <span class="gov-bdg-dot"></span>${s.status}
+                </span>
+              </div>
+              <div class="gov-card-stats">
+                <div class="gov-stat">
+                  <div class="gov-stat-val">${uptime}</div>
+                  <div class="gov-stat-lbl">uptime</div>
                 </div>
-                <span class=${'ld-bdg ' + status}>${status}</span>
-              </div>
-              ${l.city ? html`<div class="ld-lead-meta">${l.city}</div>` : ''}
-              <div class="ld-lead-meta">
-                <span class="ld-bdg source">${source}</span>
-                <span>${created}</span>
-              </div>
-              ${renderNotes(l.notes, l.id)}
-              <div class="ld-notes">
-                <input class="ld-notes-in" value=${noteInputs[l.id] !== undefined ? noteInputs[l.id] : (l.notes || '')}
-                  onChange=${e => setNoteInputs(n => ({...n, [l.id]: e.target.value}))}
-                  onKeyDown=${e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); saveNote(l.id); } }}
-                  placeholder=${l.notes ? 'edit note…' : 'add a note…'} />
-                ${noteInputs[l.id] !== undefined && noteInputs[l.id].trim() !== (l.notes || '').trim() ? html`
-                  <button class="ld-note-save" disabled=${busy === l.id + ':note'}
-                    onClick=${() => saveNote(l.id)}>
-                    ${busy === l.id + ':note' ? '…' : (l.notes ? 'Update' : 'Save')}
-                  </button>
-                ` : ''}
-              </div>
-              ${statusActions.length > 0 ? html`
-n// ── ACTIVITY LOG ─────────────────────────────────────────────────────
-function ActivityLog() {
-  const [entries, setEntries] = useState(null);
-  const [err, setErr] = useState(null);
-  const [searchQuery, setSearchQuery] = useState('');
-
-  const reload = useCallback(async () => {
-    try {
-      const r = await apiFetch('/api/v1/notes/activity').then(x => x.json());
-      setEntries(r.entries || []);
-      setErr(null);
-    } catch (e) {
-      if (e.message !== 'Unauthorized') setErr(e.message);
-    }
-  }, []);
-
-  useEffect(() => {
-    reload();
-    const t = setInterval(reload, 15000);
-    return () => clearInterval(t);
-  }, [reload]);
-
-  if (err) return html`<div class=\"stub\"><div class=\"stub-title\">Could not load Activity Log</div><div class=\"stub-body\">${err}</div></div>`;
-
-  if (!entries) return html`<div class=\"stub\"><div class=\"stub-body\">Loading activity log…</div></div>`;
-
-  // Filter by text or operator name
-  let filteredEntries = entries;
-  if (searchQuery.trim()) {
-    const q = searchQuery.trim().toLowerCase();
-    filteredEntries = entries.filter(e =>
-      (e.text || '').toLowerCase().includes(q) ||
-      (e.operator || '').toLowerCase().includes(q)
-    );
-  }
-
-  // Group by date
-  const groups = {};
-  for (const e of filteredEntries) {
-    const date = (e.timestamp || '').slice(0, 10);
-    if (!groups[date]) groups[date] = [];
-    groups[date].push(e);
-  }
-  const dates = Object.keys(groups).sort().reverse();
-
-  const goToLead = (leadId) => {
-    window.location.hash = '#/leads?focus=' + encodeURIComponent(leadId);
-  };
-
-  return html`
-    <div>
-      <div class=\"section-h\">
-        <div>
-          <div class=\"section-title\">Activity <em>Log</em></div>
-          <div class=\"section-sub\">Global notes feed · all operator activity</div>
-        </div>
-        <div class=\"section-sub\">${entries.length} notes · auto-refresh 15s</div>
-      </div>
-
-      <input class=\"fld-in mono\" style=${{flex: '1', maxWidth: '320px', padding: '6px 10px', fontSize: '11px', marginBottom: '14px'}} value=${searchQuery} onChange=${e => setSearchQuery(e.target.value)} placeholder=\"filter by text or operator…\" />\n
-      ${filteredEntries.length > 0 ? html`<div class="chart-panel">
-        <div class="chart-panel-h">
-          <div class="chart-panel-title">Daily Activity</div>
-          <div class="chart-panel-tag">${filteredEntries.length} notes · ${dates.length} days</div>
-        </div>
-        ${(() => {
-          const dayCounts = {};
-          const now = new Date();
-          for (let i = 13; i >= 0; i--) {
-            const d = new Date(now); d.setDate(d.getDate() - i);
-            const key = d.toISOString().slice(0, 10);
-            dayCounts[key] = 0;
-          }
-          for (const e of filteredEntries) {
-            if (e.timestamp) {
-              const d = e.timestamp.slice(0, 10);
-              if (dayCounts[d] !== undefined) dayCounts[d]++;
-            }
-          }
-          const chartData = Object.entries(dayCounts).map(([date, count]) => ({
-            label: date.slice(5, 10),
-            value: count
-          }));
-          return html`<${MiniBarChart} data=${chartData} color="var(--strike-cyan)" height=${60} />`;
-        })()}
-      </div>` : ''
-
-      ${filteredEntries.length > 0 ? html`<div class="chart-panel">
-        <div class="chart-panel-h">
-          <div class="chart-panel-title">Operator Activity</div>
-          <div class="chart-panel-tag">${[...new Set(filteredEntries.map(e => e.operator))].filter(Boolean).length} operators</div>
-        </div>
-        ${(() => {
-          const opCounts = {};
-          for (const e of filteredEntries) {
-            const op = e.operator || 'unknown';
-            opCounts[op] = (opCounts[op] || 0) + 1;
-          }
-          const colors = ['var(--strike-cyan)', 'var(--signal-teal)', 'var(--status-amber)', 'var(--empire-mist)', 'var(--status-red)'];
-          const opData = Object.entries(opCounts)
-            .sort((a, b) => b[1] - a[1])
-            .map(([label, value], i) => ({label, value, color: colors[i % colors.length]}));
-          return html`<${DonutChart} data=${opData} size=${108} strokeWidth=${22} />`;
-        })()}
-      </div>` : ''}
-}
-
-      <div class=\"act-meta\">Showing ${filteredEntries.length} note${entries.length === 1 ? '' : 's'} across ${dates.length} day${dates.length === 1 ? '' : 's'}</div>
-
-      ${entries.length === 0
-        ? html`<div class=\"act-empty\">No notes activity yet. Notes appear when operators add them from the Leads tab.</div>`
-        : html`<div class=\"act-feed\">
-            ${dates.map(date => html`
-              <div class=\"act-day\" key=${date}>${date}</div>
-              ${groups[date].map(e => html`
-                <div class=\"act-entry\" key=${e.timestamp + e.lead_id}>
-                  <span class=\"act-entry-ts\">${(e.timestamp || '')
-.slice(11, 19)}</span>
-                  <span class=\"act-entry-body\">
-                    <span class=\"act-entry-lead\" onClick=${() => goToLead(e.lead_id)} title=\"Go to lead\">${e.lead_name || '—'}</span>
-                    <span class=\"act-entry-text\">${e.text}</span>
-                  </span>
-                  <span class=\"act-entry-operator\">${e.operator || '—'}</span>
+                <div class="gov-stat">
+                  <div class="gov-stat-val">${s.restarts}</div>
+                  <div class="gov-stat-lbl">restarts</div>
                 </div>
-              `)}
-            `)}
-          </div>`}
-    </div>
-  `;
-}
-
-              <div class="ld-actions">
-                ${statusActions.map(a => html`
-                  <button key=${a.status} class=${'ld-action-btn ' + a.cls}
-                    disabled=${busy === l.id + ':' + a.status}
-                    onClick=${() => doUpdate(l.id, a.status)}>
-                    ${busy === l.id + ':' + a.status ? '…' : a.label}
-                  </button>
-                `)}
+                <div class="gov-stat">
+                  <div class="gov-stat-val">${s.mem_mb ?? '—'}</div>
+                  <div class="gov-stat-lbl">mem (mb)</div>
+                </div>
+                <div class="gov-stat">
+                  <div class="gov-stat-val">${s.cpu_pct ?? '—'}%</div>
+                  <div class="gov-stat-lbl">cpu</div>
+                </div>
               </div>
-              ` : ''}
             </div>
           `})}
-    </div>
-  `;
-}
+      </div>
+      `}
 
+      ${result ? html`<div class="gov-result">${result.message || (result.ok ? 'Heal complete' : 'Heal failed')}${result.errors && result.errors.length ? ' · ' + result.errors.length + ' error(s)' : ''}</div>` : ''}
 
-// ── MINI BAR CHART ──────────────────────────────────────────────────
-function MiniBarChart({data, label, color = '#44E5B8', height = 80}) {
-  if (!data || data.length === 0) return html`<div class="chart-empty">No data</div>`;
-  const max = Math.max(...data.map(d => d.value), 1);
-  return html`
-    <div class="chart-bar-group" style=${{display: 'flex', gap: '2px', alignItems: 'flex-end', height: height + 'px', paddingTop: '4px'}}>
-      ${data.map((d, i) => html`
-        <div key=${i} style=${{flex: '1', display: 'flex', flexDirection: 'column', alignItems: 'center'}}>
-          <div class="chart-bar" style=${{height: Math.max((d.value / max) * (height - 12), 2) + 'px', background: color, width: '100%', minWidth: '12px', borderRadius: '2px 2px 0 0', opacity: '0.85', transition: 'height 0.3s ease'}} title=${d.value}></div>
-          ${d.label ? html`<span style=${{fontSize: '7px', color: 'var(--empire-fog)', marginTop: '3px', fontFamily: 'var(--font-mono)', letterSpacing: '-0.02em'}}>${d.label}</span>` : ''}
+      <div class="gov-panel">
+        <div class="gov-panel-h">
+          <div class="gov-panel-title">Heal Log</div>
+          <div class="gov-panel-tag">${log.length} entries</div>
         </div>
-      `)}
+        ${log.length === 0
+          ? html`<div class="gov-empty">No heal log entries yet.</div>`
+          : html`<div class="gov-log">
+            ${log.map(e => html`
+              <div class="gov-log-row" key=${e.ts + e.service + e.action}>
+                <span class="gov-log-ts">${(e.ts || '').slice(11,19)}</span>
+                <span class=${'gov-log-lvl ' + (e.level || 'info')}>${e.level || '—'}</span>
+                <span class="gov-log-svc">${e.service || '—'}</span>
+                <span class="gov-log-detail">${e.detail || e.action || '—'}</span>
+              </div>
+            `)}
+          </div>`}
+      </div>
     </div>
   `;
 }
 
-// ── HOLO MAP ─────────────────────────────────────────────────────────
-
+// ── DONUT CHART ──────────────────────────────────────────────────────
 function DonutChart({data, size = 108, strokeWidth = 22, colors = ["var(--signal-teal)", "var(--strike-cyan)", "var(--empire-mist)", "var(--status-red)"]}) {
   const total = data.reduce((s, d) => s + (d.value || 0), 0);
   if (total === 0) return html`<div class="chart-empty" style=${{height: size + 'px', display: 'flex', alignItems: 'center', justifyContent: 'center'}}>No data</div>`;
@@ -2115,79 +1565,9 @@ function DonutChart({data, size = 108, strokeWidth = 22, colors = ["var(--signal
       })}
     </div>
   </div>`;
-}) {
-  const total = data.reduce((s, d) => s + (d.value || 0), 0);
-  if (total === 0) return html`<div class="chart-empty" style=${{height: size + 'px', display: 'flex', alignItems: 'center', justifyContent: 'center'}}>No data</div>`;
-  const cx = size / 2, cy = size / 2;
-  const r = (size - strokeWidth) / 2;
-  const circ = 2 * Math.PI * r;
-  const gap = 2;
-  let startAngle = 0;
-  const topPct = Math.round((Math.max(...data.map(d => d.value || 0)) / total) * 100);
-  const topLabel = data.reduce((a, b) => (a.value || 0) > (b.value || 0) ? a : b, data[0]);
-  return html`<div class="chart-donut">
-    <svg class="chart-donut-svg" width=${size} height=${size} viewBox="0 0 ${size} ${size}">
-      ${data.map((d, i) => {
-        const segLen = Math.max(0, ((d.value || 0) / total) * circ - (i < data.length - 1 ? gap : 0));
-        const color = d.color || colors[i % colors.length];
-        const seg = startAngle;
-        startAngle += ((d.value || 0) / total) * circ;
-        return html`<circle cx=${cx} cy=${cy} r=${r} fill="none" stroke=${color} stroke-width=${strokeWidth}
-          stroke-dasharray=${segLen} ${circ - segLen}
-          stroke-dashoffset=${-seg}
-          transform="rotate(-90 ${cx} ${cy})"
-          style="transition: stroke-dasharray 0.3s var(--ease-snap)"
-        />`;
-      })}
-      <circle cx=${cx} cy=${cy} r=${r - strokeWidth / 2 + 1} fill="var(--empire-surface)" />
-      <text x=${cx} y=${cy - 4} text-anchor="middle" fill="var(--empire-white)" font-family="var(--font-display)" font-weight="200" font-size=${Math.round(size * 0.22)}>${topPct}%</text>
-      ${data.length > 1 ? html`<text x=${cx} y=${cy + 14} text-anchor="middle" fill="var(--empire-fog)" font-family="var(--font-mono)" font-size=${Math.round(size * 0.08)}>${topLabel.label}</text>` : ''}
-    </svg>
-    <div class="chart-legend">
-      ${data.map((d, i) => {
-        const pct = Math.round(((d.value || 0) / total) * 100);
-        return html`<div class="chart-legend-item" key=${i}>
-        <span class="chart-legend-dot" style=${{backgroundColor: d.color || colors[i % colors.length]}}></span>
-        ${d.label}
-        <span class="chart-legend-val">${d.value} · ${pct}%</span>
-      </div>`;
-      })}
-    </div>
-  </div>`;
-}) {
-  const total = data.reduce((s, d) => s + (d.value || 0), 0);
-  if (total === 0) return html`<div class="chart-empty" style=${{height: size + 'px', display: 'flex', alignItems: 'center', justifyContent: 'center'}}>No data</div>`;
-  const cx = size / 2, cy = size / 2;
-  const r = (size - strokeWidth) / 2;
-  const circ = 2 * Math.PI * r;
-  const gap = 2;
-  let startAngle = 0;
-  return html`<div class="chart-donut">
-    <svg class="chart-donut-svg" width=${size} height=${size} viewBox="0 0 ${size} ${size}">
-      ${data.map((d, i) => {
-        const segLen = Math.max(0, ((d.value || 0) / total) * circ - (i < data.length - 1 ? gap : 0));
-        const color = d.color || colors[i % colors.length];
-        const seg = startAngle;
-        startAngle += ((d.value || 0) / total) * circ;
-        return html`<circle cx=${cx} cy=${cy} r=${r} fill="none" stroke=${color} stroke-width=${strokeWidth}
-          stroke-dasharray=${segLen} ${circ - segLen}
-          stroke-dashoffset=${-seg}
-          transform="rotate(-90 ${cx} ${cy})"
-          style="transition: stroke-dasharray 0.3s var(--ease-snap)"
-        />`;
-      })}
-      <circle cx=${cx} cy=${cy} r=${r - strokeWidth / 2 + 1} fill="var(--empire-surface)" />
-    </svg>
-    <div class="chart-legend">
-      ${data.map((d, i) => html`<div class="chart-legend-item" key=${i}>
-        <span class="chart-legend-dot" style=${{backgroundColor: d.color || colors[i % colors.length]}}></span>
-        ${d.label}
-        <span class="chart-legend-val">${d.value}</span>
-      </div>`)}
-    </div>
-  </div>`;
 }
 
+// ── HOLO MAP ─────────────────────────────────────────────────────────
 function HoloMap() {
   const [storms, setStorms] = useState({type:'FeatureCollection',features:[]});
   const [targets, setTargets] = useState({type:'FeatureCollection',features:[]});
@@ -2221,14 +1601,12 @@ function HoloMap() {
   const stormFeatures = storms.features || [];
   const targetFeatures = targets.features || [];
 
-  // Severity distribution for radar display
   const sevCounts = {Extreme: 0, Severe: 0, Moderate: 0, Minor: 0};
   for (const f of stormFeatures) {
     const sev = f.properties?.severity || 'Minor';
     if (sevCounts[sev] != null) sevCounts[sev]++;
   }
 
-  // Generate random-looking but deterministic blip positions from feature coords
   function hashToAngle(s) {
     let h = 0;
     for (let i = 0; i < (s||'').length; i++) { h = ((h << 5) - h) + s.charCodeAt(i); h |= 0; }
@@ -2237,7 +1615,7 @@ function HoloMap() {
   function hashToRadius(s) {
     let h = 0;
     for (let i = 0; i < (s||'').length; i++) { h = ((h << 3) - h) + s.charCodeAt(i); h |= 0; }
-    return 15 + (Math.abs(h) % 70);  // 15%-85% radius
+    return 15 + (Math.abs(h) % 70);
   }
 
   const targetBlips = targetFeatures.slice(0, 40).map(f => ({
@@ -2260,7 +1638,7 @@ function HoloMap() {
 
   function blipStyle(b) {
     const rad = (b.angle - 90) * Math.PI / 180;
-    const r = 45 + (b.radius / 100) * 130;  // px from center (45-175)
+    const r = 45 + (b.radius / 100) * 130;
     const x = 180 + r * Math.cos(rad);
     const y = 180 + r * Math.sin(rad);
     return {position: 'absolute', left: x + 'px', top: y + 'px', zIndex: b.type === 'storm' ? 2 : 1};
@@ -2278,7 +1656,6 @@ function HoloMap() {
           <span class="holo-badge target"><span class="holo-bdg-dot" style=${{width:6,height:6,borderRadius:'50%',background:'var(--signal-teal)',boxShadow:'0 0 6px var(--signal-teal)'}}></span>${targetFeatures.length} targets</span>
         </div>
       </div>
-
       <div class="holo-radar-wrap">
         <div class="holo-radar">
           <div class="holo-radar-ring r1"></div>
@@ -2303,7 +1680,6 @@ function HoloMap() {
           `)}
         </div>
       </div>
-
       <div class="holo-split">
         <div class="holo-panel">
           <div class="holo-panel-h">
@@ -2391,7 +1767,6 @@ function HealthMonitor() {
         </div>
         <div class="section-sub">Auto-refresh · 15s</div>
       </div>
-
       ${agents.length > 0 ? html`<div class="chart-panel">
         <div class="chart-panel-h">
           <div class="chart-panel-title">Agent Status</div>
@@ -2416,7 +1791,6 @@ function HealthMonitor() {
           return html`<${DonutChart} data=${sd} size=${108} strokeWidth=${22} />`;
         })()}
       </div>` : ''}
-
       <div class="hm-split">
         <div class="hm-panel">
           <div class="hm-panel-h">
@@ -2452,7 +1826,6 @@ function HealthMonitor() {
               `)}
             </div>`}
         </div>
-
         <div class="hm-panel">
           <div class="hm-panel-h">
             <div class="hm-panel-title">System Health</div>
@@ -2481,7 +1854,6 @@ function HealthMonitor() {
           </div>
         </div>
       </div>
-
       ${overseerRaw ? html`
       <div class="hm-overseer">
         <div class="hm-panel-h">
@@ -2503,7 +1875,7 @@ function HealthMonitor() {
   `;
 }
 
-// ── SNIPER FLEET ────────────────────────────────────────────────────
+// ── SNIPER FLEET ─────────────────────────────────────────────────────
 function SniperFleet() {
   const [agents, setAgents] = useState(null);
   const [err, setErr] = useState(null);
@@ -2552,13 +1924,11 @@ function SniperFleet() {
         </div>
         <div class="section-sub">Auto-refresh · 10s</div>
       </div>
-
       <div class="sf-summary">
         <span class="sf-summary-tag">Active: <strong style=${{color: 'var(--signal-teal)'}}>${activeCount}</strong></span>
         <span class="sf-summary-tag">Idle: <strong style=${{color: 'var(--status-amber)'}}>${idleCount}</strong></span>
         <span class="sf-summary-tag">Offline: <strong style=${{color: 'var(--empire-mist)'}}>${offlineCount}</strong></span>
       </div>
-
       ${activeCount + idleCount + offlineCount > 0 ? html`<div class="chart-panel">
         <div class="chart-panel-h">
           <div class="chart-panel-title">Agent Status</div>
@@ -2572,8 +1942,6 @@ function SniperFleet() {
           return html`<${DonutChart} data=${sd} size=${108} strokeWidth=${22} />`;
         })()}
       </div>` : ''}
-
-
       ${!agents
         ? html`<div class="stub"><div class="stub-body">Loading agent status…</div></div>`
         : html`
@@ -2606,169 +1974,7 @@ function SniperFleet() {
             </div>
           `})}
       </div>
-      ` : ''}
-    </div>
-  `;
-}
-
-// ── GOVERNOR ───────────────────────────────────────────────────────────
-function Governor() {
-  const [status, setStatus] = useState(null);
-  const [log, setLog] = useState(null);
-  const [err, setErr] = useState(null);
-  const [busy, setBusy] = useState(false);
-  const [result, setResult] = useState(null);
-
-  const reload = useCallback(async () => {
-    try {
-      const [s, l] = await Promise.all([
-        apiFetch('/api/governor/status').then(r => r.json()),
-        apiFetch('/api/governor/log?lines=20').then(r => r.json()),
-      ]);
-      setStatus(s);
-      setLog(l.entries || []);
-      setErr(null);
-    } catch (e) {
-      if (e.message !== 'Unauthorized') setErr(e.message);
-    }
-  }, []);
-
-  useEffect(() => {
-    reload();
-    const t = setInterval(reload, 10000);
-    return () => clearInterval(t);
-  }, [reload]);
-
-  const doHeal = async () => {
-    if (!confirm('⚠️ Force-restart ALL PM2 services? The hub will self-restart last (this page will reload).')) return;
-    setBusy(true);
-    setResult(null);
-    try {
-      const r = await apiFetch('/api/governor/heal', { method: 'POST' });
-      const j = await r.json();
-      setResult(j);
-    } catch (e) {
-      setResult({ ok: false, message: e.message });
-    }
-    setBusy(false);
-  };
-
-  if (err) return html`<div class="stub"><div class="stub-title">Could not load Governor</div><div class="stub-body">${err}</div></div>`;
-
-  const svcs = status?.services || [];
-  const wd = status?.watchdog;
-
-  return html`
-    <div>
-      <div class="section-h">
-        <div>
-          <div class="section-title">Governor</div>
-          <div class="section-sub">PM2 watchdog · self-heal · service health</div>
-        </div>
-        <div class="section-sub" style=${{display: 'flex', alignItems: 'center', gap: '16px'}}>
-          ${wd ? html`
-            <span class="gov-watch-tag">Check: <strong>every ${wd.interval_s}s</strong></span>
-            <span class="gov-watch-tag">Healthy: <strong>${wd.healthy}/${wd.total}</strong></span>
-          ` : ''}
-          <button class="gov-heal-btn" disabled=${busy} onClick=${doHeal}>${busy ? 'Healing…' : 'Heal All'}</button>
-        </div>
-      </div>
-
-      ${wd ? html`
-      <div class="gov-watchdog" style=${{marginBottom: '16px'}}>
-        <span class="gov-watch-tag">Last check: <strong>${(wd.last_check || '').slice(11,19)}</strong></span>
-        <span class="gov-watch-tag">Watching: <strong>${wd.watching.join(', ')}</strong></span>
-      </div>
-      ` : ''}
-
-      ${svcs.length > 0 ? html`<div class="chart-panel" style=${{marginBottom: '16px'}}>
-        <div class="chart-panel-h">
-          <div class="chart-panel-title">Service Status</div>
-          <div class="chart-panel-tag">${svcs.length} services</div>
-        </div>
-        ${(() => {
-          let online = 0, errored = 0, stopped = 0, unknown = 0;
-          for (const s of svcs) {
-            const st = s.status || 'unknown';
-            if (st === 'online') online++;
-            else if (st === 'errored') errored++;
-            else if (st === 'stopped') stopped++;
-            else unknown++;
-          }
-          const sd = [];
-          if (online > 0) sd.push({label: 'Online', value: online, color: 'var(--signal-teal)'});
-          if (errored > 0) sd.push({label: 'Errored', value: errored, color: 'var(--status-red)'});
-          if (stopped > 0) sd.push({label: 'Stopped', value: stopped, color: 'var(--status-amber)'});
-          if (unknown > 0) sd.push({label: 'Unknown', value: unknown, color: 'var(--empire-mist)'});
-          return html`<${DonutChart} data=${sd} size=${108} strokeWidth=${22} />`;
-        })()}
-      </div>` : ''}
-
-      ${!status
-        ? html`<div class="gov-panel"><div class="gov-empty">Loading service status…</div></div>`
-        : html`
-      <div class="gov-grid">
-        ${svcs.length === 0
-          ? html`<div class="gov-empty" style=${{gridColumn: '1 / -1'}}>No PM2 services found.</div>`
-          : svcs.map(s => {
-            const statusCls = s.status === 'online' ? 'online' : s.status === 'errored' ? 'errored' : s.status === 'stopped' ? 'stopped' : 'unknown';
-            const uptime = s.uptime_s != null
-              ? (s.uptime_s >= 86400 ? Math.round(s.uptime_s / 86400) + 'd'
-                : s.uptime_s >= 3600 ? Math.round(s.uptime_s / 3600) + 'h'
-                : s.uptime_s >= 60 ? Math.round(s.uptime_s / 60) + 'm'
-                : s.uptime_s + 's')
-              : '—';
-            return html`
-            <div class="gov-card" key=${s.name}>
-              <div class="gov-card-row">
-                <div class="gov-card-name">${s.name}</div>
-                <span class=${'gov-bdg ' + statusCls}>
-                  <span class="gov-bdg-dot"></span>${s.status}
-                </span>
-              </div>
-              <div class="gov-card-stats">
-                <div class="gov-stat">
-                  <div class="gov-stat-val">${uptime}</div>
-                  <div class="gov-stat-lbl">uptime</div>
-                </div>
-                <div class="gov-stat">
-                  <div class="gov-stat-val">${s.restarts}</div>
-                  <div class="gov-stat-lbl">restarts</div>
-                </div>
-                <div class="gov-stat">
-                  <div class="gov-stat-val">${s.mem_mb ?? '—'}</div>
-                  <div class="gov-stat-lbl">mem (mb)</div>
-                </div>
-                <div class="gov-stat">
-                  <div class="gov-stat-val">${s.cpu_pct ?? '—'}%</div>
-                  <div class="gov-stat-lbl">cpu</div>
-                </div>
-              </div>
-            </div>
-          `})}
-      </div>
-      ` : ''}
-
-      ${result ? html`<div class="gov-result">${result.message || (result.ok ? 'Heal complete' : 'Heal failed')}${result.errors && result.errors.length ? ' · ' + result.errors.length + ' error(s)' : ''}</div>` : ''}
-
-      <div class="gov-panel">
-        <div class="gov-panel-h">
-          <div class="gov-panel-title">Heal Log</div>
-          <div class="gov-panel-tag">${log.length} entries</div>
-        </div>
-        ${log.length === 0
-          ? html`<div class="gov-empty">No heal log entries yet.</div>`
-          : html`<div class="gov-log">
-            ${log.map(e => html`
-              <div class="gov-log-row" key=${e.ts + e.service + e.action}>
-                <span class="gov-log-ts">${(e.ts || '').slice(11,19)}</span>
-                <span class=${'gov-log-lvl ' + (e.level || 'info')}>${e.level || '—'}</span>
-                <span class="gov-log-svc">${e.service || '—'}</span>
-                <span class="gov-log-detail">${e.detail || e.action || '—'}</span>
-              </div>
-            `)}
-          </div>`}
-      </div>
+      `}
     </div>
   `;
 }
@@ -2817,6 +2023,7 @@ function App() {
       }
     })();
   }, []);
+
   // Hash routing
   useEffect(() => {
     const onHash = () => setSection(currentSection());
@@ -2898,16 +2105,13 @@ function App() {
             active.id === 'payouts'     ? html`<${Payouts} />` :
             active.id === 'contractors' ? html`<${Contractors} />` :
             active.id === 'console'     ? html`<${Console} />` :
-            active.id === 'audit'       ? html`<${Audit} />` :
-            active.id === 'neural-core'    ? html`<${AgiLoop} />` :
-            active.id === 'partners'    ? html`<${Partners} />` :
-            active.id === 'operators'   ? html`<${Operators} />` :
-            active.id === 'leads'      ? html`<${Leads} />` :
-            active.id === 'activity-log' ? html`<${ActivityLog} />` :
+            active.id === 'audit'       ? html`<${Audit} />` :            active.id === 'neural-core'   ? html`<${AgiLoop} />` :
             active.id === 'holo-map'      ? html`<${HoloMap} />` :
+            active.id === 'partners'      ? html`<${Partners} />` :
+            active.id === 'operators'     ? html`<${Operators} />` :
+            active.id === 'governor'      ? html`<${Governor} />` :
+            active.id === 'sniper-fleet'  ? html`<${SniperFleet} />` :
             active.id === 'health-monitor' ? html`<${HealthMonitor} />` :
-            active.id === 'sniper-fleet' ? html`<${SniperFleet} />` :
-            active.id === 'governor'    ? html`<${Governor} />` :
             html`<${Stub} section=${active} />`
           }
         </section>
