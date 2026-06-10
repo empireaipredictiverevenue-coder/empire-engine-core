@@ -1056,26 +1056,35 @@ async def webhook_lead(request: fastapi.Request, x_empire_secret: str = fastapi.
     import os
     from fastapi.responses import JSONResponse
     from supabase import create_client
-    
+    import compliance
+
     expected_secret = os.environ.get("WEBHOOK_SECRET", "empire_v49_secret")
     if x_empire_secret != expected_secret:
         return JSONResponse({"error": "Unauthorized"}, status_code=401)
-        
+
     try:
         data = await request.json()
     except Exception:
         return JSONResponse({"error": "Invalid JSON payload"}, status_code=400)
-        
+
     name = data.get("name")
     if not name:
         return JSONResponse({"error": "Missing required field: name"}, status_code=400)
-        
+
+    compliance_result = compliance.check("inbound_lead", data)
+    if not compliance_result.get("allowed", True):
+        return JSONResponse({
+            "status": "blocked",
+            "reason": compliance_result.get("reason", ""),
+            "rule": compliance_result.get("rule", "")
+        }, status_code=200)
+
     try:
         supabase_url = os.environ.get("SUPABASE_URL")
         supabase_key = os.environ.get("SUPABASE_SERVICE_KEY")
         if not supabase_url or not supabase_key:
             return JSONResponse({"error": "Supabase config missing"}, status_code=500)
-            
+
         client = create_client(supabase_url, supabase_key)
         payload = {
             "name": name,
@@ -1085,11 +1094,11 @@ async def webhook_lead(request: fastapi.Request, x_empire_secret: str = fastapi.
             "source": data.get("source", "web"),
             "raw_jsonb": data
         }
-        client.table("inbound_leads").insert(payload).execute()
-        return JSONResponse({"status": "success"})
+        result = client.table("inbound_leads").insert(payload).execute()
+        new_id = result.data[0]["id"] if result.data else None
+        return JSONResponse({"status": "success", "id": new_id})
     except Exception as e:
         return JSONResponse({"error": f'Database write error: {str(e)}'}, status_code=500)
-
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
