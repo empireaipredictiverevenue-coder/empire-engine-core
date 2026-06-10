@@ -532,6 +532,84 @@ def ncco_dynamic_inbound(
     return ncco
 
 
+def ncco_dynamic_outbound(
+    target_address: str = "",
+    asset_value: float = 0,
+    brain_decision: Optional[dict] = None,
+    operator_number: str = "",
+) -> list:
+    """
+    Dynamic NCCO for outbound strikes based on the brain's GO/NO-GO decision.
+    GO + high confidence → confident storm pitch with asset value details
+    GO + low confidence → softer weather mention
+    NO_GO or no brain → fallback to standard outbound NCCO
+    """
+    if not (brain_decision and brain_decision.get("decision") == "GO"):
+        # No brain or NO_GO — fallback to the standard static NCCO
+        return ncco_outbound_strike(
+            target_address=target_address,
+            asset_value=asset_value,
+            operator_number=operator_number,
+        )
+
+    confidence = float(brain_decision.get("confidence", 0))
+    reasoning = brain_decision.get("reasoning", "")
+    op = operator_number or os.environ.get("EMPIRE_OPERATOR_NUMBER", "")
+
+    # Build the ncco with warm-forward (same structure as ncco_outbound_strike)
+    ncco: list = []
+
+    if op:
+        ncco.append({
+            "action":   "connect",
+            "endpoint": [{"type": "phone", "number": op.lstrip("+")}],
+            "timeout":  30,
+            "limit":    1800,
+        })
+
+    fee = round(asset_value * 0.01, 0)
+
+    if confidence >= 0.7:
+        # High-confidence GO — confident storm pitch with asset details
+        pitch = (
+            "This is Empire AI Predictive Cloud. "
+            "Our system detected severe weather activity at your facility. "
+        )
+        if target_address:
+            pitch += f"We are monitoring conditions near {target_address}. "
+        if asset_value > 0:
+            pitch += (
+                f"Based on estimated asset value of ${asset_value:,.0f}, "
+                f"our success-only fee on a settled claim would be ${fee:,.0f}. "
+                "No charge if no claim is filed or no settlement reached. "
+            )
+        short_reason = reasoning[:100].rstrip(".") if reasoning else ""
+        if len(short_reason) > 10:
+            pitch += f"Our assessment indicates {short_reason}. "
+        pitch += "Please hold while we connect you to a specialist."
+    else:
+        # Lower-confidence GO — softer pitch
+        pitch = (
+            "This is Empire AI. This is a paid commercial dispatch service. "
+        )
+        if target_address:
+            pitch += f"Our system has noted weather activity near {target_address}. "
+        if asset_value > 0:
+            pitch += (
+                f"Based on an estimated asset value of ${asset_value:,.0f}, "
+                f"our fee on settlement would be ${fee:,.0f}. "
+            )
+        pitch += "Please hold while we connect you to a specialist."
+
+    ncco.append({
+        "action":    "talk",
+        "text":      pitch,
+        "voiceName": "Amy",
+    })
+
+    return ncco
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # VOICE ROUTER — the smart traffic cop. Hybrid Vonage + future SIP.
 # ─────────────────────────────────────────────────────────────────────────────
@@ -587,16 +665,29 @@ class VoiceRouter:
         asset_value:    float = 0,
         operator_number: str = "",
         broadcaster=None,  # optional empire_live.LiveBroadcaster instance
+        brain_decision: Optional[dict] = None,  # from BrainDecider.decide()
     ) -> dict:
         """
         Place an outbound strike call. Used by the Manus operator pipeline
         and the brain when an immediate dial is requested.
+
+        When brain_decision is provided, uses ncco_dynamic_outbound() to
+        customize the pitch based on GO/NO-GO decision + confidence.
+        Falls back to static ncco_outbound_strike() when no brain.
         """
-        ncco = ncco_outbound_strike(
-            target_address=target_address,
-            asset_value=asset_value,
-            operator_number=operator_number,
-        )
+        if brain_decision:
+            ncco = ncco_dynamic_outbound(
+                target_address=target_address,
+                asset_value=asset_value,
+                brain_decision=brain_decision,
+                operator_number=operator_number,
+            )
+        else:
+            ncco = ncco_outbound_strike(
+                target_address=target_address,
+                asset_value=asset_value,
+                operator_number=operator_number,
+            )
         event_url = ""
         if self.public_base_url:
             event_url = f"{self.public_base_url}/api/v1/voice/events"
@@ -1052,12 +1143,16 @@ def register_voice_routes(
 
         return PlainTextResponse("ok", status_code=200)
 
-    # ── OPERATOR: PLACE OUTBOUND STRIKE ─────────────────────────────────
+    # ── OPERATOR: PLACE OUTBOUND STRIKE (with brain-decided NCCO) ──
     if require_auth:
         @app.post("/api/v1/voice/strike")
         async def voice_strike(request: Request, auth: bool = Depends(require_auth)):
             """
             Operator endpoint to trigger an outbound strike call.
+            Enriches target from radar_targets + storm_forecasts, consults
+            the brain for a GO/NO-GO decision + few-shot memory, then
+            generates a dynamic NCCO based on the decision.
+
             Body: {to: "+12145551234", target_address: "...", asset_value: 2500000}
             """
             try:
@@ -1067,17 +1162,124 @@ def register_voice_routes(
             to_number      = body.get("to", "")
             target_address = body.get("target_address", "")
             asset_value    = float(body.get("asset_value", 0) or 0)
+            severity       = body.get("severity", "")
 
             if not to_number:
                 raise HTTPException(400, "to (phone number) required")
 
             operator = os.environ.get("EMPIRE_OPERATOR_NUMBER", "")
+            brain_decision = None
+
+            # ── Enrich + consult the brain for outbound strikes ──
+            if brain_decider is not None and get_db:
+                try:
+                    db = get_db()
+                    clean = to_number.lstrip("+1").lstrip("+").strip()
+                    res = db.table("radar_targets") \
+                        .select("id, warehouse_name, address, city, state, damage_severity, asset_value") \
+                        .or_(f"phone.ilike.%{clean[-10:]},phone2.ilike.%{clean[-10:]}") \
+                        .limit(1).execute()
+                    lead_id = None
+                    city = ""
+                    state = ""
+                    target_addr = target_address
+
+                    if res.data:
+                        row = res.data[0]
+                        target_addr = row.get("address", "") or target_address
+                        city = row.get("city", "") or ""
+                        state = row.get("state", "") or ""
+                        severity = row.get("damage_severity", "") or severity
+                        asset_value = float(row.get("asset_value") or 0) or asset_value
+                        lead_id = row.get("id")
+
+                    target = {
+                        "warehouse_name": (res.data[0].get("warehouse_name") if res.data else None) or "Prospect",
+                        "address": target_addr or "unknown",
+                        "city": city or "unknown",
+                        "phone": to_number,
+                        "email": "",
+                        "website": "",
+                        "raw_tags": {"types": ["commercial"]},
+                    }
+                    alert_summary = {
+                        "event": "Outbound Strike",
+                        "severity": severity or "Moderate",
+                        "urgency": "",
+                        "area": f"{city}, {state}" if city else "",
+                    }
+
+                    if city:
+                        try:
+                            storm_res = db.table("storm_forecasts") \
+                                .select("event, severity, urgency, area") \
+                                .ilike("area", f"%{city}%") \
+                                .order("created_at", desc=True).limit(1).execute()
+                            if storm_res.data:
+                                s = storm_res.data[0]
+                                alert_summary["event"] = s.get("event") or alert_summary["event"]
+                                alert_summary["severity"] = s.get("severity") or alert_summary["severity"]
+                        except Exception:
+                            pass
+
+                    # Few-shot memory retrieval
+                    memory_context = ""
+                    if brain_memory is not None:
+                        try:
+                            similar = await brain_memory.retrieve_similar(
+                                address=target_addr or "unknown",
+                                city=city or "unknown",
+                                severity=severity or "Moderate",
+                                asset_value=asset_value,
+                                urgency_signal=alert_summary.get("event", ""),
+                                k=5,
+                                only_with_outcomes=True,
+                            )
+                            if similar:
+                                memory_context = _render_few_shot(similar)
+                                log.info(f"[voice/strike] memory: {len(similar)} similar leads retrieved")
+                        except Exception as e:
+                            log.debug(f"[voice/strike] memory retrieval: {e}")
+
+                    brain_decision = await brain_decider.decide(
+                        target, alert_summary,
+                        memory_context=memory_context,
+                    )
+                    log.info(
+                        f"[voice/strike] brain: {brain_decision.get('decision')} · "
+                        f"confidence={brain_decision.get('confidence', 0)}"
+                    )
+
+                    # Record decision in memory
+                    if brain_memory is not None and lead_id:
+                        try:
+                            urg = round(float(brain_decision.get("confidence", 0)) * 10)
+                            await brain_memory.record_decision(
+                                lead_id=lead_id,
+                                decision=brain_decision.get("decision", "NO_GO"),
+                                urgency=min(urg, 10),
+                                reasoning=brain_decision.get("reasoning", "")[:500],
+                                address=target_addr or "unknown",
+                                city=city or "unknown",
+                                severity=severity or "Moderate",
+                                asset_value=asset_value,
+                            )
+                        except Exception as e:
+                            log.debug(f"[voice/strike] record: {e}")
+                except Exception as e:
+                    log.debug(f"[voice/strike] enrichment: {e}")
+
+            # Use enriched data when DB had a match
+            call_target_addr = target_addr if (res.data and target_addr) else target_address
+            call_asset_val = asset_value if (res.data and float(row.get("asset_value") or 0) > 0) else float(body.get("asset_value", 0) or 0)
+
             result = await router.place_strike_call(
                 to_number=to_number,
-                target_address=target_address,
-                asset_value=asset_value,
+                target_address=call_target_addr,
+                asset_value=call_asset_val,
                 operator_number=operator,
                 broadcaster=broadcaster,
+                brain_decision=brain_decision,
             )
             return result
 
