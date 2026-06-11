@@ -79,6 +79,20 @@ SCHEMA
     CREATE INDEX IF NOT EXISTS audit_log_operator_idx
       ON audit_log (operator_id, created_at DESC);
 
+    CREATE TABLE IF NOT EXISTS activity_logs (
+      id           uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+      created_at   timestamptz NOT NULL DEFAULT now(),
+      lead_id      uuid NOT NULL REFERENCES inbound_leads(id) ON DELETE CASCADE,
+      lead_name    text NOT NULL DEFAULT '',
+      action       text NOT NULL CHECK (action IN ('status_changed','note_added','note_deleted')),
+      operator     text NOT NULL DEFAULT 'operator',
+      details      jsonb DEFAULT '{}'::jsonb
+    );
+    CREATE INDEX IF NOT EXISTS activity_logs_created_idx
+      ON activity_logs (created_at DESC);
+    CREATE INDEX IF NOT EXISTS activity_logs_lead_idx
+      ON activity_logs (lead_id, created_at DESC);
+
     -- Bootstrap the owner account (run once with your real email)
     INSERT INTO operators (email, name, role)
     VALUES ('YOUR_EMAIL@empire-ai.co.uk', 'Empire Owner', 'owner')

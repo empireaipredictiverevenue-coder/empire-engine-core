@@ -233,6 +233,23 @@ ACTIONS = {
         "destructive": True,
         "min_role": "owner",
     },
+    "run_synthetic_pipeline": {
+        "description": "Run the autonomous Synthetic Intelligence media pipeline — LLM strategy → Kokoro TTS voiceover → FFmpeg video render → QC self-correction.",
+        "params": {
+            "objective": {"type": "string", "required": True, "description": "e.g. 'Build a high-impact roofing ad for Atlanta. Use +18885551234.'"},
+        },
+        "destructive": True,
+        "min_role": "operator",
+    },
+    "update_lead_status": {
+        "description": "Update an inbound lead's status (new, contacted, qualified, closed, rejected).",
+        "params": {
+            "lead_id": {"type": "string", "required": True, "description": "Lead UUID or ID"},
+            "status":  {"type": "string", "required": True, "description": "new status (new, contacted, qualified, closed, rejected)"},
+        },
+        "destructive": True,
+        "min_role": "operator",
+    },
 }
 
 
@@ -594,6 +611,23 @@ class SovereignConsole:
                         "name":  params.get("name"),
                         "role":  params.get("role", "operator"),
                     }}
+
+        if action_name == "run_synthetic_pipeline":
+            objective = params.get("objective", "").strip()
+            if not objective:
+                return {"type": "error", "error": "objective required (e.g. 'Build a roofing ad for Atlanta')"}
+            return {"type": "action", "delegated_to": "/api/v1/synthetic/run",
+                    "body": {"objective": objective}}
+
+        if action_name == "update_lead_status":
+            lead_id = params.get("lead_id", "").strip()
+            status = params.get("status", "").strip().lower()
+            if not lead_id or not status:
+                return {"type": "error", "error": "lead_id and status required (e.g. 'mark lead abc123 as contacted')"}
+            if status not in ("new", "contacted", "qualified", "closed", "rejected"):
+                return {"type": "error", "error": f"invalid status '{status}' — must be new, contacted, qualified, closed, or rejected"}
+            return {"type": "action", "delegated_to": "/api/v1/inbound/leads/update",
+                    "body": {"lead_id": lead_id, "status": status}}
 
         return {"type": "error", "error": f"action handler not implemented: {action_name}"}
 
@@ -1107,6 +1141,47 @@ CONSOLE_CLIENT_JS = r"""
         <div class="sov-result-title">${res.message || 'OK'}</div>
         <div style="color:#44E5B8;font-family:'JetBrains Mono';font-size:11px;
           letter-spacing:0.12em;padding:12px;">✓ Complete</div>`;
+    } else if (res.status && res.meta && res.strategy) {
+      // Synthetic pipeline result — side-by-side: LLM strategy vs rendered output
+      const strat = res.strategy || {};
+      const meta = res.meta || {};
+      const passed = res.status === 'COMPLETED';
+      const statusColor = passed ? '#44E5B8' : res.status === 'FAILED' ? '#f43f5e' : '#f59e0b';
+      result.innerHTML = `
+        <div class="sov-result-title">Synthetic Pipeline · ${res.status}</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:10px;">
+          <div style="background:rgba(68,229,184,0.04);border:1px solid rgba(68,229,184,0.15);padding:14px;">
+            <div style="font-family:'JetBrains Mono';font-size:9px;color:#7A8CA3;letter-spacing:0.18em;text-transform:uppercase;margin-bottom:12px;">🧠 LLM Strategy</div>
+            <div style="font-family:'JetBrains Mono';font-size:10px;line-height:1.7;">
+              ${['script_copy','chosen_template','target_phone','voice_profile','text_overlay_color','canvas_format'].map(k => {
+                const v = strat[k];
+                if (v == null) return '';
+                return `<div style="margin-bottom:8px;">
+                  <span style="color:#4A5A72;font-size:9px;letter-spacing:0.1em;text-transform:uppercase;">${k.replace(/_/g,' ')}</span><br>
+                  <span style="color:#C8D4E4;word-break:break-word;">${escape(String(v))}</span>
+                </div>`;
+              }).join('')}
+            </div>
+          </div>
+          <div style="background:rgba(90,200,250,0.04);border:1px solid rgba(90,200,250,0.15);padding:14px;">
+            <div style="font-family:'JetBrains Mono';font-size:9px;color:#7A8CA3;letter-spacing:0.18em;text-transform:uppercase;margin-bottom:12px;">📦 Rendered Output</div>
+            <div style="font-family:'JetBrains Mono';font-size:10px;line-height:1.7;">
+              ${['script_executed','voice_profile','system_template_used','production_location'].map(k => {
+                const v = meta[k];
+                if (v == null) return '';
+                const display = k === 'production_location' ? v.split('/').slice(-2).join('/') : v;
+                return `<div style="margin-bottom:8px;">
+                  <span style="color:#4A5A72;font-size:9px;letter-spacing:0.1em;text-transform:uppercase;">${k.replace(/_/g,' ')}</span><br>
+                  <span style="color:#C8D4E4;word-break:break-word;">${String(display).slice(0,80)}</span>
+                </div>`;
+              }).join('')}
+              ${res.error ? `<div style="margin-top:8px;padding:8px;background:rgba(244,63,94,0.08);border:1px solid rgba(244,63,94,0.3);color:#f43f5e;font-size:10px;">⚠ ${escape(res.error)}</div>` : ''}
+            </div>
+          </div>
+        </div>
+        <div style="margin-top:14px;background:rgba(0,0,0,0.3);padding:12px;font-family:'JetBrains Mono';font-size:10px;color:#7A8CA3;border-left:2px solid ${statusColor};">
+          <span style="color:#C8D4E4;">🔍 QC Verdict:</span> ${escape(res.agent_diagnostics || '—')}
+        </div>`;
     } else {
       result.innerHTML = `<div class="sov-result-title">Result</div>
         <pre style="color:#C8D4E4;font-family:'JetBrains Mono';font-size:11px;
