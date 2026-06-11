@@ -2,12 +2,13 @@ __pycache__/
 hourly_digest.txt
 hourly_digest.txt.tmp
 
-# JS dependencies
+# JS dependencies (SPA uses esm.sh imports — no build step)
 node_modules/
+package-lock.json
 
-# Local TTS model + voice files (regenerated at runtime)
-kokoro-*
-voices-*
+# Binary model + voice files (regenerated at runtime)
+*.onnx
+*.bin
 
 # Generated outreach drafts
 outreach_drafts/
