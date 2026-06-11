@@ -16,3 +16,21 @@ outreach_drafts/
 # Security: never commit signing keys
 private.key
 *.pem
+
+# Terraform — never commit state, plan files, or the user's tfvars
+# (which holds hcloud_token + hetzner_dns_token in plain text)
+infra/terraform/.terraform/
+infra/terraform/.terraform.lock.hcl
+infra/terraform/terraform.tfvars
+infra/terraform/terraform.tfstate
+infra/terraform/terraform.tfstate.backup
+infra/terraform/*.tfplan
+*.tfplan
+
+# Runtime data (regenerated each session — never commit)
+leads/*.json
+logs/*.log
+
+# Backup files (created by editors, sed -i.bak, etc.)
+*.bak
+*.bak.*
