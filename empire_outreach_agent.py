@@ -5,6 +5,12 @@ from empire_compliance import is_lead_compliant
 LEAD_DIR = "/root/empire-v49/leads"
 QUALIFIED_QUEUE = "/root/empire-v49/leads/hot_queue.json"
 
+# Lead-scoring tunables. Mutated at runtime by the SI Adaptive engine
+# (outreach.hot_threshold / outreach.score_per_click / outreach.score_per_reply).
+HOT_THRESHOLD  = 5   # minimum score to push lead to dialer queue
+SCORE_PER_CLICK = 5  # points awarded for clicking the lead magnet
+SCORE_PER_REPLY = 10  # points awarded for replying to an SMS
+
 def process_lead(lead_data):
     # First: Run the Legal Guardrail
     if not is_lead_compliant(lead_data):
@@ -13,11 +19,11 @@ def process_lead(lead_data):
 
     # Second: Score the lead
     score = 0
-    if lead_data.get("clicked_magnet"): score += 5
-    if lead_data.get("replied_to_sms"): score += 10
+    if lead_data.get("clicked_magnet"): score += SCORE_PER_CLICK
+    if lead_data.get("replied_to_sms"): score += SCORE_PER_REPLY
     
     # Third: Qualification Threshold
-    if score >= 5:
+    if score >= HOT_THRESHOLD:
         add_to_dialer_queue(lead_data)
         return "HOT"
     return "NURTURE"

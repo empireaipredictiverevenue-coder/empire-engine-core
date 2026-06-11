@@ -17,7 +17,7 @@ from typing import Optional
 
 import httpx as _httpx
 from fastapi import FastAPI, Request, Depends, HTTPException
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.middleware.cors import CORSMiddleware
 
 from supabase import create_client, Client
@@ -51,6 +51,9 @@ from empire_auth import AuthEngine, register_auth_routes, require_role
 from empire_inbound import InboundCallTriage, register_inbound_routes
 from empire_brain_memory import BrainMemory
 from empire_brain_learning import BrainLearning
+from empire_dream import DreamLoop, set_dream_loop, get_latest_wisdom
+from empire_hourly_digest import HourlyDigestLoop
+from bots.seo_agent import run_loop as seo_run_loop
 from empire_console import SovereignConsole, register_console_routes
 from empire_orchestrator import StormOrchestrator, register_storm_routes
 from empire_ai_router import AIRouter
@@ -62,6 +65,9 @@ from empire_narrator import Narrator
 from empire_3d_map import register_map_routes
 from empire_switchboard import register_switchboard_routes
 from empire_partner_onboarding import register_partner_routes
+from empire_si_brain import SyntheticBrain, register_synthetic_routes
+from empire_si_strategy import StrategyEvolution
+from empire_si_adaptive import AdaptiveEngine
 
 
 logging.basicConfig(level=logging.INFO)
@@ -206,6 +212,9 @@ brain_memory = BrainMemory(
 )
 
 brain_learning = BrainLearning(get_db=get_db)
+dream_loop = DreamLoop(broadcaster=live_broadcaster)
+set_dream_loop(dream_loop)
+hourly_digest = HourlyDigestLoop()
 
 console = SovereignConsole(
     anthropic_key=ANTHROPIC_API_KEY,
@@ -312,6 +321,242 @@ register_map_routes(app, scout=storm_orchestrator.scout, get_db=get_db, require_
 register_switchboard_routes(app, require_auth=require_auth)
 register_partner_routes(app, require_auth=require_auth)
 
+# ── Synthetic Intelligence Brain (Operator → LLM → Kokoro TTS → FFmpeg Render) ──
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+synthetic_brain = SyntheticBrain(
+    router=ai_router,
+    base_dir=BASE_DIR,
+)
+register_synthetic_routes(app, brain=synthetic_brain, require_auth=require_auth, auth_engine=auth_engine)
+
+
+# ─────────────────────────────────────────────────────────────────────
+# SI STRATEGY EVOLUTION + ADAPTIVE ENGINE
+# ─────────────────────────────────────────────────────────────────────
+# `si_strategy` is the central authority on strategy genomes. It tracks
+# every active/niche-specific strategy variant, scores them from outcomes,
+# and evolves (mutates / deactivates) the underperformers on a tick.
+#
+# `adaptive_engine` is the bridge between learned SI parameters and the
+# live subsystems (brain, switchboard, matching, corridor, outreach). It
+# applies parameter changes that the SI core or `brain_learning` writes
+# to the si_parameters table.
+# ─────────────────────────────────────────────────────────────────────
+si_strategy = StrategyEvolution(get_db=get_db)
+adaptive_engine = AdaptiveEngine(get_db=get_db)
+
+
+# Lightweight subsystem configurators. Each apply_fn mutates the actual
+# runtime config that its subsystem reads at call time, so the adaptive
+# engine is doing real work — not just logging. apply_fn returns False
+# for unknown keys (the engine logs a warning and skips); True on success.
+
+# We import the subsystem modules directly so we can mutate their
+# module-level config dicts/constants at runtime.
+import empire_switchboard as _sb_mod
+import empire_matching as _mt_mod
+import orchestrator_agent as _orch_mod
+import empire_outreach_agent as _outreach_mod
+
+
+def _apply_brain_param(key: str, value) -> bool:
+    # brain.* keys come from empire_brain_learning (tuned urgency floor etc).
+    # The brain reads from DB at call time, so we just log + accept.
+    log.debug(f"[si.adaptive] brain.{key} = {value} (applied via DB read)")
+    return True
+
+
+def _apply_switchboard_param(key: str, value) -> bool:
+    if key == "cache_ttl_seconds":
+        try:
+            new_ttl = float(value)
+        except (TypeError, ValueError):
+            return False
+        if new_ttl < 0:
+            return False
+        _sb_mod._BUYERS_CACHE_TTL = new_ttl
+        _sb_mod._invalidate_buyers_cache()  # force the next call to re-fetch
+        log.info(f"[si.adaptive] switchboard.cache_ttl_seconds = {new_ttl}")
+        return True
+    if key == "min_offered_for_rate":
+        try:
+            new_min = int(value)
+        except (TypeError, ValueError):
+            return False
+        if new_min < 0:
+            return False
+        _sb_mod._MIN_OFFERED_FOR_RATE = new_min
+        log.info(f"[si.adaptive] switchboard.min_offered_for_rate = {new_min}")
+        return True
+    return False
+
+
+def _read_switchboard_param(key: str):
+    if key == "cache_ttl_seconds":
+        return _sb_mod._BUYERS_CACHE_TTL
+    if key == "min_offered_for_rate":
+        return _sb_mod._MIN_OFFERED_FOR_RATE
+    return None
+
+
+def _apply_matching_param(key: str, value) -> bool:
+    if key.startswith("score_weights."):
+        weight_name = key.split(".", 1)[1]
+        if weight_name not in _mt_mod.SCORE_WEIGHTS:
+            return False
+        try:
+            new_w = float(value)
+        except (TypeError, ValueError):
+            return False
+        if new_w < 0 or new_w > 1:
+            return False
+        _mt_mod.SCORE_WEIGHTS[weight_name] = new_w
+        new_total = sum(_mt_mod.SCORE_WEIGHTS.values())
+        log.info(
+            f"[si.adaptive] matching.score_weights.{weight_name} = {new_w} "
+            f"(weights now sum to {new_total:.3f})"
+        )
+        return True
+    if key == "default_top_n":
+        try:
+            new_top_n = int(value)
+        except (TypeError, ValueError):
+            return False
+        if new_top_n < 1:
+            return False
+        _mt_mod.DEFAULT_TOP_N = new_top_n
+        log.info(f"[si.adaptive] matching.default_top_n = {new_top_n}")
+        return True
+    return False
+
+
+def _read_matching_param(key: str):
+    if key.startswith("score_weights."):
+        weight_name = key.split(".", 1)[1]
+        return _mt_mod.SCORE_WEIGHTS.get(weight_name)
+    if key == "default_top_n":
+        return _mt_mod.DEFAULT_TOP_N
+    return None
+
+
+def _apply_corridor_param(key: str, value) -> bool:
+    if key == "min_interval_seconds":
+        try:
+            new_interval = float(value)
+        except (TypeError, ValueError):
+            return False
+        if new_interval < 0:
+            return False
+        _orch_mod.CORRIDOR_MIN_INTERVAL = new_interval
+        log.info(f"[si.adaptive] corridor.min_interval_seconds = {new_interval}")
+        return True
+    return False
+
+
+def _read_corridor_param(key: str):
+    if key == "min_interval_seconds":
+        return _orch_mod.CORRIDOR_MIN_INTERVAL
+    return None
+
+
+def _apply_outreach_param(key: str, value) -> bool:
+    tunables = {
+        "hot_threshold":   (_outreach_mod, "HOT_THRESHOLD",   lambda v: max(0.0, float(v))),
+        "score_per_click": (_outreach_mod, "SCORE_PER_CLICK", lambda v: max(0.0, float(v))),
+        "score_per_reply": (_outreach_mod, "SCORE_PER_REPLY", lambda v: max(0.0, float(v))),
+    }
+    if key not in tunables:
+        return False
+    mod, attr, coerce = tunables[key]
+    try:
+        new_val = coerce(value)
+    except (TypeError, ValueError):
+        return False
+    setattr(mod, attr, new_val)
+    log.info(f"[si.adaptive] outreach.{key} = {new_val}")
+    return True
+
+
+def _read_outreach_param(key: str):
+    return {
+        "hot_threshold":   _outreach_mod.HOT_THRESHOLD,
+        "score_per_click": _outreach_mod.SCORE_PER_CLICK,
+        "score_per_reply": _outreach_mod.SCORE_PER_REPLY,
+    }.get(key)
+
+
+# Brain: no read_fn (BrainLearning reads from DB at call time, so there's
+# no in-memory cache to diff against). adopt_parameters() will re-apply
+# each tick, but brain.* writes are idempotent (they overwrite DB rows).
+# The other four subsystems DO have in-memory config, so we register a
+# read_fn for each — the SI core can then diff current vs target and
+# avoid unnecessary re-applies.
+adaptive_engine.register_subsystem("brain",       apply_fn=_apply_brain_param)
+adaptive_engine.register_subsystem("switchboard", apply_fn=_apply_switchboard_param, read_fn=_read_switchboard_param)
+adaptive_engine.register_subsystem("matching",    apply_fn=_apply_matching_param,    read_fn=_read_matching_param)
+adaptive_engine.register_subsystem("corridor",    apply_fn=_apply_corridor_param,    read_fn=_read_corridor_param)
+adaptive_engine.register_subsystem("outreach",    apply_fn=_apply_outreach_param,    read_fn=_read_outreach_param)
+
+
+# Share the live `si_strategy` instance with the predictive_revenue bot
+# (it also uses StrategyEvolution) and the AGI governor, so we don't
+# run two parallel worlds. The bot's `_SI_INSTANCE` is its module-level
+# singleton; the governor exposes a class-level `si_strategy` setter.
+import bots.predictive_revenue as _pred_rev
+_pred_rev._SI_INSTANCE = si_strategy
+try:
+    from empire_agi_governor import AGIGovernor
+    AGIGovernor.si_strategy = si_strategy
+except Exception:
+    pass
+
+
+async def _si_evolution_loop():
+    """Background tick: evolve strategies every 5 minutes, adopt SI params every 60s."""
+    evolve_every = 300   # seconds
+    adopt_every = 60
+    last_evolve = 0.0
+    last_adopt = 0.0
+    import time as _t
+    while True:
+        try:
+            now = _t.time()
+            if now - last_evolve >= evolve_every:
+                events = si_strategy.evolve()
+                last_evolve = now
+                if events:
+                    log.info(f"[si.strategy] evolution tick: {len(events)} events")
+
+            if now - last_adopt >= adopt_every:
+                last_adopt = now
+                # Pull any SI parameters the SI core / brain_learning wrote.
+                try:
+                    db = get_db()
+                    # Cap at the query level so wire cost stays bounded as the
+                    # si_parameters table grows.
+                    r = db.table("si_parameters").select("*") \
+                        .order("updated_at", desc=True) \
+                        .limit(200).execute()
+                    params = {}
+                    for row in (r.data or []):
+                        params[row.get("key")] = {
+                            "current":    row.get("current_value"),
+                            "default":    row.get("default_value"),
+                            "min":        row.get("min"),
+                            "max":        row.get("max"),
+                            "samples":    row.get("samples", 0),
+                            "confidence": row.get("confidence", 0),
+                        }
+                    if params:
+                        changes = adaptive_engine.adopt_parameters(params)
+                        if changes:
+                            log.info(f"[si.adaptive] adopted {len(changes)} parameter changes")
+                except Exception as _e:
+                    log.debug(f"[si.adaptive] adoption tick skipped: {_e}")
+        except Exception as e:
+            log.warning(f"[si.evolution] tick error: {e}")
+        await asyncio.sleep(30)
+
 
 # ─────────────────────────────────────────────────────────────────────
 # STARTUP / SHUTDOWN
@@ -323,6 +568,10 @@ async def startup():
     asyncio.create_task(sms_engine.dispatcher_loop())
     asyncio.create_task(email_engine.dispatcher_loop())
     asyncio.create_task(storm_orchestrator.poll_loop())
+    asyncio.create_task(dream_loop.run())
+    asyncio.create_task(hourly_digest.run())
+    asyncio.create_task(seo_run_loop())
+    asyncio.create_task(_si_evolution_loop())
     log.info("Empire V49 · Operational")
 
 
@@ -341,7 +590,8 @@ import json as _json
 @app.get("/api/v1/drafts/pending")
 async def drafts_pending(limit: int = 50, auth: bool = Depends(require_auth)):
     db = get_db()
-    r = db.table("email_drafts").select("*").eq("status", "pending").order("created_at", desc=True).limit(limit).execute()
+    r = db.table("email_drafts").select("*").eq("status", "pending").order("created_at", desc=True).range(offset, offset + limit - 1).execute()
+    has_more = len(r.data or []) == limit
     return {"drafts": r.data or []}
 
 @app.post("/api/v1/drafts/{draft_id}/approve")
@@ -897,11 +1147,581 @@ async def agents_status():
 
 @app.get("/api/revenue/forecast")
 async def revenue_forecast():
+    """Adaptive revenue forecast: pipeline + per-lane + few-shot LLM narrative + health."""
     try:
         from bots import predictive_revenue
-        return JSONResponse(predictive_revenue.pipeline_forecast())
+        return JSONResponse(predictive_revenue.adaptive_forecast())
     except Exception as e:
         return JSONResponse({"error": str(e), "lead_count": 0, "pipeline_value": 0, "forecasted_revenue": 0})
+
+
+@app.get("/api/revenue/lanes")
+async def revenue_lanes():
+    """Per-lane revenue breakdown for bar charts and lane comparisons."""
+    try:
+        from bots import predictive_revenue
+        return JSONResponse(predictive_revenue.per_lane_forecast())
+    except Exception as e:
+        return JSONResponse({"error": str(e), "lanes": [], "totals": {}})
+
+
+@app.get("/api/revenue/health")
+async def revenue_health():
+    """Revenue health alerts: trend analysis and anomaly detection."""
+    try:
+        from bots import predictive_revenue
+        return JSONResponse(predictive_revenue.revenue_health_check())
+    except Exception as e:
+        return JSONResponse({"error": str(e), "status": "unknown", "alerts": []})
+
+
+@app.get("/api/revenue/accuracy")
+async def revenue_accuracy(days: int = 14):
+    """Forecast vs actual over time using pipeline_health + revenue snapshots."""
+    try:
+        from bots import predictive_revenue
+        return JSONResponse(predictive_revenue.get_accuracy_timeseries(days=min(days, 30)))
+    except Exception as e:
+        return JSONResponse({"error": str(e), "series": [], "summary": {}})
+
+
+@app.get("/api/si/snapshot")
+async def si_strategy_snapshot(auth: bool = Depends(require_auth)):
+    """SI Strategy Evolution snapshot — active strategies, genomes, win rates per niche."""
+    try:
+        return JSONResponse(si_strategy.snapshot())
+    except Exception as e:
+        return JSONResponse({"error": str(e), "by_niche": {}, "best_per_niche": {}})
+
+
+@app.get("/api/si/strategy")
+async def si_strategy_view(auth: bool = Depends(require_auth)):
+    """Detailed SI Strategy Evolution view (same payload as /api/si/snapshot,
+    named for clarity on the SPA side)."""
+    try:
+        return JSONResponse(si_strategy.snapshot())
+    except Exception as e:
+        return JSONResponse({"error": str(e)[:80]})
+
+
+@app.get("/api/si/adaptive")
+async def si_adaptive_view(auth: bool = Depends(require_auth)):
+    """Adaptive Engine status — subsystems registered, adaptations applied."""
+    try:
+        return JSONResponse(adaptive_engine.snapshot())
+    except Exception as e:
+        return JSONResponse({"error": str(e)[:80]})
+
+
+@app.post("/api/si/evolve")
+async def si_evolve_force(niche: str = "", auth: bool = Depends(require_auth)):
+    """Force a strategy evolution tick. Optional ?niche= to evolve one niche only."""
+    try:
+        events = si_strategy.evolve(niche=niche or None)
+        return JSONResponse({
+            "ok": True,
+            "events": events,
+            "count": len(events),
+            "niche": niche or "all",
+        })
+    except Exception as e:
+        return JSONResponse({"error": str(e)[:80]}, status_code=500)
+
+
+@app.post("/api/si/record-outcome")
+async def si_record_outcome(request: Request, auth: bool = Depends(require_auth)):
+    """Feed an outcome back to the SI Strategy Evolution engine.
+    Body: {"strategy": "AGGRESSIVE_STRIKE", "niche": "Roofing Restoration", "success": true, "revenue": 1500.0}
+    """
+    try:
+        body = await request.json() if request.headers.get("content-type", "").startswith("application/json") else {}
+        strategy = body.get("strategy", "")
+        niche = body.get("niche", "")
+        success = bool(body.get("success", False))
+        revenue = float(body.get("revenue", 0) or 0)
+        if not strategy or not niche:
+            return JSONResponse({"error": "strategy and niche required"}, status_code=400)
+        si_strategy.record_outcome(strategy, niche, success, revenue)
+        return JSONResponse({"ok": True, "strategy": strategy, "niche": niche, "success": success, "revenue": revenue})
+    except Exception as e:
+        return JSONResponse({"error": str(e)[:80]}, status_code=500)
+
+
+@app.get("/api/seo/performance")
+async def seo_performance():
+    """SEO agent performance snapshot — audits, keywords, content, genome."""
+    try:
+        from bots.seo_agent import get_seo_agent, run_loop
+        agent = get_seo_agent()
+        return JSONResponse(await agent.performance_snapshot())
+    except Exception as e:
+        return JSONResponse({"error": str(e), "stats": {}, "keywords": [], "content": []})
+
+
+@app.get("/api/seo/genome-history")
+async def seo_genome_history(limit: int = 20):
+    """Return parsed genome evolution timeline from seo_genome_history."""
+    import json as _j
+    db = get_db()
+    try:
+        r = db.table("seo_genome_history") \
+            .select("generation,genome,top_keywords,avg_conversion_rate,created_at") \
+            .order("generation", desc=True) \
+            .limit(min(limit, 100)) \
+            .execute()
+        rows = r.data or []
+        parsed = []
+        for g in rows:
+            gm = g.get("genome") or {}
+            if isinstance(gm, str):
+                try: gm = _j.loads(gm)
+                except Exception: gm = {}
+            kws = g.get("top_keywords") or []
+            if isinstance(kws, str):
+                try: kws = _j.loads(kws)
+                except Exception: kws = []
+            parsed.append({
+                "generation": g.get("generation"),
+                "traits": gm if isinstance(gm, dict) else {},
+                "top_keywords": kws if isinstance(kws, list) else [],
+                "avg_conversion_rate": g.get("avg_conversion_rate"),
+                "created_at": g.get("created_at"),
+            })
+        # Compute trait drift across the timeline
+        drift = None
+        if len(rows) >= 2:
+            newest_gm = parsed[0].get("traits") or {}
+            oldest_gm = parsed[-1].get("traits") or {}
+            if newest_gm and oldest_gm:
+                drift = {}
+                for trait in ["keyword_competitiveness", "local_intent", "content_depth", "technical_rigor", "link_authority"]:
+                    nv = float(newest_gm.get(trait, 0))
+                    ov = float(oldest_gm.get(trait, 0))
+                    if ov and ov != 0:
+                        drift[trait] = round((nv - ov) / ov, 3)
+        return JSONResponse({
+            "generations": parsed,
+            "count": len(parsed),
+            "latest_generation": parsed[0].get("generation") if parsed else None,
+            "trait_drift": drift,
+        })
+    except Exception as e:
+        return JSONResponse({"generations": [], "count": 0, "error": str(e)[:80]})
+
+
+@app.get("/api/seo/config")
+async def seo_config_get():
+    """Return current SEO agent config (interval, bounds)."""
+    try:
+        from bots.seo_agent import get_seo_interval
+        interval = get_seo_interval()
+        return JSONResponse({"interval_hours": interval, "min": 0.1, "max": 24.0})
+    except Exception as e:
+        return JSONResponse({"interval_hours": 6.0, "min": 0.1, "max": 24.0, "error": str(e)[:80]})
+
+
+@app.post("/api/seo/config")
+async def seo_config_post(req: Request):
+    """Update SEO agent loop interval at runtime (0.1–24.0 hours)."""
+    try:
+        from bots.seo_agent import set_seo_interval, get_seo_interval
+        body = await req.json() if req.headers.get("content-type", "").startswith("application/json") else {}
+        hours = body.get("interval_hours") if isinstance(body, dict) else None
+        if hours is None:
+            return JSONResponse({"error": "Missing interval_hours"}, status_code=400)
+        if not isinstance(hours, (int, float)):
+            return JSONResponse({"error": "interval_hours must be a number"}, status_code=400)
+        set_seo_interval(float(hours))
+        return JSONResponse({"interval_hours": get_seo_interval(), "min": 0.1, "max": 24.0})
+    except Exception as e:
+        return JSONResponse({"error": str(e)[:80]}, status_code=500)
+
+
+@app.post("/api/si/parameters")
+async def si_parameters_persist(req: Request):
+    """Write SI parameter state to Supabase. Body: {"parameters": {key: {current, default, min, max, samples, confidence}}}"""
+    try:
+        db = get_db()
+        body = await req.json() if req.headers.get("content-type", "").startswith("application/json") else {}
+        params = body.get("parameters") if isinstance(body, dict) else None
+        if not params or not isinstance(params, dict):
+            return JSONResponse({"error": "Missing or invalid 'parameters' dict"}, status_code=400)
+        now = datetime.now(timezone.utc).isoformat()
+        upserted = 0
+        for key, param in params.items():
+            if not isinstance(param, dict):
+                continue
+            db.table("si_parameters").upsert({
+                "key": key,
+                "current_value": param.get("current"),
+                "default_value": param.get("default"),
+                "min": param.get("min"),
+                "max": param.get("max"),
+                "samples": param.get("samples", 0),
+                "confidence": param.get("confidence", 0),
+                "updated_at": now,
+                "updated_by": "si",
+            }, on_conflict="key").execute()
+            upserted += 1
+        return JSONResponse({"upserted": upserted})
+    except Exception as e:
+        return JSONResponse({"error": str(e)[:80]}, status_code=500)
+
+
+@app.post("/api/admin/seed")
+async def admin_seed(req: Request):
+    """Bootstrap the 6 new tables with sample data. If ADMIN_TOKEN env var is set, the
+    request must include matching X-Admin-Token header. Idempotent (upsert on keywords)."""
+    expected = os.environ.get("ADMIN_TOKEN", "")
+    if expected:
+        provided = req.headers.get("x-admin-token", "")
+        if provided != expected:
+            return JSONResponse({"error": "Invalid or missing X-Admin-Token header"}, status_code=401)
+    try:
+        from empire_seed import seed_all
+        counts = seed_all()
+        total = sum(counts.values())
+        return JSONResponse({"seeded": counts, "total_rows": total})
+    except Exception as e:
+        return JSONResponse({"error": str(e)[:200]}, status_code=500)
+
+
+@app.get("/api/agent-registry/heartbeats")
+async def agent_registry_heartbeats(stale_seconds: int = 600):
+    """List all active agent heartbeats from agent_registry. Marks agents whose
+    last_ping exceeds stale_seconds as 'stale'. Used by the SPA fleet panel."""
+    try:
+        db = get_db()
+        r = db.table("agent_registry") \
+            .select("agent_name,status,last_ping,enabled,capabilities,leads_today,metrics,updated_at") \
+            .order("last_ping", desc=True) \
+            .execute()
+        from datetime import datetime, timezone
+        now = datetime.now(timezone.utc)
+        agents = []
+        for row in (r.data or []):
+            ping = row.get("last_ping")
+            age = None
+            if ping:
+                try:
+                    ping_dt = datetime.fromisoformat(ping.replace("Z", "+00:00"))
+                    age = int((now - ping_dt).total_seconds())
+                except Exception:
+                    pass
+            agents.append({
+                "agent_name": row.get("agent_name"),
+                "status": row.get("status"),
+                "enabled": row.get("enabled", False),
+                "last_ping": ping,
+                "seconds_since_ping": age,
+                "is_stale": age is not None and age > stale_seconds,
+                "capabilities": row.get("capabilities") or [],
+                "leads_today": row.get("leads_today", 0),
+                "metrics": row.get("metrics") or {},
+            })
+        active = [a for a in agents if a.get("enabled") and not a.get("is_stale")]
+        stale = [a for a in agents if a.get("is_stale")]
+        return JSONResponse({
+            "agents": agents,
+            "active_count": len(active),
+            "stale_count": len(stale),
+            "total_count": len(agents),
+            "stale_threshold_seconds": stale_seconds,
+            "checked_at": now.isoformat(),
+        })
+    except Exception as e:
+        return JSONResponse({"agents": [], "active_count": 0, "error": str(e)[:80]})
+
+
+@app.get("/api/governor/health")
+async def governor_health():
+    """Return the AGI governor's last cached health snapshot. Auto-refreshes on
+    every governor decision; this endpoint just reads the cache."""
+    try:
+        from empire_agi_governor import get_last_health_snapshot, refresh_health_snapshot
+        snap = get_last_health_snapshot()
+        if not snap or not snap.get("checked_at"):
+            # Cold cache — force a refresh
+            snap = refresh_health_snapshot()
+        return JSONResponse({
+            "stale": snap.get("stale", []),
+            "healthy": snap.get("healthy", []),
+            "checked_at": snap.get("checked_at"),
+            "stale_count": len(snap.get("stale", [])),
+            "healthy_count": len(snap.get("healthy", [])),
+            "total_count": len(snap.get("stale", [])) + len(snap.get("healthy", [])),
+        })
+    except Exception as e:
+        return JSONResponse({"stale": [], "healthy": [], "error": str(e)[:80]})
+
+
+@app.post("/api/governor/refresh")
+async def governor_refresh():
+    """Force a fresh AGI governor health snapshot. Always re-queries Supabase
+    instead of returning the cached snapshot. Useful when the SPA needs the
+    latest staleness state immediately (e.g. after a heal action)."""
+    import time
+    t0 = time.time()
+    try:
+        from empire_agi_governor import refresh_health_snapshot
+        snap = refresh_health_snapshot()
+        elapsed_ms = round((time.time() - t0) * 1000, 1)
+        return JSONResponse({
+            "stale": snap.get("stale", []),
+            "healthy": snap.get("healthy", []),
+            "checked_at": snap.get("checked_at"),
+            "stale_count": len(snap.get("stale", [])),
+            "healthy_count": len(snap.get("healthy", [])),
+            "total_count": len(snap.get("stale", [])) + len(snap.get("healthy", [])),
+            "refreshed": True,
+            "elapsed_ms": elapsed_ms,
+        })
+    except Exception as e:
+        return JSONResponse({
+            "stale": [], "healthy": [],
+            "error": str(e)[:80],
+            "refreshed": False,
+        })
+
+
+@app.get("/api/panel_court/decisions")
+async def panel_court_decisions(limit: int = 30):
+    """Recent Panel Court 10-agent ensemble decisions."""
+    try:
+        db = get_db()
+        r = db.table("panel_court_decisions").select("*").order("created_at", desc=True).limit(min(limit, 100)).execute()
+        return JSONResponse({"decisions": r.data or [], "count": len(r.data or [])})
+    except Exception as e:
+        return JSONResponse({"decisions": [], "error": str(e)[:80]})
+
+
+@app.get("/api/dream/recent")
+async def dream_recent(limit: int = 5):
+    """Recent dream cycles — insights, rule suggestions, wisdom."""
+    try:
+        db = get_db()
+        r = db.table("dream_memory").select("*").order("dream_cycle", desc=True).limit(min(limit, 20)).execute()
+        dreams = r.data or []
+        # Parse JSONB fields that might be strings
+        for d in dreams:
+            for f in ["insights","rule_suggestions","sources_analyzed","sample_sizes","applied_rules"]:
+                if isinstance(d.get(f), str):
+                    try:
+                        d[f] = __import__("json").loads(d[f])
+                    except Exception:
+                        pass
+        return JSONResponse({"dreams": dreams, "count": len(dreams)})
+    except Exception as e:
+        return JSONResponse({"dreams": [], "error": str(e)[:80]})
+
+
+@app.get("/api/dream/latest-wisdom")
+async def dream_latest_wisdom():
+    """Return the latest dream wisdom context for prompt injection."""
+    try:
+        from empire_dream import get_latest_wisdom
+        wisdom = await get_latest_wisdom()
+        return JSONResponse({"wisdom": wisdom or "", "has_wisdom": bool(wisdom)})
+    except Exception as e:
+        return JSONResponse({"wisdom": "", "error": str(e)[:80]})
+
+
+# In-memory cache for /api/dream/si-feed to avoid repeated Supabase queries
+_si_feed_cache: dict = {"_payload": None, "_cached_at": 0}
+try:
+    SI_FEED_CACHE_TTL_SECONDS = float(os.environ.get("SI_FEED_CACHE_TTL_SECONDS", "60"))
+except (ValueError, TypeError):
+    SI_FEED_CACHE_TTL_SECONDS = 60
+
+@app.get("/api/dream/si-feed")
+async def dream_si_feed():
+    """Return latest dream's risk_flags + wisdom formatted for SI systems.
+    Cached in-memory; fresh within SI_FEED_CACHE_TTL_SECONDS (default 60s)."""
+    import time as _time
+    now = _time.time()
+    _cached_at = _si_feed_cache.get("_cached_at", 0)
+    if now - _cached_at < SI_FEED_CACHE_TTL_SECONDS:
+        return JSONResponse(_si_feed_cache["_payload"])
+    try:
+        db = get_db()
+        r = db.table("dream_memory") \
+            .select("risk_flags,wisdom_context,insights,rule_suggestions,dream_cycle,created_at") \
+            .order("dream_cycle", desc=True) \
+            .limit(1) \
+            .execute()
+        if not r.data:
+            return JSONResponse({"risk_flags": [], "wisdom": "", "cycle": None, "stale": True})
+        d = r.data[0]
+        # Parse JSONB fields
+        import json as _j
+        risk_flags = d.get("risk_flags") or []
+        if isinstance(risk_flags, str):
+            try: risk_flags = _j.loads(risk_flags)
+            except: risk_flags = []
+        insights = d.get("insights") or []
+        if isinstance(insights, str):
+            try: insights = _j.loads(insights)
+            except: insights = []
+        rules = d.get("rule_suggestions") or []
+        if isinstance(rules, str):
+            try: rules = _j.loads(rules)
+            except: rules = []
+        payload = {
+            "risk_flags": risk_flags,
+            "risk_count": len(risk_flags),
+            "wisdom": d.get("wisdom_context", ""),
+            "cycle": d.get("dream_cycle"),
+            "insight_count": len(insights),
+            "rule_count": len(rules),
+            "generated_at": d.get("created_at"),
+            "stale": False,
+        }
+        # Cache the response
+        _si_feed_cache["_payload"] = payload
+        _si_feed_cache["_cached_at"] = now
+        return JSONResponse(payload)
+    except Exception as e:
+        return JSONResponse({"risk_flags": [], "wisdom": "", "cycle": None, "stale": True, "error": str(e)[:80]})
+
+
+@app.get("/api/panel_court/pool")
+async def panel_court_pool():
+    """10-Agent pool status — win rates, temperatures, learning progress."""
+    try:
+        from bots.panel_court import _get_panel_court
+        pc = _get_panel_court()
+        return JSONResponse(pc.pool_snapshot())
+    except Exception as e:
+        return JSONResponse({"agents": [], "error": str(e)[:80]})
+
+
+@app.get("/api/revenue/accuracy/csv")
+async def revenue_accuracy_csv(days: int = 14):
+    """Download revenue accuracy data as CSV."""
+    import csv, io
+    try:
+        from bots import predictive_revenue
+        data = predictive_revenue.get_accuracy_timeseries(days=min(days, 30))
+        series = data.get("series", [])
+        summary = data.get("summary", {})
+
+        output = io.StringIO()
+        writer = csv.writer(output)
+        # Header
+        writer.writerow(["Empire AI V49 · Revenue Forecast Accuracy Report"])
+        writer.writerow([f"Generated: {data.get('generated_at', '')}"])
+        writer.writerow([f"Avg Accuracy: {summary.get('avg_accuracy_pct', 0)}% · Trend: {summary.get('trend', '?')} · Days: {summary.get('days_with_data', 0)}"])
+        writer.writerow([])
+        writer.writerow(["Date", "Forecasted Fee ($)", "Actual Revenue ($)", "Accuracy (%)"])
+        for row in series:
+            writer.writerow([
+                row.get("date", ""),
+                row.get("forecasted_fee", 0),
+                row.get("actual_revenue", 0),
+                row.get("accuracy_pct", "") if row.get("accuracy_pct") is not None else "N/A",
+            ])
+
+        csv_content = output.getvalue()
+        return Response(
+            content=csv_content,
+            media_type="text/csv",
+            headers={"Content-Disposition": "attachment; filename=empire_revenue_accuracy.csv"},
+        )
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
+@app.get("/api/revenue/accuracy/report", response_class=HTMLResponse)
+async def revenue_accuracy_report(days: int = 14):
+    """Print-friendly HTML report of revenue accuracy (Ctrl+P to save as PDF)."""
+    try:
+        from bots import predictive_revenue
+        data = predictive_revenue.get_accuracy_timeseries(days=min(days, 30))
+        series = data.get("series", [])
+        summary = data.get("summary", {})
+
+        rows_html = ""
+        for row in series:
+            acc = row.get("accuracy_pct")
+            acc_str = f"{acc}%" if acc is not None else "—"
+            acc_color = "#44E5B8" if acc and acc >= 80 else ("#FFB800" if acc and acc >= 50 else "#FF4444")
+            rows_html += f"""
+            <tr>
+              <td>{row.get('date', '')}</td>
+              <td class="num">${row.get('forecasted_fee', 0):,.2f}</td>
+              <td class="num">${row.get('actual_revenue', 0):,.2f}</td>
+              <td class="num" style="color:{acc_color}">{acc_str}</td>
+            </tr>"""
+
+        return HTMLResponse(f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Empire AI · Revenue Forecast Accuracy</title>
+  <style>
+    * {{ margin:0; padding:0; box-sizing:border-box; }}
+    body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0a0a0f; color: #e2e8f0; padding: 48px 64px; }}
+    .report {{ max-width: 900px; margin: 0 auto; }}
+    h1 {{ font-size: 22px; font-weight: 200; letter-spacing: -0.02em; margin-bottom: 4px; }}
+    h1 em {{ color: #44E5B8; font-style: italic; font-weight: 500; }}
+    .sub {{ font-family: 'SF Mono', 'Fira Code', monospace; font-size: 10px; color: #94a3b8; letter-spacing: 0.14em; text-transform: uppercase; margin-bottom: 32px; }}
+    .summary {{ display: flex; gap: 24px; margin-bottom: 28px; }}
+    .sum-card {{ background: #14141e; border: 1px solid #1e293b; padding: 16px 20px; flex: 1; }}
+    .sum-label {{ font-family: monospace; font-size: 9px; color: #64748b; letter-spacing: 0.14em; text-transform: uppercase; margin-bottom: 8px; }}
+    .sum-value {{ font-family: monospace; font-size: 24px; color: #f8fafc; font-weight: 500; }}
+    .sum-value.teal {{ color: #44E5B8; }}
+    .sum-value.amber {{ color: #FFB800; }}
+    table {{ width: 100%; border-collapse: collapse; background: #14141e; border: 1px solid #1e293b; }}
+    thead th {{ font-family: monospace; font-size: 9px; color: #64748b; letter-spacing: 0.14em; text-transform: uppercase; text-align: left; padding: 12px 16px; border-bottom: 1px solid #1e293b; background: #0f0f17; }}
+    tbody td {{ padding: 10px 16px; border-bottom: 1px solid #1e293b; font-family: monospace; font-size: 11px; }}
+    tbody tr:last-child td {{ border-bottom: none; }}
+    .num {{ text-align: right; }}
+    .footer {{ margin-top: 32px; font-family: monospace; font-size: 9px; color: #475569; letter-spacing: 0.08em; }}
+    @media print {{ body {{ background: #fff; color: #000; padding: 24px; }} .sum-card, table {{ background: #fff; border-color: #ccc; }} thead th {{ background: #f5f5f5; }} }}
+  </style>
+</head>
+<body>
+  <div class="report">
+    <h1>Empire AI <em>Revenue Forecast Accuracy</em></h1>
+    <div class="sub">Generated {data.get('generated_at', '')}</div>
+
+    <div class="summary">
+      <div class="sum-card">
+        <div class="sum-label">Avg Accuracy</div>
+        <div class="sum-value teal">{summary.get('avg_accuracy_pct', 0)}%</div>
+      </div>
+      <div class="sum-card">
+        <div class="sum-label">Trend</div>
+        <div class="sum-value {'amber' if summary.get('trend') == 'declining' else 'teal'}">{summary.get('trend', '—')}</div>
+      </div>
+      <div class="sum-card">
+        <div class="sum-label">Days Analyzed</div>
+        <div class="sum-value">{summary.get('days_with_data', 0)}</div>
+      </div>
+      <div class="sum-card">
+        <div class="sum-label">Days with Accuracy</div>
+        <div class="sum-value">{summary.get('days_with_accuracy', 0)}</div>
+      </div>
+    </div>
+
+    <table>
+      <thead><tr>
+        <th>Date</th>
+        <th class="num">Forecasted Fee</th>
+        <th class="num">Actual Revenue</th>
+        <th class="num">Accuracy</th>
+      </tr></thead>
+      <tbody>{rows_html}</tbody>
+    </table>
+
+    <div class="footer">
+      Empire AI V49 · Predictive Revenue Network · Report generated {data.get('generated_at', '')}
+    </div>
+  </div>
+</body>
+</html>""")
+    except Exception as e:
+        return HTMLResponse(f"<h1>Error</h1><p>{e}</p>", status_code=500)
 
 
 @app.post("/api/agents/{agent_id}/toggle")
@@ -915,41 +1735,74 @@ async def agents_toggle(agent_id: str):
 
 
 
-# ─── Notes activity endpoint ──────────────────────────────────────
-@app.get("/api/v1/notes/activity")
-async def notes_activity(limit: int = 100, auth: bool = Depends(require_auth)):
-    """Return all notes across all leads as a flat reverse-chronological feed."""
+# ─── Leads activity endpoint ──────────────────────────────────
+@app.get("/api/v1/leads/activity")
+async def leads_activity(limit: int = 50, offset: int = 0, lead_id: str = "", auth: bool = Depends(require_auth)):
+    """Return lead activity log entries from the activity_logs table (status changes, notes, deletions)."""
+    from fastapi.responses import JSONResponse as _jr
+    db = get_db()
+    has_more = False
+    try:
+        q = db.table("activity_logs").select("*").order("created_at", desc=True).range(offset, offset + limit - 1)
+        if lead_id:
+            q = q.eq("lead_id", lead_id)
+        r = q.execute()
+        has_more = len(r.data or []) == limit
+        entries = []
+        for row in (r.data or []):
+            entries.append({
+                "id": row.get("id"),
+                "lead_id": row.get("lead_id"),
+                "lead_name": row.get("lead_name") or "—",
+                "action": row.get("action"),
+                "operator": row.get("operator") or "operator",
+                "details": row.get("details") or {},
+                "timestamp": (row.get("created_at") or "")[:19],
+            })
+        return _jr({"entries": entries, "has_more": has_more})
+    except Exception as e:
+        return _jr({"entries": [], "error": str(e)[:80], "has_more": False})
+
+
+# ─── Leads list endpoint ────────────────────────────────────────
+@app.get("/api/v1/inbound/leads")
+async def list_inbound_leads(limit: int = 100, offset: int = 0, auth: bool = Depends(require_auth)):
+    """Return inbound leads with notes, sorted by created_at descending."""
     from fastapi.responses import JSONResponse as _jr
     db = get_db()
     try:
-        r = db.table("inbound_leads").select("id,name,notes,created_at").not_.is_("notes", "null").order("created_at", desc=True).limit(limit).execute()
-    except Exception:
-        try:
-            r = db.table("inbound_leads").select("id,name,notes,created_at").not_.is_("notes", "null").execute()
-        except Exception as e:
-            return _jr({"entries": [], "error": str(e)[:80]})
-    entries = []
-    for lead in (r.data or []):
-        raw = lead.get("notes")
-        note_list = []
-        if raw:
-            if isinstance(raw, list):
-                note_list = raw
-            elif isinstance(raw, str):
-                try:
-                    p = _gjson.loads(raw)
-                    if isinstance(p, list):
-                        note_list = p
-                    else:
-                        note_list = [{"text": raw}]
-                except Exception:
-                    note_list = [{"text": raw}]
-        for n in note_list:
-            n["lead_id"] = lead.get("id")
-            n["lead_name"] = lead.get("name") or "—"
-            entries.append(n)
-    entries.sort(key=lambda e: e.get("timestamp") or "", reverse=True)
-    return _jr({"entries": entries[:limit]})
+        r = db.table("inbound_leads").select("id,name,phone,email,metro,source,status,notes,created_at")             .order("created_at", desc=True)             .range(offset, offset + limit - 1)             .execute()
+        leads = r.data or []
+    except Exception as e:
+        return _jr({"leads": [], "error": str(e)[:80]})
+    return _jr({"leads": leads})
+
+
+# ─── Leads stats endpoint ────────────────────────────────────────
+@app.get("/api/v1/inbound/stats")
+async def inbound_leads_stats(auth: bool = Depends(require_auth)):
+    """Return aggregate stats for inbound leads."""
+    from fastapi.responses import JSONResponse as _jr
+    db = get_db()
+    try:
+        r = db.table("inbound_leads").select("status", count="exact").limit(10000).execute()
+        leads = r.data or []
+        total = r.count or 0
+        new_count = sum(1 for l in leads if not l.get("status") or l.get("status") == "new")
+        contacted = sum(1 for l in leads if l.get("status") == "contacted")
+        qualified = sum(1 for l in leads if l.get("status") == "qualified")
+        closed = sum(1 for l in leads if l.get("status") == "closed")
+        rejected = sum(1 for l in leads if l.get("status") == "rejected")
+    except Exception as e:
+        return _jr({"total": 0, "new": 0, "contacted": 0, "qualified": 0, "closed": 0, "rejected": 0, "error": str(e)[:80]})
+    return _jr({
+        "total": total,
+        "new": new_count,
+        "contacted": contacted,
+        "qualified": qualified,
+        "closed": closed,
+        "rejected": rejected,
+    })
 
 
 # ─── Leads delete-note endpoint ────────────────────────────────────
@@ -966,7 +1819,7 @@ async def delete_inbound_lead_note(request: Request, auth: bool = Depends(requir
     from fastapi.responses import JSONResponse as _jr
     db = get_db()
     try:
-        r = db.table("inbound_leads").select("notes").eq("id", lead_id).limit(1).execute()
+        r = db.table("inbound_leads").select("notes,name").eq("id", lead_id).limit(1).execute()
         if not r.data:
             return _jr({"ok": False, "error": "lead not found"})
         raw = r.data[0].get("notes")
@@ -985,7 +1838,47 @@ async def delete_inbound_lead_note(request: Request, auth: bool = Depends(requir
         entries = [e for e in entries if e.get("timestamp") != timestamp]
         if len(entries) == before:
             return _jr({"ok": False, "error": "note not found"})
+        # Persist the updated note list (no synthetic note)
         db.table("inbound_leads").update({"notes": _gjson.dumps(entries, ensure_ascii=False)}).eq("id", lead_id).execute()
+
+        # Operator name for activity + audit
+        _dop_name = "operator"
+        _dop_id = ""
+        _dop_email = ""
+        try:
+            if isinstance(auth, dict):
+                _dop_name = auth.get("name") or auth.get("email", "operator")
+                _dop_id = auth.get("id", "")
+                _dop_email = auth.get("email", "")
+        except Exception:
+            pass
+
+        # Insert into activity_logs table
+        try:
+            _lead_name = (r.data[0].get("name") or "") if r.data else ""
+            db.table("activity_logs").insert({
+                "lead_id": lead_id,
+                "lead_name": _lead_name,
+                "action": "note_deleted",
+                "operator": _dop_name,
+                "details": {"timestamp": timestamp},
+            }).execute()
+        except Exception:
+            pass
+
+        # Audit trail
+        try:
+            await auth_engine.audit(
+                operator_id=_dop_id,
+                operator_name=_dop_name,
+                operator_email=_dop_email,
+                action="lead_note_deleted",
+                target_type="inbound_lead",
+                target_id=lead_id,
+                details={"timestamp": timestamp},
+            )
+        except Exception:
+            pass
         return _jr({"ok": True})
     except Exception as e:
         raise HTTPException(500, str(e))
@@ -1004,47 +1897,92 @@ async def update_inbound_lead(request: Request, auth: bool = Depends(require_aut
     from fastapi.responses import JSONResponse as _jr
     db = get_db()
     update = {}
-    if "status" in body:
+    _operator_name = "operator"
+    try:
+        if isinstance(auth, dict):
+            _operator_name = auth.get("name") or auth.get("email", "operator")
+    except Exception:
+        pass
+    _status_changed = "status" in body
+    if _status_changed:
         update["status"] = body["status"][:50]
     if "notes" in body and body["notes"] is not None:
         # Notes history: store as JSON array [{text, operator, timestamp}, ...]
-        operator_name = "operator"
-        try:
-            if isinstance(auth, dict):
-                operator_name = auth.get("name") or auth.get("email", "operator")
-        except Exception:
-            pass
         new_text = str(body["notes"])[:1000].strip()
         if new_text:
             # Fetch existing notes
-            existing = []
+            _existing_notes = []
             try:
                 r = db.table("inbound_leads").select("notes").eq("id", lead_id).limit(1).execute()
                 if r.data and r.data[0].get("notes"):
                     raw = r.data[0]["notes"]
                     if isinstance(raw, list):
-                        existing = raw
+                        _existing_notes = raw
                     elif isinstance(raw, str):
                         try:
                             parsed = _gjson.loads(raw)
                             if isinstance(parsed, list):
-                                existing = parsed
+                                _existing_notes = parsed
                             else:
-                                existing = [{"text": raw, "operator": "system", "timestamp": _gdt.utcnow().isoformat(timespec="seconds")}]
+                                _existing_notes = [{"text": raw, "operator": "system", "timestamp": _gdt.utcnow().isoformat(timespec="seconds")}]
                         except Exception:
-                            existing = [{"text": raw, "operator": "system", "timestamp": _gdt.utcnow().isoformat(timespec="seconds")}]
+                            _existing_notes = [{"text": raw, "operator": "system", "timestamp": _gdt.utcnow().isoformat(timespec="seconds")}]
             except Exception:
                 pass
             entry = {
                 "text": new_text,
-                "operator": operator_name,
+                "operator": _operator_name,
                 "timestamp": _gdt.utcnow().isoformat(timespec="seconds"),
             }
-            existing.append(entry)
-            update["notes"] = _gjson.dumps(existing, ensure_ascii=False)
+            _existing_notes.append(entry)
+            update["notes"] = _gjson.dumps(_existing_notes, ensure_ascii=False)
+    # ── Activity log ──────────────────────────────────────────────
     try:
+        # Fetch lead name once for activity_logs entries
+        _act_lead_name = ""
+        try:
+            _lr = db.table("inbound_leads").select("name").eq("id", lead_id).limit(1).execute()
+            _act_lead_name = (_lr.data[0].get("name") or "") if _lr.data else ""
+        except Exception:
+            pass
+        # If status changed, insert into activity_logs
+        if _status_changed:
+            db.table("activity_logs").insert({
+                "lead_id": lead_id,
+                "lead_name": _act_lead_name,
+                "action": "status_changed",
+                "operator": _operator_name,
+                "details": {"new_status": body["status"]},
+            }).execute()
+        # If a note was added, insert into activity_logs
+        if "notes" in body and body["notes"] is not None and str(body["notes"])[:1000].strip():
+            db.table("activity_logs").insert({
+                "lead_id": lead_id,
+                "lead_name": _act_lead_name,
+                "action": "note_added",
+                "operator": _operator_name,
+                "details": {"note_snippet": str(body["notes"])[:200].strip()},
+            }).execute()
+    except Exception:
+        pass
         if update:
             db.table("inbound_leads").update(update).eq("id", lead_id).execute()
+        # Audit trail for status changes
+        if _status_changed:
+            try:
+                _audit_id = (auth.get("id") or "") if isinstance(auth, dict) else ""
+                _audit_email = (auth.get("email") or "") if isinstance(auth, dict) else ""
+                await auth_engine.audit(
+                    operator_id=_audit_id,
+                    operator_name=_operator_name,
+                    operator_email=_audit_email,
+                    action="lead_status_changed",
+                    target_type="inbound_lead",
+                    target_id=lead_id,
+                    details={"new_status": body["status"]},
+                )
+            except Exception:
+                pass
         return _jr({"ok": True})
     except Exception as e:
         raise HTTPException(500, str(e))

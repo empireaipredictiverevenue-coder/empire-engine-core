@@ -15,6 +15,12 @@ _BUYERS_CACHE_TTL = 60.0          # seconds before cache is considered stale
 _buyers_cache: list = []           # list of buyer dicts, mirroring Supabase rows
 _buyers_cache_ts: float = 0.0     # epoch timestamp of last cache fill
 
+# Minimum number of offered calls before the acceptance-rate heuristic kicks
+# in. Below this threshold the buyer gets a free pass (rate=1.0) so new
+# buyers don't get penalized while they're warming up. Tweakable at runtime
+# by the SI Adaptive engine (switchboard.min_offered_for_rate).
+_MIN_OFFERED_FOR_RATE = 5
+
 
 def _get_cached_buyers() -> list:
     """Return the cached list of all active buyers, refreshing from Supabase
@@ -63,7 +69,7 @@ def _reset_if_new_day(buyer):
 def _acceptance_rate(buyer):
     offered = buyer.get("calls_offered",0) or 0
     accepted = buyer.get("calls_accepted",0) or 0
-    if offered < 5:
+    if offered < _MIN_OFFERED_FOR_RATE:
         return 1.0
     return accepted / offered
 
