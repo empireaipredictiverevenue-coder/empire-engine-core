@@ -34,3 +34,9 @@ logs/*.log
 # Backup files (created by editors, sed -i.bak, etc.)
 *.bak
 *.bak.*
+
+# Local dev logs (created when the synthetic_brain runs in dev mode)
+synthetic_brain.log
+
+# Rendered/generated video templates (regenerated at runtime, large binaries)
+templates/videos/*.mp4
