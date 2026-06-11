@@ -95,9 +95,9 @@ if [ "$HETZNER_MODE" -eq 1 ]; then
     fi
     systemctl enable --now ollama
     OLLAMA_MODEL="${OLLAMA_MODEL:-llama3.2:3b}"
-    # Idempotent — Ollama skips if already present
-    ollama pull "$OLLAMA_MODEL" \
-        || echo "[DEPLOY:hetzner] WARN: ollama pull failed (non-fatal; will retry on first run)"
+    # Idempotent — Ollama skips if already present. We let `set -e` propagate
+    # any failure: a brain without a model can't serve decisions.
+    ollama pull "$OLLAMA_MODEL"
 
     # 3. PM2 (Node process manager)
     echo "[DEPLOY:hetzner] (3/10) PM2"
@@ -117,7 +117,10 @@ if [ "$HETZNER_MODE" -eq 1 ]; then
         git clone "$REPO_URL" "$EMPIRE_HOME"
     fi
     cd "$EMPIRE_HOME"
-    git pull origin master 2>/dev/null || echo "[DEPLOY:hetzner] (no remote / already current)"
+    # || true is intentional: on a fresh clone the default branch may not be
+    # `master` (could be `main`/`dev`), which produces "no upstream tracking"
+    # as a false positive. We don't want to abort the bootstrap for that.
+    git pull origin master 2>/dev/null || true
 
     # 5. Python deps
     echo "[DEPLOY:hetzner] (5/10) pip install requirements.txt"
@@ -152,8 +155,9 @@ if [ "$HETZNER_MODE" -eq 1 ]; then
         systemctl reload nginx || systemctl restart nginx
         # Certbot provisions Let's Encrypt cert. --non-interactive fails fast
         # if cert can't be issued (usually means DNS doesn't resolve yet).
-        certbot --nginx -d "$BRAIN_HOSTNAME" --non-interactive --agree-tos -m "$CERTBOT_EMAIL" \
-            || echo "[DEPLOY:hetzner] WARN: certbot failed (DNS not propagated yet? re-run: certbot --nginx -d $BRAIN_HOSTNAME --non-interactive --agree-tos -m $CERTBOT_EMAIL)"
+        # We let `set -e` propagate the failure so the operator notices and
+        # re-runs certbot manually after DNS propagates (DEPLOY_HETZNER.md §6).
+        certbot --nginx -d "$BRAIN_HOSTNAME" --non-interactive --agree-tos -m "$CERTBOT_EMAIL"
     else
         echo "[DEPLOY:hetzner]   setting up Caddy (auto-TLS)"
         # Caddy needs the official repo for the latest stable
@@ -173,14 +177,23 @@ if [ "$HETZNER_MODE" -eq 1 ]; then
 
     # 9. PM2 ecosystem + start the apps
     echo "[DEPLOY:hetzner] (9/10) pm2 start"
-    pm2 delete all 2>/dev/null || true   # clear any stale entries
+    if [ ! -f deploy/hetzner/ecosystem.config.js ]; then
+        echo "[DEPLOY:hetzner] FATAL: deploy/hetzner/ecosystem.config.js not found" >&2
+        echo "[DEPLOY:hetzner]   check the git checkout (file should be in deploy/hetzner/)" >&2
+        exit 1
+    fi
+    # clear any stale entries (|| true is intentional: pm2 delete returns
+    # non-zero if there's nothing to delete, which is fine for an idempotent re-run)
+    pm2 delete all 2>/dev/null || true
     pm2 start deploy/hetzner/ecosystem.config.js
     pm2 save
 
     # 10. Boot persistence (operator must run the printed command on first boot)
     echo "[DEPLOY:hetzner] (10/10) pm2 startup"
-    pm2 startup \
-        || echo "[DEPLOY:hetzner] WARN: pm2 startup failed (you may need to run it manually)"
+    # We let `set -e` propagate any failure: if pm2 startup fails, the
+    # operator should investigate before re-running (the printed command
+    # must be executed as root for systemd integration to work).
+    pm2 startup
 
     echo ""
     echo "[DEPLOY:hetzner] ✓ done. Verify with:"
@@ -200,7 +213,10 @@ fi
 # ════════════════════════════════════════════════════════════════════════
 echo "[DEPLOY] Pulling latest code..."
 cd "$EMPIRE_HOME"
-git pull origin master 2>/dev/null || echo "[DEPLOY] No git remote / already current"
+# || true is intentional: local dev boxes often have no `origin` remote
+# (or are pinned to a different branch). The original `|| echo` was a
+# legitimate "no-op if no remote" safety net, not a silent failure.
+git pull origin master 2>/dev/null || true
 
 echo "[DEPLOY] Installing dependencies..."
 pip install -r requirements.txt --break-system-packages 2>/dev/null || pip install praw beautifulsoup4 requests supabase python-dotenv httpx --break-system-packages
