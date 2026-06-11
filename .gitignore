@@ -39,4 +39,4 @@ logs/*.log
 synthetic_brain.log
 
 # Rendered/generated video templates (regenerated at runtime, large binaries)
-templates/videos/*.mp4
+templates/**/*.mp4
