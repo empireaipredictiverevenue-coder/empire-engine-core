@@ -1,0 +1,131 @@
+name: Tests
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+    branches: [master, main]
+  workflow_dispatch:
+  # Nightly at 06:00 UTC — re-verifies the EMPIRE_TESTING=1 import
+  # contract daily so module-level I/O regressions are caught even
+  # when no push/PR is happening. Cheap insurance: ~5 min runtime,
+  # no external services required.
+  schedule:
+    - cron: "0 6 * * *"
+
+# Cancel in-flight runs of the same branch + event when a new commit
+# is pushed. We namespace the group by event name so the nightly
+# schedule run does NOT cancel a push-triggered run (and vice-versa).
+# cancel-in-progress is also gated to push only — we always let the
+# nightly cron run to completion.
+concurrency:
+  group: tests-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'push' }}
+
+jobs:
+  pytest:
+    name: pytest
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    # No external services — every test either mocks Supabase/Ollama
+    # or is gated behind the EMPIRE_TESTING=1 env var (set in conftest.py
+    # via pytest_configure). See tests/test_imports.py for the full
+    # import-safety contract.
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install system dependencies (kokoro-onnx runtime libs)
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq \
+            libxkbcommon0 \
+            libxdamage1 \
+            libxcomposite1 \
+            libxrandr2 \
+            libgbm1 \
+            libpango-1.0-0 \
+            libcairo2
+          echo "✅ System deps installed"
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          # mypy is needed for the type-check step below; it's a dev tool
+          # so it's not in requirements.txt (which is for runtime deps).
+          pip install mypy
+          echo "✅ Python deps installed"
+
+      - name: Run pytest
+        env:
+          # EMPIRE_TESTING=1 is also set by conftest.py, but we set it
+          # here too so any test that runs before conftest loads the
+          # env var still gets the test-mode behavior.
+          EMPIRE_TESTING: "1"
+          # Provide dummy values so supabase create_client() doesn't
+          # error at import time (it doesn't connect, but validates the
+          # URL/key format).
+          SUPABASE_URL: "https://test.placeholder.supabase.co"
+          SUPABASE_ANON_KEY: "test-anon-key-placeholder"
+          SUPABASE_SERVICE_KEY: "test-service-key-placeholder"
+        run: |
+          pytest tests/ -v --tb=short --color=yes
+
+      - name: Run mypy type checks
+        # Verifies the TYPE_CHECKING-guarded forward references in the
+        # constructor-injection pattern (Optional["StrategyEvolution"],
+        # Optional["SupabaseClient"]) are properly resolved.
+        #
+        # Scope: runs mypy on the type-check verification file (which
+        # exercises the AGILaneEngine constructor with both correct and
+        # wrong types) plus the 6 refactored files that have proper
+        # TYPE_CHECKING-guarded hints. The per-module overrides in
+        # mypy.ini enforce strict checking on these files.
+        #
+        # continue-on-error: true — the initial rollout surfaces 300+
+        # pre-existing type errors in untyped helpers across the bots/
+        # directory. We're triaging them incrementally; this flag lets
+        # the rest of CI keep working while we fix them. Remove this
+        # flag once mypy returns 0 errors on the 6 refactored files.
+        continue-on-error: true
+        run: |
+          mypy tests/type_check_agi_lane_engine.py \
+                bots/agi_lane_engine.py \
+                bots/hermes_controller.py \
+                bots/panel_court.py \
+                bots/predictive_revenue.py \
+                empire_agi_governor.py \
+                empire_si_strategy.py \
+                --show-error-codes --pretty
+
+      - name: Run pytest with import-safety report
+        env:
+          EMPIRE_TESTING: "1"
+          SUPABASE_URL: "https://test.placeholder.supabase.co"
+          SUPABASE_ANON_KEY: "test-anon-key-placeholder"
+          SUPABASE_SERVICE_KEY: "test-service-key-placeholder"
+        run: |
+          # Show which modules successfully import under EMPIRE_TESTING=1
+          # (the test_imports.py test already asserts this, but a separate
+          # verbose run makes CI output easier to scan when troubleshooting.)
+          pytest tests/test_imports.py -v --tb=short || true
+
+      - name: Upload pytest artifacts on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pytest-logs
+          path: |
+            .pytest_cache/
+            **/__pycache__/
+          retention-days: 3
+          if-no-files-found: ignore
