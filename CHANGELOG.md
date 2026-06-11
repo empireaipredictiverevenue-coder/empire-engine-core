@@ -31,9 +31,9 @@ modules, routes, SPA panels, and database migrations.
 
 ## Commit History
 
-The 8 most recent commits (oldest → newest) form a logical narrative of the
-SI + Revenue + Adaptive build-out. Read them in order to understand how the
-system fits together.
+The 13 most recent commits (oldest → newest) form a logical narrative of the
+SI + Revenue + Adaptive build-out followed by a docs/housekeeping pass.
+Read them in order to understand how the system fits together.
 
 ### 1. `feat(revenue): predictive engine with per-lane MRR + LLM narrative + few-shot learning`
 
@@ -148,9 +148,9 @@ imports with no build step.
 
 **Files:** `CHANGELOG.md` (new)
 
-You're reading it. Documents the project layout, per-commit changelog,
-commit conventions (prefix taxonomy, body rules, chunking rules), and
-the 7-step process for adding a new feature.
+Documents the project layout, per-commit changelog, commit conventions
+(prefix taxonomy, body rules, chunking rules), and the 7-step process
+for adding a new feature.
 
 ### 10. `docs: add CONTRIBUTING.md with Getting Started + env vars + dev server + tests`
 
@@ -176,6 +176,15 @@ reference: `WEBHOOK_SECRET` (`/webhook/lead`), `ADMIN_TOKEN`
 Both vars have insecure defaults (`empire_v49_secret` and no auth
 respectively). Moved them from the "Optional" section to a dedicated
 "⚠️ Required for production" section with a warning emoji.
+
+### 13. `docs(changelog): add follow-up commits 9-12 (docs commits + env var fixes)`
+
+**Files:** `CHANGELOG.md`
+
+After the env-var and production-warning commits were added, the
+CHANGELOG was out of date. Added this "Follow-up commits" section so
+the history stays self-describing. (This is a self-referential
+changelog-update commit — git log is still the source of truth.)
 
 ---
 
