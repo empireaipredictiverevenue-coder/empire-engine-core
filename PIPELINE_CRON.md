@@ -147,6 +147,45 @@ Then chmod +x it and update your cron entry to call run_safe.sh instead:
 
 
 ───────────────────────────────────────────────────────────────────────────────
+NIGHTLY MODEL BENCHMARK (synthetic_brain)
+──────────────────────────────────────────────────────────
+
+The synthetic_brain endpoint uses Ollama as its LLM, and the chosen model's
+quality can drift over time (small models are particularly moody at strict-typed
+JSON output). `scripts/nightly_model_benchmark.py` runs a 20-call benchmark every
+night, writes the result to the `model_benchmark` Supabase table, and — if the
+active model falls below 70% success for 3 consecutive nights — auto-switches
+to a backup model and alerts the operator via ntfy.
+
+ONE-TIME SETUP:
+  1. Run the migration in Supabase SQL Editor:
+       migrations/003_model_benchmark.sql
+  2. Add env vars to /root/.env:
+       OLLAMA_MODEL_PRIMARY=llama3.2:3b       # currently active
+       OLLAMA_MODEL_BACKUP=llama3.1:latest    # fallback
+       NTFY_TOPIC=empire_private_alerts       # operator alert channel
+       NTFY_TOKEN=YOUR_NTFY_TOKEN             # optional, for auth
+       SUCCESS_THRESHOLD=0.70                 # success rate below this triggers
+       CONSECUTIVE_NIGHTS=3                   # how many nights in a row
+       BENCHMARK_N_CALLS=20                   # N calls per night (~3-5 min)
+
+THE CRON ENTRY (3 AM UTC = ~9-10 PM Central, off-hours):
+  0 3 * * * cd /root/empire-v49 && set -a && . /root/.env && set +a && \
+    EMPIRE_TESTING=0 python3 scripts/nightly_model_benchmark.py \
+    >> logs/nightly_benchmark.log 2>&1
+
+WHAT IT DOES:
+  - Runs N=20 calls to /api/v1/synthetic/run with the same objective
+  - Writes summary (success_rate, p50/p95 latency) to model_benchmark
+  - Queries the last 3 rows for the active model
+  - If ALL 3 are <SUCCESS_THRESHOLD, kills the current worker + starts
+    a new one with OLLAMA_MODEL_BACKUP, writes model_alerts row, sends
+    ntfy notification
+
+DRY-RUN (verify the logic without touching the worker):
+  cd /root/empire-v49 && python3 scripts/nightly_model_benchmark.py --dry-run
+
+──────────────────────────────────────────────────────────
 VERIFY IT'S WORKING
 ───────────────────────────────────────────────────────────────────────────────
 
