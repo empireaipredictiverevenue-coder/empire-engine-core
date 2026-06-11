@@ -112,10 +112,19 @@ class StateManager:
             return None
 
     # ── strike_log ───────────────────────────────────────────────
-    def log_strike(self, target_id: Optional[str], alert_summary: Dict, distance_km: Optional[float] = None) -> Optional[str]:
-        """Insert a strike_log row tying a target to an alert."""
+    def log_strike(self, target_id: Optional[str], alert_summary: Dict, distance_km: Optional[float] = None,
+                   niche: Optional[str] = None, strategy: Optional[str] = None) -> Optional[str]:
+        """Insert a strike_log row tying a target to an alert.
+        `niche` and `strategy` are written into the meta dict (the column
+        doesn't exist in the base schema) so the SI Strategy Evolution
+        engine can read them back on outcome via get_strike_strategy()."""
         try:
             db = self._get_db()
+            meta = dict(alert_summary or {})
+            if niche is not None:
+                meta["niche"] = niche
+            if strategy is not None:
+                meta["strategy"] = strategy
             row = {
                 "target_id": target_id,
                 "alert_event": alert_summary.get("event"),
@@ -123,7 +132,7 @@ class StateManager:
                 "severity": alert_summary.get("severity"),
                 "distance_km": distance_km,
                 "dispatch_status": "pending",
-                "meta": alert_summary,
+                "meta": meta,
             }
             r = db.table("strike_log").insert(row).execute()
             return (r.data or [{}])[0].get("id")
@@ -134,7 +143,57 @@ class StateManager:
     def update_strike_status(self, strike_id: str, status: str, extra_meta: Optional[Dict] = None):
         try:
             db = self._get_db()
-            patch = {"dispatch_status": status}
+            patch: Dict = {"dispatch_status": status}
+            if extra_meta:
+                # Merge extra_meta into the existing meta (don't overwrite)
+                try:
+                    import json as _j
+                    cur = db.table("strike_log").select("meta").eq("id", strike_id).limit(1).execute()
+                    existing = (cur.data or [{}])[0].get("meta") or {}
+                    if isinstance(existing, str):
+                        try: existing = _j.loads(existing)
+                        except Exception: existing = {}
+                    merged = {**(existing or {}), **(extra_meta or {})}
+                    patch["meta"] = merged
+                except Exception:
+                    pass
             db.table("strike_log").update(patch).eq("id", strike_id).execute()
         except Exception as e:
             log.error(f"[state] update_strike_status failed: {e}")
+
+    def get_strike_strategy(self, target_id: Optional[str] = None,
+                            strike_id: Optional[str] = None) -> dict:
+        """Look up the niche + strategy used for a strike (by target_id or strike_id).
+        Returns {"niche": str|None, "strategy": str|None, "alert_event": str|None}.
+        Used by the outcome path to feed record_strategy_outcome() and by the
+        voice NCCO to align the script with the chosen strategy.
+
+        Note: never raises. Returns Nones on miss (callers must handle).
+        """
+        try:
+            db = self._get_db()
+            q = db.table("strike_log").select("niche,strategy,alert_event,meta,target_id")
+            if strike_id:
+                q = q.eq("id", strike_id)
+            elif target_id:
+                q = q.eq("target_id", target_id).order("created_at", desc=True).limit(1)
+            else:
+                return {"niche": None, "strategy": None, "alert_event": None}
+            r = q.execute()
+            if not r.data:
+                return {"niche": None, "strategy": None, "alert_event": None}
+            row = r.data[0]
+            # Strategy + niche are stored in the meta dict (no dedicated
+            # columns in the base strike_log schema).
+            _meta = row.get("meta") or {}
+            if isinstance(_meta, str):
+                try: _meta = __import__("json").loads(_meta)
+                except Exception: _meta = {}
+            return {
+                "niche":       (_meta or {}).get("niche"),
+                "strategy":    (_meta or {}).get("strategy"),
+                "alert_event": row.get("alert_event"),
+            }
+        except Exception as e:
+            log.debug(f"[state] get_strike_strategy failed: {e}")
+            return {"niche": None, "strategy": None, "alert_event": None}

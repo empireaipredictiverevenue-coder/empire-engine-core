@@ -6,6 +6,12 @@ Go/No-Go scoring with reasoning. Replaces orchestrator's "accept all" placeholde
 import logging
 from typing import Dict
 from empire_ai_router import AIRouter
+import os, sys
+sys.path.insert(0, "/root/empire-v49")
+try:
+    from empire_dream import get_latest_wisdom
+except ImportError:
+    get_latest_wisdom = None
 
 log = logging.getLogger("empire.brain.decide")
 
@@ -64,6 +70,17 @@ TARGET:
   Website: {website}
   Type tags: {", ".join(types) if types else "unknown"}
 {memory_block}
+    # Inject dream wisdom alongside memory context
+    dream_block = ""
+    if get_latest_wisdom:
+        import asyncio as _bd_async
+        try:
+            dream_wisdom = await _bd_async.get_event_loop().create_task(get_latest_wisdom()) if _bd_async.get_event_loop().is_running() else ""
+        except Exception:
+            dream_wisdom = ""
+        if dream_wisdom:
+            dream_block = "\n\n=== DREAM WISDOM (cross-system patterns) ===\n" + dream_wisdom
+    memory_block = {memory_block} + dream_block
 Decide: should we enroll this target in storm-strike outreach?
 Return JSON only."""
 

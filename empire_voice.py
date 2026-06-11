@@ -1147,6 +1147,33 @@ def register_voice_routes(
     if require_auth:
         @app.post("/api/v1/voice/strike")
         async def voice_strike(request: Request, auth: bool = Depends(require_auth)):
+            # Optional target_id/lead_id in the body → look up the SI strategy
+            # chosen at strike time so the NCCO script aligns with it.
+            try:
+                _voice_body_preview = await request.json()
+            except Exception:
+                _voice_body_preview = {}
+            _voice_target_id = _voice_body_preview.get("target_id") or _voice_body_preview.get("lead_id")
+            _voice_strategy = None
+            _voice_niche = None
+            if _voice_target_id and get_db:
+                try:
+                    db_v = get_db()
+                    _sr = db_v.table("strike_log").select("meta") \
+                        .eq("target_id", _voice_target_id) \
+                        .order("created_at", desc=True).limit(1).execute()
+                    if _sr.data:
+                        _meta = _sr.data[0].get("meta") or {}
+                        if isinstance(_meta, str):
+                            try: _meta = __import__("json").loads(_meta)
+                            except Exception: _meta = {}
+                        _voice_strategy = (_meta or {}).get("strategy")
+                        _voice_niche = (_meta or {}).get("niche")
+                except Exception as e:
+                    log.debug(f"[voice.strike] strategy lookup failed: {e}")
+            # Note: _voice_strategy / _voice_niche will be folded into the
+            # brain_decision dict below (after decide() returns) so the NCCO
+            # builder inside place_strike_call can read them.
             """
             Operator endpoint to trigger an outbound strike call.
             Enriches target from radar_targets + storm_forecasts, consults
@@ -1245,6 +1272,12 @@ def register_voice_routes(
                         target, alert_summary,
                         memory_context=memory_context,
                     )
+                    # Fold the SI-chosen strategy/niche into the brain_decision
+                    # so the NCCO builder inside place_strike_call can read it.
+                    if _voice_strategy and isinstance(brain_decision, dict):
+                        brain_decision["si_strategy"] = _voice_strategy
+                    if _voice_niche and isinstance(brain_decision, dict):
+                        brain_decision["si_niche"] = _voice_niche
                     log.info(
                         f"[voice/strike] brain: {brain_decision.get('decision')} · "
                         f"confidence={brain_decision.get('confidence', 0)}"

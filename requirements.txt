@@ -1,2 +1,10 @@
+fastapi
+uvicorn
+httpx
+supabase
+pydantic
+python-dotenv
+kokoro-onnx
+soundfile
 flask
 gunicorn

@@ -217,6 +217,10 @@ class PayoutEngine:
         self.matcher                = matcher
         self.ntfy_topic             = ntfy_topic
         self.ntfy_token             = ntfy_token
+        # De-dupe guard: the Solana watcher can retry the same tx_signature;
+        # without this, _record_strategy_outcome_from_settlement would
+        # double-credit the in-memory genome.
+        self._settlements_recorded: set = set()
 
         # Can we sign? Soft check; we'll handle missing keys gracefully.
         self.execution_enabled = bool(empire_signing_key and empire_vault_wallet)
@@ -327,6 +331,14 @@ class PayoutEngine:
                 )
             except Exception as e:
                 log.debug(f"[payouts] trust update failed: {e}")
+
+        # Feed the outcome back to the SI Strategy Evolution engine so the
+        # genome actually evolves from real wins. Look up the strategy
+        # that was chosen at strike time via the strike_log meta.
+        try:
+            await self._record_strategy_outcome_from_settlement(attribution, amount_usdc, tx_signature)
+        except Exception as e:
+            log.debug(f"[payouts] strategy outcome record failed: {e}")
 
         return {
             "ok":             True,
@@ -903,6 +915,73 @@ class PayoutEngine:
 # ─────────────────────────────────────────────────────────────────────────────
 # FASTAPI ROUTES
 # ─────────────────────────────────────────────────────────────────────────────
+    async def _record_strategy_outcome_from_settlement(self, attribution: dict, amount_usdc: float, tx_signature: str = ""):
+        """Look up the strategy + niche used at strike time and feed the
+        outcome back to empire_agi_governor. This is the genome-evolution
+        path: each settled payout nudges the SI Strategy Evolution toward
+        the strategies that actually produced revenue.
+
+        Guarded by _settlements_recorded (set) to avoid double-counting if
+        the Solana watcher fires twice for the same tx_signature.
+        """
+        # De-dupe: a retried watcher tick would otherwise double-credit the genome
+        tx_sig = tx_signature or attribution.get("tx_signature") or ""
+        if tx_sig and tx_sig in self._settlements_recorded:
+            return
+        if tx_sig:
+            self._settlements_recorded.add(tx_sig)
+            # Cap the set so it doesn't grow unbounded across long-running workers
+            if len(self._settlements_recorded) > 5000:
+                # Keep the most recent half (set is unordered, so just trim)
+                self._settlements_recorded = set(list(self._settlements_recorded)[-2500:])
+
+        try:
+            from empire_agi_governor import governor as _gov
+        except Exception as e:
+            log.warning(f"[payouts] SI governor import failed: {e}")
+            return
+
+        # attribution carries lead_id (radar_targets.id), which is the same
+        # value stored as strike_log.target_id. That's our lookup key.
+        lead_id = attribution.get("lead_id")
+        if not lead_id:
+            log.warning(f"[payouts] SI strategy outcome skipped: attribution has no lead_id (tx={tx_sig[:16]})")
+            return
+
+        niche = None
+        strategy = None
+        if self.matcher:
+            try:
+                import json as _j
+                db = self.matcher.get_db()
+                r = db.table("strike_log").select("meta") \
+                    .eq("target_id", lead_id) \
+                    .order("created_at", desc=True).limit(1).execute()
+                if r.data:
+                    _meta = r.data[0].get("meta") or {}
+                    if isinstance(_meta, str):
+                        try: _meta = _j.loads(_meta)
+                        except Exception: _meta = {}
+                    niche = (_meta or {}).get("niche")
+                    strategy = (_meta or {}).get("strategy")
+            except Exception as e:
+                log.warning(f"[payouts] SI strike_log lookup failed: {e}")
+
+        if not strategy:
+            log.warning(f"[payouts] SI strategy outcome skipped: no strategy in strike_log for lead_id={lead_id}")
+            return  # no SI signal recorded at strike time — nothing to evolve
+        try:
+            _gov.record_strategy_outcome(
+                strategy=strategy,
+                niche=niche or "Roofing Restoration",
+                success=True,
+                revenue=float(amount_usdc or 0),
+            )
+            log.info(f"[payouts] SI strategy outcome: {strategy} / {niche} · ${amount_usdc:.2f}")
+        except Exception as e:
+            log.warning(f"[payouts] SI record_strategy_outcome failed: {e}")
+
+
 def register_payout_routes(
     app: FastAPI,
     *,

@@ -16,6 +16,20 @@ from empire_sniper_satellite import SniperSatellite
 from empire_state_manager import StateManager
 from empire_cinematic_engine import launch_3d_render
 from empire_lane_controller import LaneController
+from empire_agi_governor import governor as _agi_governor
+
+# Storm event keyword → niche map. Hoisted to module level so it's
+# built once at import, not on every _infer_niche() call. The first
+# matching keyword wins; the final tuple is the generic-storm fallback.
+_NICHE_MAP = (
+    (("tornado",),                       "Tornado Damage Repair"),
+    (("hurricane",),                     "Hurricane Damage Restoration"),
+    (("hail",),                          "Hail Damage Repair"),
+    (("flood", "flash flood"),            "Flood Damage Restoration"),
+    (("thunderstorm", "severe storm", "wind"),  "Storm Damage Restoration"),
+)
+_DEFAULT_NICHE = "Roofing Restoration"
+_GENERIC_STORM_KW = ("storm", "warning", "watch", "advisory")
 
 log = logging.getLogger("empire.orchestrator")
 
@@ -176,16 +190,24 @@ class StormOrchestrator:
 
     async def _dispatch_target(self, target: Dict, alert_summary: Dict) -> str:
         """
-        Stage target, log strike, decide GO/NO_GO, enroll.
+        Stage target, log strike, decide GO/NO_GO, pick strategy, enroll.
         Returns dispatch_status string.
+
+        Note: strategy is selected ONLY after the brain says GO. If the brain
+        says NO_GO, the strike_log row is still inserted (for analytics) but
+        without a strategy — the genome only sees outcomes from real GOs.
         """
+        # Infer the niche from the alert event + target type. Storm-driven
+        # warehouse/industrial outreach is overwhelmingly Roofing Restoration.
+        niche = self._infer_niche(alert_summary, target)
+
         target_id = self.state.stage_target(target, source="storm_trigger")
-        strike_id = self.state.log_strike(target_id, alert_summary)
+        strike_id = self.state.log_strike(target_id, alert_summary, niche=niche, strategy=None)
 
         # Rate gate
         if self._hit_send_limit():
             if strike_id:
-                self.state.update_strike_status(strike_id, "skipped_rate")
+                self.state.update_strike_status(strike_id, "skipped_rate", extra_meta={"niche": niche})
             return "skipped_rate"
 
         # Brain gate (real)
@@ -194,12 +216,17 @@ class StormOrchestrator:
             log.info(f"[orchestrator] brain {decision.get('decision')} ({decision.get('confidence', 0):.2f}) for {target.get('warehouse_name')}: {decision.get('reasoning')}")
             if decision.get("decision") != "GO":
                 if strike_id:
-                    self.state.update_strike_status(strike_id, "skipped_brain")
+                    self.state.update_strike_status(strike_id, "skipped_brain", extra_meta={"niche": niche})
                 return "skipped_brain"
             if decision.get("confidence", 0) < 0.6:
                 if strike_id:
-                    self.state.update_strike_status(strike_id, "skipped_brain")
+                    self.state.update_strike_status(strike_id, "skipped_brain", extra_meta={"niche": niche})
                 return "skipped_brain_lowconf"
+
+        # Brain said GO — NOW pick the strategy and stamp it on the strike_log.
+        strategy = _agi_governor.strategy_for_niche(niche) if _agi_governor else "AGGRESSIVE_STRIKE"
+        if strike_id:
+            self.state.update_strike_status(strike_id, "pending", extra_meta={"strategy": strategy, "niche": niche})
 
         # Try to enrich email if missing
         target_email = target.get("email")
@@ -215,12 +242,14 @@ class StormOrchestrator:
 
         if not target_email:
             if strike_id:
-                self.state.update_strike_status(strike_id, "skipped_dup")
+                self.state.update_strike_status(strike_id, "skipped_dup", extra_meta={"strategy": strategy, "niche": niche})
             return "no_email"
 
         # If we have a drafter, generate a draft instead of direct enrolling
         if self.drafter:
             decision_for_draft = decision if self.brain else {"decision": "GO", "confidence": 0.7, "reasoning": "default"}
+            # Pass strategy into the drafter so the email body matches the SI-chosen approach
+            decision_for_draft = {**decision_for_draft, "strategy": strategy, "niche": niche}
             draft = await self.drafter.draft_for_target(
                 target=target,
                 alert_summary=alert_summary,
@@ -230,11 +259,11 @@ class StormOrchestrator:
             )
             if draft:
                 if strike_id:
-                    self.state.update_strike_status(strike_id, "enrolled")
+                    self.state.update_strike_status(strike_id, "enrolled", extra_meta={"strategy": strategy, "niche": niche})
                 return "draft_created"
             else:
                 if strike_id:
-                    self.state.update_strike_status(strike_id, "error")
+                    self.state.update_strike_status(strike_id, "error", extra_meta={"strategy": strategy, "niche": niche})
                 return "draft_failed"
 
         success = await launch_3d_render(
@@ -250,12 +279,34 @@ class StormOrchestrator:
         )
         if success:
             if strike_id:
-                self.state.update_strike_status(strike_id, "enrolled")
+                self.state.update_strike_status(strike_id, "enrolled", extra_meta={"strategy": strategy, "niche": niche})
             return "enrolled"
         else:
             if strike_id:
-                self.state.update_strike_status(strike_id, "error")
+                self.state.update_strike_status(strike_id, "error", extra_meta={"strategy": strategy, "niche": niche})
             return "error"
+
+    @staticmethod
+    def _infer_niche(alert_summary: Dict, target: Dict) -> str:
+        """Pick the most likely niche for this strike. Maps storm events to
+        specific niches so the genome accumulates per-niche signal instead
+        of one mega-bucket. Operators can override via target.meta.niche
+        if a more specific niche is known."""
+        try:
+            explicit = (target.get("meta") or {}).get("niche")
+            if explicit:
+                return str(explicit)[:80]
+        except Exception:
+            pass
+        event = (alert_summary.get("event") or "").lower()
+        for keywords, niche in _NICHE_MAP:
+            if any(kw in event for kw in keywords):
+                return niche
+        # Generic storm / default → Roofing Restoration (the dominant niche
+        # for Empire's warehouse/industrial lead flow).
+        if any(kw in event for kw in _GENERIC_STORM_KW):
+            return _DEFAULT_NICHE
+        return _DEFAULT_NICHE
 
     # ── rate limiting & circuit breaker ────────────────────────
     def _hit_send_limit(self) -> bool:

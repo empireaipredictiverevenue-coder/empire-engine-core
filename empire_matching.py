@@ -287,10 +287,17 @@ class ContractorMatcher:
         public_base_url: str,
         link_ttl: int = DEFAULT_LINK_TTL,
         broadcaster=None,
+        strategy: Optional[str] = None,
+        niche: Optional[str] = None,
     ) -> dict:
         """
         Send dispatch magic links to the matched contractors. Creates a
         dispatches row per contractor. First to accept wins via accept route.
+
+        `strategy` and `niche` (if provided) are stamped into each
+        dispatches.meta row so the contractor-dispatch path carries the
+        SI Strategy Evolution signal end-to-end. The outcome path looks
+        these up to call record_strategy_outcome on settlement.
 
         Returns: {ok, dispatched: N, dispatch_ids: [...]}
         """
@@ -323,6 +330,15 @@ class ContractorMatcher:
 
             # Insert dispatch row
             try:
+                dispatch_meta = {
+                    "urgency":     urgency,
+                    "lead_addr":   lead.get("address"),
+                    "lead_metro":  lead.get("city"),
+                }
+                if strategy:
+                    dispatch_meta["strategy"] = strategy
+                if niche:
+                    dispatch_meta["niche"] = niche
                 ins = db.table("dispatches").insert({
                     "lead_id":         str(lead.get("id")) if lead.get("id") else None,
                     "contractor_id":   str(contractor["id"]),
@@ -330,11 +346,7 @@ class ContractorMatcher:
                     "match_components":components,
                     "token":           token,
                     "status":          "sent",
-                    "meta": {
-                        "urgency":     urgency,
-                        "lead_addr":   lead.get("address"),
-                        "lead_metro":  lead.get("city"),
-                    },
+                    "meta":            dispatch_meta,
                 }).execute()
                 dispatch_ids.append(ins.data[0]["id"] if ins.data else None)
             except Exception as e:
@@ -713,6 +725,20 @@ def register_matching_routes(
             top_n=int(body.get("top_n", DEFAULT_TOP_N)),
         )
 
+        # Look up the SI-chosen strategy + niche from the strike_log so the
+        # contractor-dispatch path carries the genome signal end-to-end.
+        # Uses the shared StateManager helper (no inline meta-parsing).
+        strategy = None
+        niche = None
+        try:
+            from empire_state_manager import StateManager
+            _state = StateManager(get_db=matcher.get_db)
+            _si = _state.get_strike_strategy(target_id=lead_id)
+            strategy = _si.get("strategy")
+            niche = _si.get("niche")
+        except Exception as e:
+            log.debug(f"[matching] strategy lookup failed: {e}")
+
         # Fan out
         result = await matcher.dispatch_to_matched(
             matched=matched,
@@ -722,6 +748,8 @@ def register_matching_routes(
             send_email=send_email,
             public_base_url=public_base_url,
             broadcaster=broadcaster,
+            strategy=strategy,
+            niche=niche,
         )
         return result
 
