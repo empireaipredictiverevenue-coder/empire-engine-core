@@ -12,3 +12,7 @@ package-lock.json
 
 # Generated outreach drafts
 outreach_drafts/
+
+# Security: never commit signing keys
+private.key
+*.pem
