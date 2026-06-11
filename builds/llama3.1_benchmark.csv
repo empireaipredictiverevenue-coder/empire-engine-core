@@ -1,0 +1,11 @@
+call,http,time_s,json_valid,fields_str,error
+1,500,11.28,True,False,"non_string_fields: ['script_executed', 'voice_profile', 'system_template_used', 'productio"
+2,500,10.65,True,False,"non_string_fields: ['script_executed', 'voice_profile', 'system_template_used', 'productio"
+3,500,9.89,True,False,"non_string_fields: ['script_executed', 'voice_profile', 'system_template_used', 'productio"
+4,500,7.88,True,False,"non_string_fields: ['script_executed', 'voice_profile', 'system_template_used', 'productio"
+5,500,8.2,True,False,"non_string_fields: ['script_executed', 'voice_profile', 'system_template_used', 'productio"
+6,500,9.47,True,False,"non_string_fields: ['script_executed', 'voice_profile', 'system_template_used', 'productio"
+7,500,9.61,True,False,"non_string_fields: ['script_executed', 'voice_profile', 'system_template_used', 'productio"
+8,500,10.78,True,False,"non_string_fields: ['script_executed', 'voice_profile', 'system_template_used', 'productio"
+9,200,17.49,True,True,
+10,500,10.41,True,False,"non_string_fields: ['script_executed', 'voice_profile', 'system_template_used', 'productio"

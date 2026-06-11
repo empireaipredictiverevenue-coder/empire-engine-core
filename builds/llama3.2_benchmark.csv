@@ -1,0 +1,11 @@
+call,http,time_s,json_valid,fields_str,error
+1,500,5.67,True,False,"non_string_fields: ['script_executed', 'voice_profile', 'system_template_used', 'productio"
+2,500,4.98,True,False,"non_string_fields: ['script_executed', 'voice_profile', 'system_template_used', 'productio"
+3,500,4.97,True,False,"non_string_fields: ['script_executed', 'voice_profile', 'system_template_used', 'productio"
+4,200,8.24,True,True,
+5,500,6.89,True,False,"non_string_fields: ['script_executed', 'voice_profile', 'system_template_used', 'productio"
+6,500,4.72,True,False,"non_string_fields: ['script_executed', 'voice_profile', 'system_template_used', 'productio"
+7,200,8.38,True,True,
+8,200,8.33,True,True,
+9,200,9.08,True,True,
+10,200,8.92,True,True,
