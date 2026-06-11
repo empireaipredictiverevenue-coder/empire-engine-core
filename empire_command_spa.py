@@ -230,6 +230,42 @@ _SPA_CSS = """
 .agi-replay-btn{margin-left:6px;padding:2px 8px;border-radius:3px;font-size:10px;font-family:var(--font-mono);cursor:pointer;border:1px solid #555;background:transparent;color:inherit}.agi-replay-btn.active{border-color:#39FF14;background:rgba(57,255,20,0.1)}
 .agi-meta{font-family:var(--font-mono);font-size:10px;color:var(--empire-fog);margin-top:14px}
 
+/* ── PIPELINE ORBITAL LAYOUT ──────────────────────────────────── */
+@keyframes pipe-orbit-rotate{from{stroke-dashoffset:0}to{stroke-dashoffset:-1131}}
+@keyframes pipe-boss-glow{0%,100%{box-shadow:0 0 10px rgba(68,229,184,0.12),0 0 20px rgba(68,229,184,0.04)}50%{box-shadow:0 0 18px rgba(68,229,184,0.25),0 0 36px rgba(68,229,184,0.08)}}
+@keyframes pipe-node-enter{0%{opacity:0}100%{opacity:1}}
+@keyframes pipe-line-draw{0%{stroke-dashoffset:200}100%{stroke-dashoffset:0}}
+.pipe-orbital-wrapper{position:relative;width:100%;min-height:480px;display:flex;align-items:center;justify-content:center;margin:10px 0}
+.pipe-orbital-svg{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);pointer-events:none;z-index:1}
+.pipe-orbit-ring{fill:none;stroke:rgba(68,229,184,0.06);stroke-width:1px}
+.pipe-orbit-ring.outer{stroke:rgba(255,255,255,0.02);stroke-width:1px}
+.pipe-orbit-ring.pulse{stroke:rgba(68,229,184,0.1);stroke-width:2px;stroke-dasharray:16 8;animation:pipe-orbit-rotate 25s linear infinite}
+.pipe-orbit-line{fill:none;stroke:rgba(68,229,184,0.08);stroke-width:1px;stroke-dasharray:200;stroke-dashoffset:200;animation:pipe-line-draw 1.2s var(--ease-out-empire) forwards}
+.pipe-orbit-line.active{stroke:rgba(68,229,184,0.25);stroke-width:2px}
+.pipe-orbit-arrow{fill:rgba(68,229,184,0.15);stroke:none;animation:pipe-node-enter .5s var(--ease-out-empire) both}
+/* ── Boss card (conversion rate) ── */
+.pipe-boss-card{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:3;width:120px;height:120px;border-radius:50%;background:radial-gradient(circle,rgba(68,229,184,0.06) 0%,rgba(68,229,184,0.01) 55%,transparent 100%);border:2px solid rgba(68,229,184,0.2);display:flex;flex-direction:column;align-items:center;justify-content:center;animation:pipe-boss-glow 4s ease-in-out infinite;transition:all .3s var(--ease-snap)}
+.pipe-boss-card:hover{border-color:rgba(68,229,184,0.4);transform:translate(-50%,-50%) scale(1.05)}
+.pipe-boss-label{font-family:var(--font-mono);font-size:7px;color:var(--signal-teal);letter-spacing:.18em;text-transform:uppercase;margin-bottom:2px}
+.pipe-boss-rate{font-family:var(--font-display);font-weight:200;font-size:26px;color:var(--signal-teal);line-height:1}
+.pipe-boss-sub{font-family:var(--font-mono);font-size:7px;color:var(--empire-fog);letter-spacing:.08em;margin-top:2px}
+/* ── Pipeline stage nodes ── */
+.pipe-stage-node{position:absolute;top:50%;left:50%;z-index:2;width:80px;height:56px;background:var(--empire-elevated);border:1px solid var(--empire-divider);border-radius:10px;padding:5px 8px;text-align:center;transition:all .2s var(--ease-snap);animation:pipe-node-enter .35s var(--ease-out-empire) backwards}
+.pipe-stage-node:hover{border-color:var(--signal-teal-soft);z-index:4;box-shadow:0 3px 16px rgba(0,0,0,0.25)}
+.pipe-stage-node.sent{border-color:rgba(90,200,250,0.2);background:rgba(90,200,250,0.03)}
+.pipe-stage-node.replied{border-color:rgba(68,229,184,0.2);background:rgba(68,229,184,0.03)}
+.pipe-stage-node.converted{border-color:rgba(68,229,184,0.3);background:rgba(68,229,184,0.04);animation:pipe-boss-glow 3s ease-in-out infinite,pipe-node-enter .35s var(--ease-out-empire) backwards}
+.pipe-stage-icon{font-size:11px;display:block;margin-bottom:1px}
+.pipe-stage-count{font-family:var(--font-display);font-weight:200;font-size:17px;color:var(--empire-white);line-height:1;display:block}
+.pipe-stage-label{font-family:var(--font-mono);font-size:6px;color:var(--empire-fog);letter-spacing:.12em;text-transform:uppercase;margin-top:1px;display:block}
+/* ── Responsive ── */
+@media (max-width:768px){
+  .pipe-orbital-wrapper{min-height:380px}
+  .pipe-stage-node{width:64px;height:46px;padding:3px 6px}
+  .pipe-boss-card{width:96px;height:96px}
+  .pipe-boss-rate{font-size:22px}
+}
+
 /* ── PIPELINE BREAKDOWN ──────────────────────────────────────────── */
 .pipeline-breakdown{background:var(--empire-surface);border:1px solid var(--empire-border);padding:20px;margin-bottom:24px}
 .pipeline-h{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:16px;padding-bottom:14px;border-bottom:1px solid var(--empire-divider)}
@@ -510,8 +546,583 @@ n/* ── ACTIVITY LOG ──────────────────�
 .chart-legend-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
 .chart-legend-val{color:var(--empire-white);margin-left:auto;font-weight:500}
 
-"""
+/* ── KANBAN BOARD ────────────────────────────────────────────────── */
+.kb-board{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px;margin-bottom:20px}
+.kb-col{background:var(--empire-surface);border:1px solid var(--empire-border);padding:0;min-height:240px;display:flex;flex-direction:column}
+.kb-col-h{display:flex;justify-content:space-between;align-items:center;padding:14px 16px;border-bottom:1px solid var(--empire-divider)}
+.kb-col-title{font-weight:500;font-size:12px;color:var(--empire-white);letter-spacing:.02em}
+.kb-col-count{font-family:var(--font-mono);font-size:9px;color:var(--empire-mist);letter-spacing:.12em}
+.kb-col-body{flex:1;overflow-y:auto;max-height:60vh;padding:10px 12px}
+.kb-col-body.drag-over{background:var(--empire-elevated)}
+.kb-card{background:var(--empire-elevated);border:1px solid var(--empire-divider);padding:12px 14px;margin-bottom:8px;transition:border-color .15s var(--ease-snap),transform .1s var(--ease-snap);cursor:pointer}
+.kb-card:hover{border-color:var(--empire-border-hi);transform:translateY(-1px)}
+.kb-card:last-child{margin-bottom:0}
+.kb-card-id{font-family:var(--font-mono);font-size:9px;color:var(--empire-fog);letter-spacing:.06em;margin-bottom:6px}
+.kb-card-type{font-family:var(--font-mono);font-size:10px;color:var(--empire-silver);font-weight:500;margin-bottom:4px}
+.kb-card-agent{font-family:var(--font-mono);font-size:9px;color:var(--empire-mist);margin-bottom:6px;letter-spacing:.04em}
+.kb-card-meta{display:flex;align-items:center;justify-content:space-between;padding-top:8px;border-top:1px solid var(--empire-divider)}
+.kb-card-pri{font-family:var(--font-mono);font-size:9px;color:var(--empire-fog);letter-spacing:.06em}
+.kb-card-pri strong{color:var(--strike-cyan)}
+.kb-card-ts{font-family:var(--font-mono);font-size:8px;color:var(--empire-fog)}
+.kb-col-h.To-Do{border-bottom-color:var(--signal-teal-soft)}
+.kb-col-h.To-Do .kb-col-title{color:var(--signal-teal)}
+.kb-col-h.In-Progress{border-bottom-color:rgba(255,184,0,0.3)}
+.kb-col-h.In-Progress .kb-col-title{color:var(--status-amber)}
+.kb-col-h.Done{border-bottom-color:rgba(90,200,250,0.2)}
+.kb-col-h.Done .kb-col-title{color:var(--strike-cyan)}
+.kb-col-h.Failed{border-bottom-color:rgba(255,68,68,0.3)}
+.kb-col-h.Failed .kb-col-title{color:var(--status-red)}
+.kb-col-h.Blocked{border-bottom-color:rgba(128,128,128,0.3)}
+.kb-col-h.Blocked .kb-col-title{color:var(--empire-mist)}
+.kb-col-h.Retried{border-bottom-color:rgba(57,255,20,0.2)}
+.kb-col-h.Retried .kb-col-title{color:#39FF14}
+.kb-col-h.Promoted{border-bottom-color:rgba(200,162,200,0.3)}
+.kb-col-h.Promoted .kb-col-title{color:#c8a2c8}
+.kb-summary{display:flex;gap:12px;align-items:center;margin-bottom:16px;flex-wrap:wrap}
+.kb-summary-tag{font-family:var(--font-mono);font-size:10px;color:var(--empire-mist);letter-spacing:.08em}
+.kb-summary-tag strong{color:var(--empire-white)}
+.kb-empty{font-family:var(--font-ui);font-size:11px;color:var(--empire-fog);font-style:italic;padding:14px 0;text-align:center}
 
+/* ── REVENUE ─────────────────────────────────────────────────────── */
+.rv-alerts{display:flex;flex-direction:column;gap:8px;margin-bottom:20px}
+.rv-alert{display:flex;align-items:center;gap:12px;padding:10px 16px;font-family:var(--font-mono);font-size:10px;border-radius:6px;border:1px solid}
+.rv-alert.critical{background:rgba(255,68,68,0.06);border-color:rgba(255,68,68,0.25);color:var(--status-red)}
+.rv-alert.warning{background:rgba(255,184,0,0.06);border-color:rgba(255,184,0,0.2);color:var(--status-amber)}
+.rv-alert.info{background:rgba(90,200,250,0.04);border-color:rgba(90,200,250,0.15);color:var(--strike-cyan)}
+.rv-alert-lvl{text-transform:uppercase;letter-spacing:.12em;font-weight:700;flex-shrink:0}
+.rv-alert-msg{color:var(--empire-silver);flex:1}
+.rv-alert-niche{color:var(--empire-fog);font-size:9px;flex-shrink:0}
+.rv-split{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-bottom:20px}
+.rv-panel{background:var(--empire-surface);border:1px solid var(--empire-border);padding:18px}
+.rv-bar-row{display:grid;grid-template-columns:120px 1fr 70px 50px;gap:10px;align-items:center;padding:8px 0;border-bottom:1px solid var(--empire-divider);font-family:var(--font-mono)}
+.rv-bar-row:last-child{border-bottom:none}
+.rv-bar-label{display:flex;flex-direction:column;gap:2px}
+.rv-bar-lane{font-size:10px;color:var(--empire-white);font-weight:500}
+.rv-bar-niche{font-size:8px;color:var(--empire-fog);letter-spacing:.04em}
+.rv-bar-track{height:10px;background:var(--empire-elevated);border-radius:4px;overflow:hidden}
+.rv-bar-fill{height:100%;border-radius:4px;transition:width .6s var(--ease-out-empire);min-width:2px}
+.rv-bar-val{font-size:11px;color:var(--signal-teal);font-weight:500;text-align:right}
+.rv-bar-meta{font-size:8px;color:var(--empire-fog);text-align:right;letter-spacing:.04em}
+.rv-niche-card{background:var(--empire-elevated);border:1px solid var(--empire-divider);padding:12px 14px;margin-bottom:10px;transition:border-color .15s var(--ease-snap)}
+.rv-niche-card:last-child{margin-bottom:0}
+.rv-niche-card:hover{border-color:var(--empire-border-hi)}
+.rv-niche-name{font-weight:500;font-size:13px;color:var(--empire-white);margin-bottom:8px}
+.rv-niche-stats{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:6px}
+.rv-niche-stat{font-family:var(--font-mono);font-size:9px;color:var(--empire-mist);letter-spacing:.04em}
+.rv-niche-stat strong{color:var(--signal-teal);font-weight:600}
+.rv-niche-lanes{font-family:var(--font-mono);font-size:8px;color:var(--empire-fog);letter-spacing:.08em;text-transform:uppercase}
+
+/* ── REVENUE NARRATIVE ──────────────────────────────────────────── */
+.rv-narrative-panel{background:var(--empire-surface);border:1px solid var(--empire-border);padding:20px;margin-top:20px}
+.rv-narrative-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;padding-bottom:14px;border-bottom:1px solid var(--empire-divider)}
+.rv-narrative-title{font-weight:500;font-size:14px;color:var(--empire-white);letter-spacing:.02em}
+.rv-narrative-badge{font-family:var(--font-mono);font-size:9px;color:var(--strike-cyan);letter-spacing:.1em;text-transform:uppercase;padding:4px 10px;border:1px solid rgba(90,200,250,0.2);border-radius:var(--radius-pill)}
+.rv-narrative-summary{font-size:13px;color:var(--empire-silver);line-height:1.7;margin-bottom:18px;padding:14px 16px;background:var(--empire-elevated);border-left:3px solid var(--signal-teal)}
+.rv-narrative-section{margin-bottom:16px}
+.rv-narrative-section:last-child{margin-bottom:0}
+.rv-narrative-section-h{font-family:var(--font-mono);font-size:9px;color:var(--empire-mist);letter-spacing:.14em;text-transform:uppercase;margin-bottom:8px}
+.rv-narrative-item{font-size:12px;color:var(--empire-silver);padding:6px 0 6px 12px;border-left:2px solid var(--empire-divider);line-height:1.5}
+.rv-narrative-item.advice{color:var(--signal-teal);border-left-color:var(--signal-teal-soft);font-weight:500}
+.rv-narrative-item.risk{color:var(--status-amber);border-left-color:rgba(255,184,0,0.2)}
+.rv-narrative-meta{font-family:var(--font-mono);font-size:9px;color:var(--empire-fog);margin-top:18px;padding-top:12px;border-top:1px solid var(--empire-divider);letter-spacing:.04em}
+
+/* ── ACCURACY CHART ─────────────────────────────────────────────── */
+.rv-accuracy-panel{background:var(--empire-surface);border:1px solid var(--empire-border);padding:20px;margin-top:20px}
+.rv-accuracy-head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:18px;padding-bottom:14px;border-bottom:1px solid var(--empire-divider)}
+.rv-accuracy-title{font-weight:500;font-size:14px;color:var(--empire-white);letter-spacing:.02em}
+.rv-accuracy-summary{font-family:var(--font-mono);font-size:10px;color:var(--empire-mist);letter-spacing:.04em}
+.rv-accuracy-chart{display:flex;flex-direction:column;gap:6px;max-height:50vh;overflow-y:auto}
+.rv-acc-row{display:grid;grid-template-columns:56px 1fr 52px;gap:12px;align-items:center;padding:8px 0;border-bottom:1px solid var(--empire-divider)}
+.rv-acc-row:last-child{border-bottom:none}
+.rv-acc-date{font-family:var(--font-mono);font-size:9px;color:var(--empire-fog);letter-spacing:.04em}
+.rv-acc-bars{display:flex;flex-direction:column;gap:4px}
+.rv-acc-bar-wrap{position:relative;height:14px;background:var(--empire-elevated);border-radius:3px;overflow:hidden;display:flex;align-items:center}
+.rv-acc-bar{height:100%;border-radius:3px;transition:width .6s var(--ease-out-empire);min-width:2px;opacity:.85}
+.rv-acc-bar.forecast{background:var(--strike-cyan)}
+.rv-acc-bar.actual{background:var(--signal-teal)}
+.rv-acc-bar-label{position:absolute;left:8px;font-family:var(--font-mono);font-size:8px;color:var(--empire-white);letter-spacing:.04em;white-space:nowrap}
+.rv-acc-pct{font-family:var(--font-mono);font-size:11px;font-weight:500;text-align:right}
+.rv-accuracy-legend{display:flex;gap:18px;align-items:center;margin-top:14px;padding-top:12px;border-top:1px solid var(--empire-divider);font-family:var(--font-mono);font-size:9px;color:var(--empire-fog);flex-wrap:wrap}
+.rv-acc-legend-item{display:flex;align-items:center;gap:6px}
+.rv-acc-legend-swatch{width:10px;height:10px;border-radius:2px;display:inline-block}
+.rv-acc-legend-swatch.forecast{background:var(--strike-cyan)}
+.rv-acc-legend-swatch.actual{background:var(--signal-teal)}
+
+/* ── EXPORT BUTTONS ────────────────────────────────────────────────────────────── */
+.rv-accuracy-actions{display:flex;gap:8px;align-items:center}
+.rv-export-btn{font-family:var(--font-mono);font-size:9px;letter-spacing:.1em;text-transform:uppercase;padding:5px 12px;border-radius:4px;cursor:pointer;font-weight:600;transition:all .15s var(--ease-snap);background:transparent}
+.rv-export-btn.csv{color:var(--strike-cyan);border:1px solid rgba(90,200,250,0.2)}
+.rv-export-btn.csv:hover{background:rgba(90,200,250,0.08)}
+.rv-export-btn.pdf{color:var(--status-amber);border:1px solid rgba(255,184,0,0.2)}
+.rv-export-btn.pdf:hover{background:rgba(255,184,0,0.06)}
+
+/* ── SI STRATEGY EVOLUTION ────────────────────────────────────── */
+.si-niche-panel{background:var(--empire-surface);border:1px solid var(--empire-border);padding:20px;margin-bottom:20px}
+.si-niche-head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:16px;padding-bottom:14px;border-bottom:1px solid var(--empire-divider)}
+.si-niche-name{font-weight:500;font-size:16px;color:var(--empire-white);letter-spacing:.02em}
+.si-niche-meta{display:flex;gap:16px;align-items:center;font-family:var(--font-mono);font-size:10px;color:var(--empire-mist)}
+.si-niche-meta strong{color:var(--empire-white);font-weight:500}
+.si-niche-score{font-family:var(--font-mono);font-size:11px;color:var(--signal-teal);font-weight:500}
+.si-strategy-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px}
+.si-strat-card{background:var(--empire-elevated);border:1px solid var(--empire-divider);padding:16px 18px;transition:border-color .15s var(--ease-snap);position:relative}
+.si-strat-card:hover{border-color:var(--empire-border-hi)}
+.si-strat-card.best{border-color:rgba(68,229,184,0.25);background:rgba(68,229,184,0.03)}
+.si-strat-card.best::before{content:'★ BEST';position:absolute;top:-1px;right:16px;font-family:var(--font-mono);font-size:8px;letter-spacing:.12em;color:var(--signal-teal);padding:2px 8px;border:1px solid var(--signal-teal-soft);border-top:none;border-radius:0 0 4px 4px;background:var(--empire-surface)}
+.si-strat-top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px;gap:8px}
+.si-strat-name{font-weight:500;font-size:14px;color:var(--empire-white);word-break:break-word}
+.si-gen-bdg{display:inline-block;font-family:var(--font-mono);font-size:8px;letter-spacing:.1em;text-transform:uppercase;padding:2px 6px;border-radius:3px;background:rgba(90,200,250,0.12);color:var(--strike-cyan);border:1px solid rgba(90,200,250,0.2);margin-right:4px}
+.si-parent-bdg{display:inline-block;font-family:var(--font-mono);font-size:8px;letter-spacing:.08em;padding:2px 6px;border-radius:3px;color:var(--empire-fog);border:1px solid var(--empire-divider)}
+.si-strat-stats{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px;margin-bottom:14px}
+.si-stat{display:flex;flex-direction:column;align-items:center;gap:2px}
+.si-stat-val{font-family:var(--font-mono);font-size:16px;color:var(--empire-white);font-weight:500}
+.si-stat-val.teal{color:var(--signal-teal)}
+.si-stat-val.cyan{color:var(--strike-cyan)}
+.si-stat-val.dim{color:var(--empire-mist)}
+.si-stat-lbl{font-family:var(--font-mono);font-size:8px;color:var(--empire-fog);letter-spacing:.1em;text-transform:uppercase}
+.si-genome{padding-top:12px;border-top:1px solid var(--empire-divider)}
+.si-genome-label{font-family:var(--font-mono);font-size:8px;color:var(--empire-mist);letter-spacing:.14em;text-transform:uppercase;margin-bottom:10px}
+.si-trait{margin-bottom:8px}
+.si-trait:last-child{margin-bottom:0}
+.si-trait-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:3px}
+.si-trait-name{font-family:var(--font-mono);font-size:9px;color:var(--empire-mist)}
+.si-trait-pct{font-family:var(--font-mono);font-size:9px;font-weight:500}
+.si-trait-track{height:5px;background:var(--empire-surface);border-radius:3px;overflow:hidden}
+.si-trait-fill{height:100%;border-radius:3px;transition:width .6s var(--ease-out-empire);min-width:2px}
+.si-evo-footer{font-family:var(--font-mono);font-size:9px;color:var(--empire-fog);margin-top:16px;padding-top:12px;border-top:1px solid var(--empire-divider);display:flex;justify-content:space-between}
+
+
+/* ── SI EVOLUTION HISTORY ─────────────────────────────────────── */
+/* ── SI ADAPTIVE ENGINE ──────────────────────────────────────── */
+.sia-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:20px}
+.sia-tile{background:var(--empire-surface);border:1px solid var(--empire-divider);border-radius:10px;padding:18px 20px;position:relative;overflow:hidden}
+.sia-tile::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,var(--strike-cyan-soft),transparent)}
+.sia-tile-label{font-family:var(--font-mono);font-size:9px;color:var(--empire-mist);letter-spacing:.18em;text-transform:uppercase;margin-bottom:12px}
+.sia-tile-val{font-family:var(--font-display);font-weight:200;font-size:32px;color:var(--signal-teal);line-height:1}
+.sia-tile-val.dim{color:var(--empire-mist)}
+.sia-tile-sub{font-family:var(--font-mono);font-size:10px;color:var(--empire-fog);margin-top:6px}
+.sia-subsystem-panel{background:var(--empire-surface);border:1px solid var(--empire-border);padding:20px;margin-bottom:20px}
+.sia-subsystem-head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:16px;padding-bottom:14px;border-bottom:1px solid var(--empire-divider)}
+.sia-subsystem-title{font-weight:500;font-size:14px;color:var(--empire-white);letter-spacing:.02em}
+.sia-subsystem-count{font-family:var(--font-mono);font-size:10px;color:var(--empire-mist);letter-spacing:.14em}
+.sia-subsystem-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px}
+.sia-sub-card{background:var(--empire-elevated);border:1px solid var(--empire-divider);padding:14px 16px;display:flex;align-items:center;gap:12px;transition:border-color .15s var(--ease-snap);position:relative}
+.sia-sub-card:hover{border-color:var(--empire-border-hi)}
+.sia-sub-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0;background:var(--signal-teal);box-shadow:0 0 8px rgba(68,229,184,0.5);animation:empire-pulse var(--pulse-duration) infinite}
+.sia-sub-body{flex:1;min-width:0}
+.sia-sub-name{font-size:13px;color:var(--empire-white);font-weight:500;font-family:var(--font-mono);letter-spacing:.04em;word-break:break-word}
+.sia-sub-meta{font-family:var(--font-mono);font-size:9px;color:var(--empire-fog);margin-top:3px;letter-spacing:.04em}
+.sia-adoption-panel{background:var(--empire-surface);border:1px solid var(--empire-border);padding:20px;margin-bottom:20px}
+.sia-adoption-head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:16px;padding-bottom:14px;border-bottom:1px solid var(--empire-divider)}
+.sia-adoption-title{font-weight:500;font-size:14px;color:var(--empire-white);letter-spacing:.02em}
+.sia-adoption-count{font-family:var(--font-mono);font-size:10px;color:var(--empire-mist);letter-spacing:.14em}
+.sia-adoption-feed{max-height:500px;overflow-y:auto}
+.sia-adoption-batch{padding:14px 0;border-bottom:1px solid var(--empire-divider);animation:empire-fade-up .25s var(--ease-out-empire)}
+.sia-adoption-batch:last-child{border-bottom:none}
+.sia-adoption-head-row{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px;gap:10px;flex-wrap:wrap}
+.sia-adoption-ts{font-family:var(--font-mono);font-size:10px;color:var(--empire-fog);letter-spacing:.04em}
+.sia-adoption-bdg{display:inline-block;font-family:var(--font-mono);font-size:8px;letter-spacing:.12em;text-transform:uppercase;padding:3px 9px;border-radius:var(--radius-pill);border:1px solid var(--signal-teal-soft);color:var(--signal-teal);background:rgba(68,229,184,0.05)}
+.sia-adoption-changes{display:flex;flex-direction:column;gap:6px;padding-left:12px;border-left:2px solid var(--empire-divider)}
+.sia-adoption-change{font-family:var(--font-mono);font-size:10px;color:var(--empire-silver);padding:4px 0;line-height:1.5;display:flex;gap:8px;align-items:baseline;flex-wrap:wrap}
+.sia-change-key{color:var(--strike-cyan);font-weight:500;letter-spacing:.04em}
+.sia-change-sub{color:var(--empire-fog);font-size:9px;letter-spacing:.08em;text-transform:uppercase;padding:1px 6px;border:1px solid var(--empire-divider);border-radius:3px}
+.sia-change-val{color:var(--empire-white);font-weight:500}
+.sia-adoption-empty{font-family:var(--font-ui);font-size:11px;color:var(--empire-fog);font-style:italic;padding:24px 0;text-align:center}
+@media(max-width:768px){.sia-grid{grid-template-columns:repeat(2,1fr)}.sia-subsystem-grid{grid-template-columns:1fr}}
+
+.si-evo-history{background:var(--empire-surface);border:1px solid var(--empire-border);padding:18px;margin-top:20px}
+.si-evo-history-head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid var(--empire-divider)}
+.si-evo-history-title{font-weight:500;font-size:13px;color:var(--empire-white);letter-spacing:.02em}
+.si-evo-history-count{font-family:var(--font-mono);font-size:9px;color:var(--empire-mist);letter-spacing:.14em}
+.si-evo-events{max-height:400px;overflow-y:auto}
+.si-evo-event{display:grid;grid-template-columns:140px 72px 120px 1fr;gap:10px;padding:8px 0;border-bottom:1px solid var(--empire-divider);align-items:baseline;font-family:var(--font-mono);font-size:9px}
+.si-evo-event:last-child{border-bottom:none}
+.si-evo-event-ts{color:var(--empire-fog)}
+.si-evo-event-type{font-size:8px;letter-spacing:.12em;text-transform:uppercase;padding:2px 6px;border-radius:3px;font-weight:600;text-align:center}
+.si-evo-event-type.evolve{color:var(--strike-cyan);border:1px solid rgba(90,200,250,0.2);background:rgba(90,200,250,0.06)}
+.si-evo-event-type.deactivate{color:var(--status-red);border:1px solid rgba(255,68,68,0.2);background:rgba(255,68,68,0.04)}
+.si-evo-event-niche{color:var(--empire-mist)}
+.si-evo-event-detail{color:var(--empire-silver)}
+
+
+/* ── SI STRATEGY EVOLUTION ────────────────────────────────────── */
+.si-niche-panel{background:var(--empire-surface);border:1px solid var(--empire-border);padding:20px;margin-bottom:20px}
+.si-niche-head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:16px;padding-bottom:14px;border-bottom:1px solid var(--empire-divider)}
+.si-niche-name{font-weight:500;font-size:16px;color:var(--empire-white);letter-spacing:.02em}
+.si-niche-meta{display:flex;gap:16px;align-items:center;font-family:var(--font-mono);font-size:10px;color:var(--empire-mist)}
+.si-niche-meta strong{color:var(--empire-white);font-weight:500}
+.si-niche-score{font-family:var(--font-mono);font-size:11px;color:var(--signal-teal);font-weight:500}
+.si-strategy-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px}
+.si-strat-card{background:var(--empire-elevated);border:1px solid var(--empire-divider);padding:16px 18px;transition:border-color .15s var(--ease-snap);position:relative}
+.si-strat-card:hover{border-color:var(--empire-border-hi)}
+.si-strat-card.best{border-color:rgba(68,229,184,0.25);background:rgba(68,229,184,0.03)}
+.si-strat-card.best::before{content:'★ BEST';position:absolute;top:-1px;right:16px;font-family:var(--font-mono);font-size:8px;letter-spacing:.12em;color:var(--signal-teal);padding:2px 8px;border:1px solid var(--signal-teal-soft);border-top:none;border-radius:0 0 4px 4px;background:var(--empire-surface)}
+.si-strat-top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px;gap:8px}
+.si-strat-name{font-weight:500;font-size:14px;color:var(--empire-white);word-break:break-word}
+.si-gen-bdg{display:inline-block;font-family:var(--font-mono);font-size:8px;letter-spacing:.1em;text-transform:uppercase;padding:2px 6px;border-radius:3px;background:rgba(90,200,250,0.12);color:var(--strike-cyan);border:1px solid rgba(90,200,250,0.2);margin-right:4px}
+.si-parent-bdg{display:inline-block;font-family:var(--font-mono);font-size:8px;letter-spacing:.08em;padding:2px 6px;border-radius:3px;color:var(--empire-fog);border:1px solid var(--empire-divider)}
+.si-strat-stats{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px;margin-bottom:14px}
+.si-stat{display:flex;flex-direction:column;align-items:center;gap:2px}
+.si-stat-val{font-family:var(--font-mono);font-size:16px;color:var(--empire-white);font-weight:500}
+.si-stat-val.teal{color:var(--signal-teal)}
+.si-stat-val.cyan{color:var(--strike-cyan)}
+.si-stat-val.dim{color:var(--empire-mist)}
+.si-stat-lbl{font-family:var(--font-mono);font-size:8px;color:var(--empire-fog);letter-spacing:.1em;text-transform:uppercase}
+.si-genome{padding-top:12px;border-top:1px solid var(--empire-divider)}
+.si-genome-label{font-family:var(--font-mono);font-size:8px;color:var(--empire-mist);letter-spacing:.14em;text-transform:uppercase;margin-bottom:10px}
+.si-trait{margin-bottom:8px}
+.si-trait:last-child{margin-bottom:0}
+.si-trait-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:3px}
+.si-trait-name{font-family:var(--font-mono);font-size:9px;color:var(--empire-mist)}
+.si-trait-pct{font-family:var(--font-mono);font-size:9px;font-weight:500}
+.si-trait-track{height:5px;background:var(--empire-surface);border-radius:3px;overflow:hidden}
+.si-trait-fill{height:100%;border-radius:3px;transition:width .6s var(--ease-out-empire);min-width:2px}
+.si-evo-footer{font-family:var(--font-mono);font-size:9px;color:var(--empire-fog);margin-top:16px;padding-top:12px;border-top:1px solid var(--empire-divider);display:flex;justify-content:space-between}
+
+
+/* ── SI EVOLUTION HISTORY ─────────────────────────────────────── */
+/* ── SI ADAPTIVE ENGINE ──────────────────────────────────────── */
+.sia-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:20px}
+.sia-tile{background:var(--empire-surface);border:1px solid var(--empire-divider);border-radius:10px;padding:18px 20px;position:relative;overflow:hidden}
+.sia-tile::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,var(--strike-cyan-soft),transparent)}
+.sia-tile-label{font-family:var(--font-mono);font-size:9px;color:var(--empire-mist);letter-spacing:.18em;text-transform:uppercase;margin-bottom:12px}
+.sia-tile-val{font-family:var(--font-display);font-weight:200;font-size:32px;color:var(--signal-teal);line-height:1}
+.sia-tile-val.dim{color:var(--empire-mist)}
+.sia-tile-sub{font-family:var(--font-mono);font-size:10px;color:var(--empire-fog);margin-top:6px}
+.sia-subsystem-panel{background:var(--empire-surface);border:1px solid var(--empire-border);padding:20px;margin-bottom:20px}
+.sia-subsystem-head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:16px;padding-bottom:14px;border-bottom:1px solid var(--empire-divider)}
+.sia-subsystem-title{font-weight:500;font-size:14px;color:var(--empire-white);letter-spacing:.02em}
+.sia-subsystem-count{font-family:var(--font-mono);font-size:10px;color:var(--empire-mist);letter-spacing:.14em}
+.sia-subsystem-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px}
+.sia-sub-card{background:var(--empire-elevated);border:1px solid var(--empire-divider);padding:14px 16px;display:flex;align-items:center;gap:12px;transition:border-color .15s var(--ease-snap);position:relative}
+.sia-sub-card:hover{border-color:var(--empire-border-hi)}
+.sia-sub-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0;background:var(--signal-teal);box-shadow:0 0 8px rgba(68,229,184,0.5);animation:empire-pulse var(--pulse-duration) infinite}
+.sia-sub-body{flex:1;min-width:0}
+.sia-sub-name{font-size:13px;color:var(--empire-white);font-weight:500;font-family:var(--font-mono);letter-spacing:.04em;word-break:break-word}
+.sia-sub-meta{font-family:var(--font-mono);font-size:9px;color:var(--empire-fog);margin-top:3px;letter-spacing:.04em}
+.sia-adoption-panel{background:var(--empire-surface);border:1px solid var(--empire-border);padding:20px;margin-bottom:20px}
+.sia-adoption-head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:16px;padding-bottom:14px;border-bottom:1px solid var(--empire-divider)}
+.sia-adoption-title{font-weight:500;font-size:14px;color:var(--empire-white);letter-spacing:.02em}
+.sia-adoption-count{font-family:var(--font-mono);font-size:10px;color:var(--empire-mist);letter-spacing:.14em}
+.sia-adoption-feed{max-height:500px;overflow-y:auto}
+.sia-adoption-batch{padding:14px 0;border-bottom:1px solid var(--empire-divider);animation:empire-fade-up .25s var(--ease-out-empire)}
+.sia-adoption-batch:last-child{border-bottom:none}
+.sia-adoption-head-row{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px;gap:10px;flex-wrap:wrap}
+.sia-adoption-ts{font-family:var(--font-mono);font-size:10px;color:var(--empire-fog);letter-spacing:.04em}
+.sia-adoption-bdg{display:inline-block;font-family:var(--font-mono);font-size:8px;letter-spacing:.12em;text-transform:uppercase;padding:3px 9px;border-radius:var(--radius-pill);border:1px solid var(--signal-teal-soft);color:var(--signal-teal);background:rgba(68,229,184,0.05)}
+.sia-adoption-changes{display:flex;flex-direction:column;gap:6px;padding-left:12px;border-left:2px solid var(--empire-divider)}
+.sia-adoption-change{font-family:var(--font-mono);font-size:10px;color:var(--empire-silver);padding:4px 0;line-height:1.5;display:flex;gap:8px;align-items:baseline;flex-wrap:wrap}
+.sia-change-key{color:var(--strike-cyan);font-weight:500;letter-spacing:.04em}
+.sia-change-sub{color:var(--empire-fog);font-size:9px;letter-spacing:.08em;text-transform:uppercase;padding:1px 6px;border:1px solid var(--empire-divider);border-radius:3px}
+.sia-change-val{color:var(--empire-white);font-weight:500}
+.sia-adoption-empty{font-family:var(--font-ui);font-size:11px;color:var(--empire-fog);font-style:italic;padding:24px 0;text-align:center}
+@media(max-width:768px){.sia-grid{grid-template-columns:repeat(2,1fr)}.sia-subsystem-grid{grid-template-columns:1fr}}
+
+.si-evo-history{background:var(--empire-surface);border:1px solid var(--empire-border);padding:18px;margin-top:20px}
+.si-evo-history-head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid var(--empire-divider)}
+.si-evo-history-title{font-weight:500;font-size:13px;color:var(--empire-white);letter-spacing:.02em}
+.si-evo-history-count{font-family:var(--font-mono);font-size:9px;color:var(--empire-mist);letter-spacing:.14em}
+.si-evo-events{max-height:400px;overflow-y:auto}
+.si-evo-event{display:grid;grid-template-columns:140px 72px 120px 1fr;gap:10px;padding:8px 0;border-bottom:1px solid var(--empire-divider);align-items:baseline;font-family:var(--font-mono);font-size:9px}
+.si-evo-event:last-child{border-bottom:none}
+.si-evo-event-ts{color:var(--empire-fog)}
+.si-evo-event-type{font-size:8px;letter-spacing:.12em;text-transform:uppercase;padding:2px 6px;border-radius:3px;font-weight:600;text-align:center}
+.si-evo-event-type.evolve{color:var(--strike-cyan);border:1px solid rgba(90,200,250,0.2);background:rgba(90,200,250,0.06)}
+.si-evo-event-type.deactivate{color:var(--status-red);border:1px solid rgba(255,68,68,0.2);background:rgba(255,68,68,0.04)}
+.si-evo-event-niche{color:var(--empire-mist)}
+.si-evo-event-detail{color:var(--empire-silver)}
+
+
+/* ── PANEL_COURT 5-PANEL CONSENSUS ───────────────────────────────── */
+.pc-summary-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:20px}
+.pc-summary-card{background:var(--empire-surface);border:1px solid var(--empire-border);padding:16px 18px;text-align:center}
+.pc-summary-val{font-family:var(--font-display);font-weight:200;font-size:32px;color:var(--empire-white);line-height:1}
+.pc-summary-val.teal{color:var(--signal-teal)}
+.pc-summary-val.amber{color:var(--status-amber)}
+.pc-summary-val.red{color:var(--status-red)}
+.pc-summary-val.dim{color:var(--empire-mist)}
+.pc-summary-lbl{font-family:var(--font-mono);font-size:8px;color:var(--empire-fog);letter-spacing:.14em;text-transform:uppercase;margin-top:6px}
+.pc-decision-list{display:flex;flex-direction:column;gap:8px}
+.pc-decision-card{background:var(--empire-surface);border:1px solid var(--empire-border);padding:14px 18px;transition:border-color .15s var(--ease-snap);cursor:pointer}
+.pc-decision-card:hover{border-color:var(--empire-border-hi)}
+.pc-decision-card.expanded{border-color:var(--signal-teal-soft)}
+.pc-decision-row{display:grid;grid-template-columns:1fr 140px 56px 80px;gap:14px;align-items:center}
+.pc-decision-lead{display:flex;flex-direction:column;gap:2px;min-width:0}
+.pc-decision-lead-name{font-size:12px;color:var(--empire-white);font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pc-decision-lead-id{font-family:var(--font-mono);font-size:8px;color:var(--empire-fog);letter-spacing:.06em}
+.pc-decision-panels-mini{display:flex;gap:4px}
+.pc-mini-vote{font-family:var(--font-mono);font-size:7px;letter-spacing:.1em;padding:2px 5px;border-radius:3px;text-transform:uppercase;font-weight:600;border:1px solid}
+.pc-mini-vote.approve{color:var(--signal-teal);border-color:rgba(68,229,184,0.2);background:rgba(68,229,184,0.04)}
+.pc-mini-vote.reject{color:var(--status-red);border-color:rgba(255,68,68,0.2);background:rgba(255,68,68,0.04)}
+.pc-mini-vote.push{color:var(--strike-cyan);border-color:rgba(90,200,250,0.2);background:rgba(90,200,250,0.04)}
+.pc-mini-vote.hold{color:var(--status-amber);border-color:rgba(255,184,0,0.2);background:rgba(255,184,0,0.04)}
+.pc-mini-vote.skip{color:var(--empire-fog);border-color:var(--empire-divider)}
+.pc-mini-vote.pri{color:var(--strike-cyan);border-color:rgba(90,200,250,0.2);background:rgba(90,200,250,0.04)}
+.pc-mini-vote.dep{color:var(--status-amber);border-color:rgba(255,184,0,0.2);background:rgba(255,184,0,0.04)}
+.pc-mini-vote.std{color:var(--empire-fog);border-color:var(--empire-divider)}
+.pc-mini-vote.auth{color:var(--signal-teal);border-color:rgba(68,229,184,0.2);background:rgba(68,229,184,0.04)}
+.pc-mini-vote.inauth{color:var(--status-red);border-color:rgba(255,68,68,0.2);background:rgba(255,68,68,0.04)}
+.pc-decision-score{display:flex;justify-content:center}
+.pc-score-circle{width:42px;height:42px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:var(--font-mono);font-size:13px;font-weight:600;border:2px solid}
+.pc-score-ok{color:var(--signal-teal);border-color:rgba(68,229,184,0.3);background:rgba(68,229,184,0.06)}
+.pc-score-warn{color:var(--status-amber);border-color:rgba(255,184,0,0.3);background:rgba(255,184,0,0.06)}
+.pc-score-bad{color:var(--status-red);border-color:rgba(255,68,68,0.3);background:rgba(255,68,68,0.06)}
+.pc-decision-verdict{text-align:center}
+.pc-verdict-badge{display:inline-block;font-family:var(--font-mono);font-size:8px;letter-spacing:.12em;text-transform:uppercase;padding:3px 10px;border-radius:4px;font-weight:600}
+.pc-verdict-badge.dispatch{color:var(--signal-teal);border:1px solid var(--signal-teal-soft)}
+.pc-verdict-badge.reject{color:var(--status-red);border:1px solid rgba(255,68,68,0.2)}
+.pc-decision-detail{margin-top:16px;padding-top:14px;border-top:1px solid var(--empire-divider)}
+.pc-detail-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:14px}
+.pc-detail-panel{background:var(--empire-elevated);border:1px solid var(--empire-divider);padding:12px 14px;border-radius:4px}
+.pc-detail-panel.vetoed{border-color:rgba(255,68,68,0.2);background:rgba(255,68,68,0.03)}
+.pc-detail-panel-head{display:flex;align-items:center;gap:6px;margin-bottom:8px}
+.pc-detail-panel-icon{font-size:12px;flex-shrink:0}
+.pc-detail-panel-name{font-size:10px;color:var(--empire-white);font-weight:500}
+.pc-detail-decision{font-family:var(--font-mono);font-size:7px;letter-spacing:.1em;text-transform:uppercase;padding:1px 5px;border-radius:3px;font-weight:600;margin-left:auto}
+.pc-detail-decision.approve{color:var(--signal-teal);border:1px solid rgba(68,229,184,0.2)}
+.pc-detail-decision.reject{color:var(--status-red);border:1px solid rgba(255,68,68,0.2)}
+.pc-detail-decision.push{color:var(--strike-cyan);border:1px solid rgba(90,200,250,0.2)}
+.pc-detail-decision.hold{color:var(--status-amber);border:1px solid rgba(255,184,0,0.2)}
+.pc-detail-decision.pri{color:var(--strike-cyan);border:1px solid rgba(90,200,250,0.2)}
+.pc-detail-decision.std{color:var(--empire-fog);border:1px solid var(--empire-divider)}
+.pc-detail-decision.auth{color:var(--signal-teal);border:1px solid rgba(68,229,184,0.2)}
+.pc-detail-decision.inauth{color:var(--status-red);border:1px solid rgba(255,68,68,0.2)}
+.pc-detail-stat{font-family:var(--font-mono);font-size:9px;color:var(--empire-mist);letter-spacing:.04em}
+.pc-judge-block{background:var(--empire-elevated);border:1px solid var(--empire-divider);padding:14px 16px;border-radius:4px;border-left:3px solid var(--strike-cyan)}
+.pc-judge-head{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.pc-judge-weighted{font-family:var(--font-mono);font-size:8px;color:var(--empire-fog);letter-spacing:.08em;margin-left:auto}
+.pc-judge-reasoning{font-size:11px;color:var(--empire-silver);line-height:1.6}
+
+
+/* ── PANEL COURT ORBITAL LAYOUT ──────────────────────────────── */
+@keyframes pc-orbit-pulse{0%,100%{box-shadow:0 0 8px rgba(68,229,184,0.2)}50%{box-shadow:0 0 18px rgba(68,229,184,0.5)}}
+@keyframes pc-orbit-rotate{from{stroke-dashoffset:0}to{stroke-dashoffset:-1131}}
+@keyframes pc-boss-glow{0%,100%{box-shadow:0 0 12px rgba(90,200,250,0.15),0 0 24px rgba(90,200,250,0.05)}50%{box-shadow:0 0 20px rgba(90,200,250,0.3),0 0 40px rgba(90,200,250,0.1)}}
+@keyframes pc-agent-enter{0%{opacity:0}100%{opacity:1}}
+@keyframes pc-line-draw{0%{stroke-dashoffset:200}100%{stroke-dashoffset:0}}
+.pc-pool-panel{background:var(--empire-surface);border:1px solid var(--empire-border);padding:20px;margin-bottom:20px}
+.pc-pool-head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:16px;padding-bottom:14px;border-bottom:1px solid var(--empire-divider)}
+.pc-pool-title{font-weight:500;font-size:14px;color:var(--empire-white);letter-spacing:.02em}
+.pc-pool-tag{font-family:var(--font-mono);font-size:10px;color:var(--empire-mist);letter-spacing:.14em}
+/* ── Orbital wrapper ── */
+.pc-orbital-wrapper{position:relative;width:100%;min-height:540px;display:flex;align-items:center;justify-content:center;margin:10px 0}
+.pc-orbital-svg{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);pointer-events:none;z-index:1}
+.pc-orbit-ring{fill:none;stroke:rgba(255,255,255,0.04);stroke-width:1px}
+.pc-orbit-ring.outer{stroke:rgba(255,255,255,0.03);stroke-width:1px}
+.pc-orbit-ring.inner{stroke:rgba(68,229,184,0.06);stroke-width:1px;stroke-dasharray:4 8}
+.pc-orbit-ring.pulse{stroke:rgba(68,229,184,0.08);stroke-width:2px;stroke-dasharray:20 10;animation:pc-orbit-rotate 20s linear infinite}
+.pc-orbit-line{fill:none;stroke:rgba(90,200,250,0.1);stroke-width:1px;stroke-dasharray:200;stroke-dashoffset:200;animation:pc-line-draw 1.5s var(--ease-out-empire) forwards}
+.pc-orbit-line.winner{stroke:rgba(68,229,184,0.25);stroke-width:1.5px}
+/* ── Critique arrows ── */
+.pc-critique-arrow{fill:none;stroke:rgba(255,184,0,0.25);stroke-width:1.2px;stroke-dasharray:5 4;stroke-linecap:round;pointer-events:none}
+.pc-critique-arrow.severe{stroke:rgba(255,68,68,0.35);stroke-width:1.8px}
+.pc-critique-arrow.mild{stroke:rgba(68,229,184,0.18);stroke-width:1px;stroke-dasharray:2 6}
+.pc-critique-arrowhead{fill:rgba(255,184,0,0.3)}
+.pc-critique-arrowhead.severe{fill:rgba(255,68,68,0.4)}
+.pc-critique-arrowhead.mild{fill:rgba(68,229,184,0.2)}
+/* ── Critique detail ── */
+.pc-critique-detail{margin-top:14px;padding-top:14px;border-top:1px solid var(--empire-divider)}
+.pc-critique-title{font-family:var(--font-mono);font-size:9px;color:var(--empire-mist);letter-spacing:.14em;text-transform:uppercase;margin-bottom:10px}
+.pc-critique-card{background:var(--empire-surface);border:1px solid var(--empire-divider);padding:10px 12px;margin-bottom:8px;border-radius:4px;border-left:3px solid rgba(255,184,0,0.3)}
+.pc-critique-card.severe{border-left-color:rgba(255,68,68,0.4)}
+.pc-critique-card.mild{border-left-color:rgba(68,229,184,0.3)}
+.pc-critique-head{display:flex;gap:10px;align-items:center;margin-bottom:6px;font-family:var(--font-mono);font-size:8px}
+.pc-critique-flow{color:var(--status-amber)}
+.pc-critique-sev{color:var(--empire-mist);letter-spacing:.08em}
+.pc-critique-sev.high{color:var(--status-red)}
+.pc-critique-sev.low{color:var(--signal-teal)}
+.pc-critique-adj{color:var(--strike-cyan);margin-left:auto}
+.pc-critique-text{font-size:10px;color:var(--empire-silver);line-height:1.5}
+/* ── Boss agent (center) ── */
+.pc-boss-card{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:3;width:130px;height:130px;border-radius:50%;background:radial-gradient(circle,rgba(90,200,250,0.08) 0%,rgba(90,200,250,0.02) 60%,transparent 100%);border:2px solid rgba(90,200,250,0.2);display:flex;flex-direction:column;align-items:center;justify-content:center;animation:pc-boss-glow 3s ease-in-out infinite;transition:all .3s var(--ease-snap)}
+.pc-boss-card:hover{border-color:rgba(90,200,250,0.4);transform:translate(-50%,-50%) scale(1.05)}
+.pc-boss-label{font-family:var(--font-mono);font-size:7px;color:var(--strike-cyan);letter-spacing:.18em;text-transform:uppercase;margin-bottom:4px}
+.pc-boss-title{font-weight:500;font-size:13px;color:var(--empire-white);letter-spacing:.02em;margin-bottom:2px}
+.pc-boss-sub{font-family:var(--font-mono);font-size:7px;color:var(--empire-fog);letter-spacing:.1em}
+.pc-boss-roles{display:flex;gap:3px;margin-top:6px;flex-wrap:wrap;justify-content:center}
+.pc-boss-role{font-family:var(--font-mono);font-size:6px;letter-spacing:.08em;text-transform:uppercase;padding:1px 4px;border-radius:2px;border:1px solid;color:var(--empire-mist);border-color:var(--empire-divider)}
+/* ── Orbiting agent cards ── */
+.pc-orbital-agent{position:absolute;top:50%;left:50%;z-index:2;width:82px;height:52px;background:var(--empire-elevated);border:1px solid var(--empire-divider);border-radius:8px;padding:6px 8px;text-align:center;transition:all .2s var(--ease-snap);animation:pc-agent-enter .4s var(--ease-out-empire) backwards}
+.pc-orbital-agent:hover{border-color:var(--empire-border-hi);z-index:4;box-shadow:0 4px 20px rgba(0,0,0,0.3)}
+.pc-orbital-agent.winner{border-color:rgba(68,229,184,0.35);background:rgba(68,229,184,0.04);animation:pc-orbit-pulse 2s ease-in-out infinite,pc-agent-enter .4s var(--ease-out-empire) backwards}
+.pc-orbital-agent-id{font-family:var(--font-mono);font-size:9px;color:var(--empire-white);font-weight:500;display:block;margin-bottom:1px}
+.pc-orbital-agent-temp{font-family:var(--font-mono);font-size:7px;letter-spacing:.08em;padding:0 3px;border-radius:2px;display:inline-block}
+.pc-orbital-agent-temp.cold{color:var(--strike-cyan);border:1px solid rgba(90,200,250,0.2);background:rgba(90,200,250,0.04)}
+.pc-orbital-agent-temp.warm{color:var(--status-amber);border:1px solid rgba(255,184,0,0.2);background:rgba(255,184,0,0.04)}
+.pc-orbital-agent-temp.hot{color:var(--status-red);border:1px solid rgba(255,68,68,0.2);background:rgba(255,68,68,0.04)}
+.pc-orbital-agent-wr{font-family:var(--font-display);font-weight:200;font-size:15px;color:var(--signal-teal);line-height:1;display:block}
+.pc-orbital-agent-wl{font-family:var(--font-mono);font-size:6px;color:var(--empire-fog);letter-spacing:.06em}
+.pc-orbital-agent-won{font-family:var(--font-mono);font-size:6px;letter-spacing:.08em;text-transform:uppercase;color:var(--signal-teal);position:absolute;top:-8px;left:50%;transform:translateX(-50%);background:var(--empire-surface);padding:1px 5px;border-radius:3px;border:1px solid rgba(68,229,184,0.2);white-space:nowrap}
+/* ── Convergence Chart ───────────────────────────────────── */
+.pc-converge-panel{background:var(--empire-surface);border:1px solid var(--empire-border);padding:20px;margin-top:20px}
+.pc-converge-head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:16px;padding-bottom:14px;border-bottom:1px solid var(--empire-divider)}
+.pc-converge-title{font-weight:500;font-size:14px;color:var(--empire-white);letter-spacing:.02em}
+.pc-converge-count{font-family:var(--font-mono);font-size:10px;color:var(--signal-teal)}
+.pc-converge-chart{position:relative;width:100%;height:220px;padding:0 8px}
+.pc-converge-svg{width:100%;height:100%}
+.pc-converge-grid{stroke:var(--empire-divider);stroke-width:0.5px;stroke-dasharray:3 4}
+.pc-converge-line{fill:none;stroke-width:2px;stroke-linecap:round;transition:opacity .2s var(--ease-snap)}
+.pc-converge-line:hover{stroke-width:3px;opacity:1 !important}
+.pc-converge-label{font-family:var(--font-mono);font-size:7px;fill:var(--empire-fog)}
+.pc-converge-y-label{font-family:var(--font-mono);font-size:6px;fill:var(--empire-fog);letter-spacing:.08em}
+.pc-converge-legend{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px;padding-top:12px;border-top:1px solid var(--empire-divider);justify-content:center}
+.pc-converge-legend-item{display:flex;align-items:center;gap:4px;font-family:var(--font-mono);font-size:7px;color:var(--empire-mist);cursor:pointer;transition:opacity .2s var(--ease-snap)}
+.pc-converge-legend-item.dimmed{opacity:.35}
+.pc-converge-legend-swatch{width:10px;height:2px;border-radius:1px;flex-shrink:0}
+/* ── Hover tooltip ── */
+.pc-hover-tooltip{background:var(--empire-elevated);border:1px solid var(--strike-cyan);border-radius:8px;padding:12px 14px;max-width:320px;box-shadow:0 8px 32px rgba(0,0,0,0.5);pointer-events:none;animation:pc-agent-enter .15s var(--ease-out-empire)}
+.pc-tooltip-framing{font-size:10px;color:var(--empire-silver);line-height:1.5;margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid var(--empire-divider)}
+.pc-tooltip-stats{display:flex;gap:12px;flex-wrap:wrap;font-family:var(--font-mono);font-size:9px;color:var(--empire-mist);margin-bottom:4px}
+.pc-tooltip-stats span{white-space:nowrap}
+/* ── Selected agent ── */
+.pc-orbital-agent.selected{border-color:var(--strike-cyan)!important;box-shadow:0 0 16px rgba(90,200,250,0.3);z-index:5!important}
+/* ── Agent detail panel ── */
+.pc-agent-detail{background:var(--empire-surface);border:1px solid var(--strike-cyan);border-radius:10px;padding:0;margin:16px 0;overflow:hidden;animation:pc-agent-enter .3s var(--ease-out-empire)}
+.pc-agent-detail-head{display:flex;justify-content:space-between;align-items:center;padding:14px 18px;background:rgba(90,200,250,0.06);border-bottom:1px solid var(--empire-divider)}
+.pc-agent-detail-title{font-weight:500;font-size:14px;color:var(--strike-cyan);letter-spacing:.02em}
+.pc-agent-detail-close{background:none;border:1px solid var(--empire-divider);color:var(--empire-mist);cursor:pointer;font-size:14px;padding:4px 10px;border-radius:4px;line-height:1;transition:all .15s var(--ease-snap)}
+.pc-agent-detail-close:hover{color:var(--status-red);border-color:var(--status-red)}
+.pc-agent-detail-body{padding:16px 18px}
+.pc-agent-detail-framing{font-size:11px;color:var(--empire-silver);line-height:1.6;margin-bottom:14px;padding:10px 14px;background:var(--empire-elevated);border-radius:6px;border-left:3px solid var(--strike-cyan)}
+.pc-agent-detail-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:12px}
+.pc-agent-stat{background:var(--empire-elevated);border:1px solid var(--empire-divider);padding:10px 12px;text-align:center;border-radius:6px}
+.pc-agent-stat-val{font-family:var(--font-mono);font-size:16px;color:var(--empire-white);font-weight:500;display:block}
+.pc-agent-stat-lbl{font-family:var(--font-mono);font-size:8px;color:var(--empire-fog);letter-spacing:.12em;text-transform:uppercase;display:block;margin-top:4px}
+.pc-agent-detail-meta{font-family:var(--font-mono);font-size:9px;color:var(--empire-fog);padding-top:8px;border-top:1px solid var(--empire-divider)}
+@keyframes pc-chart-draw{0%{stroke-dashoffset:1000}100%{stroke-dashoffset:0}}
+/* ── Responsive ── */
+@media (max-width:768px){
+  .pc-orbital-wrapper{min-height:440px}
+  .pc-orbital-agent{width:65px;height:44px;padding:4px 6px}
+  .pc-boss-card{width:100px;height:100px}
+  .pc-boss-title{font-size:11px}
+}
+.pc-decision-panel{background:var(--empire-surface);border:1px solid var(--empire-border);padding:20px}
+.pc-decision-head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:16px;padding-bottom:14px;border-bottom:1px solid var(--empire-divider)}
+.pc-decision-title{font-weight:500;font-size:14px;color:var(--empire-white);letter-spacing:.02em}
+.pc-decision-count{font-family:var(--font-mono);font-size:10px;color:var(--signal-teal)}
+.pc-decision-list{display:flex;flex-direction:column;gap:8px}
+.pc-decision-card{background:var(--empire-elevated);border:1px solid var(--empire-divider);padding:14px 18px;transition:border-color .15s var(--ease-snap);cursor:pointer}
+.pc-decision-card:hover{border-color:var(--empire-border-hi)}
+.pc-decision-card.expanded{border-color:var(--signal-teal-soft)}
+.pc-decision-row{display:grid;grid-template-columns:1fr 80px 48px 72px;gap:12px;align-items:center}
+.pc-decision-lead{display:flex;flex-direction:column;gap:2px;min-width:0}
+.pc-decision-lead-name{font-size:12px;color:var(--empire-white);font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pc-decision-lead-id{font-family:var(--font-mono);font-size:8px;color:var(--empire-fog);letter-spacing:.06em}
+.pc-decision-winner{text-align:center}
+.pc-winner-badge{font-family:var(--font-mono);font-size:8px;letter-spacing:.08em;text-transform:uppercase;color:var(--signal-teal);border:1px solid rgba(68,229,184,0.2);padding:2px 6px;border-radius:3px}
+.pc-score-circle{width:38px;height:38px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:var(--font-mono);font-size:12px;font-weight:600;border:2px solid}
+.pc-score-ok{color:var(--signal-teal);border-color:rgba(68,229,184,0.3);background:rgba(68,229,184,0.06)}
+.pc-score-warn{color:var(--status-amber);border-color:rgba(255,184,0,0.3);background:rgba(255,184,0,0.06)}
+.pc-score-bad{color:var(--status-red);border-color:rgba(255,68,68,0.3);background:rgba(255,68,68,0.06)}
+.pc-verdict-badge{display:inline-block;font-family:var(--font-mono);font-size:8px;letter-spacing:.12em;text-transform:uppercase;padding:3px 10px;border-radius:4px;font-weight:600}
+.pc-verdict-badge.dispatch{color:var(--signal-teal);border:1px solid var(--signal-teal-soft)}
+.pc-verdict-badge.reject{color:var(--status-red);border:1px solid rgba(255,68,68,0.2)}
+.pc-decision-detail{margin-top:16px;padding-top:14px;border-top:1px solid var(--empire-divider)}
+.pc-detail-title{font-family:var(--font-mono);font-size:9px;color:var(--empire-mist);letter-spacing:.14em;text-transform:uppercase;margin-bottom:12px}
+.pc-detail-scores{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:14px}
+.pc-detail-score{background:var(--empire-surface);border:1px solid var(--empire-divider);padding:8px;text-align:center;border-radius:4px}
+.pc-detail-score.winner{border-color:rgba(68,229,184,0.3);background:rgba(68,229,184,0.04)}
+.pc-detail-aid{font-family:var(--font-mono);font-size:8px;color:var(--empire-fog);letter-spacing:.08em;display:block;margin-bottom:2px}
+.pc-detail-pts{font-family:var(--font-mono);font-size:14px;color:var(--empire-white);font-weight:500}
+.pc-judge-block{background:var(--empire-elevated);border:1px solid var(--empire-divider);padding:14px 16px;border-radius:4px;border-left:3px solid var(--strike-cyan);margin-top:12px}
+.pc-judge-head{font-family:var(--font-mono);font-size:9px;color:var(--strike-cyan);letter-spacing:.1em;text-transform:uppercase;margin-bottom:8px}
+.pc-judge-reasoning{font-size:11px;color:var(--empire-silver);line-height:1.6}
+.pc-summary-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:20px}
+.pc-summary-card{background:var(--empire-surface);border:1px solid var(--empire-border);padding:16px 18px;text-align:center}
+.pc-summary-val{font-family:var(--font-display);font-weight:200;font-size:32px;color:var(--empire-white);line-height:1}
+.pc-summary-val.teal{color:var(--signal-teal)}
+.pc-summary-val.amber{color:var(--status-amber)}
+.pc-summary-val.red{color:var(--status-red)}
+.pc-summary-val.dim{color:var(--empire-mist)}
+.pc-summary-lbl{font-family:var(--font-mono);font-size:8px;color:var(--empire-fog);letter-spacing:.14em;text-transform:uppercase;margin-top:6px}
+
+/* ── SEO PERFORMANCE ─────────────────────────────────────────── */
+.seo-kw-row{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--empire-divider)}
+.seo-kw-row:last-child{border-bottom:none}
+.seo-kw-name{font-size:11px;color:var(--empire-silver);font-family:var(--font-mono)}
+.seo-kw-meta{display:flex;gap:10px;align-items:center}
+.seo-kw-stat{font-family:var(--font-mono);font-size:10px;color:var(--signal-teal);font-weight:500}
+.seo-kw-stat.dim{color:var(--empire-fog);font-weight:400}
+.seo-kw-comp{font-family:var(--font-mono);font-size:8px;letter-spacing:.1em;text-transform:uppercase;padding:1px 6px;border-radius:3px;border:1px solid}
+.seo-kw-comp.low{color:var(--signal-teal);border-color:rgba(68,229,184,0.2)}
+.seo-kw-comp.medium{color:var(--status-amber);border-color:rgba(255,184,0,0.2)}
+.seo-kw-comp.high{color:var(--status-red);border-color:rgba(255,68,68,0.2)}
+.seo-content-card{background:var(--empire-elevated);border:1px solid var(--empire-divider);padding:10px 14px;margin-bottom:8px;border-radius:4px}
+.seo-content-card:last-child{margin-bottom:0}
+.seo-content-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:4px}
+.seo-content-kw{font-family:var(--font-mono);font-size:10px;color:var(--strike-cyan);font-weight:500}
+.seo-content-niche{font-family:var(--font-mono);font-size:8px;color:var(--empire-fog)}
+.seo-content-title{font-size:11px;color:var(--empire-white);font-weight:500;margin-bottom:3px}
+.seo-content-meta{font-size:10px;color:var(--empire-mist);line-height:1.4}
+.seo-content-attrib{font-family:var(--font-mono);font-size:8px;color:var(--signal-teal);margin-top:6px;padding-top:5px;border-top:1px solid var(--empire-divider)}
+.seo-audit-row{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--empire-divider)}
+.seo-audit-row:last-child{border-bottom:none}
+.seo-audit-url{font-family:var(--font-mono);font-size:10px;color:var(--empire-silver)}
+.seo-audit-scores{display:flex;gap:10px}
+.seo-audit-score{font-family:var(--font-mono);font-size:10px;font-weight:500}
+.seo-audit-score.ok{color:var(--signal-teal)}
+.seo-audit-score.warn{color:var(--status-amber)}
+.seo-audit-score.bad{color:var(--status-red)}
+.seo-audit-score.dim{color:var(--empire-fog);font-weight:400}
+
+/* ── AGENT FLEET ────────────────────────────────────────────────────── */
+.af-panel{background:var(--empire-surface);border:1px solid var(--empire-border);padding:18px;margin-top:20px}
+.af-h{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid var(--empire-divider)}
+.af-title{font-weight:500;font-size:13px;letter-spacing:.02em}
+.af-tag{font-family:var(--font-mono);font-size:10px;color:var(--empire-mist);letter-spacing:.14em;text-transform:uppercase}
+.af-summary{display:flex;gap:18px;margin-bottom:16px;flex-wrap:wrap}
+.af-stat{font-family:var(--font-mono);font-size:10px;color:var(--empire-mist);letter-spacing:.06em}
+.af-stat strong{color:var(--empire-white);font-weight:500;margin-left:4px}
+.af-stat.stale strong{color:var(--status-red)}
+.af-stat.healthy strong{color:var(--signal-teal)}
+.af-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px}
+.af-card{background:var(--empire-elevated);border:1px solid var(--empire-divider);padding:12px 14px;display:flex;align-items:center;gap:12px;transition:border-color .15s var(--ease-snap)}
+.af-card:hover{border-color:var(--empire-border-hi)}
+.af-card.stale{border-color:rgba(255,68,68,0.3);background:rgba(255,68,68,0.04)}
+.af-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+.af-dot.green{background:var(--signal-teal);box-shadow:0 0 8px rgba(68,229,184,0.6);animation:empire-pulse var(--pulse-duration) infinite}
+.af-dot.red{background:var(--status-red);box-shadow:0 0 8px rgba(255,68,68,0.5)}
+.af-card-body{flex:1;min-width:0}
+.af-card-name{font-size:12px;color:var(--empire-white);font-weight:500;margin-bottom:2px}
+.af-card-meta{font-family:var(--font-mono);font-size:9px;color:var(--empire-fog);letter-spacing:.04em}
+.af-card-meta.stale{color:var(--status-red)}
+.af-card-caps{display:flex;flex-wrap:wrap;gap:3px;margin-top:6px}
+.af-cap{font-family:var(--font-mono);font-size:7px;letter-spacing:.08em;text-transform:uppercase;padding:2px 5px;border-radius:2px;border:1px solid var(--empire-divider);color:var(--empire-fog)}
+.af-empty{font-family:var(--font-ui);font-size:11px;color:var(--empire-fog);font-style:italic;padding:24px 0;text-align:center}
+.gh-refresh{margin-left:auto;display:flex;align-items:center}
+.gh-refresh-btn{padding:6px 14px;font-family:var(--font-mono);font-size:9px;letter-spacing:.12em;text-transform:uppercase;border:1px solid var(--signal-teal-soft);background:transparent;color:var(--signal-teal);cursor:pointer;border-radius:4px;font-weight:600;transition:all .15s var(--ease-snap)}
+.gh-refresh-btn:hover{background:rgba(68,229,184,0.08);border-color:var(--signal-teal)}
+.gh-refresh-btn:disabled{opacity:.5;cursor:default}
+.af-stat{display:inline-flex;align-items:center;gap:6px}
+
+/* ── AGENT DETAIL MODAL ─────────────────────────────────────────────── */
+.af-modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.7);backdrop-filter:blur(4px);z-index:100;display:flex;align-items:center;justify-content:center;padding:40px 20px;animation:af-fade-in .15s var(--ease-snap)}
+@keyframes af-fade-in{from{opacity:0}to{opacity:1}}
+.af-modal{background:var(--empire-surface);border:1px solid var(--empire-border);width:100%;max-width:680px;max-height:calc(100vh - 80px);overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,0.6);animation:af-slide-up .2s var(--ease-out-empire)}
+@keyframes af-slide-up{from{transform:translateY(12px);opacity:0}to{transform:translateY(0);opacity:1}}
+.af-modal-head{display:flex;justify-content:space-between;align-items:flex-start;padding:18px 22px;border-bottom:1px solid var(--empire-divider);background:var(--empire-elevated)}
+.af-modal-eyebrow{font-family:var(--font-mono);font-size:9px;color:var(--empire-mist);letter-spacing:.18em;text-transform:uppercase;margin-bottom:4px}
+.af-modal-title{font-weight:500;font-size:18px;color:var(--empire-white);display:flex;align-items:center;gap:10px}
+.af-modal-close{background:none;border:1px solid var(--empire-divider);color:var(--empire-mist);cursor:pointer;font-size:20px;line-height:1;padding:4px 12px;border-radius:4px;transition:all .15s var(--ease-snap);font-family:var(--font-ui)}
+.af-modal-close:hover{color:var(--status-red);border-color:var(--status-red)}
+.af-modal-body{padding:20px 22px}
+.af-modal-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.af-modal-section{background:var(--empire-elevated);border:1px solid var(--empire-divider);padding:14px 16px}
+.af-modal-section-wide{grid-column:1 / -1}
+.af-modal-section-h{font-family:var(--font-mono);font-size:9px;color:var(--empire-mist);letter-spacing:.18em;text-transform:uppercase;margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid var(--empire-divider)}
+.af-modal-kv{display:flex;justify-content:space-between;align-items:baseline;padding:5px 0;font-family:var(--font-mono);font-size:11px}
+.af-modal-kv span{color:var(--empire-fog);letter-spacing:.04em}
+.af-modal-kv strong{color:var(--empire-white);font-weight:500;text-align:right}
+.af-modal-kv strong.teal{color:var(--signal-teal)}
+.af-modal-kv strong.red{color:var(--status-red)}
+.af-modal-empty{font-family:var(--font-ui);font-size:11px;color:var(--empire-fog);font-style:italic;padding:6px 0}
+.af-modal-metrics{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px}
+.af-modal-metric{background:var(--empire-surface);border:1px solid var(--empire-divider);padding:8px 10px}
+.af-modal-metric-k{font-family:var(--font-mono);font-size:8px;color:var(--empire-fog);letter-spacing:.08em;text-transform:uppercase;margin-bottom:4px;word-break:break-word}
+.af-modal-metric-v{font-family:var(--font-mono);font-size:11px;color:var(--empire-white);word-break:break-word}
+@media (max-width:640px){.af-modal-grid{grid-template-columns:1fr}.af-modal{max-width:100%}}
+
+"""
 
 _SPA_JS = r"""
 import { createElement as h, useState, useEffect, useRef, useCallback } from 'react';
@@ -553,6 +1164,13 @@ const SECTIONS = [
   { id: 'governor',      label: 'Governor',       sub: 'AGI governor · weight control · guardrails' },
   { id: 'sniper-fleet',  label: 'Sniper Fleet',   sub: 'Active agents · lane status · targeting' },
   { id: 'health-monitor',label: 'Health Monitor', sub: 'Agent mesh · system health · overseer' },
+  { id: 'leads',         label: 'Leads',          sub: 'Inbound leads · pipeline · intake' },
+  { id: 'kanban',        label: 'Kanban',         sub: 'Agent task queue · pipeline stages' },
+  { id: 'revenue',       label: 'Revenue',        sub: 'Predictive revenue · per-lane MRR · LLM forecast' },
+  { id: 'si-strategy',   label: 'SI Strategy',    sub: 'Evolution · genomes · win rates' },
+  { id: 'si-adaptive',   label: 'SI Adaptive',    sub: 'Subsystem adoption · parameter propagation' },
+  { id: 'panel_court',      label: 'Panel Court',    sub: '10-Agent ensemble · voting · learning' },
+  { id: 'seo',           label: 'SEO',            sub: 'Audits · keywords · content · genome' },
   { id: 'partners',      label: 'Partners',       sub: 'Buyers · pending · approvals' },
 ];
 
@@ -874,22 +1492,137 @@ function Pipeline() {
   }, []);
   if (e) return html`<div class="stub"><div class="stub-body">${e}</div></div>`;
   if (!d) return html`<div class="stub"><div class="stub-body">Loading…</div></div>`;
+
+  // ── Pipeline stage counts (email + SMS combined) ──
+  const seqActive = (d.em?.sequences_active ?? 0) + (d.sm?.sequences_active ?? 0);
+  const totalSent = (d.em?.emails_sent ?? 0) + (d.sm?.sms_sent ?? 0);
+  const totalReplied = (d.em?.replies ?? 0) + (d.sm?.replies ?? 0);
+  const totalUnsub = (d.em?.unsubscribes ?? 0) + (d.sm?.opt_outs ?? 0);
+  const totalConverted = Math.round(totalReplied * 0.28); // rough estimate
+  const convRate = totalSent > 0 ? Math.round((totalReplied / totalSent) * 100) : 0;
+
+  // Pipeline stages for the orbital ring (5 stages, clockwise from top)
+  const stages = [
+    { id: 'new',      icon: '●', label: 'Active',   count: seqActive,       cls: '' },
+    { id: 'sent',     icon: '→', label: 'Sent',     count: totalSent,       cls: 'sent' },
+    { id: 'replied',  icon: '↩', label: 'Replied',  count: totalReplied,    cls: 'replied' },
+    { id: 'unsub',    icon: '✕', label: 'Unsub',    count: totalUnsub,      cls: '' },
+    { id: 'converted',icon: '★', label: 'Conv (est)',count: totalConverted,   cls: 'converted' },
+  ];
+
   return html`
     <div>
-      <div class="section-h"><div><div class="section-title">Pipeline</div><div class="section-sub">Email & SMS sequence engines</div></div></div>
-      <div class="split">
+      <div class="section-h">
+        <div>
+          <div class="section-title">Pipeline <em>Orbital</em></div>
+          <div class="section-sub">Email & SMS · 5-stage lifecycle</div>
+        </div>
+        <div class="section-sub">${seqActive} active · ${totalSent} sent · ${convRate}% reply rate</div>
+      </div>
+
+      <!-- ── 5-Stage Orbital Ring ── -->
+      <div class="pipe-orbital-wrapper">
+        ${(() => {
+          const orbitR = 170;
+          const outerR = 220;
+          const innerR = 110;
+          const svgW = outerR * 2 + 16;
+          const svgH = outerR * 2 + 16;
+          
+          // SVG rings and lines
+          const svgLines = stages.map((s, i) => {
+            const angleDeg = i * (360 / stages.length) - 90;
+            const angleRad = angleDeg * Math.PI / 180;
+            const ax = Math.cos(angleRad) * orbitR;
+            const ay = Math.sin(angleRad) * orbitR;
+            const isActive = s.count > 0;
+            return html`<line 
+              key=${s.id}
+              x1="0" y1="0" 
+              x2="${ax.toFixed(1)}" y2="${ay.toFixed(1)}" 
+              class=${'pipe-orbit-line' + (isActive ? ' active' : '')}
+              style=${{animationDelay: (i * 0.12) + 's'}}
+            />`;
+          });
+
+          // Direction arrows between stages
+          const arrows = stages.map((s, i) => {
+            const nextI = (i + 1) % stages.length;
+            const a1 = (i * (360 / stages.length) - 90) * Math.PI / 180;
+            const a2 = (nextI * (360 / stages.length) - 90) * Math.PI / 180;
+            const midR = orbitR;
+            const x1 = Math.cos(a1) * midR * 0.78;
+            const y1 = Math.sin(a1) * midR * 0.78;
+            const x2 = Math.cos(a2) * midR * 0.78;
+            const y2 = Math.sin(a2) * midR * 0.78;
+            const mx = (x1 + x2) / 2;
+            const my = (y1 + y2) / 2;
+            const dx = x2 - x1;
+            const dy = y2 - y1;
+            const len = Math.sqrt(dx*dx + dy*dy);
+            const ux = dx / len;
+            const uy = dy / len;
+            // Arrowhead triangle
+            const tipX = x2;
+            const tipY = y2;
+            const baseX = tipX - ux * 10;
+            const baseY = tipY - uy * 10;
+            const wing = 5;
+            const px = -uy * wing;
+            const py = ux * wing;
+            const points = `${tipX.toFixed(1)},${tipY.toFixed(1)} ${(baseX+px).toFixed(1)},${(baseY+py).toFixed(1)} ${(baseX-px).toFixed(1)},${(baseY-py).toFixed(1)}`;
+            return html`<polygon key=${s.id} class="pipe-orbit-arrow" points="${points}" style=${{animationDelay: (i * 0.2) + 's'}} />`;
+          });
+          
+          return html`
+            <svg class="pipe-orbital-svg" width="${svgW}" height="${svgH}" viewBox="${-svgW/2} ${-svgH/2} ${svgW} ${svgH}">
+              <circle cx="0" cy="0" r="${outerR}" class="pipe-orbit-ring outer"/>
+              <circle cx="0" cy="0" r="${orbitR}" class="pipe-orbit-ring pulse"/>
+              <circle cx="0" cy="0" r="${innerR}" class="pipe-orbit-ring"/>
+              ${svgLines}
+              ${arrows}
+            </svg>
+            
+            <!-- Boss card: conversion rate -->
+            <div class="pipe-boss-card">
+              <span class="pipe-boss-label">Reply Rate</span>
+              <span class="pipe-boss-rate">${convRate}%</span>
+              <span class="pipe-boss-sub">${totalReplied}/${totalSent}</span>
+            </div>
+            
+            <!-- 5 stage nodes -->
+            ${stages.map((s, i) => {
+              const angleDeg = i * (360 / stages.length) - 90;
+              const angleRad = angleDeg * Math.PI / 180;
+              const ax = Math.cos(angleRad) * orbitR;
+              const ay = Math.sin(angleRad) * orbitR;
+              return html`
+                <div key=${s.id} class=${'pipe-stage-node' + (s.cls ? ' ' + s.cls : '')}
+                     style=${{transform: 'translate(-50%,-50%) translate(' + ax.toFixed(1) + 'px,' + ay.toFixed(1) + 'px)', animationDelay: (i * 0.08) + 's'}}>
+                  <span class="pipe-stage-icon">${s.icon}</span>
+                  <span class="pipe-stage-count">${s.count}</span>
+                  <span class="pipe-stage-label">${s.label}</span>
+                </div>
+              `;
+            })}
+          `;
+        })()}
+      </div>
+
+      <!-- ── Engine panels below orbital ── -->
+      <div class="split" style=${{marginTop: '8px'}}>
         <div class="panel">
           <div class="panel-head">Email Engine</div>
-          <div class="sec-meta">Sequences active: <strong>${d.em.sequences_active ?? 0}</strong> · Sent today: <strong>${d.em.emails_sent ?? 0}</strong> · Replies: <strong>${d.em.replies ?? 0}</strong> · Unsubs: <strong>${d.em.unsubscribes ?? 0}</strong></div>
+          <div class="sec-meta">Active: <strong>${d.em?.sequences_active ?? 0}</strong> · Sent: <strong>${d.em?.emails_sent ?? 0}</strong> · Replies: <strong>${d.em?.replies ?? 0}</strong> · Unsubs: <strong>${d.em?.unsubscribes ?? 0}</strong></div>
         </div>
         <div class="panel">
           <div class="panel-head">SMS Engine</div>
-          <div class="sec-meta">Sequences active: <strong>${d.sm.sequences_active ?? 0}</strong> · Sent today: <strong>${d.sm.sms_sent ?? 0}</strong> · Replies: <strong>${d.sm.replies ?? 0}</strong> · Opt-outs: <strong>${d.sm.opt_outs ?? 0}</strong></div>
+          <div class="sec-meta">Active: <strong>${d.sm?.sequences_active ?? 0}</strong> · Sent: <strong>${d.sm?.sms_sent ?? 0}</strong> · Replies: <strong>${d.sm?.replies ?? 0}</strong> · Opt-outs: <strong>${d.sm?.opt_outs ?? 0}</strong></div>
         </div>
       </div>
       <div class="panel">
         <div class="panel-head">Engine status</div>
-        <div class="sec-meta">Email dispatcher polling: <strong>every 5s</strong> · limit 12/min · SMS dispatcher: <strong>every 5s</strong> · limit 6/min</div>
+        <div class="sec-meta">Email dispatcher: <strong>every 5s</strong> · limit 12/min · SMS dispatcher: <strong>every 5s</strong> · limit 6/min</div>
       </div>
     </div>
   `;
@@ -900,6 +1633,7 @@ function Dispatch() {
   const [board, setBoard] = useState(null);
   const [stats, setStats] = useState(null);
   const [err, setErr] = useState(null);
+  const [genomeHistory, setGenomeHistory] = useState(null);
   useEffect(() => {
     Promise.all([
       apiFetch('/api/v1/matching/leaderboard').then(r => r.json()),
@@ -992,6 +1726,7 @@ function Payouts() {
     try {
       await apiFetch('/api/v1/payouts/' + action, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ payout_id: id }) });
       await reload();
+      loadActivity(0, false);
     } catch (e) { alert('Failed: ' + e.message); }
     setBusy(null);
   };
@@ -1192,7 +1927,7 @@ function AgiLoop(){
   const [err,setErr]=useState(null);
   const [tick,setTick]=useState(0);
   const [approved,setApproved]=useState([]);
-  const [replayIdx,setReplayIdx]=useState(null);
+  const [replayIdx,setReplayIdx]=useState(null);const [dreamData,setDreamData]=useState(null);
   useEffect(()=>{
     let alive=true;
     async function poll(){
@@ -1200,6 +1935,7 @@ function AgiLoop(){
         const r=await apiFetch("/api/telemetry?lines=20");
         const j=await r.json();
         if(alive){setData(j);setErr(null);}
+        apiFetch('/api/dream/recent?limit=1').then(r2=>r2.json()).then(dr=>{if(dr.dreams&&dr.dreams.length>0)setDreamData(dr.dreams[0]);}).catch(()=>{});
       }catch(e){if(alive)setErr(e.message);}
     }
     poll();
@@ -1209,7 +1945,30 @@ function AgiLoop(){
   const hist=data?.snapshots??[]; const live=replayIdx===null; const snap=live?hist[0]:hist[replayIdx];
   const doApprove=(idx,w)=>{if(approved.includes(idx))return;setApproved(p=>[...p,idx]);apiFetch("/api/v1/storm/tick",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({auto_weight:parseFloat(w),source:"neural-core"})}).catch(e=>console.warn(e));};
   const decisions=(data?.actions??[]).map(a=>({weight:a.new_weight?.toFixed(2),reason:a.reasoning}));
-  return html`<div class="section-header"><div><div class="section-title">Neural Core</div><div class="section-sub">Live brain · autonomous decisions · 5s refresh</div></div><div class="agi-meta">TICK ${tick} · LIVE<button class=${live?"agi-replay-btn active":"agi-replay-btn"} onClick=${()=>setReplayIdx(null)}>LIVE</button><button class="agi-replay-btn" onClick=${()=>setReplayIdx(r=>r===null?1:Math.min(r+1,hist.length-1))}>PREV</button><button class="agi-replay-btn" onClick=${()=>setReplayIdx(r=>r===null?null:r<=1?null:r-1)}>NEXT</button></div></div><div class="agi-grid"><div class="agi-tile"><div class="agi-tile-label">LEAD VELOCITY</div><div class="agi-tile-val"><em>${snap?.lead_velocity??"--"}</em></div><div class="agi-tile-sub">leads/hr</div></div><div class="agi-tile"><div class="agi-tile-label">REVENUE PULSE</div><div class="agi-tile-val"><em>${snap?.revenue_pulse!=null?(snap.revenue_pulse*100).toFixed(1)+"%":"--"}</em></div><div class="agi-tile-sub">AI confidence</div></div><div class="agi-tile"><div class="agi-tile-label">PROXY HEALTH</div><div class="agi-tile-val"><em>${snap?.proxy_health!=null?(snap.proxy_health*100).toFixed(1)+"%":"--"}</em></div><div class="agi-tile-sub">network health</div></div><div class="agi-tile"><div class="agi-tile-label">AI CALLS</div><div class="agi-tile-val"><em>${snap?.ai_calls_today??"--"}</em></div><div class="agi-tile-sub">brain activations</div></div></div><div class="agi-decisions"><div class="agi-decisions-head"><div class="agi-decisions-title">Decision Log</div><div class="agi-decisions-count">${decisions.length} entries</div></div>${decisions.map((d,i)=>html`<div class="agi-row"><div class=${"agi-row-weight "+(parseFloat(d.weight)>=1.5?"agi-w-hi":parseFloat(d.weight)>=1.0?"agi-w-mid":"agi-w-lo")}>${d.weight??"·"}<div class="agi-w-bar"></div></div><div class="agi-row-reason">${d.reason??"·"}<button class=${approved.includes(i)?"agi-approve-btn done":"agi-approve-btn"} onClick=${()=>doApprove(i,d.weight)}>${approved.includes(i)?"✓ APPROVED":"AUTO-APPROVE"}</button></div></div>`)}</div>`;
+  // Parse genome trait drift for visualization
+  const drift = genomeHistory && genomeHistory.trait_drift ? genomeHistory.trait_drift : null;
+  const driftEntries = drift ? Object.entries(drift).map(([k,v]) => ({trait:k, drift:v})) : [];
+  const driftMax = driftEntries.length > 0 ? Math.max(...driftEntries.map(d => Math.abs(d.drift)), 0.01) : 0.01;
+
+  return html`<div class="section-header"><div><div class="section-title">Neural Core</div><div class="section-sub">Live brain · autonomous decisions · 5s refresh</div></div><div class="agi-meta">TICK ${tick} · LIVE<button class=${live?"agi-replay-btn active":"agi-replay-btn"} onClick=${()=>setReplayIdx(null)}>LIVE</button><button class="agi-replay-btn" onClick=${()=>setReplayIdx(r=>r===null?1:Math.min(r+1,hist.length-1))}>PREV</button><button class="agi-replay-btn" onClick=${()=>setReplayIdx(r=>r===null?null:r<=1?null:r-1)}>NEXT</button></div></div><div class="agi-grid"><div class="agi-tile"><div class="agi-tile-label">LEAD VELOCITY</div><div class="agi-tile-val"><em>${snap?.lead_velocity??"--"}</em></div><div class="agi-tile-sub">leads/hr</div></div><div class="agi-tile"><div class="agi-tile-label">REVENUE PULSE</div><div class="agi-tile-val"><em>${snap?.revenue_pulse!=null?(snap.revenue_pulse*100).toFixed(1)+"%":"--"}</em></div><div class="agi-tile-sub">AI confidence</div></div><div class="agi-tile"><div class="agi-tile-label">PROXY HEALTH</div><div class="agi-tile-val"><em>${snap?.proxy_health!=null?(snap.proxy_health*100).toFixed(1)+"%":"--"}</em></div><div class="agi-tile-sub">network health</div></div><div class="agi-tile"><div class="agi-tile-label">AI CALLS</div><div class="agi-tile-val"><em>${snap?.ai_calls_today??"--"}</em></div><div class="agi-tile-sub">brain activations</div></div></div><div class="agi-decisions">
+      ${dreamData ? html`
+        <div class="agi-decisions-head">
+          <div class="agi-decisions-title">Dream Memory <span style="font-size:0.7em;opacity:0.6;">(cycle #${dreamData.dream_cycle})</span></div>
+          <div class="agi-decisions-count">${(dreamData.insights||[]).length} insights · ${(dreamData.rule_suggestions||[]).length} rules${(dreamData.risk_flags||[]).length > 0 ? ` · ⚠ ${(dreamData.risk_flags||[]).length} risks` : ``}</div>
+        </div>
+        ${(dreamData.insights||[]).slice(0,3).map(i => html`
+          <div class="agi-row">
+            <div class="agi-row-weight">${i.confidence}/10</div>
+            <div class="agi-row-reason">${i.text} <span style="font-size:0.8em;opacity:0.6;">[${(i.systems||[]).join(", ")}]</span></div>
+          </div>
+        `)}
+        ${dreamData.wisdom_context ? html`
+          <div class="agi-row" style="border-top:1px solid var(--empire-divider);margin-top:8px;padding-top:12px;">
+            <div class="agi-row-weight" style="color:var(--strike-cyan);">Wisdom</div>
+            <div class="agi-row-reason" style="font-style:italic;">${dreamData.wisdom_context}</div>
+          </div>
+        ` : }
+      ` : }<div class="agi-decisions-head"><div class="agi-decisions-title">Decision Log</div><div class="agi-decisions-count">${decisions.length} entries</div></div>${decisions.map((d,i)=>html`<div class="agi-row"><div class=${"agi-row-weight "+(parseFloat(d.weight)>=1.5?"agi-w-hi":parseFloat(d.weight)>=1.0?"agi-w-mid":"agi-w-lo")}>${d.weight??"·"}<div class="agi-w-bar"></div></div><div class="agi-row-reason">${d.reason??"·"}<button class=${approved.includes(i)?"agi-approve-btn done":"agi-approve-btn"} onClick=${()=>doApprove(i,d.weight)}>${approved.includes(i)?"✓ APPROVED":"AUTO-APPROVE"}</button></div></div>`)}</div>`;
 }
 
 function Partners() {
@@ -1520,6 +2279,10 @@ function Governor() {
             `)}
           </div>`}
       </div>
+
+      <${GovernorHealthPanel} />
+
+      <${AgentFleetPanel} />
     </div>
   `;
 }
@@ -1727,6 +2490,247 @@ function HoloMap() {
 }
 
 // ── HEALTH MONITOR ───────────────────────────────────────────────────
+
+function AgentDetailModal({ agent, govHealth, onClose }) {
+  if (!agent) return null;
+  // Match this agent against the governor's stale/healthy lists
+  const all = [...(govHealth && govHealth.stale || []), ...(govHealth && govHealth.healthy || [])];
+  const govEntry = all.find(g => g.agent_name === agent.agent_name) || null;
+  const lastPingStr = agent.last_ping ? new Date(agent.last_ping).toLocaleString() : '—';
+  const ageStr = agent.seconds_since_ping == null ? '—'
+    : agent.seconds_since_ping < 60 ? `${agent.seconds_since_ping}s ago`
+    : agent.seconds_since_ping < 3600 ? `${Math.floor(agent.seconds_since_ping / 60)}m ago`
+    : `${Math.floor(agent.seconds_since_ping / 3600)}h ago`;
+  const metrics = agent.metrics || {};
+  const metricKeys = Object.keys(metrics);
+  return html`
+    <div class="af-modal-overlay" onClick=${onClose}>
+      <div class="af-modal" onClick=${e => e.stopPropagation()}>
+        <div class="af-modal-head">
+          <div>
+            <div class="af-modal-eyebrow">Agent Detail</div>
+            <div class="af-modal-title">
+              <span class=${'af-dot ' + (agent.is_stale ? 'red' : 'green')}></span>
+              ${agent.agent_name || 'unknown'}
+            </div>
+          </div>
+          <button class="af-modal-close" onClick=${onClose}>×</button>
+        </div>
+        <div class="af-modal-body">
+          <div class="af-modal-grid">
+            <div class="af-modal-section">
+              <div class="af-modal-section-h">Status</div>
+              <div class="af-modal-kv"><span>Status</span><strong>${agent.status || '?'}</strong></div>
+              <div class="af-modal-kv"><span>Enabled</span><strong>${agent.enabled ? 'YES' : 'NO'}</strong></div>
+              <div class="af-modal-kv"><span>Last ping</span><strong>${lastPingStr}</strong></div>
+              <div class="af-modal-kv"><span>Age</span><strong>${ageStr}</strong></div>
+            </div>
+            <div class="af-modal-section">
+              <div class="af-modal-section-h">Throughput</div>
+              <div class="af-modal-kv"><span>Leads today</span><strong class="teal">${agent.leads_today != null ? agent.leads_today : '—'}</strong></div>
+              <div class="af-modal-kv"><span>Total registered</span><strong>${data && data.total_count ? data.total_count : '—'}</strong></div>
+            </div>
+            <div class="af-modal-section af-modal-section-wide">
+              <div class="af-modal-section-h">Governor Health Snapshot</div>
+              ${govEntry
+                ? html`
+                  <div class="af-modal-kv"><span>Bucket</span><strong class=${govEntry.is_stale ? 'red' : 'teal'}>${govEntry.is_stale ? 'STALE' : 'HEALTHY'}</strong></div>
+                  <div class="af-modal-kv"><span>Interval</span><strong>${govEntry.interval_hours != null ? govEntry.interval_hours.toFixed(1) + 'h' : '—'}</strong></div>
+                  <div class="af-modal-kv"><span>Max age (3×)</span><strong>${govEntry.max_age_seconds != null ? Math.floor(govEntry.max_age_seconds / 60) + 'm' : '—'}</strong></div>
+                  <div class="af-modal-kv"><span>Actual age</span><strong>${govEntry.seconds_since_ping != null ? Math.floor(govEntry.seconds_since_ping / 60) + 'm' : '—'}</strong></div>
+                `
+                : html`<div class="af-modal-empty">Not in governor snapshot (disabled or unknown agent)</div>`
+              }
+            </div>
+            ${metricKeys.length > 0
+              ? html`
+                <div class="af-modal-section af-modal-section-wide">
+                  <div class="af-modal-section-h">Metrics</div>
+                  <div class="af-modal-metrics">
+                    ${metricKeys.map(k => html`
+                      <div class="af-modal-metric" key=${k}>
+                        <div class="af-modal-metric-k">${k}</div>
+                        <div class="af-modal-metric-v">${typeof metrics[k] === 'object' ? JSON.stringify(metrics[k]) : String(metrics[k])}</div>
+                      </div>
+                    `)}
+                  </div>
+                </div>
+              `
+              : html`
+                <div class="af-modal-section af-modal-section-wide">
+                  <div class="af-modal-section-h">Metrics</div>
+                  <div class="af-modal-empty">No metrics reported</div>
+                </div>
+              `
+            }
+            ${agent.capabilities && agent.capabilities.length > 0
+              ? html`
+                <div class="af-modal-section af-modal-section-wide">
+                  <div class="af-modal-section-h">Capabilities</div>
+                  <div class="af-card-caps">
+                    ${agent.capabilities.map(c => html`<span class="af-cap" key=${c}>${c}</span>`)}
+                  </div>
+                </div>
+              ` : null
+            }
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function GovernorHealthPanel() {
+  const [data, setData] = useState(null);
+  const [err, setErr] = useState(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const reload = useCallback(async () => {
+    try {
+      const r = await apiFetch('/api/governor/health');
+      const d = await r.json();
+      setData(d);
+      setErr(null);
+    } catch (e) { if (e.message !== 'Unauthorized') setErr(e.message); }
+  }, []);
+  const forceRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      const r = await apiFetch('/api/governor/refresh', { method: 'POST' });
+      const d = await r.json();
+      setData(d);
+      setErr(null);
+    } catch (e) { if (e.message !== 'Unauthorized') setErr(e.message); }
+    setRefreshing(false);
+  }, []);
+  useEffect(() => {
+    reload();
+    const t = setInterval(reload, 15000);
+    return () => clearInterval(t);
+  }, [reload]);
+  if (err) return html`
+    <div class="af-panel">
+      <div class="af-h">
+        <div class="af-title">Governor Health</div>
+        <div class="af-tag">error</div>
+      </div>
+      <div class="af-empty">${err}</div>
+    </div>
+  `;
+  if (!data) return html`
+    <div class="af-panel">
+      <div class="af-h">
+        <div class="af-title">Governor Health</div>
+        <div class="af-tag">loading…</div>
+      </div>
+      <div class="af-empty">Loading governor health…</div>
+    </div>
+  `;
+  return html`
+    <div class="af-panel">
+      <div class="af-h">
+        <div class="af-title">Governor Health</div>
+        <div class="af-tag">${data.checked_at ? new Date(data.checked_at).toLocaleTimeString() : ''}</div>
+      </div>
+      <div class="af-summary">
+        <div class="af-stat healthy">
+          <span class=${'af-dot ' + (data.healthy_count > 0 ? 'green' : 'red')}></span>
+          Healthy <strong>${data.healthy_count}</strong>
+        </div>
+        <div class="af-stat stale">
+          <span class=${'af-dot ' + (data.stale_count > 0 ? 'red' : 'green')}></span>
+          Stale <strong>${data.stale_count}</strong>
+        </div>
+        <div class="af-stat">Total <strong>${data.total_count}</strong></div>
+        <div class="gh-refresh">
+          <button class="gh-refresh-btn" disabled=${refreshing} onClick=${forceRefresh}>
+            ${refreshing ? 'Refreshing…' : 'Refresh now'}
+          </button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function AgentFleetPanel() {
+  const [data, setData] = useState(null);
+  const [err, setErr] = useState(null);
+  const [selected, setSelected] = useState(null);
+  const [govHealth, setGovHealth] = useState(null);
+  const reload = useCallback(async () => {
+    try {
+      const r = await apiFetch('/api/agent-registry/heartbeats?stale_seconds=600');
+      const d = await r.json();
+      setData(d);
+      setErr(null);
+    } catch (e) { if (e.message !== 'Unauthorized') setErr(e.message); }
+  }, []);
+  const reloadGov = useCallback(async () => {
+    try {
+      const r = await apiFetch('/api/governor/health');
+      const d = await r.json();
+      setGovHealth(d);
+    } catch (e) { /* silent */ }
+  }, []);
+  useEffect(() => {
+    reload();
+    reloadGov();
+    const t1 = setInterval(reload, 20000);
+    const t2 = setInterval(reloadGov, 30000);
+    return () => { clearInterval(t1); clearInterval(t2); };
+  }, [reload, reloadGov]);
+  // Esc closes modal
+  useEffect(() => {
+    if (!selected) return;
+    const handler = e => { if (e.key === 'Escape') setSelected(null); };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [selected]);
+  if (err) return html`<div class="af-panel"><div class="af-h"><div class="af-title">Agent Fleet</div><div class="af-tag">error</div></div><div class="af-empty">${err}</div></div>`;
+  if (!data) return html`<div class="af-panel"><div class="af-h"><div class="af-title">Agent Fleet</div><div class="af-tag">loading…</div></div><div class="af-empty">Loading heartbeats…</div></div>`;
+  const agents = data.agents || [];
+  return html`
+    <div class="af-panel">
+      <div class="af-h">
+        <div class="af-title">Agent Fleet</div>
+        <div class="af-tag">${data.checked_at ? new Date(data.checked_at).toLocaleTimeString() : ''} · ${data.total_count} agents</div>
+      </div>
+      <div class="af-summary">
+        <div class="af-stat healthy">Active <strong>${data.active_count}</strong></div>
+        <div class="af-stat stale">Stale <strong>${data.stale_count}</strong></div>
+        <div class="af-stat">Total <strong>${data.total_count}</strong></div>
+        <div class="af-stat">Threshold <strong>${data.stale_threshold_seconds}s</strong></div>
+      </div>
+      ${agents.length === 0
+        ? html`<div class="af-empty">No agents registered yet</div>`
+        : html`
+          <div class="af-grid">
+            ${agents.map(a => {
+              const age = a.seconds_since_ping;
+              const ageStr = age == null ? '—' : age < 60 ? `${age}s ago` : age < 3600 ? `${Math.floor(age/60)}m ago` : `${Math.floor(age/3600)}h ago`;
+              return html`
+                <div class=${'af-card' + (a.is_stale ? ' stale' : '')} onClick=${() => setSelected(a)}>
+                  <div class=${'af-dot ' + (a.is_stale ? 'red' : 'green')}></div>
+                  <div class="af-card-body">
+                    <div class="af-card-name">${a.agent_name || 'unknown'}</div>
+                    <div class=${'af-card-meta' + (a.is_stale ? ' stale' : '')}>
+                      ${a.status || '?'} · ${ageStr}${a.is_stale ? ' · STALE' : ''}
+                    </div>
+                    ${a.capabilities && a.capabilities.length > 0 ? html`
+                      <div class="af-card-caps">
+                        ${a.capabilities.slice(0, 4).map(c => html`<span class="af-cap" key=${c}>${c}</span>`)}
+                      </div>
+                    ` : null}
+                  </div>
+                </div>
+              `;
+            })}
+          </div>
+        `}
+      ${selected ? html`<${AgentDetailModal} agent=${selected} govHealth=${govHealth} onClose=${() => setSelected(null)} />` : null}
+    </div>
+  `;
+}
+
 function HealthMonitor() {
   const [data, setData] = useState(null);
   const [err, setErr] = useState(null);
@@ -1998,10 +3002,1467 @@ function Stub({ section }) {
       </div>
     </div>
   `;
+
+// ── LEADS ────────────────────────────────────────────────────────────
+function Leads() {
+  const [leads, setLeads] = useState(null);
+  const [stats, setStats] = useState(null);
+  const [err, setErr] = useState(null);
+  const [filter, setFilter] = useState('all');
+  const [busy, setBusy] = useState(null);
+  const [noteText, setNoteText] = useState({});
+  const [activity, setActivity] = useState([]);
+  const [activityErr, setActivityErr] = useState(null);
+  const [activityOffset, setActivityOffset] = useState(0);
+  const [hasMoreActivity, setHasMoreActivity] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+
+  const loadActivity = useCallback(async (offset = 0, append = false) => {
+    try {
+      const r = await apiFetch(\`/api/v1/leads/activity?limit=50&offset=\${offset}\`).then(r => r.json());
+      if (append) {
+        setActivity(a => [...a, ...(r.entries || [])]);
+      } else {
+        setActivity(r.entries || []);
+      }
+      setHasMoreActivity(r.has_more || false);
+      setActivityOffset(offset + (r.entries || []).length);
+      setActivityErr(null);
+    } catch (e) {
+      if (e.message !== 'Unauthorized') setActivityErr(e.message);
+    }
+  }, []);
+
+  useEffect(() => { loadActivity(0, false); }, [loadActivity]);
+
+  const reload = useCallback(async () => {
+    try {
+      const [l, s] = await Promise.all([
+        apiFetch('/api/v1/inbound/leads?limit=100').then(r => r.json()),
+        apiFetch('/api/v1/inbound/stats').then(r => r.json()),
+      ]);
+      setLeads(l.leads || (Array.isArray(l) ? l : []));
+      setStats(s || {});
+      setErr(null);
+    } catch (e) {
+      if (e.message !== 'Unauthorized') setErr(e.message);
+    }
+  }, []);
+
+  useEffect(() => { reload(); }, [reload]);
+
+  const addNote = async (leadId) => {
+    const text = (noteText[leadId] || '').trim();
+    if (!text || busy) return;
+    setBusy(leadId);
+    try {
+      await apiFetch('/api/v1/inbound/leads/update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ lead_id: leadId, notes: text }),
+      });
+      setNoteText(n => { const c = {...n}; delete c[leadId]; return c; });
+      await reload();
+      loadActivity(0, false);
+    } catch (e) { alert('Failed: ' + e.message); }
+    setBusy(null);
+  };
+
+  const deleteNote = async (leadId, noteTs) => {
+    if (!confirm('Delete this note?')) return;
+    setBusy(leadId);
+    try {
+      await apiFetch('/api/v1/inbound/leads/delete-note', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ lead_id: leadId, timestamp: noteTs }),
+      });
+      await reload();
+      loadActivity(0, false);
+    } catch (e) { alert('Failed: ' + e.message); }
+    setBusy(null);
+  };
+
+  const updateStatus = async (leadId, status) => {
+    if (!confirm('Set status to ' + status + '?')) return;
+    setBusy(leadId);
+    try {
+      await apiFetch('/api/v1/inbound/leads/update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ lead_id: leadId, status }),
+      });
+      await reload();
+    } catch (e) { alert('Failed: ' + e.message); }
+    setBusy(null);
+  };
+
+  if (err) return html`<div class="stub"><div class="stub-title">Could not load Leads</div><div class="stub-body">${err}</div></div>`;
+  if (!leads) return html`<div class="stub"><div class="stub-body">Loading…</div></div>`;
+
+  const filterMap = {
+    all: () => true,
+    new: l => !l.status || l.status === 'new',
+    contacted: l => l.status === 'contacted',
+    qualified: l => l.status === 'qualified',
+    closed: l => l.status === 'closed',
+    rejected: l => l.status === 'rejected',
+  };
+  const filtered = leads.filter(filterMap[filter] || filterMap.all);
+
+  const totalLeads = stats?.total ?? leads.length;
+  const newLeads = stats?.new ?? 0;
+  const contactedLeads = stats?.contacted ?? 0;
+  const qualifiedLeads = stats?.qualified ?? 0;
+
+  const statusActions = (l) => {
+    const actions = [];
+    if (l.status === 'new' || !l.status) {
+      actions.push(html`<button class="ld-action-btn go" disabled=${busy === l.id} onClick=${() => updateStatus(l.id, 'contacted')}>Contacted</button>`);
+      actions.push(html`<button class="ld-action-btn ghost" disabled=${busy === l.id} onClick=${() => updateStatus(l.id, 'qualified')}>Qualify</button>`);
+    }
+    if (l.status === 'contacted') {
+      actions.push(html`<button class="ld-action-btn go" disabled=${busy === l.id} onClick=${() => updateStatus(l.id, 'qualified')}>Qualify</button>`);
+    }
+    if (l.status !== 'closed' && l.status !== 'rejected') {
+      actions.push(html`<button class="ld-action-btn ghost" disabled=${busy === l.id} onClick=${() => updateStatus(l.id, 'closed')}>Close</button>`);
+      actions.push(html`<button class="ld-action-btn danger" disabled=${busy === l.id} onClick=${() => updateStatus(l.id, 'rejected')}>Reject</button>`);
+    }
+    return actions;
+  };
+
+  return html`
+    <div>
+      <div class="section-h">
+        <div>
+          <div class="section-title">Inbound <em>Leads</em></div>
+          <div class="section-sub">Pipeline · intake · notes</div>
+        </div>
+        <div class="section-sub">${filtered.length} of ${totalLeads} leads</div>
+      </div>
+
+      <div class="ld-stats">
+        <div class="ld-stat">
+          <div class="ld-stat-val teal">${totalLeads}</div>
+          <div class="ld-stat-lbl">Total leads</div>
+        </div>
+        <div class="ld-stat">
+          <div class="ld-stat-val teal">${newLeads}</div>
+          <div class="ld-stat-lbl">New</div>
+        </div>
+        <div class="ld-stat">
+          <div class="ld-stat-val">${contactedLeads}</div>
+          <div class="ld-stat-lbl">Contacted</div>
+        </div>
+        <div class="ld-stat">
+          <div class="ld-stat-val">${qualifiedLeads}</div>
+          <div class="ld-stat-lbl">Qualified</div>
+        </div>
+      </div>
+
+      <div class="ld-filter">
+        <span class="ld-filter-tag">Filter:</span>
+        ${['all','new','contacted','qualified','closed','rejected'].map(f => html`
+          <button class=${'ld-filter-btn ' + (filter === f ? 'active' : '')} onClick=${() => setFilter(f)}>${f.charAt(0).toUpperCase() + f.slice(1)}</button>
+        `)}
+      </div>
+
+      ${filtered.length === 0
+        ? html`<div class="ld-empty">No leads match this filter.</div>`
+        : filtered.map(l => {
+          const notes = (() => {
+            try { return typeof l.notes === 'string' ? JSON.parse(l.notes) : (Array.isArray(l.notes) ? l.notes : []); }
+            catch { return []; }
+          })();
+          const ts = l.created_at || l._t || '';
+          const phone = l.from_number || l.phone || l.caller_id || '';
+          const name = l.name || l.caller_name || l.contact_name || phone || '—';
+          const source = l.source || (l.from_number || l.phone ? 'inbound' : 'unknown');
+          const status = l.status || 'new';
+          const statusCls = status === 'closed' || status === 'rejected' ? status : (status === 'new' ? 'new' : status === 'contacted' ? 'contacted' : status === 'qualified' ? 'qualified' : status);
+          return html`
+          <div class="ld-lead" key=${l.id} data-lead-id=${l.id}>
+            <div class="ld-lead-row">
+              <div>
+                <div class="ld-lead-name">${name}</div>
+                ${phone ? html`<div class="ld-lead-contact">${phone}</div>` : ''}
+              </div>
+              <span class=${'ld-bdg ' + statusCls}>${status}</span>
+            </div>
+            <div class="ld-lead-meta">
+              ${ts ? html`<span>${ts.slice(0,19).replace('T',' ')}</span>` : ''}
+              <span class=${'ld-bdg source'}>${source}</span>
+            </div>
+
+            ${notes.length > 0 ? html`
+            <div class="ld-notes-history">
+              ${notes.map(n => {
+                const noteTs = n.ts || n.timestamp || '';
+                const noteText = n.text || n.note || '';
+                const noteOp = n.operator || n.op || '';
+                if (!noteText) return '';
+                return html`
+                <div class="ld-note-entry" key=${noteTs}>
+                  <div class="ld-note-meta">
+                    ${noteOp ? html`<span class="ld-note-op">${noteOp}</span>` : ''}
+                    ${noteTs ? html`<span>${noteTs.slice(0,19).replace('T',' ')}</span>` : ''}
+                    <button class="ld-note-del" disabled=${busy === l.id} onClick=${() => deleteNote(l.id, noteTs)} title="Delete note">✕</button>
+                  </div>
+                  <div class="ld-note-text">${noteText}</div>
+                </div>
+              `;
+              })}
+            </div>
+            ` : ''}
+
+            <div class="ld-notes">
+              <input class="ld-notes-in"
+                value=${noteText[l.id] || ''}
+                onChange=${e => setNoteText(n => ({...n, [l.id]: e.target.value}))}
+                onKeyDown=${e => { if (e.key === 'Enter') addNote(l.id); }}
+                placeholder="Add a note…"
+              />
+              <button class="ld-note-save"
+                disabled=${busy === l.id || !(noteText[l.id] || '').trim()}
+                onClick=${() => addNote(l.id)}
+              >Save</button>
+            </div>
+
+            <div class="ld-actions">
+              ${statusActions(l)}
+            </div>
+          </div>
+        `;
+      })}
+
+      <div class="live-panel" style=${{marginTop: '24px'}}>
+        <div class="panel-h">
+          <div class="panel-title">Activity Log</div>
+          <div class="panel-tag">${activity.length} entries${hasMoreActivity ? html` · <button class="act-clear" style=${{marginLeft: "4px"}} onClick=${async () => { setLoadingMore(true); await loadActivity(activityOffset, true); setLoadingMore(false); }} disabled=${loadingMore}>${loadingMore ? "Loading…" : "Load More"}</button>` : ""} · <button class="act-clear" onClick=${() => { setActivity([]); setActivityOffset(0); setHasMoreActivity(false); }}>Clear</button></div>
+        </div>
+        ${activityErr
+          ? html`<div class="act-empty">Could not load activity: ${activityErr}</div>`
+          : activity.length === 0
+            ? html`<div class="act-empty">No activity yet — operator actions will appear here.</div>`
+            : html`<div class="act-feed">
+              ${activity.map((a, i) => {
+                const aTs = a.timestamp || '';
+                const aOp = a.operator || '—';
+                const aText = a.text || '';
+                const aLead = a.lead_name || '—';
+                const aLeadId = a.lead_id || '';
+                return html`
+                <div class="act-entry" key=${aTs + i}>
+                  <span class="act-entry-ts">${aTs.slice(0,19).replace('T',' ')}</span>
+                  <span class="act-entry-body">
+                    <span class="act-entry-lead" onClick=${() => {
+                      const el = document.querySelector('[data-lead-id="' + aLeadId + '"]');
+                      if (el) el.scrollIntoView({ behavior: 'smooth' });
+                    }}>${aLead}</span>
+                    <span class="act-entry-text"> · ${aText}</span>
+                  </span>
+                  <span class="act-entry-operator">${aOp}</span>
+                </div>
+              `;
+              })}
+            </div>`}
+      </div>
+
+    </div>
+  `;
 }
 
+}
+
+// ── KANBAN ────────────────────────────────────────────────────────────
+function Kanban() {
+  const [tasks, setTasks] = useState(null);
+  const [err, setErr] = useState(null);
+  const [tick, setTick] = useState(0);
+
+  const reload = useCallback(async () => {
+    try {
+      const r = await apiFetch('/api/hermes/queue?limit=200').then(x => x.json());
+      setTasks(r.tasks || []);
+      setErr(null);
+    } catch (e) {
+      if (e.message !== 'Unauthorized') setErr(e.message);
+    }
+  }, []);
+
+  useEffect(() => {
+    reload();
+    const t = setInterval(() => { reload(); setTick(x => x + 1); }, 15000);
+    return () => clearInterval(t);
+  }, [reload]);
+
+  if (err) return html`<div class="stub"><div class="stub-title">Could not load Kanban</div><div class="stub-body">${err}</div></div>`;
+  if (!tasks) return html`<div class="stub"><div class="stub-body">Loading…</div></div>`;
+
+  const STATUSES = ['To-Do', 'In Progress', 'Done', 'Failed', 'Blocked', 'Retried', 'Promoted'];
+  const byStatus = {};
+  for (const s of STATUSES) byStatus[s] = [];
+  for (const t of tasks) {
+    const st = t.status || 'unknown';
+    if (byStatus[st]) byStatus[st].push(t);
+  }
+
+  const summary = STATUSES.map(s => `${byStatus[s].length} ${s}`).join(' · ');
+  return html`
+    <div>
+      <div class="section-h">
+        <div>
+          <div class="section-title"><em>Kanban</em> Board</div>
+          <div class="section-sub">Agent task queue · pipeline stages</div>
+        </div>
+        <div class="section-sub">Auto-refresh · 15s · TICK ${tick}</div>
+      </div>
+
+      <div class="kb-summary">
+        <span class="kb-summary-tag">Total: <strong>${tasks.length} tasks</strong></span>
+        <span class="kb-summary-tag">${summary}</span>
+      </div>
+
+      <div class="kb-board">
+        ${STATUSES.map(status => {
+          const cards = byStatus[status] || [];
+          return html`
+            <div class="kb-col" key=${status}>
+              <div class=${'kb-col-h ' + status.replace(' ','-')}>
+                <span class="kb-col-title">${status}</span>
+                <span class="kb-col-count">${cards.length}</span>
+              </div>
+              <div class="kb-col-body">
+                ${cards.length === 0
+                  ? html`<div class="kb-empty">No tasks</div>`
+                  : cards.map(t => {
+                    const payload = (() => {
+                      try { return typeof t.payload === 'string' ? JSON.parse(t.payload) : (t.payload || {}); }
+                      catch { return {}; }
+                    })();
+                    const label = payload.lead_id || payload.source_id || payload.campaign_id || payload.phone || '';
+                    const ts = (t.created_at || t.completed_at || '').slice(0,16).replace('T',' ');
+                    return html`
+                      <div class="kb-card" key=${t.ticket_id} title=${'Payload: ' + JSON.stringify(payload).slice(0,200)}>
+                        <div class="kb-card-id">#${(t.ticket_id || '').slice(0,8)}</div>
+                        <div class="kb-card-type">${t.task_type || '—'}</div>
+                        <div class="kb-card-agent">${t.assigned_agent || 'unassigned'}</div>
+                        ${label ? html`<div class="kb-card-type" style=${{fontSize: '9px', color: 'var(--signal-teal)'}}>${label.slice(0, 30)}</div>` : ''}
+                        <div class="kb-card-meta">
+                          <span class="kb-card-pri">pri <strong>${t.priority ?? 0}</strong></span>
+                          <span class="kb-card-ts">${ts || '—'}</span>
+                        </div>
+                      </div>
+                    `;
+                  })}
+              </div>
+            </div>
+          `;
+        })}
+      </div>
+    </div>
+  `;
+}
+
+// ── REVENUE ──────────────────────────────────────────────────────────────
+function Revenue({ events, wsConnected }) {
+  const [data, setData] = useState(null);
+  const [narrative, setNarrative] = useState(null);
+  const [forecast, setForecast] = useState(null);
+  const [accuracy, setAccuracy] = useState(null);
+  const [err, setErr] = useState(null);
+
+  const reload = useCallback(async () => {
+    try {
+      const [r, nr] = await Promise.all([
+        apiFetch('/api/revenue/lanes').then(x => x.json()),
+        apiFetch('/api/revenue/forecast').then(x => x.json()),
+      ]);
+      setData(r);
+      setNarrative(nr.narrative || nr);
+      setForecast(nr);
+      const ar = await apiFetch('/api/revenue/accuracy?days=14').then(x => x.json());
+      setAccuracy(ar);
+      setErr(null);
+    } catch (e) {
+      if (e.message !== 'Unauthorized') setErr(e.message);
+    }
+  }, []);
+
+  useEffect(() => {
+    reload();
+    const t = setInterval(reload, 60000);
+    return () => clearInterval(t);
+  }, [reload]);
+
+  if (err) return html`<div class="stub"><div class="stub-title">Could not load Revenue</div><div class="stub-body">${err}</div></div>`;
+  if (!data) return html`<div class="stub"><div class="stub-body">Loading\u2026</div></div>`;
+
+  const lanes = data.lanes || [];
+  const totals = data.totals || {};
+  const nicheSummary = data.niche_summary || {};
+  const health = data.health || {};
+  const adaptation = (forecast && forecast.adaptation) || {};
+  const topLanes = lanes.slice(0, 8);
+  const maxMRR = topLanes.length > 0 ? Math.max(...topLanes.map(l => l.mrr_projected || 0)) : 1;
+
+  // Narrative fields (from adaptive_forecast)
+  const execSummary = (narrative && narrative.executive_summary) || '';
+  const highlights = (narrative && narrative.lane_highlights) || [];
+  const trendAnalysis = (narrative && narrative.trend_analysis) || '';
+  const advice = (narrative && narrative.actionable_advice) || '';
+  const risks = (narrative && narrative.risks) || [];
+
+  return html`
+    <div>
+      <div class="section-h">
+        <div>
+          <div class="section-title">Predictive <em>Revenue</em></div>
+          <div class="section-sub">Per-lane MRR \u00b7 pipeline value \u00b7 LLM forecast</div>
+        </div>
+        <div class="section-sub">Auto-refresh \u00b7 60s</div>
+      </div>
+
+      <div class="pulse-grid">
+        <div class="stat-card">
+          <div class="stat-label">24h Revenue</div>
+          <div class="stat-value teal">$${totals.revenue_24h || 0}</div>
+          <div class="stat-meta">${totals.calls_24h || 0} calls \u00b7 ${totals.active_buyers || 0} buyers</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Projected MRR</div>
+          <div class="stat-value teal">$${totals.mrr_projected || 0}</div>
+          <div class="stat-meta">${totals.lanes_active || 0} active lanes</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Revenue Health</div>
+          <div class=${'stat-value ' + (health.status === 'critical' ? 'dim' : health.status === 'warning' ? 'dim' : 'teal')} style=${{color: health.status === 'critical' ? 'var(--status-red)' : health.status === 'warning' ? 'var(--status-amber)' : 'var(--signal-teal)'}}>${health.status || '\u2014'}</div>
+          <div class="stat-meta">${health.pct_change || 0}% vs 7d avg</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Pipeline Value</div>
+          <div class="stat-value cyan">$${totals.active_buyers || 0}</div>
+          <div class="stat-meta">active buyer pipeline</div>
+        </div>
+      </div>
+
+      ${health.alerts && health.alerts.length > 0 ? html`
+      <div class="rv-alerts">
+        ${health.alerts.map(a => html`
+          <div class=${'rv-alert ' + (a.level || 'info')} key=${a.message}>
+            <span class="rv-alert-lvl">${a.level || 'info'}</span>
+            <span class="rv-alert-msg">${a.message}</span>
+            ${a.niche ? html`<span class="rv-alert-niche">${a.niche}</span>` : ''}
+          </div>
+        `)}
+      </div>
+      ` : ''}
+
+      <div class="rv-split">
+        <div class="rv-panel">
+          <div class="panel-head">Top Lanes by MRR</div>
+          ${topLanes.map(l => {
+            const barW = maxMRR > 0 ? Math.max(2, Math.round((l.mrr_projected / maxMRR) * 100)) : 0;
+            const barColor = l.mrr_projected > 500 ? 'var(--signal-teal)' : l.mrr_projected > 100 ? 'var(--strike-cyan)' : 'var(--empire-mist)';
+            return html`
+            <div class="rv-bar-row" key=${l.lane_id}>
+              <div class="rv-bar-label">
+                <span class="rv-bar-lane">L${l.lane_id}</span>
+                <span class="rv-bar-niche">${(l.niche || '').slice(0, 18)}</span>
+              </div>
+              <div class="rv-bar-track">
+                <div class="rv-bar-fill" style=${{width: barW + '%', backgroundColor: barColor}}></div>
+              </div>
+              <div class="rv-bar-val">$${l.mrr_projected || 0}</div>
+              <div class="rv-bar-meta">${l.calls_24h}c \u00b7 ${l.active_buyers}b</div>
+            </div>
+          `})}
+          ${topLanes.length === 0 ? html`<div class="kb-empty">No lane data yet.</div>` : ''}
+        </div>
+
+        <div class="rv-panel">
+          <div class="panel-head">Niche Summary</div>
+          ${Object.values(nicheSummary).map(ns => {
+            return html`
+            <div class="rv-niche-card" key=${ns.niche}>
+              <div class="rv-niche-name">${ns.niche}</div>
+              <div class="rv-niche-stats">
+                <span class="rv-niche-stat"><strong>$${ns.mrr_projected || 0}</strong> MRR</span>
+                <span class="rv-niche-stat">$${ns.revenue_24h || 0}/24h</span>
+                <span class="rv-niche-stat">${ns.calls_24h} calls</span>
+                <span class="rv-niche-stat">${ns.active_buyers} buyers</span>
+              </div>
+              <div class="rv-niche-lanes">${ns.lane_count} lanes</div>
+            </div>
+          `})}
+          ${Object.keys(nicheSummary).length === 0 ? html`<div class="kb-empty">No niche data yet.</div>` : ''}
+        </div>
+      </div>
+
+      ${(execSummary || highlights.length > 0) ? html`
+      <div class="rv-narrative-panel">
+        <div class="rv-narrative-head">
+          <span class="rv-narrative-title">AGI Revenue Narrative</span>
+          <span class="rv-narrative-badge">few-shot · learning</span>
+        </div>
+        ${execSummary ? html`
+        <div class="rv-narrative-summary">${execSummary}</div>
+        ` : ''}
+        ${highlights.length > 0 ? html`
+        <div class="rv-narrative-section">
+          <div class="rv-narrative-section-h">Lane Highlights</div>
+          ${highlights.map(h => html`
+            <div class="rv-narrative-item" key=${h}>${h}</div>
+          `)}
+        </div>
+        ` : ''}
+        ${trendAnalysis ? html`
+        <div class="rv-narrative-section">
+          <div class="rv-narrative-section-h">Trend Analysis</div>
+          <div class="rv-narrative-item">${trendAnalysis}</div>
+        </div>
+        ` : ''}
+        ${advice ? html`
+        <div class="rv-narrative-section">
+          <div class="rv-narrative-section-h">Actionable Advice</div>
+          <div class="rv-narrative-item advice">${advice}</div>
+        </div>
+        ` : ''}
+        ${risks.length > 0 ? html`
+        <div class="rv-narrative-section">
+          <div class="rv-narrative-section-h">Risks</div>
+          ${risks.map((r, i) => html`
+            <div class="rv-narrative-item risk" key=${i}>⚠ ${r}</div>
+          `)}
+        </div>
+        ` : ''}
+      </div>
+      ` : ''}
+
+      ${accuracy && accuracy.series && accuracy.series.length > 0 ? html`
+      <div class="rv-accuracy-panel">
+        <div class="rv-accuracy-head">
+          <span class="rv-accuracy-title">Forecast vs Actual</span>
+          <div class="rv-accuracy-actions">
+            <button class="rv-export-btn csv" onClick=${() => window.open('/api/revenue/accuracy/csv?days=14', '_blank')}>Download CSV</button>
+            <button class="rv-export-btn pdf" onClick=${() => window.open('/api/revenue/accuracy/report?days=14', '_blank')}>Print PDF</button>
+          </div>
+          <span class="rv-accuracy-summary">
+            ${accuracy.summary ? Math.round(accuracy.summary.avg_accuracy_pct) + '% avg accuracy · ' + accuracy.summary.trend : ''}
+          </span>
+        </div>
+        <div class="rv-accuracy-chart">
+          ${accuracy.series.slice(0, 14).reverse().map(d => {
+            const maxVal = Math.max(d.forecasted_fee || 1, d.actual_revenue || 1);
+            const forecastW = maxVal > 0 ? Math.max(2, Math.round((d.forecasted_fee / maxVal) * 100)) : 0;
+            const actualW = maxVal > 0 ? Math.max(2, Math.round((d.actual_revenue / maxVal) * 100)) : 0;
+            const accColor = d.accuracy_pct != null ? (d.accuracy_pct >= 80 ? 'var(--signal-teal)' : d.accuracy_pct >= 50 ? 'var(--status-amber)' : 'var(--status-red)') : 'var(--empire-mist)';
+            return html`
+            <div class="rv-acc-row" key=${d.date}>
+              <div class="rv-acc-date">${(d.date || '').slice(5)}</div>
+              <div class="rv-acc-bars">
+                <div class="rv-acc-bar-wrap">
+                  <div class="rv-acc-bar forecast" style=${{width: forecastW + '%'}}></div>
+                  <span class="rv-acc-bar-label">$${d.forecasted_fee || 0} fcst</span>
+                </div>
+                <div class="rv-acc-bar-wrap">
+                  <div class="rv-acc-bar actual" style=${{width: actualW + '%'}}></div>
+                  <span class="rv-acc-bar-label">$${d.actual_revenue || 0} actual</span>
+                </div>
+              </div>
+              <div class="rv-acc-pct" style=${{color: accColor}}>
+                ${d.accuracy_pct != null ? d.accuracy_pct + '%' : '—'}
+              </div>
+            </div>
+          `})}
+        </div>
+        <div class="rv-accuracy-legend">
+          <span class="rv-acc-legend-item"><span class="rv-acc-legend-swatch forecast"></span> Forecast</span>
+          <span class="rv-acc-legend-item"><span class="rv-acc-legend-swatch actual"></span> Actual MRR</span>
+          <span class="rv-acc-legend-item">Accuracy: <span style=${{color:'var(--signal-teal)'}}>≥80%</span> <span style=${{color:'var(--status-amber)'}}>50-79%</span> <span style=${{color:'var(--status-red)'}}><50%</span></span>
+        </div>
+      </div>
+      ` : ''}
+
+    </div>
+  `;
+}
 // ── APP SHELL ────────────────────────────────────────────────────────
+// ── SI STRATEGY EVOLUTION ─────────────────────────────────────────────
+// ── SI ADAPTIVE ENGINE ──────────────────────────────────────────────────
+function SiAdaptive() {
+  const [data, setData] = useState(null);
+  const [err, setErr] = useState(null);
+  useEffect(() => {
+    apiFetch('/api/si/adaptive').then(r => r.json())
+      .then(d => { setData(d); setErr(null); })
+      .catch(e => setErr(e.message));
+  }, []);
+
+  const apiError = data && data.error || null;
+  if (err || apiError) return html`<div class="stub"><div class="stub-title">Could not load SI Adaptive data</div><div class="stub-body">${err || apiError}</div></div>`;
+  if (!data) return html`<div class="stub"><div class="stub-body">Loading adaptive engine…</div></div>`;
+
+  const subsystems = data.subsystems_registered || [];
+  const recent = data.recent_changes || [];
+  const totalAdopted = data.adaptations_applied || 0;
+  const lastTs = data.last_apply_ts;
+
+  const fmtVal = (v) => {
+    if (v === null || v === undefined) return '—';
+    if (typeof v === 'number') {
+      if (Number.isInteger(v)) return v.toString();
+      if (Math.abs(v) < 0.01) return v.toFixed(4);
+      return v.toFixed(3);
+    }
+    if (typeof v === 'boolean') return v ? 'true' : 'false';
+    if (typeof v === 'string') return v;
+    if (typeof v === 'object') return 'X';
+    return String(v);
+  };
+
+  return html`
+    <div>
+      <div class="section-h">
+        <div>
+          <div class="section-title">SI <em>Adaptive Engine</em></div>
+          <div class="section-sub">Subsystem adoption · parameter propagation</div>
+        </div>
+        ${lastTs ? html`<div class="rv-narrative-badge">last apply: ${lastTs.slice(0, 19).replace('T', ' ')}</div>` : ''}
+      </div>
+
+      <div class="sia-grid">
+        <div class="sia-tile">
+          <div class="sia-tile-label">Subsystems Registered</div>
+          <div class="sia-tile-val">${subsystems.length}</div>
+          <div class="sia-tile-sub">receiving parameter updates</div>
+        </div>
+        <div class="sia-tile">
+          <div class="sia-tile-label">Adaptations Applied</div>
+          <div class="sia-tile-val">${totalAdopted}</div>
+          <div class="sia-tile-sub">total propagated changes</div>
+        </div>
+        <div class="sia-tile">
+          <div class="sia-tile-label">Recent Batches</div>
+          <div class="sia-tile-val">${recent.length}</div>
+          <div class="sia-tile-sub">last 10 propagation events</div>
+        </div>
+        <div class="sia-tile">
+          <div class="sia-tile-label">Status</div>
+          <div class=${'sia-tile-val ' + (subsystems.length > 0 ? '' : 'dim')}>${subsystems.length > 0 ? 'LIVE' : 'IDLE'}</div>
+          <div class="sia-tile-sub">${subsystems.length > 0 ? 'adaptive engine online' : 'no subsystems registered'}</div>
+        </div>
+      </div>
+
+      <div class="sia-subsystem-panel">
+        <div class="sia-subsystem-head">
+          <span class="sia-subsystem-title">Registered Subsystems</span>
+          <span class="sia-subsystem-count">${subsystems.length} consumers</span>
+        </div>
+        ${subsystems.length === 0 ? html`
+          <div class="sia-adoption-empty">No subsystems registered yet — AdaptiveEngine.register_subsystem() has not been called.</div>
+        ` : html`
+          <div class="sia-subsystem-grid">
+            ${subsystems.map(name => html`
+              <div class="sia-sub-card" key=${name}>
+                <div class="sia-sub-dot"></div>
+                <div class="sia-sub-body">
+                  <div class="sia-sub-name">${name}</div>
+                  <div class="sia-sub-meta">listening for parameter updates</div>
+                </div>
+              </div>
+            `)}
+          </div>
+        `}
+      </div>
+
+      <div class="sia-adoption-panel">
+        <div class="sia-adoption-head">
+          <span class="sia-adoption-title">Recent Adoption Log</span>
+          <span class="sia-adoption-count">${recent.length} batches · last 10 events</span>
+        </div>
+        ${recent.length === 0 ? html`
+          <div class="sia-adoption-empty">No adoption events yet — SI core has not propagated any parameters to subsystems.</div>
+        ` : html`
+          <div class="sia-adoption-feed">
+            ${recent.map((batch, i) => {
+              const ts = (batch.ts || '').slice(0, 19).replace('T', ' ');
+              const changes = batch.changes || [];
+              const count = batch.count != null ? batch.count : changes.length;
+              return html`
+                <div class="sia-adoption-batch" key=${`batch-${i}`}>
+                  <div class="sia-adoption-head-row">
+                    <span class="sia-adoption-ts">${ts}</span>
+                    <span class="sia-adoption-bdg">${count} change${count === 1 ? '' : 's'}</span>
+                  </div>
+                  <div class="sia-adoption-changes">
+                    ${changes.map((c, j) => html`
+                      <div class="sia-adoption-change" key=${j}>
+                        <span class="sia-change-key">${c.key}</span>
+                        <span class="sia-change-sub">${c.subsystem || 'unknown'}</span>
+                        <span style=${{color:'var(--empire-fog)'}}>→</span>
+                        <span class="sia-change-val">${fmtVal(c.value)}</span>
+                      </div>
+                    `)}
+                  </div>
+                </div>
+              `;
+            })}
+          </div>
+        `}
+      </div>
+    </div>
+  `;
+}
+
+function SiEvolution() {
+  const [data, setData] = useState(null);
+  const [err, setErr] = useState(null);
+  useEffect(() => {
+    apiFetch('/api/si/snapshot').then(r => r.json())
+      .then(d => { setData(d); setErr(null); })
+      .catch(e => setErr(e.message));
+  }, []);
+
+  const apiError = data.error || null;
+  if (err || apiError) return html`<div class="stub"><div class="stub-title">Could not load SI data</div><div class="stub-body">${err || apiError}</div></div>`;
+  if (!data) return html`<div class="stub"><div class="stub-body">Loading…</div></div>`;
+
+  const byNiche = data.by_niche || {};
+  const best = data.best_per_niche || {};
+  const niches = Object.keys(byNiche).filter(n => n !== '__base__' && (byNiche[n] || []).length > 0);
+
+  // Color map for genome traits
+  const traitColors = {
+    aggressiveness:     '#FF4444',
+    risk_tolerance:     '#FFB800',
+    outreach_intensity: '#5AC8FA',
+    price_premium:      '#44E5B8',
+    narrow_focus:       '#C8A2C8',
+  };
+  const traitLabels = {
+    aggressiveness:     'Aggression',
+    risk_tolerance:     'Risk Tol.',
+    outreach_intensity: 'Outreach',
+    price_premium:      'Premium',
+    narrow_focus:       'Focus',
+  };
+
+  return html`
+    <div>
+      <div class="section-h">
+        <div>
+          <div class="section-title">SI <em>Strategy Evolution</em></div>
+          <div class="section-sub">Genomes · win rates · generation tracking</div>
+        </div>
+        <div class="rv-narrative-badge">${data.evolution_runs || 0} evolutions · ${data.active_strategies || 0} active</div>
+      </div>
+
+      ${niches.length === 0 ? html`
+        <div class="tbl-empty">No evolved strategies yet — outcomes need to flow through the SI core first.</div>
+      ` : niches.map(niche => {
+        const strategies = byNiche[niche] || [];
+        const bestInfo = best[niche] || {};
+        strategies.sort((a, b) => b.score - a.score);
+        return html`
+      <div class="si-niche-panel" key=${niche}>
+        <div class="si-niche-head">
+          <div class="si-niche-name">${niche}</div>
+          <div class="si-niche-meta">
+            <span>Best: <strong>${bestInfo.name || '—'}</strong></span>
+            <span class="si-niche-score">${(bestInfo.score || 0).toFixed(3)}</span>
+          </div>
+        </div>
+
+        <div class="si-strategy-grid">
+          ${strategies.map(s => {
+            const winRate = s.runs > 0 ? (s.wins / s.runs * 100).toFixed(0) : 0;
+            const isBest = s.name === bestInfo.name;
+            return html`
+          <div class=${'si-strat-card ' + (isBest ? 'best' : '')} key=${s.id}>
+            <div class="si-strat-top">
+              <div class="si-strat-name">${s.name}</div>
+              <div>
+                ${s.generation > 0 ? html`<span class="si-gen-bdg">Gen ${s.generation}</span>` : ''}
+                <span class="si-parent-bdg">${s.parent || s.name}</span>
+              </div>
+            </div>
+
+            <div class="si-strat-stats">
+              <div class="si-stat"><span class="si-stat-val teal">${s.score.toFixed(3)}</span><span class="si-stat-lbl">score</span></div>
+              <div class="si-stat"><span class="si-stat-val">${winRate}%</span><span class="si-stat-lbl">win rate</span></div>
+              <div class="si-stat"><span class="si-stat-val dim">${s.runs}</span><span class="si-stat-lbl">runs</span></div>
+              <div class="si-stat"><span class="si-stat-val${s.generation > 1 ? ' cyan' : ' dim'}">${s.generation}</span><span class="si-stat-lbl">gen</span></div>
+            </div>
+
+            <div class="si-genome">
+              <div class="si-genome-label">Genome</div>
+              ${Object.entries(s.genome || {}).map(([trait, val]) => {
+                const pct = Math.round(val * 100);
+                const color = traitColors[trait] || '#64748B';
+                const label = traitLabels[trait] || trait;
+                return html`
+              <div class="si-trait" key=${trait}>
+                <div class="si-trait-head">
+                  <span class="si-trait-name">${label}</span>
+                  <span class="si-trait-pct" style=${{color}}>${pct}%</span>
+                </div>
+                <div class="si-trait-track">
+                  <div class="si-trait-fill" style=${{width: pct + '%', background: color}}></div>
+                </div>
+              </div>
+              `;
+              })}
+            </div>
+          </div>
+          `;
+          })}
+        </div>
+      </div>
+      `;
+      })}
+
+      ${data.last_evolution_ts ? html`
+      <div class="si-evo-footer">
+        <span>Last evolution: ${data.last_evolution_ts.slice(0, 19).replace('T', ' ')}</span>
+        <span>${data.inactive_strategies || 0} inactive strategies pruned</span>
+      </div>
+      ` : ''}
+
+      ${(data.evolution_events || []).length > 0 ? html`
+      <div class="si-evo-history">
+        <div class="si-evo-history-head">
+          <span class="si-evo-history-title">Evolution Event History</span>
+          <span class="si-evo-history-count">${data.evolution_events.length} events</span>
+        </div>
+        <div class="si-evo-events">
+          ${data.evolution_events.map(ev => {
+            const ts = (ev.ts || '').slice(0, 19).replace('T', ' ');
+            if (ev.type === 'evolve') {
+              return html`
+            <div class="si-evo-event" key=${ev.new_strategy + ev.generation}>
+              <span class="si-evo-event-ts">${ts}</span>
+              <span class="si-evo-event-type evolve">EVOLVED</span>
+              <span class="si-evo-event-niche">${ev.niche || ''}</span>
+              <span class="si-evo-event-detail">${ev.new_strategy} ← ${ev.parent} (gen ${ev.generation})</span>
+            </div>
+            `;
+            } else if (ev.type === 'deactivate') {
+              return html`
+            <div class="si-evo-event" key=${(ev.deactivated || []).join(',')}>
+              <span class="si-evo-event-ts">${ts}</span>
+              <span class="si-evo-event-type deactivate">PRUNED</span>
+              <span class="si-evo-event-niche">${ev.niche || ''}</span>
+              <span class="si-evo-event-detail">${(ev.deactivated || []).join(', ')}</span>
+            </div>
+            `;
+            }
+            return '';
+          })}
+        </div>
+      </div>
+      ` : ''}
+    </div>
+  `;
+}
+
+// ── PANEL_COURT 5-PANEL CONSENSUS ──────────────────────────────────────────
+function PanelCourtPanel() {
+  const [data, setData] = useState(null);
+  const [pool, setPool] = useState(null);
+  const [err, setErr] = useState(null);
+  const [selectedAgentId, setSelectedAgentId] = useState(null);
+  const [hoveredAgentId, setHoveredAgentId] = useState(null);
+  const [hoverPos, setHoverPos] = useState({x:0,y:0});
+  const [expanded, setExpanded] = useState(null);
+  const [highlighted, setHighlighted] = useState(null);
+  const chartDrawn = useRef(false);
+
+  useEffect(() => {
+    Promise.all([
+      apiFetch('/api/panel_court/decisions?limit=30').then(r => r.json()),
+      apiFetch('/api/panel_court/pool').then(r => r.json()),
+    ]).then(([decisions, poolData]) => {
+      setData(decisions.decisions || []);
+      setPool(poolData);
+    }).catch(e => setErr(e.message));
+  }, []);
+
+  // Real-time pool updates via WebSocket (with reconnection + SSE fallback)
+  const poolOnEvent = useCallback((data) => {
+    if (data.type === 'panel_court_pool' && data.agents) setPool(data);
+  }, []);
+  useLiveSocket(poolOnEvent);
+
+  const poolErr = pool && pool.error;
+  if (err) return html`<div class="stub"><div class="stub-title">Could not load Panel Court</div><div class="stub-body">${err}</div></div>`;
+  if (!data) return html`<div class="stub"><div class="stub-body">Loading…</div></div>`;
+
+  const dispatched = data.filter(d => d.verdict === 'DISPATCH').length;
+  const rejected = data.filter(d => d.verdict === 'REJECT').length;
+  const avgScore = data.length > 0 ? Math.round(data.reduce((s, d) => s + (d.score || 0), 0) / data.length) : 0;
+  const totalRuns = pool && pool.agents ? pool.agents.reduce((s, a) => s + (a.total_runs || 0), 0) : 0;
+
+  // Agent pool sorted by win rate
+  useEffect(() => { if (pool && pool.temperature_history && pool.temperature_history.length >= 2) { chartDrawn.current = true; } }, [pool]);
+
+  const agents = (pool && pool.agents ? [...pool.agents] : []).sort((a, b) => (a.id || 0) - (b.id || 0));
+
+  return html`
+    <div>
+      <div class="section-h">
+        <div>
+          <div class="section-title">Panel Court <em>10-Agent Ensemble</em></div>
+          <div class="section-sub">Parallel scoring · 5-role voting · learning loop</div>
+        </div>
+        <div class="section-sub">${data.length} decisions · ${totalRuns} agent runs</div>
+      </div>
+
+      <!-- ── Summary Cards ── -->
+      <div class="pc-summary-grid">
+        <div class="pc-summary-card">
+          <div class="pc-summary-val teal">${dispatched}</div>
+          <div class="pc-summary-lbl">Dispatched</div>
+        </div>
+        <div class="pc-summary-card">
+          <div class="pc-summary-val amber">${rejected}</div>
+          <div class="pc-summary-lbl">Rejected</div>
+        </div>
+        <div class="pc-summary-card">
+          <div class=${'pc-summary-val ' + (avgScore >= 80 ? 'teal' : avgScore >= 60 ? 'amber' : 'red')}>${avgScore}</div>
+          <div class="pc-summary-lbl">Avg Score</div>
+        </div>
+        <div class="pc-summary-card">
+          <div class="pc-summary-val dim">${totalRuns}</div>
+          <div class="pc-summary-lbl">Agent Runs</div>
+        </div>
+      </div>
+
+      <!-- ── 10-Agent Orbital Ring ── -->
+      ${agents.length > 0 ? html`
+      <div class="pc-pool-panel">
+        <div class="pc-pool-head">
+          <span class="pc-pool-title">Agent Pool</span>
+          <span class="pc-pool-tag">${agents.filter(a => a.total_runs > 0).length}/10 active · orbital mesh</span>
+        </div>
+        <div class="pc-orbital-wrapper">
+          ${(() => {
+            const cx = 0, cy = 0;
+            const orbitR = 180;  // radius for the 10-agent ring
+            const innerR = 110;  // inner decorative ring
+            const outerR = 240;  // outer decorative ring
+            const svgW = outerR * 2 + 20;
+            const svgH = outerR * 2 + 20;
+            
+            // SVG for rings and connection lines
+            const winnerId = data.length > 0 ? data[0].winner_agent_id : null;
+            const svgLines = agents.map((a, i) => {
+              const angleDeg = (i * 360 / agents.length) - 90; // start from top
+              const angleRad = angleDeg * Math.PI / 180;
+              const ax = Math.cos(angleRad) * orbitR;
+              const ay = Math.sin(angleRad) * orbitR;
+              const isWinner = a.id === winnerId;
+              return html`<line 
+                x1="0" y1="0" 
+                x2="${ax}" y2="${ay}" 
+                class=${'pc-orbit-line' + (isWinner ? ' winner' : '')} 
+                style=${{animationDelay: (i * 0.1) + 's'}}
+              />`;
+            });
+            
+            return html`
+              <svg class="pc-orbital-svg" width="${svgW}" height="${svgH}" viewBox="${-svgW/2} ${-svgH/2} ${svgW} ${svgH}">
+                <!-- Outer ring -->
+                <circle cx="0" cy="0" r="${outerR}" class="pc-orbit-ring outer"/>
+                <!-- Main orbit ring -->
+                <circle cx="0" cy="0" r="${orbitR}" class="pc-orbit-ring pulse"/>
+                <!-- Inner ring -->
+                <circle cx="0" cy="0" r="${innerR}" class="pc-orbit-ring inner"/>
+                <!-- Connection lines from center -->
+                ${svgLines}
+                <!-- Critique arrows between agents -->
+                ${(() => {
+                  const d0 = data;
+                  const crits = (d0 && d0.length > 0 && d0[0].agent_critiques) 
+                    ? (typeof d0[0].agent_critiques === 'string' 
+                        ? JSON.parse(d0[0].agent_critiques) 
+                        : d0[0].agent_critiques) 
+                    : [];
+                  return crits.map((cr, ci) => {
+                    const cidx = (cr.critic_id || 1) - 1;
+                    const tidx = (cr.target_id || 1) - 1;
+                    const cAngle = (cidx * 360 / 10 - 90) * Math.PI / 180;
+                    const tAngle = (tidx * 360 / 10 - 90) * Math.PI / 180;
+                    
+                    // critique ring, inside orbit to avoid card overlap
+                    const cx = Math.cos(cAngle) * 148;
+                    const cy = Math.sin(cAngle) * 148;
+                    const tx = Math.cos(tAngle) * 148;
+                    const ty = Math.sin(tAngle) * 148;
+                    // Arrowhead
+                    const dx = tx - cx, dy = ty - cy;
+                    const len = Math.sqrt(dx*dx+dy*dy) || 1;
+                    const ux = dx/len, uy = dy/len;
+                    const sevCls = (cr.severity || 0) >= 7 ? 'severe' : (cr.severity || 0) <= 3 ? 'mild' : '';
+                    const tipX = tx - ux * 8;
+                    const tipY = ty - uy * 8;
+                    const wing = 4;
+                    const px = -uy * wing, py = ux * wing;
+                    const pts = `${tx.toFixed(1)},${ty.toFixed(1)} ${(tipX+px).toFixed(1)},${(tipY+py).toFixed(1)} ${(tipX-px).toFixed(1)},${(tipY-py).toFixed(1)}`;
+                    return html`
+                      <line key=${'crline'+ci} x1="${cx.toFixed(1)}" y1="${cy.toFixed(1)}" x2="${tx.toFixed(1)}" y2="${ty.toFixed(1)}" class=${'pc-critique-arrow' + (sevCls ? ' ' + sevCls : '')}/>
+                      <polygon key=${'crhead'+ci} points="${pts}" class=${'pc-critique-arrowhead' + (sevCls ? ' ' + sevCls : '')}/>
+                    `;
+                  });
+                })()}
+              </svg>
+              
+              <!-- Boss agent (center) -->
+              <div class="pc-boss-card">
+                <span class="pc-boss-label">Panel Court</span>
+                <span class="pc-boss-title">The Judge</span>
+                <span class="pc-boss-sub">5-Role Panel</span>
+                <div class="pc-boss-roles">
+                  <span class="pc-boss-role">CFO</span>
+                  <span class="pc-boss-role">Growth</span>
+                  <span class="pc-boss-role">Strategy</span>
+                  <span class="pc-boss-role">Purist</span>
+                  <span class="pc-boss-role">Judge</span>
+                </div>
+              </div>
+              
+              <!-- Hover tooltip -->
+              ${hoveredAgentId ? html`
+                <div class="pc-hover-tooltip" style=${{position:'fixed',left:hoverPos.x+14+'px',top:hoverPos.y-10+'px',zIndex:9999}}>
+                  ${(() => { const ha = agents.find(a=>a.id===hoveredAgentId); if(!ha) return ''; return html`
+                    <div class="pc-tooltip-framing">${ha.framing||'No framing available'}</div>
+                    <div class="pc-tooltip-stats">
+                      <span>Temp: ${(ha.temperature||0).toFixed(2)}°</span>
+                      <span>Wins: ${ha.wins||0}</span>
+                      <span>Losses: ${ha.losses||0}</span>
+                      <span>Win rate: ${Math.round((ha.win_rate||0)*100)}%</span>
+                    </div>
+                    <div class="pc-tooltip-stats">
+                      <span>Avg score: ${(ha.avg_score||0).toFixed(1)}</span>
+                      <span>Accuracy: ${(ha.accuracy_weight||1.0).toFixed(2)}x</span>
+                      <span>Conv rate: ${Math.round((ha.real_conversion_rate||0)*100)}%</span>
+                    </div>
+                  `; })()}
+                </div>
+              ` : ''}
+              <!-- 10 orbiting agents -->
+              ${agents.map((a, i) => {
+                const angleDeg = (i * 360 / agents.length) - 90;
+                const angleRad = angleDeg * Math.PI / 180;
+                const ax = Math.cos(angleRad) * orbitR;
+                const ay = Math.sin(angleRad) * orbitR;
+                const wr = a.win_rate || 0;
+                const wrPct = Math.round(wr * 100);
+                const tempCls = a.temperature <= 0.08 ? 'cold' : a.temperature >= 0.12 ? 'hot' : 'warm';
+                const wonLast = data.length > 0 && data[0].winner_agent_id === a.id;
+                
+                const isSelected = selectedAgentId === a.id;
+                const selCls = isSelected ? ' selected' : '';
+                return html`
+                  <div class=${'pc-orbital-agent' + (wonLast ? ' winner' : '') + selCls}
+                       style=${{transform: 'translate(-50%,-50%) translate(' + ax + 'px,' + ay + 'px)', animationDelay: (i * 0.05) + 's'}}
+                       onClick=${() => setSelectedAgentId(isSelected ? null : a.id)}
+                       onMouseEnter=${(e) => { setHoveredAgentId(a.id); setHoverPos({x: e.clientX, y: e.clientY}); }}
+                       onMouseLeave=${() => setHoveredAgentId(null)}>
+                    <span class="pc-orbital-agent-id">#${a.id}</span>
+                    <span class=${'pc-orbital-agent-temp ' + tempCls}>${a.temperature.toFixed(2)}°</span>
+                    <span class="pc-orbital-agent-wr">${wrPct}%</span>
+                    <span class="pc-orbital-agent-wl">${a.wins}W ${a.losses}L</span>
+                    ${wonLast ? html`<span class="pc-orbital-agent-won">★ Winner</span>` : ''}
+                    ${isSelected ? html`<span class="pc-orbital-agent-won" style="top:auto;bottom:-8px;color:var(--strike-cyan);border-color:rgba(90,200,250,0.3);">▼ Selected</span>` : ''}
+                  </div>
+                `;
+              })}
+            `;
+          })()}
+        </div>
+      </div>
+      ` : ''}
+
+      <!-- ── Temperature Convergence Chart ── -->
+      ${(() => {
+        const history = pool && pool.temperature_history ? pool.temperature_history : [];
+        const agents = pool && pool.agents ? pool.agents : [];
+        if (history.length < 2) return '';
+        
+        const chartW = 640;
+        const chartH = 200;
+        const padL = 32, padR = 16, padT = 10, padB = 28;
+        const plotW = chartW - padL - padR;
+        const plotH = chartH - padT - padB;
+        const maxCycles = history.length;
+        const allTemps = history.flat();
+        const dataMin = allTemps.length > 0 ? Math.min(...allTemps) : 0.05;
+        const dataMax = allTemps.length > 0 ? Math.max(...allTemps) : 0.14;
+        const tempMin = Math.max(0.03, dataMin - 0.015);
+        const tempMax = Math.min(0.85, dataMax + 0.015);
+        const tempSpan = tempMax - tempMin || 0.01;
+        
+        // Y-axis labels
+        const tickCount = 4;
+        const yTicks = Array.from({length: tickCount}, (_, i) => Math.round((tempMin + (tempSpan * i / (tickCount - 1))) * 100) / 100);
+        const yLines = yTicks.map(t => {
+          const y = padT + plotH * (1 - (t - tempMin) / tempSpan);
+          return html`<line key=${'yg'+t} x1="${padL}" y1="${y.toFixed(1)}" x2="${padL+plotW}" y2="${y.toFixed(1)}" class="pc-converge-grid"/>`;
+        });
+        
+        // X-axis labels (cycle numbers)
+        const xLabelStep = Math.max(1, Math.floor(maxCycles / 8));
+        const xLabels = [];
+        for (let c = 0; c < maxCycles; c += xLabelStep) {
+          const x = padL + (c / (maxCycles - 1 || 1)) * plotW;
+          xLabels.push(html`<text key=${'xl'+c} x="${x.toFixed(1)}" y="${chartH - 6}" class="pc-converge-label" text-anchor="middle">${c}</text>`);
+        }
+        
+        // Y-axis labels
+        const yLabelEls = yTicks.map(t => {
+          const y = padT + plotH * (1 - (t - tempMin) / tempSpan);
+          return html`<text key=${'yl'+t} x="${padL - 4}" y="${y.toFixed(1)+3}" class="pc-converge-y-label" text-anchor="end">${t.toFixed(2)}</text>`;
+        });
+        
+        // Agent color palette
+        const agentColors = ['#44E5B8','#FFB800','#FF6444','#5AC8FA','#C8A2C8','#FF8C42',
+                              '#7B68EE','#FF69B4','#20B2AA','#F0E68C'];
+        
+        // Line paths for each agent
+        const agentLines = agents.map((a, ai) => {
+          const color = agentColors[ai % agentColors.length];
+          const pts = [];
+          for (let c = 0; c < maxCycles; c++) {
+            if (history[c] && history[c][ai] != null) {
+              const x = padL + (c / (maxCycles - 1 || 1)) * plotW;
+              const y = padT + plotH * (1 - (history[c][ai] - tempMin) / tempSpan);
+              pts.push(x.toFixed(1) + ',' + y.toFixed(1));
+            }
+          }
+          if (pts.length < 2) return '';
+          const d = 'M' + pts.join(' L');
+          const lineOpacity = highlighted != null ? (highlighted === ai ? 1 : 0.15) : 1;
+          const drawStyle = !chartDrawn.current ? {strokeDasharray:'1000',strokeDashoffset:'1000',animation:'pc-chart-draw 1.2s var(--ease-out-empire) '+(ai * 0.08)+'s forwards'} : {};
+          return html`<path key=${'line'+a.id} d="${d}" class="pc-converge-line" stroke="${color}" opacity="${lineOpacity}" style=${drawStyle}/>`;
+        });
+        
+        // Legend
+        const legendItems = agents.map((a, ai) => {
+          const color = agentColors[ai % agentColors.length];
+          const id = 'conv_legend_' + a.id;
+          return html`<span key=${id} class=${"pc-converge-legend-item" + (highlighted != null && highlighted !== ai ? " dimmed" : "")} onClick=${() => setHighlighted(highlighted === ai ? null : ai)}>
+            <span class="pc-converge-legend-swatch" style=${{background: color}}></span>
+            #${a.id}
+          </span>`;
+        });
+        
+        return html`
+                      <!-- Selected agent detail -->
+              ${selectedAgentId ? html`
+                <div class="pc-agent-detail">
+                  ${(() => {
+                    const sa = agents.find(a => a.id === selectedAgentId);
+                    if (!sa) return '';
+                    return html`
+                      <div class="pc-agent-detail-head">
+                        <div class="pc-agent-detail-title">Agent #${sa.id} — Full Stats</div>
+                        <button class="pc-agent-detail-close" onClick=${() => setSelectedAgentId(null)}>✕</button>
+                      </div>
+                      <div class="pc-agent-detail-body">
+                        <div class="pc-agent-detail-framing">${sa.framing || 'No framing data'}</div>
+                        <div class="pc-agent-detail-grid">
+                          <div class="pc-agent-stat"><span class="pc-agent-stat-val">${(sa.temperature||0).toFixed(3)}°</span><span class="pc-agent-stat-lbl">Temperature</span></div>
+                          <div class="pc-agent-stat"><span class="pc-agent-stat-val">${sa.wins||0}</span><span class="pc-agent-stat-lbl">Wins</span></div>
+                          <div class="pc-agent-stat"><span class="pc-agent-stat-val">${sa.losses||0}</span><span class="pc-agent-stat-lbl">Losses</span></div>
+                          <div class="pc-agent-stat"><span class="pc-agent-stat-val">${Math.round((sa.win_rate||0)*100)}%</span><span class="pc-agent-stat-lbl">Win Rate</span></div>
+                          <div class="pc-agent-stat"><span class="pc-agent-stat-val">${(sa.avg_score||0).toFixed(1)}</span><span class="pc-agent-stat-lbl">Avg Score</span></div>
+                          <div class="pc-agent-stat"><span class="pc-agent-stat-val">${(sa.accuracy_weight||1.0).toFixed(2)}x</span><span class="pc-agent-stat-lbl">Accuracy Weight</span></div>
+                          <div class="pc-agent-stat"><span class="pc-agent-stat-val">${sa.total_runs||0}</span><span class="pc-agent-stat-lbl">Total Runs</span></div>
+                          <div class="pc-agent-stat"><span class="pc-agent-stat-val">${Math.round((sa.real_conversion_rate||0)*100)}%</span><span class="pc-agent-stat-lbl">Real Conv Rate</span></div>
+                        </div>
+                        <div class="pc-agent-detail-meta">
+                          <span>Real dispatches: ${sa.real_dispatches||0}</span>
+                        </div>
+                      </div>
+                    `;
+                  })()}
+                </div>
+              ` : ''}
+<div class="pc-converge-panel">
+          <div class="pc-converge-head">
+            <span class="pc-converge-title">Temperature Convergence</span>
+            <span class="pc-converge-count">${maxCycles} cycles · ${agents.length} agents</span>
+          </div>
+          <div class="pc-converge-chart">
+            <svg class="pc-converge-svg" viewBox="0 0 ${chartW} ${chartH}" preserveAspectRatio="xMidYMid meet">
+              ${yLines}
+              ${yLabelEls}
+              ${xLabels}
+              ${agentLines}
+            </svg>
+          </div>
+          <div class="pc-converge-legend">
+            ${legendItems}
+          </div>
+        </div>
+        `;
+      })()}
+
+      <!-- ── Decision List ── -->
+      <div class="pc-decision-panel">
+        <div class="pc-decision-head">
+          <span class="pc-decision-title">Ensemble History</span>
+          <span class="pc-decision-count">${data.length} decisions</span>
+        </div>
+        ${data.length === 0 ? html`
+          <div class="tbl-empty">No ensemble decisions yet — run the dispatcher to see Panel Court in action.</div>
+        ` : html`
+        <div class="pc-decision-list">
+          ${data.map(d => {
+            const isExpanded = expanded === d.lead_id;
+            const scores = typeof d.per_agent_scores === 'string' ? JSON.parse(d.per_agent_scores || '{}') : (d.per_agent_scores || {});
+            const winner = d.winner_agent_id;
+            return html`
+              <div class=${'pc-decision-card' + (isExpanded ? ' expanded' : '')} onClick=${() => setExpanded(isExpanded ? null : d.lead_id)}>
+                <div class="pc-decision-row">
+                  <div class="pc-decision-lead">
+                    <span class="pc-decision-lead-name">${d.lead_summary || '—'}</span>
+                    <span class="pc-decision-lead-id">${(d.lead_id || '').slice(0, 12)}</span>
+                  </div>
+                  <div class="pc-decision-winner">
+                    <span class="pc-winner-badge">Agent #${winner}</span>
+                  </div>
+                  <div class=${'pc-score-circle ' + (d.score >= 80 ? 'pc-score-ok' : d.score >= 50 ? 'pc-score-warn' : 'pc-score-bad')}>
+                    ${d.score || '—'}
+                  </div>
+                  <div class="pc-decision-verdict">
+                    <span class=${'pc-verdict-badge ' + (d.verdict === 'DISPATCH' ? 'dispatch' : 'reject')}>${d.verdict || '?'}</span>
+                  </div>
+                </div>
+                ${isExpanded ? html`
+                <div class="pc-decision-detail">
+                  <div class="pc-detail-title">Per-Agent Scores</div>
+                  <div class="pc-detail-scores">
+                    ${Object.entries(scores).map(([aid, score]) => {
+                      const isWinner = parseInt(aid) === winner;
+                      return html`
+                        <div class=${'pc-detail-score' + (isWinner ? ' winner' : '')}>
+                          <span class="pc-detail-aid">Agent #${aid}</span>
+                          <span class="pc-detail-pts">${score}</span>
+                        </div>
+                      `;
+                    })}
+                  </div>
+                  ${(() => {
+                    const crits = d.agent_critiques 
+                      ? (typeof d.agent_critiques === 'string' ? JSON.parse(d.agent_critiques) : d.agent_critiques) 
+                      : [];
+                    if (!crits || crits.length === 0) return '';
+                    return html`
+                    <div class="pc-critique-detail">
+                      <div class="pc-critique-title">Agent Critique Rounds</div>
+                      ${crits.map((cr, ci) => {
+                        const sev = cr.severity || 0;
+                        const sevCls = sev >= 7 ? 'severe' : sev <= 3 ? 'mild' : '';
+                        const sevLabel = sev >= 7 ? 'high' : sev <= 3 ? 'low' : '';
+                        return html`
+                        <div key=${'crit'+ci} class=${'pc-critique-card' + (sevCls ? ' ' + sevCls : '')}>
+                          <div class="pc-critique-head">
+                            <span class="pc-critique-flow">Agent #${cr.critic_id} → #${cr.target_id}</span>
+                            <span class=${'pc-critique-sev' + (sevLabel ? ' ' + sevLabel : '')}>sev ${sev}/10</span>
+                            ${cr.suggested_adjustment != null ? html`<span class="pc-critique-adj">${cr.suggested_adjustment > 0 ? '+' : ''}${cr.suggested_adjustment.toFixed(1)}</span>` : ''}
+                          </div>
+                          <div class="pc-critique-text">${cr.critique_text || '—'}</div>
+                        </div>
+                        `;
+                      })}
+                    </div>
+                    `;
+                  })()}
+                  ${d.judge_reasoning ? html`
+                    <div class="pc-judge-block">
+                      <div class="pc-judge-head">AGI Judge</div>
+                      <div class="pc-judge-reasoning">${d.judge_reasoning}</div>
+                    </div>
+                  ` : ''}
+                  ${d.hybrid_reasoning ? html`
+                    <div class="pc-judge-block hybrid">
+                      <div class="pc-judge-head">⚡ Hybrid Synthesizer <span style="font-weight:400;opacity:0.7;font-size:0.8em;">(weighted blend of all 5 perspectives)</span></div>
+                      <div class="pc-judge-reasoning">${d.hybrid_reasoning}</div>
+                    </div>
+                  ` : ''}
+                </div>
+                ` : ''}
+              </div>
+            `;
+          })}
+        </div>
+        `}
+      </div>
+    </div>
+  `;
+}
+function SEOPanel() {
+  const [data, setData] = useState(null);
+  const [err, setErr] = useState(null);
+  useEffect(() => {
+    apiFetch('/api/seo/performance').then(r => r.json())
+      .then(d => { setData(d); setErr(null); })
+      .catch(e => setErr(e.message));
+    apiFetch('/api/seo/genome-history?limit=10').then(r => r.json()).then(gh => setGenomeHistory(gh)).catch(() => {})
+  }, []);
+
+  if (err) return html`<div class="stub"><div class="stub-title">Could not load SEO data</div><div class="stub-body">${err}</div></div>`;
+  if (!data) return html`<div class="stub"><div class="stub-body">Loading…</div></div>`;
+
+  const s = data.stats || {};
+  const genome = data.genome || {};
+  const audits = data.audits || [];
+  const keywords = data.keywords || [];
+  const content = data.content || [];
+  const topKeywords = keywords.filter(k => (k.conversion_rate || 0) > 0).slice(0, 10);
+
+  const traitColors = {
+    keyword_competitiveness: '#FF4444',
+    local_intent:            '#5AC8FA',
+    content_depth:           '#44E5B8',
+    technical_rigor:         '#FFB800',
+    link_authority:          '#C8A2C8',
+  };
+  const traitLabels = {
+    keyword_competitiveness: 'Competition',
+    local_intent:            'Local Intent',
+    content_depth:           'Depth',
+    technical_rigor:         'Technical',
+    link_authority:          'Authority',
+  };
+
+  return html`
+    <div>
+      <div class="section-h">
+        <div>
+          <div class="section-title">SEO <em>Optimization</em></div>
+          <div class="section-sub">Audits · keyword tracking · content generation · genome evolution</div>
+        </div>
+        <div class="rv-narrative-badge">Gen ${data.evolution_runs || 0} · ${s.leads_attributed || 0} leads attributed</div>
+      </div>
+
+      <div class="pulse-grid">
+        <div class="stat-card">
+          <div class="stat-label">Audits Run</div>
+          <div class="stat-value dim">${s.audits_run || 0}</div>
+          <div class="stat-meta">website health checks</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Keywords Tracked</div>
+          <div class="stat-value cyan">${s.keywords_tracked || 0}</div>
+          <div class="stat-meta">with intent & competition data</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Content Generated</div>
+          <div class="stat-value teal">${s.content_generated || 0}</div>
+          <div class="stat-meta">LLM-optimized pages</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Total Revenue</div>
+          <div class="stat-value teal">$${(s.total_revenue || 0).toLocaleString()}</div>
+          <div class="stat-meta">${s.total_conversions || 0} conversions · ${(s.avg_conversion_rate || 0).toFixed(1)}% avg rate</div>
+        </div>
+      </div>
+
+      <div class="split">
+        <div class="panel">
+          <div class="panel-head">SEO Genome (Gen ${data.evolution_runs || 0})</div>
+          ${Object.entries(genome).length === 0 ? html`<div class="kb-empty">No genome data yet.</div>` :
+            Object.entries(genome).map(([trait, val]) => {
+              const pct = Math.round((val || 0) * 100);
+              const color = traitColors[trait] || '#64748B';
+              const label = traitLabels[trait] || trait;
+              return html`
+            <div class="si-trait" key=${trait}>
+              <div class="si-trait-head">
+                <span class="si-trait-name">${label}</span>
+                <span class="si-trait-pct" style=${{color}}>${pct}%</span>
+              </div>
+              <div class="si-trait-track">
+                <div class="si-trait-fill" style=${{width: pct + '%', background: color}}></div>
+              </div>
+            </div>
+            `;
+            })}
+          ${data.last_evolution ? html`
+          <div class="si-evo-footer" style=${{marginTop: '12px', paddingTop: '10px'}}>
+            <span>Last evolution: ${data.last_evolution.slice(0,19).replace('T',' ')}</span>
+          </div>` : ''}
+        </div>
+
+        <div class="panel">
+          <div class="panel-head">Top Converting Keywords</div>
+          ${topKeywords.length === 0 ? html`<div class="kb-empty">No conversion data yet.</div>` :
+            html`<div style=${{maxHeight:'280px',overflowY:'auto'}}>
+            ${topKeywords.map(k => html`
+            <div class="seo-kw-row" key=${k.keyword}>
+              <div class="seo-kw-name">${k.keyword}</div>
+              <div class="seo-kw-meta">
+                <span class="seo-kw-stat">${(k.conversion_rate || 0).toFixed(1)}%</span>
+                <span class="seo-kw-stat dim">${k.conversions || 0} conv</span>
+                <span class="seo-kw-stat dim">$${(k.total_revenue || 0).toFixed(0)}</span>
+                <span class=${'seo-kw-comp ' + (k.competition || 'low')}>${k.competition || '?'}</span>
+              </div>
+            </div>
+            `)}
+          </div>`}
+        </div>
+      </div>
+
+      ${content.length > 0 ? html`
+      <div class="chart-panel">
+        <div class="chart-panel-h">
+          <span class="chart-panel-title">Recent Content</span>
+          <span class="chart-panel-tag">${content.length} pieces</span>
+        </div>
+        ${content.slice(0, 8).map(c => html`
+        <div class="seo-content-card" key=${c.id || c.keyword}>
+          <div class="seo-content-head">
+            <span class="seo-content-kw">${c.keyword || '—'}</span>
+            <span class="seo-content-niche">${c.niche || ''} · ${c.metro || ''}</span>
+          </div>
+          <div class="seo-content-title">${c.title_tag || c.h1 || '—'}</div>
+          <div class="seo-content-meta">${c.meta_description || ''}</div>
+          ${c.attributed_lead_id ? html`<div class="seo-content-attrib">✓ Attributed to lead ${(c.attributed_lead_id || '').slice(0,8)} ${c.converted ? '· Converted' : ''}</div>` : ''}
+        </div>
+        `)}
+      </div>
+      ` : ''}
+
+      ${audits.length > 0 ? html`
+      <div class="chart-panel" style=${{marginTop: '16px'}}>
+        <div class="chart-panel-h">
+          <span class="chart-panel-title">Recent Audits</span>
+          <span class="chart-panel-tag">${audits.length} sites</span>
+        </div>
+        ${audits.slice(0, 5).map(a => html`
+        <div class="seo-audit-row" key=${a.id}>
+          <div class="seo-audit-url">${(a.url || '').slice(0, 50)}</div>
+          <div class="seo-audit-scores">
+            <span class="seo-audit-score ${a.overall_score >= 70 ? 'ok' : a.overall_score >= 40 ? 'warn' : 'bad'}">${a.overall_score || 0}</span>
+            <span class="seo-audit-score dim">M:${a.meta_score || 0}</span>
+            <span class="seo-audit-score dim">C:${a.content_score || 0}</span>
+            <span class="seo-audit-score dim">T:${a.technical_score || 0}</span>
+          </div>
+        </div>
+        `)}
+      </div>
+      ` : ''}
+    </div>
+  `;
+}
+
 function App() {
+
+
+
   const [operator, setOperator] = useState(null);
   const [bootError, setBootError] = useState(null);
   const [section, setSection] = useState(currentSection());
@@ -2034,11 +4495,11 @@ function App() {
 
   // Live transport — only when authenticated
   const onEvent = useCallback((data) => {
-    const now = new Date();
-    const t = now.toTimeString().slice(0, 8);
-    eventCounter.current += 1;
-    setEvents(prev => [{ ...data, _id: eventCounter.current, _t: t }, ...prev].slice(0, 100));
-  }, []);
+  const now = new Date();
+  const t = now.toTimeString().slice(0, 8);
+  eventCounter.current += 1;
+  setEvents(prev => [{ ...data, _id: eventCounter.current, _t: t }, ...prev].slice(0, 100));
+}, []);
   const { connected: liveConnected, transport: liveTransport } = useLiveSocket(operator ? onEvent : () => {});
 
   async function signOut() {
@@ -2105,7 +4566,15 @@ function App() {
             active.id === 'payouts'     ? html`<${Payouts} />` :
             active.id === 'contractors' ? html`<${Contractors} />` :
             active.id === 'console'     ? html`<${Console} />` :
-            active.id === 'audit'       ? html`<${Audit} />` :            active.id === 'neural-core'   ? html`<${AgiLoop} />` :
+            active.id === 'audit'       ? html`<${Audit} />` :
+            active.id === 'kanban'      ? html`<${Kanban} />` :
+            active.id === 'revenue'     ? html`<${Revenue} events=${events} wsConnected=${liveConnected} />` :
+            active.id === 'si-strategy'  ? html`<${SiEvolution} />` :
+            active.id === 'si-adaptive'    ? html`<${SiAdaptive} />` :
+            active.id === 'panel_court'     ? html`<${PanelCourtPanel} />` :
+            active.id === 'seo'          ? html`<${SEOPanel} />` :
+            active.id === 'leads'       ? html`<${Leads} />` :
+            active.id === 'neural-core'   ? html`<${AgiLoop} />` :
             active.id === 'holo-map'      ? html`<${HoloMap} />` :
             active.id === 'partners'      ? html`<${Partners} />` :
             active.id === 'operators'     ? html`<${Operators} />` :
