@@ -166,6 +166,33 @@ _LANE_METRICS_CACHE_TTL: float = 30.0  # seconds
 _SI_INSTANCE = None
 
 
+def get_si_instance():
+    """
+    Return the hub's live StrategyEvolution instance, or None if not wired.
+
+    Mirrors the StrategyEvolution.get_shared_instance() / AGIGovernor.get_si_strategy()
+    pattern so callers can read the shared singleton through a single API.
+    """
+    return _SI_INSTANCE
+
+
+def set_si_instance(instance) -> None:
+    """
+    Register the hub's live StrategyEvolution as this module's shared SI singleton.
+
+    Call this once at startup (e.g. `set_si_instance(si_strategy)`) so the
+    `feed_si_evolution()` and adaptive-forecast paths can reuse the hub's
+    authoritative instance instead of creating a parallel one. Passing `None`
+    clears the registration.
+
+    Symmetric with:
+      - StrategyEvolution.set_shared_instance()
+      - AGIGovernor.set_si_strategy()
+    """
+    global _SI_INSTANCE
+    _SI_INSTANCE = instance
+
+
 def get_lane_metrics() -> dict:
     """
     Query call_logs + buyers + payouts, group by niche, then distribute
@@ -876,15 +903,26 @@ def feed_si_evolution() -> dict:
     Revenue dips → strategy failure signal. Revenue surges → strategy win.
     Uses persistent module-level SI instance so strategies accumulate
     outcomes across ticks and actually evolve over time.
+
+    Resolution order:
+      1. `get_si_instance()` — return the hub-registered singleton (preferred)
+      2. Lazy construct a new StrategyEvolution() and cache it back via
+         `set_si_instance()` so subsequent ticks reuse the same instance
+         (and the same accumulated strategy state)
+      3. Return an error if empire_si_strategy is not importable
     """
-    global _SI_INSTANCE
-    if _SI_INSTANCE is None:
+    # Resolve the SI instance via the public getter
+    si_instance = get_si_instance()
+    if si_instance is None:
+        # Lazy fallback — cache it back so we don't re-construct on every tick
         try:
             from empire_si_strategy import StrategyEvolution
-            _SI_INSTANCE = StrategyEvolution()
+            si_instance = StrategyEvolution()
+            set_si_instance(si_instance)
+            log.info("[revenue] SI strategy instance constructed and cached for reuse")
         except ImportError:
             return {"action": "error", "message": "SI strategy module not available"}
-    
+
     try:
         forecast = per_lane_forecast()
         niche_summary = forecast.get("niche_summary", {})
@@ -912,7 +950,7 @@ def feed_si_evolution() -> dict:
             revenue_per_lane = revenue_24h / max(1, lane_count)
 
             success = (mrr_per_lane > 200) or (revenue_per_lane > 50)
-            _SI_INSTANCE.record_outcome(
+            si_instance.record_outcome(
                 strategy_name=strategy,
                 niche=niche,
                 success=success,
@@ -927,7 +965,7 @@ def feed_si_evolution() -> dict:
             })
 
         # Run evolution cycle if enough data
-        evolved = _SI_INSTANCE.evolve()
+        evolved = si_instance.evolve()
         if evolved:
             log.info(f"[revenue] SI evolution: {len(evolved)} events")
 

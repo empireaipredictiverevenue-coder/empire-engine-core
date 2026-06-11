@@ -8,3 +8,16 @@ kokoro-onnx
 soundfile
 flask
 gunicorn
+
+# Optional: Redis client for the multi-worker streaming registry backend.
+# In-memory (default) works fine for single-worker dev + the in-process
+# orchestrator pattern. For production with N uvicorn workers (Hetzner
+# --workers 2) install + run Redis and set REDIS_URL=redis://... so the
+# _STREAMING_REGISTRY shares state across workers.
+redis>=5.0
+
+# ── Test dependencies (pytest runner for the tests/ suite) ──
+# Pinned to >=8 so the strict-markers / filterwarnings options in pytest.ini
+# work reliably. The mission-control tests are pure unit tests (fully mocked),
+# so pytest is the only test dep we need.
+pytest>=8.0

@@ -68,6 +68,11 @@ from empire_partner_onboarding import register_partner_routes
 from empire_si_brain import SyntheticBrain, register_synthetic_routes
 from empire_si_strategy import StrategyEvolution
 from empire_si_adaptive import AdaptiveEngine
+from empire_mission_control import (
+    mission_control_snapshot,
+    mission_control_broadcast_loop,
+    register_mission_control_routes,
+)
 
 
 logging.basicConfig(level=logging.INFO)
@@ -329,6 +334,9 @@ synthetic_brain = SyntheticBrain(
 )
 register_synthetic_routes(app, brain=synthetic_brain, require_auth=require_auth, auth_engine=auth_engine)
 
+# Mission Control — always-visible top status bar (AGI/SI/Brain/Revenue/Lanes/Compliance/Network)
+register_mission_control_routes(app, get_db=get_db)
+
 
 # ─────────────────────────────────────────────────────────────────────
 # SI STRATEGY EVOLUTION + ADAPTIVE ENGINE
@@ -343,6 +351,12 @@ register_synthetic_routes(app, brain=synthetic_brain, require_auth=require_auth,
 # to the si_parameters table.
 # ─────────────────────────────────────────────────────────────────────
 si_strategy = StrategyEvolution(get_db=get_db)
+# Expose the SI strategy instance on the class so empire_mission_control
+# can read the live snapshot without re-instantiating a parallel world.
+try:
+    StrategyEvolution.set_shared_instance(si_strategy)
+except Exception:
+    pass
 adaptive_engine = AdaptiveEngine(get_db=get_db)
 
 
@@ -503,10 +517,10 @@ adaptive_engine.register_subsystem("outreach",    apply_fn=_apply_outreach_param
 # run two parallel worlds. The bot's `_SI_INSTANCE` is its module-level
 # singleton; the governor exposes a class-level `si_strategy` setter.
 import bots.predictive_revenue as _pred_rev
-_pred_rev._SI_INSTANCE = si_strategy
+_pred_rev.set_si_instance(si_strategy)
 try:
     from empire_agi_governor import AGIGovernor
-    AGIGovernor.si_strategy = si_strategy
+    AGIGovernor.set_si_strategy(si_strategy)
 except Exception:
     pass
 
@@ -572,6 +586,10 @@ async def startup():
     asyncio.create_task(hourly_digest.run())
     asyncio.create_task(seo_run_loop())
     asyncio.create_task(_si_evolution_loop())
+    # Mission Control broadcasts every 5s — drives the top status bar in the SPA
+    asyncio.create_task(mission_control_broadcast_loop(
+        broadcaster=live_broadcaster, get_db=get_db, interval=5.0,
+    ))
     log.info("Empire V49 · Operational")
 
 
