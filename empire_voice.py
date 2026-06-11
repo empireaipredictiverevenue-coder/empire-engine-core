@@ -442,6 +442,60 @@ def ncco_outbound_strike(
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# STREAMING TTS NCCO — live phone-call audio from synthetic_brain
+# ─────────────────────────────────────────────────────────────────────────────
+def ncco_stream_tts(
+    ws_url: str,
+    target_address: str = "",
+    operator_number: str = "",
+) -> list:
+    """
+    Build a Vonage NCCO that streams live TTS audio from the synthetic_brain
+    WebSocket onto the call. The `stream` action tells Vonage to open a
+    WebSocket to `ws_url` and play the binary audio frames (L16 16kHz mono
+    PCM) back to the caller as they arrive.
+
+    Use this for high-value outbound strikes where we want our own Kokoro
+    voice (consistent with the SPA's video ads) rather than Vonage's
+    built-in TTS voices. The voice_streaming_agent registers the script
+    via synthetic_brain's /register_stream endpoint first, then calls
+    place_streaming_strike() with the returned ws_url.
+
+    Optional warm-forward: if operator_number is set and a human answers
+    within `connect_timeout_s`, we connect them to the operator and skip
+    the TTS stream. If connect times out (voicemail/silence), the stream
+    NCCO plays. Same warm-forward logic as ncco_outbound_strike.
+
+    Audio format: L16 (16-bit signed little-endian PCM), 16kHz, mono.
+    """
+    op = operator_number or os.environ.get("EMPIRE_OPERATOR_NUMBER", "")
+    ncco: list = []
+
+    if op:
+        ncco.append({
+            "action":   "connect",
+            "endpoint": [{"type": "phone", "number": op.lstrip("+")}],
+            "timeout":  30,
+            "limit":    1800,
+            # AMD: hang up on voicemail so the stream NCCO (below) doesn't
+            # burn minutes on a machine. Without this the connect action
+            # would bridge to whatever the operator's voicemail picks up,
+            # which is what we explicitly want to avoid here.
+            "machineDetection": "hangup",
+        })
+
+    # Stream action — Vonage opens WebSocket to ws_url and plays whatever
+    # binary audio frames we send. Audio format is fixed: L16 16kHz mono.
+    ncco.append({
+        "action":  "stream",
+        "streamUrl": [ws_url],
+        "level":   0,
+    })
+
+    return ncco
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # DYNAMIC NCCO — brain-decided call scripts
 # ─────────────────────────────────────────────────────────────────────────────
 def ncco_dynamic_inbound(
@@ -723,6 +777,73 @@ class VoiceRouter:
         result = await adapter.send_sms(to_number, message)
         if result.get("ok"):
             self.stats["sms_sent"] += 1
+        return result
+
+    async def place_streaming_strike(
+        self,
+        to_number: str,
+        ws_url: str,
+        target_address: str = "",
+        operator_number: str = "",
+        broadcaster=None,
+        brain_decision: Optional[dict] = None,
+    ) -> dict:
+        """
+        Place an outbound call that streams live Kokoro TTS from the
+        synthetic_brain WebSocket onto the call. Used by the
+        voice_streaming_agent for high-value strikes where we want our
+        own voice rather than Vonage's built-in TTS.
+
+        Args:
+            to_number:      E.164 destination phone
+            ws_url:         The wss:// URL the synthetic_brain returned from
+                            /register_stream — Vonage connects here to pull
+                            the audio stream.
+            target_address: For broadcaster payload context only.
+            operator_number: Warm-forward number (optional, falls through to
+                            EMPIRE_OPERATOR_NUMBER env var).
+            broadcaster:    Optional empire_live.LiveBroadcaster for the
+                            live dashboard feed.
+            brain_decision: Optional BrainDecider output for stats.
+
+        Returns:
+            Dict from the underlying adapter (ok, uuid, status, error?).
+        """
+        op = operator_number or os.environ.get("EMPIRE_OPERATOR_NUMBER", "")
+        ncco = ncco_stream_tts(
+            ws_url=ws_url,
+            target_address=target_address,
+            operator_number=op,
+        )
+        event_url = ""
+        if self.public_base_url:
+            event_url = f"{self.public_base_url}/api/v1/voice/events"
+
+        adapter = self._pick_adapter(to_number, CallDirection.OUTBOUND)
+        result = await adapter.place_call(
+            to_number=to_number,
+            ncco=ncco,
+            event_webhook=event_url,
+        )
+        self.stats["outbound_placed"] += 1
+        if result.get("ok"):
+            self.stats.setdefault("streaming_strikes", 0)
+            self.stats["streaming_strikes"] += 1
+
+        if broadcaster and result.get("ok"):
+            try:
+                await broadcaster.broadcast({
+                    "type":         "streaming_strike",
+                    "direction":    "outbound",
+                    "to":           to_number,
+                    "target":       target_address,
+                    "uuid":         result.get("uuid"),
+                    "ws_url":       ws_url,
+                    "brain_decision": (brain_decision or {}).get("decision"),
+                    "confidence":   (brain_decision or {}).get("confidence"),
+                })
+            except Exception:
+                pass
         return result
 
 
