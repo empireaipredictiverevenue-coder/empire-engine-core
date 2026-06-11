@@ -317,6 +317,138 @@ def _layout_css() -> str:
     .e-tick-event { color: var(--empire-silver); }
     .e-tick-area  { color: var(--signal-teal); opacity: 0.8; }
     .e-tick-sep   { color: var(--empire-shadow); padding: 0 4px; }
+
+    /* ══ MISSION CONTROL STRIP — always-visible top status bar ══ */
+    .e-mission {
+      height: 44px; flex-shrink: 0; z-index: 9;
+      background: linear-gradient(180deg, var(--empire-canvas-2, #0a0a12) 0%, var(--empire-canvas, #050508) 100%);
+      border-bottom: 1px solid var(--empire-divider);
+      display: flex; align-items: stretch;
+      overflow: hidden;
+      position: relative;
+    }
+    .e-mission::before {
+      content: ''; position: absolute; left: 0; right: 0; top: 0; height: 1px;
+      background: linear-gradient(90deg, transparent 0%, var(--signal-teal, #44E5B8) 50%, transparent 100%);
+      opacity: 0.4;
+    }
+    .e-mission::after {
+      content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px;
+      background: var(--signal-teal, #44E5B8);
+      transition: background 0.3s, box-shadow 0.3s;
+    }
+    .e-mission[data-health="green"]::after {
+      background: var(--signal-teal, #44E5B8);
+      box-shadow: 0 0 8px var(--signal-teal, #44E5B8);
+    }
+    .e-mission[data-health="amber"]::after {
+      background: var(--status-amber, #FFB800);
+      box-shadow: 0 0 8px var(--status-amber, #FFB800);
+    }
+    .e-mission[data-health="red"]::after {
+      background: var(--status-red, #FF4444);
+      box-shadow: 0 0 10px var(--status-red, #FF4444);
+      animation: empire-pulse 1.2s ease-in-out infinite;
+    }
+    .e-mc-brand {
+      flex-shrink: 0; width: 188px; height: 100%;
+      display: flex; align-items: center; gap: 10px;
+      padding: 0 16px;
+      border-right: 1px solid var(--empire-divider);
+      background: var(--empire-overlay);
+    }
+    .e-mc-brand-icon {
+      width: 20px; height: 20px; border-radius: 4px;
+      background: linear-gradient(135deg, var(--signal-teal) 0%, var(--strike-cyan) 100%);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 11px; color: var(--empire-canvas);
+      box-shadow: var(--glow-signal);
+    }
+    .e-mc-brand-text {
+      font-family: var(--font-mono); font-size: 9px;
+      color: var(--empire-fog); letter-spacing: 0.22em;
+      text-transform: uppercase;
+    }
+    .e-mc-brand-text strong {
+      color: var(--signal-teal); font-weight: 600;
+      display: block; font-size: 10px; letter-spacing: 0.18em;
+    }
+    .e-mc-tiles {
+      flex: 1; display: flex; align-items: stretch;
+      overflow-x: auto; overflow-y: hidden;
+      scrollbar-width: none;
+    }
+    .e-mc-tiles::-webkit-scrollbar { display: none; }
+    .e-mc-tile {
+      flex-shrink: 0; min-width: 124px;
+      display: flex; flex-direction: column; justify-content: center;
+      padding: 0 18px;
+      border-right: 1px solid var(--empire-divider);
+      position: relative;
+      cursor: default;
+      transition: background 0.2s;
+    }
+    .e-mc-tile:hover { background: rgba(68, 229, 184, 0.04); }
+    .e-mc-tile::before {
+      content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 1px;
+      background: var(--signal-teal); opacity: 0; transition: opacity 0.2s;
+    }
+    .e-mc-tile:hover::before { opacity: 0.6; }
+    .e-mc-label {
+      font-family: var(--font-mono); font-size: 8.5px;
+      color: var(--empire-fog); letter-spacing: 0.18em;
+      text-transform: uppercase; margin-bottom: 3px;
+      display: flex; align-items: center; gap: 5px;
+    }
+    .e-mc-label .dot {
+      width: 4px; height: 4px; border-radius: 50%;
+      background: var(--empire-shadow); flex-shrink: 0;
+    }
+    .e-mc-label .dot.live { background: var(--signal-teal); box-shadow: 0 0 4px var(--signal-teal); }
+    .e-mc-label .dot.amber { background: var(--status-amber); box-shadow: 0 0 4px var(--status-amber); }
+    .e-mc-label .dot.red   { background: var(--status-red);   box-shadow: 0 0 4px var(--status-red); animation: empire-pulse 1.2s ease-in-out infinite; }
+    .e-mc-value {
+      font-family: var(--font-mono); font-size: 14px;
+      color: var(--empire-white); font-weight: 500;
+      letter-spacing: -0.01em; line-height: 1.1;
+      font-variant-numeric: tabular-nums;
+    }
+    .e-mc-value.signal  { color: var(--signal-teal); }
+    .e-mc-value.cyan    { color: var(--strike-cyan); }
+    .e-mc-value.amber   { color: var(--status-amber); }
+    .e-mc-value.red     { color: var(--status-red); }
+    .e-mc-sub {
+      font-family: var(--font-mono); font-size: 9px;
+      color: var(--empire-shadow); letter-spacing: 0.06em;
+      margin-top: 1px;
+    }
+    .e-mc-tile.brain { min-width: 180px; }
+    .e-mc-tile.agi { min-width: 168px; }
+    .e-mc-tile.si  { min-width: 160px; }
+    .e-mc-tile.network { min-width: 110px; }
+    @keyframes empire-mc-flash {
+      0%   { background: rgba(68, 229, 184, 0.18); }
+      100% { background: transparent; }
+    }
+    .e-mc-tile.flash { animation: empire-mc-flash 0.7s ease-out; }
+    .e-mc-pulse {
+      width: 6px; height: 6px; border-radius: 50%;
+      background: var(--signal-teal); box-shadow: 0 0 6px var(--signal-teal);
+      display: inline-block; margin-right: 4px;
+      animation: empire-pulse var(--pulse-duration) ease-in-out infinite;
+      vertical-align: middle;
+    }
+    .e-mc-pulse.amber { background: var(--status-amber); box-shadow: 0 0 6px var(--status-amber); }
+    .e-mc-pulse.red   { background: var(--status-red);   box-shadow: 0 0 6px var(--status-red);   animation-duration: 0.8s; }
+    .e-mc-pulse.gray  { background: var(--empire-shadow); box-shadow: none; animation: none; }
+    @media (max-width: 1280px) {
+      .e-mc-tile.network, .e-mc-tile.compliance { display: none; }
+    }
+    @media (max-width: 1100px) {
+      .e-mc-tile.network, .e-mc-tile.compliance,
+      .e-mc-tile.brain, .e-mc-tile.si { display: none; }
+      .e-mc-tile.agi { min-width: auto; flex: 1; }
+    }
     """
 
 
@@ -378,6 +510,79 @@ def _topbar_html(vault_total: str) -> str:
         </div>
       </div>
     </header>
+    """
+
+
+def _mission_control_html() -> str:
+    """
+    Always-visible top status bar (Mission Control). Sits between the topbar
+    and the layout row. Subscribed to by _shell_js(), which subscribes to the
+    `mission_control` event emitted by empire_mission_control's broadcast loop.
+    """
+    return """
+    <div class="e-mission" id="empire-mc" data-health="green" role="region" aria-label="Mission control">
+      <div class="e-mc-brand">
+        <div class="e-mc-brand-icon"><i class="ti ti-radar" aria-hidden="true"></i></div>
+        <div class="e-mc-brand-text">
+          Mission
+          <strong id="mc-status">ONLINE</strong>
+        </div>
+      </div>
+      <div class="e-mc-tiles" id="mc-tiles">
+
+        <div class="e-mc-tile agi" data-tile="agi">
+          <div class="e-mc-label">
+            <span class="e-mc-pulse" id="mc-agi-pulse"></span>
+            AGI Strategy
+          </div>
+          <div class="e-mc-value signal" id="mc-agi-status">—</div>
+          <div class="e-mc-sub"><span id="mc-agi-cycles">0</span> cycles · <span id="mc-agi-strikes">0</span> strikes</div>
+        </div>
+
+        <div class="e-mc-tile si" data-tile="si">
+          <div class="e-mc-label">SI Evolution</div>
+          <div class="e-mc-value cyan" id="mc-si-gen">G0</div>
+          <div class="e-mc-sub"><span id="mc-si-active">0</span> active · fitness <span id="mc-si-fitness">0.00</span></div>
+        </div>
+
+        <div class="e-mc-tile brain" data-tile="brain">
+          <div class="e-mc-label">
+            <span class="dot" id="mc-brain-dot"></span>
+            Brain
+          </div>
+          <div class="e-mc-value" id="mc-brain-model">—</div>
+          <div class="e-mc-sub">conf <span id="mc-brain-conf">—</span> · <span id="mc-brain-decisions">0</span> decisions</div>
+        </div>
+
+        <div class="e-mc-tile" data-tile="revenue">
+          <div class="e-mc-label">Revenue 24h</div>
+          <div class="e-mc-value signal" id="mc-rev-total">$0</div>
+          <div class="e-mc-sub">MRR <span id="mc-rev-mrr">$0</span> · <span id="mc-rev-calls">0</span> calls</div>
+        </div>
+
+        <div class="e-mc-tile" data-tile="lanes">
+          <div class="e-mc-label">Lanes</div>
+          <div class="e-mc-value cyan" id="mc-lanes-active">0/0</div>
+          <div class="e-mc-sub"><span id="mc-lanes-buyers">0</span> active buyers</div>
+        </div>
+
+        <div class="e-mc-tile" data-tile="compliance">
+          <div class="e-mc-label">
+            <span class="dot" id="mc-comp-dot"></span>
+            Compliance
+          </div>
+          <div class="e-mc-value" id="mc-comp-status">—</div>
+          <div class="e-mc-sub"><span id="mc-comp-blocked">0</span> blocked · <span id="mc-comp-dnc">0</span> DNC</div>
+        </div>
+
+        <div class="e-mc-tile network" data-tile="network">
+          <div class="e-mc-label">Network</div>
+          <div class="e-mc-value" id="mc-net-ws">0</div>
+          <div class="e-mc-sub">WS · <span id="mc-net-uptime">—</span></div>
+        </div>
+
+      </div>
+    </div>
     """
 
 
@@ -466,6 +671,173 @@ def _shell_js() -> str:
         }
       }
       bindLive();
+
+      // ── MISSION CONTROL — live status tiles ──
+      // Subscribes to the `mission_control` event emitted by
+      // empire_mission_control.broadcast_loop() every 5s. Falls back to a
+      // manual fetch every 10s if WS isn't connected.
+      const _mcPrev = {};   // track previous values to flash on change
+      const _mcEls = id => document.getElementById(id);
+
+      function fmtUSD(v, opts = {}) {
+        const n = Number(v) || 0;
+        if (opts.compact) {
+          if (n >= 1e6) return '$' + (n / 1e6).toFixed(2) + 'M';
+          if (n >= 1e3) return '$' + (n / 1e3).toFixed(1) + 'K';
+        }
+        return '$' + n.toLocaleString('en-US', { maximumFractionDigits: opts.dps ?? 2 });
+      }
+      function fmtUptime(seconds) {
+        const s = Number(seconds) || 0;
+        if (s < 60) return s + 's';
+        if (s < 3600) return Math.floor(s / 60) + 'm';
+        if (s < 86400) return Math.floor(s / 3600) + 'h ' + Math.floor((s % 3600) / 60) + 'm';
+        return Math.floor(s / 86400) + 'd';
+      }
+      function maybeFlash(id, key, newVal) {
+        if (_mcPrev[key] !== undefined && _mcPrev[key] !== newVal) {
+          const el = _mcEls(id);
+          if (el) {
+            el.classList.remove('flash');
+            // force reflow so the animation restarts
+            void el.offsetWidth;
+            el.classList.add('flash');
+          }
+        }
+        _mcPrev[key] = newVal;
+      }
+
+      function applyMissionControl(snap) {
+        if (!snap) return;
+        const strip = _mcEls('empire-mc');
+        if (strip) strip.setAttribute('data-health', snap.health || 'green');
+
+        // AGI
+        const agi = snap.agi || {};
+        const agiStatus = agi.status || '—';
+        const agiEl = _mcEls('mc-agi-status');
+        if (agiEl) {
+          agiEl.textContent = agiStatus;
+          if (agiStatus === 'HOLD') agiEl.className = 'e-mc-value red';
+          else if (agiStatus === 'AGGRESSIVE_STRIKE') agiEl.className = 'e-mc-value signal';
+          else agiEl.className = 'e-mc-value cyan';
+        }
+        const agiPulse = _mcEls('mc-agi-pulse');
+        if (agiPulse) {
+          if (agiStatus === 'HOLD') agiPulse.className = 'e-mc-pulse red';
+          else if (agi.running) agiPulse.className = 'e-mc-pulse';
+          else agiPulse.className = 'e-mc-pulse gray';
+        }
+        const cyc = _mcEls('mc-agi-cycles'); if (cyc) cyc.textContent = agi.cycles || 0;
+        const stk = _mcEls('mc-agi-strikes'); if (stk) stk.textContent = agi.strikes_total || 0;
+        maybeFlash('mc-agi-status', 'agi.status', agiStatus);
+
+        // SI
+        const si = snap.si || {};
+        const siGen = _mcEls('mc-si-gen'); if (siGen) siGen.textContent = 'G' + (si.generation || 0);
+        const siAct = _mcEls('mc-si-active'); if (siAct) siAct.textContent = si.active_strategies || 0;
+        const siFit = _mcEls('mc-si-fitness'); if (siFit) siFit.textContent = (si.fitness_avg || 0).toFixed(2);
+        maybeFlash('mc-si-gen', 'si.generation', si.generation);
+
+        // Brain
+        const brain = snap.brain || {};
+        const brainEl = _mcEls('mc-brain-model');
+        if (brainEl) {
+          brainEl.textContent = brain.up ? (brain.model_code || 'qwen2.5-coder:14b') : 'OFFLINE';
+          brainEl.className = 'e-mc-value ' + (brain.up ? '' : 'red');
+        }
+        const brainDot = _mcEls('mc-brain-dot');
+        if (brainDot) {
+          brainDot.className = 'dot ' + (brain.up ? 'live' : 'red');
+        }
+        const conf = _mcEls('mc-brain-conf');
+        if (conf) conf.textContent = brain.confidence_avg ? (brain.confidence_avg * 100).toFixed(0) + '%' : '—';
+        const dec = _mcEls('mc-brain-decisions');
+        if (dec) dec.textContent = brain.decisions_24h || 0;
+        maybeFlash('mc-brain-model', 'brain.up', brain.up);
+
+        // Revenue
+        const rev = snap.revenue || {};
+        const revEl = _mcEls('mc-rev-total');
+        if (revEl) revEl.textContent = fmtUSD(rev.total_24h, { compact: true });
+        const mrrEl = _mcEls('mc-rev-mrr');
+        if (mrrEl) mrrEl.textContent = fmtUSD(rev.mrr_projected, { compact: true });
+        const callsEl = _mcEls('mc-rev-calls');
+        if (callsEl) callsEl.textContent = rev.calls_24h || 0;
+        maybeFlash('mc-rev-total', 'rev.total_24h', rev.total_24h);
+
+        // Lanes
+        const lanes = snap.revenue || {};
+        const lanesEl = _mcEls('mc-lanes-active');
+        if (lanesEl) lanesEl.textContent = (lanes.lanes_active || 0) + '/32';
+        const buyersEl = _mcEls('mc-lanes-buyers');
+        if (buyersEl) buyersEl.textContent = lanes.active_buyers || 0;
+
+        // Compliance
+        const comp = snap.compliance || {};
+        const compEl = _mcEls('mc-comp-status');
+        if (compEl) {
+          if (!comp.call_window_open) { compEl.textContent = 'CLOSED'; compEl.className = 'e-mc-value amber'; }
+          else if (comp.blocked_today > 20) { compEl.textContent = 'GUARDED'; compEl.className = 'e-mc-value amber'; }
+          else { compEl.textContent = 'OPEN'; compEl.className = 'e-mc-value signal'; }
+        }
+        const compDot = _mcEls('mc-comp-dot');
+        if (compDot) {
+          compDot.className = 'dot ' + (comp.call_window_open ? 'live' : 'amber');
+        }
+        const blk = _mcEls('mc-comp-blocked'); if (blk) blk.textContent = comp.blocked_today || 0;
+        const dnc = _mcEls('mc-comp-dnc'); if (dnc) dnc.textContent = comp.dnc_total || 0;
+
+        // Network
+        const net = snap.network || {};
+        const wsEl = _mcEls('mc-net-ws');
+        if (wsEl) wsEl.textContent = (net.ws_connections || 0) + (net.sse_connected ? '+SSE' : '');
+        const upEl = _mcEls('mc-net-uptime');
+        if (upEl) upEl.textContent = fmtUptime(net.uptime_s);
+
+        // Top-level status word
+        const stEl = _mcEls('mc-status');
+        if (stEl) {
+          if (snap.health === 'red') stEl.textContent = 'DEGRADED';
+          else if (snap.health === 'amber') stEl.textContent = 'CAUTION';
+          else stEl.textContent = 'ONLINE';
+        }
+      }
+
+      // Subscribe via the EMPIRE_LIVE bus. Only fire the immediate first poll
+      // once we know the bus is wired up — otherwise the connect/disconnect
+      // listeners aren't attached and the strip would show "WS down" forever.
+      function bindMissionControl() {
+        if (window.EMPIRE_LIVE && window.EMPIRE_LIVE.on) {
+          window.EMPIRE_LIVE.on('mission_control', applyMissionControl);
+          // Bus is live → fire the immediate first poll to seed the strip
+          // with real data within ~100ms. (Without this, the first paint
+          // shows the empty placeholder state until the 5s broadcast tick.)
+          pollMissionControl();
+        } else {
+          setTimeout(bindMissionControl, 500);
+        }
+      }
+      bindMissionControl();
+
+      // Fallback HTTP poll — only active when the WS is disconnected.
+      // (Broadcast tick is 5s; the poll picks up slack if WS is down.)
+      let _mcWsDown = true;
+      if (window.EMPIRE_LIVE && window.EMPIRE_LIVE.on) {
+        window.EMPIRE_LIVE.on('connect',    () => { _mcWsDown = false; });
+        window.EMPIRE_LIVE.on('disconnect', () => { _mcWsDown = true; });
+      }
+      async function pollMissionControl() {
+        if (!_mcWsDown) return;
+        try {
+          const r = await fetch('/api/v1/mission_control', { credentials: 'include' });
+          if (r.ok) {
+            const data = await r.json();
+            applyMissionControl(data);
+          }
+        } catch (e) { /* silent */ }
+      }
+      setInterval(pollMissionControl, 10000);
     })();
     </script>
     """
@@ -508,6 +880,7 @@ def base_layout(
 {head}
 <body>
 {_topbar_html(vault_total)}
+{_mission_control_html()}
 <div class="e-layout">
   {_sidebar_html(active_module)}
   <main class="e-main" role="main">
