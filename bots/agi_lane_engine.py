@@ -26,7 +26,15 @@ import time
 import logging
 import asyncio
 from datetime import datetime, timezone, timedelta
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Callable, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    # StrategyEvolution lives in empire_si_strategy. We use a string forward
+    # reference (and a TYPE_CHECKING guard) so mypy / IDEs see the proper
+    # type for the `si_strategy` parameter without paying any runtime import
+    # cost. At runtime the actual instance is resolved lazily via
+    # `bots.predictive_revenue.get_si_instance()` (see _resolve_si_strategies).
+    from empire_si_strategy import StrategyEvolution  # noqa: F401
 
 sys.path.insert(0, "/root/empire-v49")
 
@@ -116,8 +124,29 @@ class AGILaneEngine:
     uses it instead of the hardcoded archetype.
     """
 
-    def __init__(self, max_correction_loops: int = 3):
+    def __init__(
+        self,
+        max_correction_loops: int = 3,
+        si_strategy: Optional["StrategyEvolution"] = None,
+        revenue_score_fn: Optional[Callable[[int], float]] = None,
+    ):
+        """
+        Args:
+            max_correction_loops: max LLM re-query attempts per tick.
+            si_strategy: optional StrategyEvolution instance. When provided,
+                the engine uses it directly for evolved-strategy lookup.
+                When None, falls back to the shared singleton
+                `bots.predictive_revenue.get_si_instance()` at runtime
+                (back-compat for hub.py's late-binding pattern).
+            revenue_score_fn: optional callable `int -> float` that returns
+                a lane's revenue score. When provided, the engine uses it
+                directly for revenue-priority boosts. When None, falls back
+                to `bots.predictive_revenue.lane_revenue_score` at runtime
+                (back-compat for the late-binding pattern).
+        """
         self.max_loops = max_correction_loops
+        self.si_strategy = si_strategy
+        self.revenue_score_fn = revenue_score_fn
         self.stats: Dict[str, Any] = {"ticks": 0, "actions_dispatched": 0, "lanes_active": 0}
 
     # ── 0. RESOLVE SI-EVOLVED STRATEGIES ─────────────────────────
@@ -126,16 +155,19 @@ class AGILaneEngine:
         Read the persistent SI strategy instance (fed by RevenueBrain).
         Returns {niche: {best_strategy, genome, score, generation}} for each
         niche that has accumulated enough outcomes to evolve.
-        Falls back gracefully if SI isn't available.
+
+        Uses `self.si_strategy` directly (injected via constructor). If
+        it's None, returns {} and the engine falls back to hardcoded
+        archetypes. Production always wires a real instance via run_loop();
+        tests inject mocks.
         """
         si_by_niche: Dict[str, Dict[str, Any]] = {}
+        si_instance = self.si_strategy
+        if si_instance is None:
+            return si_by_niche
         try:
-            from bots.predictive_revenue import _SI_INSTANCE
-            if _SI_INSTANCE is None:
-                return si_by_niche
-
             # One snapshot call — avoids 4x overhead inside the loop
-            snap = _SI_INSTANCE.snapshot()
+            snap = si_instance.snapshot()
             best_per_niche = snap.get("best_per_niche", {})
             by_niche = snap.get("by_niche", {})
 
@@ -148,7 +180,7 @@ class AGILaneEngine:
                     continue
 
                 best_name = best_info["name"]
-                genome = _SI_INSTANCE.get_genome(best_name, niche)
+                genome = si_instance.get_genome(best_name, niche)
 
                 # Generation lives on the strategy object, not the genome
                 generation = 0
@@ -426,17 +458,21 @@ class AGILaneEngine:
         if state.get("in_progress", 0) == 0 and state.get("pending", 0) > 0:
             score += 2  # unblock stalled lanes
         # Revenue potential boost: high-MRR lanes get priority
-        try:
-            from bots.predictive_revenue import lane_revenue_score
-            rev_score = lane_revenue_score(state.get("lane_id", -1))
-            if rev_score >= 7:
-                score += 3  # top revenue lane — push hard
-            elif rev_score >= 4:
-                score += 1  # moderate revenue lane — slight boost
-            elif rev_score <= 1 and state.get("pending", 0) == 0:
-                score -= 1  # dead-end lane — deprioritize
-        except Exception:
-            pass  # revenue engine unavailable — no penalty
+        # Uses self.revenue_score_fn (injected via constructor) directly.
+        # If it's None, no revenue boost is applied — production always
+        # wires a real fn via run_loop(); tests inject mocks.
+        revenue_fn = self.revenue_score_fn
+        if revenue_fn is not None:
+            try:
+                rev_score = revenue_fn(state.get("lane_id", -1))
+                if rev_score >= 7:
+                    score += 3  # top revenue lane — push hard
+                elif rev_score >= 4:
+                    score += 1  # moderate revenue lane — slight boost
+                elif rev_score <= 1 and state.get("pending", 0) == 0:
+                    score -= 1  # dead-end lane — deprioritize
+            except Exception:
+                pass  # revenue engine raised — no penalty
         # SI strategy score boost: proven strategies get priority
         si_score = state.get("si_score", 0)
         if si_score > 0.5:
@@ -533,7 +569,31 @@ async def heartbeat():
 async def run_loop():
     """Background loop: AGI lane decision cycle every INTERVAL seconds."""
     log.info(f"[agi.lane] AGI Lane Engine ONLINE ({MAX_LANES} lanes, interval={INTERVAL}s, loops={3})")
-    engine = AGILaneEngine(max_correction_loops=3)
+
+    # Resolve predictive_revenue dependencies at startup and pass them
+    # explicitly via the constructor. This makes the data flow obvious in
+    # one place (here) instead of relying on the late-binding fallback
+    # inside AGILaneEngine._resolve_si_strategies / _lane_priority. The
+    # fallback paths in those methods remain for unit-test ergonomics,
+    # but production always wires the deps in explicitly via this block.
+    si_instance: Optional["StrategyEvolution"] = None
+    revenue_score_fn: Optional[Callable[[int], float]] = None
+    try:
+        from bots.predictive_revenue import get_si_instance, lane_revenue_score
+        si_instance = get_si_instance()
+        revenue_score_fn = lane_revenue_score
+        log.info(
+            f"[agi.lane] wired deps: si_instance={'set' if si_instance else 'None'} "
+            f"revenue_score_fn={'set' if revenue_score_fn else 'None'}"
+        )
+    except Exception as e:
+        log.warning(f"[agi.lane] could not resolve predictive_revenue deps at startup: {e}")
+
+    engine = AGILaneEngine(
+        max_correction_loops=3,
+        si_strategy=si_instance,
+        revenue_score_fn=revenue_score_fn,
+    )
 
     await heartbeat()
 

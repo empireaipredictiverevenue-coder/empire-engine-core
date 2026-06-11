@@ -27,7 +27,13 @@ import time
 import logging
 import asyncio
 from datetime import datetime, timezone, timedelta
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    # Forward reference for the Supabase client type. We use TYPE_CHECKING
+    # so mypy/IDEs see the proper type for the `sb` parameter without
+    # paying any runtime import cost.
+    from supabase import Client as SupabaseClient  # noqa: F401
 
 sys.path.insert(0, "/root/empire-v49")
 
@@ -73,11 +79,16 @@ STAGE_AGENT: Dict[str, str] = {
     "revenue.score_call":      "mesh.quality",
 }
 
-if not SUPABASE_URL or not SUPABASE_KEY:
-    log.error("SUPABASE_URL and SUPABASE_SERVICE_KEY required")
-    sys.exit(1)
-
-_sb = create_client(SUPABASE_URL, SUPABASE_KEY)
+if os.environ.get("EMPIRE_TESTING") != "1":
+    # In production, require Supabase creds at module load.
+    # In test mode, defer the connection to first use (or accept an injected
+    # client) so the module can be imported without external creds.
+    if not SUPABASE_URL or not SUPABASE_KEY:
+        log.error("SUPABASE_URL and SUPABASE_SERVICE_KEY required")
+        sys.exit(1)
+    _sb = create_client(SUPABASE_URL, SUPABASE_KEY)
+else:
+    _sb = None  # type: ignore[assignment]  # lazy in test mode
 
 
 # ── GOD MODE ORCHESTRATION ENGINE ────────────────────────────────────
@@ -91,16 +102,34 @@ class GodModeController:
       4. If QC fails, self-correct via LLM and retry (up to 3x)
     """
 
-    def __init__(self, max_loops: int = 3):
+    def __init__(
+        self,
+        max_loops: int = 3,
+        sb: Optional["SupabaseClient"] = None,
+    ):
+        """
+        Args:
+            max_loops: max LLM re-query attempts per cycle.
+            sb: optional Supabase client. When provided, the controller
+                uses it directly for all DB operations. When None, falls
+                back to the module-level `_sb` client (back-compat for
+                callers that don't pass the kwarg). In EMPIRE_TESTING=1
+                mode, the module-level client is None and the controller
+                must be constructed with an injected `sb` or will skip
+                DB operations.
+        """
         self.max_loops = max_loops
+        self.sb = sb
         self.stats = {"runs": 0, "actions_taken": 0, "retries": 0, "escalations": 0, "promotions": 0}
 
     # ── 1. FETCH RECENTLY COMPLETED TASKS ────────────────────────────
     def fetch_recent_tasks(self) -> Dict[str, List[Dict]]:
         """Pull Done and Failed tasks from the last N minutes."""
+        if self.sb is None:
+            return {"done": [], "failed": [], "all": []}
         since = (datetime.now(timezone.utc) - timedelta(minutes=MAX_LOOKBACK)).isoformat()
         try:
-            r = _sb.table("agent_task_queue").select("*") \
+            r = self.sb.table("agent_task_queue").select("*") \
                 .in_("status", ["Done", "Failed"]) \
                 .gte("completed_at", since) \
                 .order("completed_at", desc=True) \
@@ -118,8 +147,10 @@ class GodModeController:
     # ── 2. ANALYZE QUEUE STATE ───────────────────────────────────────
     def fetch_queue_state(self) -> Dict[str, Any]:
         """Get aggregate queue stats for the LLM to reason about."""
+        if self.sb is None:
+            return {"error": "no Supabase client (EMPIRE_TESTING=1 mode)"}
         try:
-            r = _sb.table("agent_task_queue").select("status,task_type,assigned_agent").execute()
+            r = self.sb.table("agent_task_queue").select("status,task_type,assigned_agent").execute()
             tasks = r.data or []
             by_status: Dict[str, int] = {}
             by_type: Dict[str, int] = {}
@@ -245,8 +276,10 @@ class GodModeController:
     async def _execute_retry(self, ticket_id: str, params: Dict) -> Dict[str, Any]:
         """Re-queue a failed task as To-Do with corrected payload.
         Marks the original task as 'Retried' to prevent re-picking on subsequent cycles."""
+        if self.sb is None:
+            return {"ok": False, "error": "no Supabase client (EMPIRE_TESTING=1 mode)"}
         try:
-            task = _sb.table("agent_task_queue").select("*") \
+            task = self.sb.table("agent_task_queue").select("*") \
                 .eq("ticket_id", ticket_id).limit(1).execute()
             if not task.data:
                 return {"ok": False, "error": "ticket not found"}
@@ -259,7 +292,7 @@ class GodModeController:
 
             # Insert a fresh To-Do task with corrected payload
             new_payload = params.get("payload", json.loads(t.get("payload", "{}")) if isinstance(t.get("payload"), str) else (t.get("payload") or {}))
-            _sb.table("agent_task_queue").insert({
+            self.sb.table("agent_task_queue").insert({
                 "task_type": t.get("task_type"),
                 "payload": json.dumps(new_payload) if isinstance(new_payload, dict) else new_payload,
                 "status": "To-Do",
@@ -268,7 +301,7 @@ class GodModeController:
             }).execute()
 
             # Mark the original as Retried so it won't be picked up again
-            _sb.table("agent_task_queue").update({
+            self.sb.table("agent_task_queue").update({
                 "status": "Retried",
                 "completed_at": datetime.now(timezone.utc).isoformat(),
             }).eq("ticket_id", ticket_id).execute()
@@ -282,8 +315,10 @@ class GodModeController:
     async def _execute_promote(self, ticket_id: str, params: Dict) -> Dict[str, Any]:
         """Promote a Done task to the next pipeline stage.
         Checks for existing duplicates and marks the original as 'Promoted' to prevent re-promotion."""
+        if self.sb is None:
+            return {"ok": False, "error": "no Supabase client (EMPIRE_TESTING=1 mode)"}
         try:
-            task = _sb.table("agent_task_queue").select("*") \
+            task = self.sb.table("agent_task_queue").select("*") \
                 .eq("ticket_id", ticket_id).limit(1).execute()
             if not task.data:
                 return {"ok": False, "error": "ticket not found"}
@@ -308,7 +343,7 @@ class GodModeController:
             if dedup_key:
                 # Try JSONB path filtering for per-entity dedup
                 try:
-                    existing = _sb.table("agent_task_queue").select("ticket_id") \
+                    existing = self.sb.table("agent_task_queue").select("ticket_id") \
                         .eq("task_type", next_type) \
                         .in_("status", ["To-Do", "In Progress"]) \
                         .or_(f"payload->>'lead_id'.eq.{dedup_key},payload->>'source_id'.eq.{dedup_key},payload->>'campaign_id'.eq.{dedup_key}") \
@@ -316,7 +351,7 @@ class GodModeController:
                     if existing.data:
                         log.info(f"[controller] skip promote {ticket_id[:8]} — existing {next_type} task for {dedup_key}")
                         # Still mark original as Promoted to stop re-processing
-                        _sb.table("agent_task_queue").update({
+                        self.sb.table("agent_task_queue").update({
                             "status": "Promoted",
                             "completed_at": datetime.now(timezone.utc).isoformat(),
                         }).eq("ticket_id", ticket_id).execute()
@@ -327,7 +362,7 @@ class GodModeController:
                     pass
 
             # Carry forward the payload to the next stage
-            _sb.table("agent_task_queue").insert({
+            self.sb.table("agent_task_queue").insert({
                 "task_type": next_type,
                 "payload": json.dumps(payload),
                 "status": "To-Do",
@@ -335,7 +370,7 @@ class GodModeController:
             }).execute()
 
             # Mark the original as Promoted so it won't be picked up again
-            _sb.table("agent_task_queue").update({
+            self.sb.table("agent_task_queue").update({
                 "status": "Promoted",
                 "completed_at": datetime.now(timezone.utc).isoformat(),
             }).eq("ticket_id", ticket_id).execute()
@@ -348,9 +383,11 @@ class GodModeController:
 
     async def _execute_escalate(self, ticket_id: str, params: Dict) -> Dict[str, Any]:
         """Flag a stalled task with an escalation note."""
+        if self.sb is None:
+            return {"ok": False, "error": "no Supabase client (EMPIRE_TESTING=1 mode)"}
         try:
             reason = params.get("reason", "controller flagged")
-            _sb.table("agent_task_queue").update({
+            self.sb.table("agent_task_queue").update({
                 "error": f"[ESCALATED] {reason}",
             }).eq("ticket_id", ticket_id).execute()
             self.stats["escalations"] += 1
@@ -422,6 +459,9 @@ class GodModeController:
 # ── REGISTER AS MESH AGENT ──────────────────────────────────────────
 async def heartbeat():
     """Register/ping this controller as a mesh agent."""
+    if _sb is None:
+        log.debug("[controller] heartbeat skipped: no Supabase client (EMPIRE_TESTING=1 mode)")
+        return
     try:
         _sb.table("agent_registry").upsert({
             "agent_name": AGENT_NAME,
@@ -440,7 +480,15 @@ async def heartbeat():
 async def run_loop():
     """Background loop: GodMode cycle every INTERVAL seconds."""
     log.info(f"[controller] Hermes Controller ONLINE (GodMode, interval={INTERVAL}s, loops={3})")
-    controller = GodModeController(max_loops=3)
+
+    # Resolve the Supabase client at startup and pass it explicitly via
+    # the constructor. This makes the data flow obvious in one place
+    # (here) instead of relying on the module-level `_sb` global. In
+    # production `_sb` is set at module load; in test mode it's None
+    # and the controller skips DB operations gracefully.
+    sb_client: Optional["SupabaseClient"] = _sb
+
+    controller = GodModeController(max_loops=3, sb=sb_client)
 
     await heartbeat()
 

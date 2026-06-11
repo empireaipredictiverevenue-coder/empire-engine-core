@@ -19,6 +19,7 @@ _AGENT_INTERVAL_HOURS = {
     "seo_agent": lambda: _safe_call("bots.seo_agent", "get_seo_interval", 6.0),
     "dream_loop": lambda: _safe_call("empire_dream", "get_dream_interval", 6.0),
     "hourly_digest": lambda: _safe_call("empire_hourly_digest", "get_digest_interval", 3600.0) / 3600.0,
+    "voice_streaming_agent": lambda: _safe_call("bots.voice_streaming_agent", "get_streaming_interval", 0.5),
 }
 AGENT_DEFAULT_INTERVAL_HOURS = 6.0
 STALENESS_MULTIPLIER = 3.0
@@ -35,8 +36,28 @@ def _safe_call(module_name: str, func_name: str, default: float) -> float:
 
 
 class AGIGovernor:
-    # Set by hub.py after import — avoids sys.modules["__main__"] fragility.
+    # Class-level slot for the shared StrategyEvolution instance. hub.py
+    # assigns the live instance here at startup (now via set_si_strategy()).
+    # Kept as a class attribute (not a method) for back-compat with any
+    # existing readers that do `AGIGovernor.si_strategy` directly.
     si_strategy = None
+
+    @classmethod
+    def get_si_strategy(cls):
+        """Return the hub's live StrategyEvolution instance, or None if not wired."""
+        return cls.si_strategy
+
+    @classmethod
+    def set_si_strategy(cls, instance) -> None:
+        """
+        Register the hub's live StrategyEvolution as the shared singleton.
+
+        Call this once at startup (e.g. `AGIGovernor.set_si_strategy(si_strategy)`)
+        so any module can read the live instance via `get_si_strategy()` or the
+        legacy `AGIGovernor.si_strategy` class attribute. Passing `None` clears
+        the registration.
+        """
+        cls.si_strategy = instance
 
     def __init__(self):
         self.si = SyntheticIntelligence()
@@ -117,7 +138,7 @@ class AGIGovernor:
         Falls back to AGGRESSIVE_STRIKE if SI strategy engine has no signal yet.
         """
         try:
-            si_instance = AGIGovernor.si_strategy
+            si_instance = AGIGovernor.get_si_strategy()
             if si_instance is not None:
                 best = si_instance.best_for_niche(niche)
                 if best:
@@ -129,7 +150,7 @@ class AGIGovernor:
     def record_strategy_outcome(self, strategy: str, niche: str, success: bool, revenue: float = 0):
         """Feed an outcome back to the SI Strategy Evolution engine."""
         try:
-            si_instance = AGIGovernor.si_strategy
+            si_instance = AGIGovernor.get_si_strategy()
             if si_instance is not None:
                 si_instance.record_outcome(strategy, niche, success, revenue)
         except Exception as e:
@@ -157,7 +178,18 @@ def refresh_health_snapshot() -> Dict:
 
 
 governor = AGIGovernor()
-print(f"[AGI] Current Strategy: {governor.direct_strategy()}")
+# Run a single decision at import time to log the current strategy. In test
+# mode (conftest.py sets EMPIRE_TESTING=1) skip the live Supabase/Ollama query
+# so the module is importable without external services — otherwise the
+# import would raise and tests using `from empire_agi_governor import ...`
+# would silently skip via setUp's self.skipTest().
+if os.environ.get("EMPIRE_TESTING") == "1":
+    print(f"[AGI] Current Strategy: TEST_MODE (EMPIRE_TESTING=1, skipping direct_strategy)")
+else:
+    try:
+        print(f"[AGI] Current Strategy: {governor.direct_strategy()}")
+    except Exception as _e:
+        print(f"[AGI] Current Strategy: <unavailable at import time: {_e}>")
 
 
 def get_local_brain(task_type):

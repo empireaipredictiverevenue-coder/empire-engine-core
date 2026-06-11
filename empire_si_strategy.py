@@ -89,6 +89,27 @@ class StrategyEvolution:
     overperforms, it becomes the baseline for its niche.
     """
 
+    # Module-level singleton reference. hub.py assigns the live instance here
+    # at startup so empire_mission_control (and any other read-only consumer)
+    # can call get_shared_instance() instead of monkey-patching the class.
+    _shared_instance: Optional["StrategyEvolution"] = None
+
+    @classmethod
+    def get_shared_instance(cls) -> Optional["StrategyEvolution"]:
+        """Return the hub's live StrategyEvolution instance, or None if not wired."""
+        return cls._shared_instance
+
+    @classmethod
+    def set_shared_instance(cls, instance: "StrategyEvolution") -> None:
+        """
+        Register the hub's live StrategyEvolution as the shared singleton.
+
+        Call this once at startup (e.g. `StrategyEvolution.set_shared_instance(si_strategy)`)
+        so any module can read the live instance via `get_shared_instance()`.
+        Passing `None` clears the registration.
+        """
+        cls._shared_instance = instance
+
     def __init__(self, get_db: Optional[Callable] = None):
         self.get_db = get_db
         # strategy_id → {name, niche, genome, runs, wins, revenue, score, generation, parent, is_active}

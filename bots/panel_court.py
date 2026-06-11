@@ -25,20 +25,27 @@ import asyncio
 import logging
 import random
 from datetime import datetime, timezone
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Optional, Any, Awaitable, TYPE_CHECKING
 
 import httpx
 
+if TYPE_CHECKING:
+    # Forward references for the injected dependency types. We use
+    # TYPE_CHECKING so mypy/IDEs see the proper types for the
+    # `live_broadcaster`, `get_latest_wisdom`, and `sb` parameters
+    # without paying any runtime import cost.
+    from supabase import Client as SupabaseClient  # noqa: F401
+
 sys.path.insert(0, "/root/empire-v49")
 try:
-    from empire_dream import get_latest_wisdom
+    from empire_dream import get_latest_wisdom as _module_get_latest_wisdom
 except ImportError:
-    get_latest_wisdom = None
+    _module_get_latest_wisdom = None
 
 try:
-    from empire_live import live_broadcaster
+    from empire_live import live_broadcaster as _module_live_broadcaster
 except ImportError:
-    live_broadcaster = None
+    _module_live_broadcaster = None
 
 try:
     from dotenv import load_dotenv
@@ -515,12 +522,19 @@ async def _call_panel_member(name: str, system: str, prompt: str) -> Dict:
         return {"_error": str(e), "scores": {}}
 
 
-async def _run_voting_panel(lead: Dict, outputs: List[Dict], critiques: Optional[List[Dict]] = None) -> Dict:
-    """Run all 5 panel members in parallel, then the hybrid synthesizer."""
+async def _run_voting_panel(lead: Dict, outputs: List[Dict], critiques: Optional[List[Dict]] = None, *, wisdom_fn: Optional[Awaitable[str]] = None) -> Dict:
+    """Run all 5 panel members in parallel, then the hybrid synthesizer.
+
+    Args:
+        wisdom_fn: optional async callable returning the latest dream wisdom.
+            When provided, injected by the caller (PanelCourt.get_latest_wisdom).
+            When None, falls back to the module-level import (back-compat).
+    """
     prompt = _build_panel_prompt(lead, outputs, critiques)
     # Inject dream wisdom context into the prompt
     try:
-        wisdom = await get_latest_wisdom() if get_latest_wisdom else ""
+        fn = wisdom_fn if wisdom_fn is not None else _module_get_latest_wisdom
+        wisdom = await fn() if fn else ""
         if wisdom:
             prompt = wisdom + "\n\n" + prompt
     except Exception:
@@ -678,7 +692,28 @@ class PanelCourt:
 
     SCORE_THRESHOLD = 80   # Minimum consensus score (0-100) to dispatch
 
-    def __init__(self, ollama_url: Optional[str] = None):
+    def __init__(
+        self,
+        ollama_url: Optional[str] = None,
+        live_broadcaster: Optional[Any] = None,
+        get_latest_wisdom: Optional[Awaitable[str]] = None,
+        sb: Optional["SupabaseClient"] = None,
+    ):
+        """
+        Args:
+            ollama_url: optional Ollama endpoint (defaults to OLLAMA_URL env var).
+            live_broadcaster: optional broadcaster for WebSocket pool snapshots.
+                When None, falls back to the module-level `live_broadcaster`
+                import (back-compat). In EMPIRE_TESTING=1 mode, the module
+                fallback is None and broadcasting is skipped.
+            get_latest_wisdom: optional async callable returning the latest
+                dream-loop wisdom string. When None, falls back to the
+                module-level import (back-compat).
+            sb: optional Supabase client. When provided, the court uses
+                it directly for all DB operations (logging decisions,
+                dispatches). When None, falls back to the lazy
+                `_get_sb()` helper (back-compat).
+        """
         self._url = (ollama_url or OLLAMA_URL).rstrip("/")
         self.pool = AgentPool()
         self.temperature_history: List[List[float]] = []
@@ -688,6 +723,11 @@ class PanelCourt:
             "rejected": 0,
             "panel_errors": 0,
         }
+        # Resolved dependencies: prefer injected, fall back to module-level.
+        # In EMPIRE_TESTING=1 mode the module-level imports may be None.
+        self.live_broadcaster = live_broadcaster if live_broadcaster is not None else _module_live_broadcaster
+        self.get_latest_wisdom = get_latest_wisdom if get_latest_wisdom is not None else _module_get_latest_wisdom
+        self.sb = sb  # may be None; methods fall back to _get_sb() if so
 
     async def run_ensemble(
         self, lead: Dict, market_context: Optional[Dict] = None
@@ -707,7 +747,7 @@ class PanelCourt:
 
         # ── Phase 2: 5-role voting panel reviews all 10 outputs ──────
         try:
-            panel_votes = await _run_voting_panel(lead, outputs, critiques)
+            panel_votes = await _run_voting_panel(lead, outputs, critiques, wisdom_fn=self.get_latest_wisdom)
         except Exception as e:
             log.error(f"[panel_court] voting panel failed: {e}")
             self.stats["panel_errors"] += 1
@@ -763,9 +803,9 @@ class PanelCourt:
 
         # ── Broadcast pool snapshot via WebSocket for real-time SPA orbital ──
         try:
-            if live_broadcaster and hasattr(live_broadcaster, 'broadcast'):
+            if self.live_broadcaster and hasattr(self.live_broadcaster, 'broadcast'):
                 snapshot = self.pool_snapshot()
-                await live_broadcaster.broadcast({
+                await self.live_broadcaster.broadcast({
                     "type": "panel_court_pool",
                     "agents": snapshot["agents"],
                     "stats": snapshot["stats"],
@@ -831,7 +871,7 @@ class PanelCourt:
     def _log_decision(self, result: Dict) -> None:
         """Persist ensemble result to panel_court_decisions."""
         try:
-            sb = _get_sb()
+            sb = self.sb if self.sb is not None else _get_sb()
             sb.table("panel_court_decisions").insert({
                 "lead_id": result["lead_id"],
                 "lead_summary": result["lead_summary"],
@@ -854,7 +894,7 @@ class PanelCourt:
         self, lead: Dict, buyer: Dict, result: Dict
     ) -> Dict[str, Any]:
         """Execute dispatch after the ensemble picks a winner."""
-        sb = _get_sb()
+        sb = self.sb if self.sb is not None else _get_sb()
         try:
             r = sb.table("dispatches").insert({
                 "lead_id": lead["id"],
