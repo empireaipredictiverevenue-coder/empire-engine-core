@@ -1,9 +1,19 @@
 #!/usr/bin/env python3
 """
 Run SQL migration files against Supabase PostgreSQL database.
-Usage: python3 scripts/run_migrations.py migrations/001_seo_panel_court.sql migrations/002_dream_memory.sql
+
+Usage:
+  python3 scripts/run_migrations.py                          # auto-discover via glob
+  python3 scripts/run_migrations.py --list                   # show discovered migrations + order
+  python3 scripts/run_migrations.py migrations/005_*.sql     # explicit file(s)
+
+Migrations are auto-discovered from migrations/*.sql (sorted by filename)
+when no arguments are passed. Adding a new 00N_*.sql file to migrations/
+is enough to register it — no code changes needed. The --list flag
+prints the discovered order + statement count + file size so operators
+can spot misnamed or out-of-order files without reading the source.
 """
-import os, sys, re
+import os, sys, re, glob
 
 try:
     from dotenv import load_dotenv
@@ -73,6 +83,26 @@ def parse_sql_statements(content):
             statements.append(clean)
     
     return statements
+
+def list_migrations():
+    """Print all discovered migrations in execution order without running them.
+
+    Used by --list to verify the glob picks up new migrations. Prints
+    order + statement count + file size so operators can spot misnamed
+    or out-of-order files. Does NOT make any DB calls.
+    """
+    files = sorted(glob.glob("migrations/*.sql"))
+    if not files:
+        print("No migrations found in migrations/*.sql")
+        return
+    print(f"Discovered {len(files)} migration(s) (in execution order):\n")
+    for i, filepath in enumerate(files, 1):
+        with open(filepath) as fh:
+            content = fh.read()
+        n = len(parse_sql_statements(content))
+        size_kb = os.path.getsize(filepath) / 1024
+        print(f"  {i:2}. {filepath}  ({n} statements, {size_kb:.1f} KB)")
+
 
 def run_migrations(files):
     conn = None
@@ -148,8 +178,22 @@ def run_migrations(files):
             conn.close()
 
 if __name__ == "__main__":
-    files = sys.argv[1:] if len(sys.argv) > 1 else [
-        "migrations/001_seo_panel_court.sql",
-        "migrations/002_dream_memory.sql",
-    ]
+    args = sys.argv[1:]
+
+    # --list flag: print discovered migrations + order, then exit (no DB calls)
+    if "--list" in args:
+        list_migrations()
+        sys.exit(0)
+
+    if args:
+        # User passed explicit migration file(s)
+        files = args
+    else:
+        # Auto-discover all .sql files in migrations/ (sorted by filename)
+        files = sorted(glob.glob("migrations/*.sql"))
+        if not files:
+            print("No migrations found in migrations/*.sql")
+            print("Either create some or pass explicit file paths.")
+            sys.exit(1)
+
     run_migrations(files)
