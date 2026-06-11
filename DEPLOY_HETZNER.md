@@ -172,6 +172,11 @@ print('OK: wss:// URL uses public hostname')
 # (d) Full E2E: register + WebSocket round-trip with L16 audio
 python3 scripts/smoke_voice_streaming.py
 # Expect: 111 KB of L16 16kHz mono PCM streamed in ~2 s, stop event received.
+
+# (e) Inspect historical one-off diagnostic scripts (archived, not in regular
+#     dev/test workflow but kept for reference on the deployed box).
+ls scripts_archive/ | head -20
+cat scripts_archive/README.md   # explains the archive convention
 ```
 
 The smoke test in step (d) should also be wired into the agent_registry's
