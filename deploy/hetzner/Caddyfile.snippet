@@ -1,0 +1,29 @@
+# Empire AI — synthetic_brain reverse proxy (Caddy v2)
+# Drop this stanza into your existing /etc/caddy/Caddyfile, then:
+#     sudo systemctl reload caddy
+# Caddy auto-provisions the Let's Encrypt cert.
+#
+# Make sure brain.your-domain.com DNS A-record points at the Hetzner box's
+# public IPv4 (and AAAA at the IPv6 if you want IPv6).
+
+brain.your-domain.com {
+    # The synthetic_brain listens on 127.0.0.1:8005 (see start_synthetic_brain.sh).
+    # Loopback only — never expose uvicorn directly to the public internet.
+    reverse_proxy 127.0.0.1:8005 {
+        # WebSocket upgrade headers (Caddy passes these through automatically,
+        # but listing them explicitly makes the intent clear for future readers
+        # — Vonage's `stream` NCCO action opens a WebSocket to this hostname).
+        header_up Host {host}
+        header_up X-Real-IP {remote_host}
+        header_up X-Forwarded-For {remote_host}
+        header_up X-Forwarded-Proto {scheme}
+    }
+
+    # Optional: tighten logging
+    log {
+        output file /var/log/caddy/brain.your-domain.com.log {
+            roll_size 100mb
+            roll_keep 5
+        }
+    }
+}

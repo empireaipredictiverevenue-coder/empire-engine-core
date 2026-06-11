@@ -1,0 +1,75 @@
+# ── Hetzner Cloud API token ───────────────────────────────────
+# Generate at: https://console.hetzner.cloud → Project → Security → API Tokens
+# Required scope: Read + Write
+# Recommended: store in ~/.bashrc as `export HCLOUD_TOKEN=...` so it
+# never lands in git. If you must put it in a tfvars file, ensure
+# the file is in .gitignore.
+hcloud_token = "hcpt_REPLACE_ME"
+
+# ── Hetzner DNS Console API token ─────────────────────────────
+# Generate at: https://dns.hetzner.com → API Tokens
+# Required scope: Read + Write
+hetzner_dns_token = "hdns_REPLACE_ME"
+
+# ── Server sizing ─────────────────────────────────────────────
+# cx22 = 4 GB RAM, 2 vCPU, ~€4.5/mo — fits Kokoro + Ollama + PM2
+# cax21 = ARM equivalent, ~30% cheaper, equally fast
+# cpx31 = 8 GB RAM, 4 vCPU, ~€15/mo — headroom for more concurrent calls
+# See https://www.hetzner.com/cloud for the full menu.
+server_type = "cx22"
+
+# fsn1 = Falkenstein, Germany (cheapest, lowest latency for EU users)
+# nbg1 = Nuremberg, Germany
+# hel1 = Helsinki, Finland
+# ash  = Ashburn, VA, USA East Coast
+# hil  = Hillsboro, OR, USA West Coast
+server_location = "fsn1"
+
+# ubuntu-22.04 LTS (what DEPLOY_HETNER.md uses; the cloud-init
+# scripts assume this distro).
+server_image = "ubuntu-22.04"
+
+# ── SSH ───────────────────────────────────────────────────────
+# The public key that will be authorized to log into the new box.
+# Default works for ed25519 keys generated with `ssh-keygen -t ed25519`.
+# For RSA: ~/.ssh/id_rsa.pub. For an existing key on a team member's
+# laptop, paste the contents of their .pub here (or add it after
+# provisioning with `ssh-copy-id`).
+ssh_public_key_path = "~/.ssh/id_ed25519.pub"
+
+# ── DNS ───────────────────────────────────────────────────────
+# Your registered domain (zone). MUST already exist in the
+# Hetzner DNS Console — the module reads it via data source.
+# E.g. "empire-ai.co.uk" (don't include the "https://" prefix).
+dns_zone = "empire-ai.co.uk"
+
+# The subdomain to point at the server. Default: "brain"
+# (creates brain.empire-ai.co.uk). Leave empty to point the
+# zone apex (e.g. empire-ai.co.uk) at the box.
+dns_subdomain = "brain"
+
+# ── Production hardening (all on by default) ──────────────────
+enable_backups    = true   # daily backups, +20% cost
+# Note: Hetzner Cloud basic server monitoring is enabled by default on
+# all servers and isn't exposed as a writable attribute in the hcloud
+# Terraform provider, so there's no `enable_monitoring` toggle.
+enable_ipv6       = true   # also creates an AAAA record
+
+# ── SSH CIDR allowlist ────────────────────────────────────────
+# Lock down to your office/home IP for better security.
+#   ["203.0.113.42/32"]                  # single static IP
+#   ["203.0.113.0/24", "198.51.100.4/32"] # an office range + a VPN
+#   ["0.0.0.0/0"]                        # anywhere (default; safe-ish
+#                                         # if you have fail2ban, which
+#                                         # the first-boot script installs)
+allowed_ssh_cidrs = ["0.0.0.0/0"]
+
+# ── Resource labels (cost tracking + dashboard filtering) ────
+# Free-form key=value. Visible in the Hetzner dashboard and in
+# `hcloud server list -o columns=...` output. Don't put secrets
+# here — Hetzner labels are not encrypted.
+labels = {
+  project     = "empire-ai"
+  environment = "production"
+  managed-by  = "terraform"
+}

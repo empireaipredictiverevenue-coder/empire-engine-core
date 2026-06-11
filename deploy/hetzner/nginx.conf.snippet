@@ -1,0 +1,51 @@
+# Empire AI — synthetic_brain reverse proxy (Nginx)
+# Drop this into /etc/nginx/sites-available/brain, then:
+#     sudo ln -s /etc/nginx/sites-available/brain /etc/nginx/sites-enabled/brain
+#     sudo certbot --nginx -d brain.your-domain.com
+#     sudo systemctl reload nginx
+#
+# Make sure brain.your-domain.com DNS A-record points at the Hetzner box's
+# public IPv4.
+
+upstream synthetic_brain {
+    server 127.0.0.1:8005;
+    keepalive 32;
+}
+
+# HTTP -> HTTPS redirect
+server {
+    listen 80;
+    server_name brain.your-domain.com;
+    return 301 https://$host$request_uri;
+}
+
+server {
+    listen 443 ssl http2;
+    server_name brain.your-domain.com;
+
+    ssl_certificate     /etc/letsencrypt/live/brain.your-domain.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/brain.your-domain.com/privkey.pem;
+
+    # WebSocket connections (Vonage `stream` action) can stay open for the
+    # full call duration — 30 min cap on Vonage side, so 1 hour is safe.
+    proxy_read_timeout 3600s;
+    proxy_send_timeout 3600s;
+
+    # Don't buffer WebSocket frames
+    proxy_buffering off;
+
+    location / {
+        proxy_pass http://synthetic_brain;
+        proxy_http_version 1.1;
+
+        # WebSocket upgrade headers (critical — without these Vonage's
+        # `stream` action silently falls back to HTTP and the call hangs)
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
