@@ -68,9 +68,11 @@ STORM_LANE_COUNT=6
 STORM_MAX_SENDS_PER_HOUR=50
 STORM_MAX_SENDS_PER_DAY=200
 STORM_BOUNCE_BREAKER_PCT=5
-WEBHOOK_SECRET=<secret>      # for /webhook/lead (default: empire_v49_secret)
-ADMIN_TOKEN=<secret>         # for /api/admin/seed (X-Admin-Token header)
 SI_FEED_CACHE_TTL_SECONDS=60 # dream SI feed cache TTL
+
+# ⚠️  Required for production (insecure defaults otherwise)
+WEBHOOK_SECRET=<long-random-string>  # /webhook/lead · default: empire_v49_secret
+ADMIN_TOKEN=<long-random-string>     # /api/admin/seed · no auth if unset
 ```
 
 ### 3. Database migrations
