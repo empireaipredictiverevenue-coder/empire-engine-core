@@ -142,6 +142,41 @@ future binary model files (Whisper, PyTorch checkpoints, etc.) are caught
 automatically. Added `package-lock.json` since the SPA uses `esm.sh`
 imports with no build step.
 
+### Follow-up commits (after the initial 8)
+
+### 9. `docs: add CHANGELOG.md with 8-commit history + project layout + conventions`
+
+**Files:** `CHANGELOG.md` (new)
+
+You're reading it. Documents the project layout, per-commit changelog,
+commit conventions (prefix taxonomy, body rules, chunking rules), and
+the 7-step process for adding a new feature.
+
+### 10. `docs: add CONTRIBUTING.md with Getting Started + env vars + dev server + tests`
+
+**Files:** `CONTRIBUTING.md` (new)
+
+Closes the gap the CHANGELOG reviewer identified: no developer setup
+instructions. Covers clone/install, full env-var reference (extracted
+from `hub.py`), migrations, seed data, dev server, background loops
+table, debugging tips, and code style.
+
+### 11. `docs(contributing): add 3 missing env vars (WEBHOOK_SECRET, ADMIN_TOKEN, SI_FEED_CACHE_TTL_SECONDS)`
+
+**Files:** `CONTRIBUTING.md`
+
+Code review caught 3 env vars used in `hub.py` but missing from the
+reference: `WEBHOOK_SECRET` (`/webhook/lead`), `ADMIN_TOKEN`
+(`/api/admin/seed`), `SI_FEED_CACHE_TTL_SECONDS` (dream SI feed cache).
+
+### 12. `docs(contributing): flag WEBHOOK_SECRET + ADMIN_TOKEN as required for production`
+
+**Files:** `CONTRIBUTING.md`
+
+Both vars have insecure defaults (`empire_v49_secret` and no auth
+respectively). Moved them from the "Optional" section to a dedicated
+"⚠️ Required for production" section with a warning emoji.
+
 ---
 
 ## Commit Conventions
