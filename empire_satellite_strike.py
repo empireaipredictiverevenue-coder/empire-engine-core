@@ -13,6 +13,7 @@ Each package has: {target, storm_context, niche, script_context}
 """
 
 import os
+import json as _json
 import logging
 from datetime import datetime, timezone, timedelta
 from typing import Dict, List, Optional, Callable, Any
@@ -192,7 +193,6 @@ class SatelliteStrikeCore:
             forecasts_str = row.get("forecasts")
             if not forecasts_str:
                 return []
-            import json as _json
             if isinstance(forecasts_str, str):
                 forecasts = _json.loads(forecasts_str)
             else:

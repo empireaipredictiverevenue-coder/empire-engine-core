@@ -69,6 +69,7 @@ from empire_si_brain import SyntheticBrain, register_synthetic_routes
 from empire_si_strategy import StrategyEvolution
 from empire_si_adaptive import AdaptiveEngine
 from empire_ai_closer import AICloser, ai_closer_score_only
+from empire_agi_governor import governor
 from empire_pain_points import PainPointLibrary
 from empire_satellite_strike import SatelliteStrikeCore
 from empire_swarm_gate import GodModeSwarmGate
@@ -262,25 +263,6 @@ storm_orchestrator = StormOrchestrator(
 # Pain Points Library — niche-specific pain point profiles, conversion tracking, script integration
 pain_points = PainPointLibrary(get_db=get_db)
 
-# ── Satellite Strike Core + God Mode Swarm Gate ──────────────────
-# Scans storm forecasts → filters warehouse targets → parallel video ads.
-# Each lane runs Script Engine → Kokoro TTS → FFmpeg 1080x1920 Render.
-satellite_strike = SatelliteStrikeCore(
-    get_db=get_db,
-    lookback_hours=int(os.environ.get("SATELLITE_LOOKBACK_HOURS", "24")),
-    min_risk_rank=int(os.environ.get("SATELLITE_MIN_RISK_RANK", "4")),
-    max_packages=int(os.environ.get("SATELLITE_MAX_PACKAGES", "32")),
-)
-
-swarm_gate = GodModeSwarmGate(
-    get_db=get_db,
-    brain_decider=brain_decider,
-    si_strategy=si_strategy,
-    pain_points=pain_points,
-    lane_count=int(os.environ.get("SWARM_LANE_COUNT", "3")),
-    lane_timeout=int(os.environ.get("SWARM_LANE_TIMEOUT_SEC", "120")),
-)
-
 # AI Closer — AGI-brained voice pipeline (BrainDecider → VoiceStreaming → SI feedback)
 ai_closer = AICloser(
     brain_decider=brain_decider,
@@ -292,7 +274,7 @@ ai_closer = AICloser(
     pain_points=pain_points,
 )
 
-# Sales Funnel — routes inbound leads through the AI Closer pipeline
+# Sales Funnel — will be wired after si_strategy is created (see SI Strategy section below)
 sales_funnel = SalesFunnel(closer=ai_closer)
 
 
@@ -707,6 +689,32 @@ async def pain_points_export_report(auth: bool = Depends(require_auth)):
 # ─────────────────────────────────────────────────────────────────────
 si_strategy = StrategyEvolution(get_db=get_db)
 si_strategy.set_pain_points(pain_points)
+
+# ── Satellite Strike Core + God Mode Swarm Gate ──────────────────
+# Scans storm forecasts → filters warehouse targets → parallel video ads.
+# Each lane runs Script Engine → FFmpeg 1080x1920 Render (Kokoro TTS included).
+# Constructed AFTER si_strategy so it can be wired for per-niche genome lookups.
+satellite_strike = SatelliteStrikeCore(
+    get_db=get_db,
+    lookback_hours=int(os.environ.get("SATELLITE_LOOKBACK_HOURS", "24")),
+    min_risk_rank=int(os.environ.get("SATELLITE_MIN_RISK_RANK", "4")),
+    max_packages=int(os.environ.get("SATELLITE_MAX_PACKAGES", "32")),
+)
+
+swarm_gate = GodModeSwarmGate(
+    get_db=get_db,
+    brain_decider=brain_decider,
+    si_strategy=si_strategy,
+    pain_points=pain_points,
+    lane_count=int(os.environ.get("SWARM_LANE_COUNT", "3")),
+    lane_timeout=int(os.environ.get("SWARM_LANE_TIMEOUT_SEC", "120")),
+)
+
+# Wire AGI Governor + SI Strategy into the SalesFunnel (now that both exist)
+sales_funnel._agi_governor = governor
+sales_funnel._si_strategy = si_strategy
+log.info("[hub] SalesFunnel wired with AGI Governor + SI Strategy")
+
 # Expose the SI strategy instance on the class so empire_mission_control
 # can read the live snapshot without re-instantiating a parallel world.
 try:

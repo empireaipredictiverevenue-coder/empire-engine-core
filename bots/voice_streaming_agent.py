@@ -8,13 +8,20 @@ returns GO with confidence >= STREAM_CONFIDENCE_THRESHOLD we use the
 streaming path (synthetic_brain WebSocket -> Vonage `stream` NCCO),
 otherwise we fall back to the static NCCO (Vonage's built-in TTS).
 
+AGI · SI · PREDICTIVE REVENUE INJECTION:
+  - AGI Governor: strategy_for_niche() selects optimal call strategy
+  - SI Strategy: best_for_niche() evolves genome per call outcome
+  - Predictive Revenue: per-target revenue estimation for priority
+    REVENUE = asset_value × 0.01 × niche_win_rate × urgency_multiplier
+
 Pipeline per cycle:
   1. _next_target() pulls highest-asset unconverted radar_target
   2. BrainDecider.decide() returns GO/NO_GO + confidence + reasoning
-  3. GO + high conf -> _register_stream() then place_streaming_strike()
-  4. GO + low conf  -> place_strike_call() (static NCCO)
-  5. NO_GO          -> skip and log
-  6. Heartbeat to agent_registry every cycle
+  3. SI Strategy selects best genome for the niche
+  4. GO + high conf -> _register_stream() then place_streaming_strike()
+  5. GO + low conf  -> place_strike_call() (static NCCO)
+  6. AGI Governor records outcome for strategy evolution
+  7. Heartbeat to agent_registry every cycle
 """
 
 import os
@@ -99,9 +106,17 @@ def _script_for_target(target: dict, decision: dict) -> str:
 
 
 class VoiceStreamingAgent:
-    """Orchestrates the AGI-brained streaming voice strike pipeline."""
+    """Orchestrates the AGI-brained streaming voice strike pipeline.
 
-    def __init__(self):
+    AGI · SI · Predictive Revenue wired:
+      - AGI Governor: strategy_for_niche() + record_strategy_outcome()
+      - SI Strategy: best_for_niche() genome selection per niche
+      - Predictive Revenue: prioritizes targets by estimated call value
+    """
+
+    def __init__(self, agi_governor=None, si_strategy=None):
+        self._agi_governor = agi_governor
+        self._si_strategy = si_strategy
         self.stats = {
             "cycles": 0,
             "targets_evaluated": 0,
@@ -186,8 +201,27 @@ class VoiceStreamingAgent:
             "urgency": "",
             "area": f"{target.get('city', '')}, {target.get('state', '')}".strip(", "),
         }
+        # ── SI Strategy: enrich target with genome context ──
+        niche = None
+        if self._si_strategy:
+            try:
+                city = target.get("city") or ""
+                damage = target.get("damage_severity") or ""
+                if "tornado" in damage.lower():
+                    niche = "Tornado Damage Repair"
+                elif "hail" in damage.lower():
+                    niche = "Hail Damage Repair"
+                elif "flood" in damage.lower():
+                    niche = "Flood Damage Restoration"
+                else:
+                    niche = "Storm Damage Restoration"
+                best = self._si_strategy.best_for_niche(niche)
+                if best:
+                    log.info(f"[voice_streaming] SI genome: {best} for {city} ({niche})")
+            except Exception:
+                pass
         try:
-            return await self._brain_decider.decide(
+            decision = await self._brain_decider.decide(
                 target={
                     "warehouse_name": target.get("warehouse_name") or "Target",
                     "address": target.get("address") or "unknown",
@@ -200,6 +234,7 @@ class VoiceStreamingAgent:
                 alert_summary=alert,
                 memory_context="",
             )
+            return decision
         except Exception as e:
             log.warning(f"[voice_streaming] brain.decide failed: {e}")
             return {"decision": "NO_GO", "confidence": 0.0, "reasoning": "brain unavailable"}
@@ -212,6 +247,20 @@ class VoiceStreamingAgent:
             return {"ok": True, "action": "no_target"}
 
         self.stats["targets_evaluated"] += 1
+
+        # ── Predictive Revenue: estimate call value for logging ──
+        asset_value = float(target.get("asset_value") or 0)
+        niche = self._infer_niche(target)
+        predicted_revenue = 0.0
+        if asset_value > 0 and self._agi_governor:
+            try:
+                win_rate = self._agi_governor.get_niche_win_rate(niche) or 0.1
+                urgency_mult = 1.8 if (target.get("damage_severity") or "").lower() in ("severe", "extreme") else 1.2
+                predicted_revenue = round(asset_value * 0.01 * win_rate * urgency_mult, 2)
+                log.info(f"[voice_streaming] predicted revenue: ${predicted_revenue:,.2f} for {target.get('warehouse_name', '?')}")
+            except Exception:
+                pass
+
         decision = await self._brain_decide(target)
 
         if decision.get("decision") != "GO":
@@ -219,11 +268,21 @@ class VoiceStreamingAgent:
             return {"ok": True, "action": "no_go", "decision": decision}
 
         self.stats["brain_go"] += 1
+
+        # ── AGI Governor: select SI strategy for niche ──
+        strategy = "AGGRESSIVE_STRIKE"
+        if self._agi_governor:
+            try:
+                strategy = self._agi_governor.strategy_for_niche(niche) or strategy
+            except Exception:
+                pass
+
         confidence = float(decision.get("confidence", 0))
         phone = target.get("phone") or target.get("phone2")
         if not phone:
             return {"ok": False, "action": "no_phone"}
 
+        result = {}
         if confidence >= STREAM_CONFIDENCE_THRESHOLD:
             script = _script_for_target(target, decision)
             reg = await self._register_stream(script, "am_michael")
@@ -238,30 +297,51 @@ class VoiceStreamingAgent:
                 brain_decision=decision,
             )
             self.stats["streaming_strikes"] += 1
-            return {
-                "ok": result.get("ok", False),
-                "action": "streaming_strike",
-                "voice_id": reg["voice_id"],
-                "ws_url": reg["ws_url"],
-                "call_result": result,
-                "decision": decision,
-            }
+        else:
+            # Low confidence GO -> static NCCO (Vonage built-in TTS)
+            result = await self._voice_router.place_strike_call(
+                to_number=phone,
+                target_address=target.get("address", ""),
+                asset_value=asset_value,
+                operator_number=os.environ.get("EMPIRE_OPERATOR_NUMBER", ""),
+                brain_decision=decision,
+            )
+            self.stats["static_strikes"] += 1
 
-        # Low confidence GO -> static NCCO (Vonage built-in TTS)
-        result = await self._voice_router.place_strike_call(
-            to_number=phone,
-            target_address=target.get("address", ""),
-            asset_value=float(target.get("asset_value") or 0),
-            operator_number=os.environ.get("EMPIRE_OPERATOR_NUMBER", ""),
-            brain_decision=decision,
-        )
-        self.stats["static_strikes"] += 1
+        # ── AGI Governor: record outcome for strategy evolution ──
+        success = result.get("ok", False)
+        revenue = predicted_revenue if success else 0.0
+        if self._agi_governor:
+            try:
+                self._agi_governor.record_strategy_outcome(strategy, niche, success, revenue)
+                log.debug(f"[voice_streaming] AGI recorded: {strategy} {niche} success={success}")
+            except Exception:
+                pass
+
+        action = "streaming_strike" if confidence >= STREAM_CONFIDENCE_THRESHOLD else "static_strike"
         return {
             "ok": result.get("ok", False),
-            "action": "static_strike",
+            "action": action,
+            "voice_id": reg.get("voice_id") if confidence >= STREAM_CONFIDENCE_THRESHOLD else None,
             "call_result": result,
             "decision": decision,
+            "strategy": strategy,
+            "niche": niche,
+            "predicted_revenue": predicted_revenue,
         }
+
+    @staticmethod
+    def _infer_niche(target: dict) -> str:
+        damage = (target.get("damage_severity") or "").lower()
+        if "tornado" in damage or "nado" in damage:
+            return "Tornado Damage Repair"
+        if "hurricane" in damage:
+            return "Hurricane Damage Restoration"
+        if "hail" in damage:
+            return "Hail Damage Repair"
+        if "flood" in damage:
+            return "Flood Damage Restoration"
+        return "Storm Damage Restoration"
 
     async def trigger_strike(self, target: dict) -> dict:
         """One-shot trigger against an explicit target (skip the poll)."""
@@ -303,7 +383,20 @@ async def run_loop():
         f"[voice_streaming] ONLINE - interval={STREAMING_INTERVAL_HOURS}h "
         f"- stream_threshold={STREAM_CONFIDENCE_THRESHOLD}"
     )
-    agent = VoiceStreamingAgent()
+    # ── Lazy-wire AGI Governor + SI Strategy at runtime ──
+    agi_gov = None
+    si_strat = None
+    try:
+        from empire_agi_governor import governor as _gov
+        agi_gov = _gov
+    except Exception:
+        log.debug("[voice_streaming] AGI Governor not available")
+    try:
+        from empire_si_strategy import StrategyEvolution
+        si_strat = StrategyEvolution.get_shared_instance()
+    except Exception:
+        log.debug("[voice_streaming] SI Strategy not available")
+    agent = VoiceStreamingAgent(agi_governor=agi_gov, si_strategy=si_strat)
     await agent.heartbeat()
     while True:
         try:

@@ -352,6 +352,18 @@ def _synthesize_sentence(samples: np.ndarray, sample_rate: int) -> bytes:
 class AGICommand(BaseModel):
     objective: str # e.g., "Build a high-impact roofing ad for Atlanta. Use +18885551234."
 
+
+class SynthesizeRequest(BaseModel):
+    """Request to synthesize text to a WAV audio file via Kokoro TTS.
+    Used by the Swarm Gate's standalone audio phase for phone calls
+    and audio-only output (no video)."""
+    script: str = Field(..., min_length=1, max_length=2000,
+                        description="Text to synthesize into speech.")
+    voice: STREAM_VOICES = Field("am_michael",
+                                  description="Kokoro voice profile (am_michael or af_sarah).")
+    speed: float = Field(1.1, ge=0.5, le=2.0,
+                          description="Speech speed multiplier.")
+
 # ── STRATEGY MODEL (validation + grammar-constrained sampling) ─────
 # This single Pydantic model is the source of truth for BOTH the
 # runtime validation (Pydantic) AND the JSON Schema we hand to Ollama
@@ -634,6 +646,55 @@ async def register_stream(
         _STREAM_TTL_SECONDS,
     )
     return StreamRegistrationResponse(**rec)
+
+
+# ── STANDALONE AUDIO SYNTHESIS (no video) ─────────────────────────
+# The Swarm Gate and voice pipeline use this endpoint for audio-only
+# output (e.g., phone call voiceovers, SMS voice notes, audio ads).
+# Returns the WAV file path so callers can use it downstream.
+@app.post("/api/v1/synthetic/synthesize")
+async def synthesize_audio(
+    payload: SynthesizeRequest,
+    api_key: str = Depends(require_api_key),
+):
+    """
+    Synthesize text to a WAV audio file via Kokoro TTS.
+
+    Returns {status, audio_path, duration_s, voice, sample_rate}.
+    The audio file is written to builds/production_vault/synth_<uuid>/voiceover.wav.
+
+    Used by:
+      - bots/swarm_worker.py (standalone per-lane audio)
+      - empire_swarm_gate.py (GodModeSwarmGate._run_kokoro_audio)
+      - Any caller needing audio-only output (phone calls, voice notes)
+    """
+    script = payload.script
+    voice = payload.voice
+    speed = payload.speed
+
+    # Write to a unique directory so multiple concurrent requests don't collide
+    synth_dir = OUTPUT_DIR / f"synth_{uuid.uuid4().hex}"
+    synth_dir.mkdir(parents=True, exist_ok=True)
+    audio_path = synth_dir / "voiceover.wav"
+
+    try:
+        kokoro = _get_kokoro()
+        samples, sample_rate = kokoro.create(script, voice=voice, speed=speed, lang="en-us")
+        sf.write(str(audio_path), samples, sample_rate)
+        duration_s = len(samples) / sample_rate if sample_rate > 0 else 0.0
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Kokoro synthesis failed: {str(e)}",
+        )
+
+    return {
+        "status": "OK",
+        "audio_path": str(audio_path),
+        "duration_s": round(duration_s, 2),
+        "voice": voice,
+        "sample_rate": sample_rate,
+    }
 
 
 @app.websocket("/api/v1/synthetic/stream")

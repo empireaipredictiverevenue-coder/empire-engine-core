@@ -122,6 +122,15 @@ class GodModeSwarmGate:
             "total_videos_rendered": 0,
             "last_fire_at": None,
         }
+        # Shared httpx client for all lanes (connection pooling)
+        self._http: Optional[httpx.AsyncClient] = None
+
+    # ── Per-lane processing phases ────────────────────────────────
+    # Phase 1: Script Engine (BrainDecider + SI strategy + pain points)
+    # Phase 2: Kokoro Audio Match via synthetic_brain /api/v1/synthetic/synthesize
+    #           (standalone TTS for audio-only output — phone calls, voice notes)
+    # Phase 3: FFmpeg 1080x1920 Render via synthetic_brain /api/v1/synthetic/run
+    #           (full video ad — TTS + video bundled in one call)
 
     # ── PUBLIC: FIRE THE SWARM ──────────────────────────────────
     async def fire(
@@ -137,7 +146,7 @@ class GodModeSwarmGate:
         Args:
             packages: List of StrikePackage objects or dicts with same shape
             auto_script: Run Script Engine per lane
-            auto_audio:  Run Kokoro Audio Match per lane
+            auto_audio:  Run Kokoro Audio Match per lane (audio-only WAV)
             auto_render: Run FFmpeg 1080x1920 Render per lane
 
         Returns:
@@ -232,11 +241,17 @@ class GodModeSwarmGate:
                 await self._run_script_engine(pkg, job)
 
             # ── Phase 2: Kokoro Audio Match ──────────────────────
-            if auto_audio and job.script and job.brain_decision == "GO":
+            # Standalone TTS via synthetic_brain /api/v1/synthetic/synthesize.
+            # Produces a WAV voiceover for audio-only use cases
+            # (phone calls, voice notes, audio ads without video).
+            if auto_audio and job.script:
                 job.status = "audio"
-                await self._run_kokoro_audio(pkg, job)
+                await self._run_kokoro_audio(job)
 
             # ── Phase 3: FFmpeg 1080x1920 Render ─────────────────
+            # synthetic_brain /api/v1/synthetic/run bundles:
+            #   LLM strategy → Kokoro TTS voiceover → FFmpeg video assembly
+            # Single API call for the full video ad pipeline.
             if auto_render and job.script:
                 job.status = "rendering"
                 await self._run_ffmpeg_render(pkg, job)
@@ -299,11 +314,13 @@ class GodModeSwarmGate:
                 decision = {"decision": "GO", "confidence": 0.5, "reasoning": "brain timeout (30s)"}
                 job.brain_decision = "GO"
                 job.brain_confidence = 0.5
+                job.brain_reasoning = decision["reasoning"]
             except Exception as e:
                 log.debug(f"[swarm] brain.decide failed for {name}: {e}")
                 decision = {"decision": "GO", "confidence": 0.5, "reasoning": "brain unavailable"}
                 job.brain_decision = "GO"
                 job.brain_confidence = 0.5
+                job.brain_reasoning = decision["reasoning"]
         else:
             decision = {"decision": "GO", "confidence": 0.5, "reasoning": "no brain wired"}
             job.brain_decision = "GO"
@@ -368,38 +385,55 @@ class GodModeSwarmGate:
 
         job.script = script[:1000]
 
-    # ── PHASE 2: KOKORO AUDIO MATCH ─────────────────────────────
-    async def _run_kokoro_audio(self, pkg: dict, job: SwarmJob):
-        """Generate voiceover WAV via synthetic_brain Kokoro TTS."""
+    # ── PHASE 2: KOKORO AUDIO MATCH ────────────────────────────
+    async def _run_kokoro_audio(self, job: SwarmJob):
+        """Synthesize the script to a WAV voiceover via synthetic_brain /api/v1/synthetic/synthesize.
+        
+        This is the standalone audio phase — produces audio-only output for
+        phone calls, voice notes, and audio ads without requiring a full
+        video render. The Swarm Gate can run this independently of the
+        FFmpeg render phase (use auto_audio=True, auto_render=False for
+        audio-only output).
+        """
         if not self.synthetic_brain_key:
             log.debug("[swarm] no SYNTHETIC_BRAIN_API_KEY — skipping audio")
-            job.audio_path = "skipped (no API key)"
+            job.audio_path = ""
             return
 
+        voice = job.voice_profile or "am_michael"
         try:
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                r = await client.post(
-                    f"{self.synthetic_brain_url}/api/v1/synthetic/synthesize",
-                    json={
-                        "script": job.script,
-                        "voice": job.voice_profile,
-                        "speed": 1.1,
-                    },
-                    headers={"X-API-Key": self.synthetic_brain_key},
+            if self._http is None:
+                self._http = httpx.AsyncClient(timeout=90.0)
+            r = await self._http.post(
+                f"{self.synthetic_brain_url}/api/v1/synthetic/synthesize",
+                json={
+                    "script": job.script[:2000],
+                    "voice": voice,
+                    "speed": 1.1,
+                },
+                headers={"X-API-Key": self.synthetic_brain_key},
+            )
+            if r.status_code == 200:
+                data = r.json()
+                job.audio_path = data.get("audio_path", "")
+                job.audio_duration_s = float(data.get("duration_s", 0))
+                job.voice_profile = data.get("voice", voice)
+                log.info(
+                    f"[swarm] audio synthesized for {job.warehouse_name}: "
+                    f"{job.audio_duration_s:.1f}s ({voice})"
                 )
-                if r.status_code == 200:
-                    data = r.json()
-                    job.audio_path = data.get("audio_path", "")
-                    job.audio_duration_s = float(data.get("duration_s", 0))
-                    log.debug(f"[swarm] audio synthesized for {job.warehouse_name}: {job.audio_duration_s:.1f}s")
-                else:
-                    log.warning(f"[swarm] synthesize failed ({r.status_code}): {r.text[:200]}")
-                    job.audio_path = f"synthesize_failed_{r.status_code}"
+            else:
+                log.warning(f"[swarm] audio synthesis failed ({r.status_code}): {r.text[:200]}")
+                job.error = (job.error + " | " + r.text[:200]).strip(" | ")
+        except asyncio.TimeoutError:
+            log.warning(f"[swarm] audio synthesis timeout for {job.warehouse_name}")
         except Exception as e:
             log.warning(f"[swarm] Kokoro audio error for {job.warehouse_name}: {e}")
-            job.audio_path = f"error: {str(e)[:100]}"
 
     # ── PHASE 3: FFMPEG 1080x1920 RENDER ────────────────────────
+    # Kokoro TTS runs inside synthetic_brain /api/v1/synthetic/run —
+    # a bundled call for LLM strategy + TTS + FFmpeg video assembly.
+    # For audio-only, use Phase 2 (_run_kokoro_audio) instead.
     async def _run_ffmpeg_render(self, pkg: dict, job: SwarmJob):
         """Render the full 1080x1920 vertical video ad via synthetic_brain /api/v1/synthetic/run."""
         if not self.synthetic_brain_key:
@@ -418,22 +452,24 @@ class GodModeSwarmGate:
         )
 
         try:
-            async with httpx.AsyncClient(timeout=90.0) as client:
-                r = await client.post(
-                    f"{self.synthetic_brain_url}/api/v1/synthetic/run",
-                    json={"objective": objective},
-                    headers={"X-API-Key": self.synthetic_brain_key},
-                )
-                if r.status_code == 200:
-                    data = r.json()
-                    job.video_status = data.get("status", "UNKNOWN")
-                    job.video_path = data.get("meta", {}).get("production_location", "")
-                    job.render_duration_s = 0.0
-                    log.info(f"[swarm] video rendered for {job.warehouse_name}: {job.video_status}")
-                else:
-                    log.warning(f"[swarm] render failed ({r.status_code}): {r.text[:200]}")
-                    job.video_status = f"render_failed_{r.status_code}"
-                    job.error = r.text[:300]
+            # Reuse shared httpx client across lanes (connection pooling)
+            if self._http is None:
+                self._http = httpx.AsyncClient(timeout=90.0)
+            r = await self._http.post(
+                f"{self.synthetic_brain_url}/api/v1/synthetic/run",
+                json={"objective": objective},
+                headers={"X-API-Key": self.synthetic_brain_key},
+            )
+            if r.status_code == 200:
+                data = r.json()
+                job.video_status = data.get("status", "UNKNOWN")
+                job.video_path = data.get("meta", {}).get("production_location", "")
+                job.render_duration_s = 0.0
+                log.info(f"[swarm] video rendered for {job.warehouse_name}: {job.video_status}")
+            else:
+                log.warning(f"[swarm] render failed ({r.status_code}): {r.text[:200]}")
+                job.video_status = f"render_failed_{r.status_code}"
+                job.error = r.text[:300]
         except asyncio.TimeoutError:
             job.video_status = "timeout"
             job.error = "render timeout after 90s"

@@ -1573,6 +1573,173 @@ function PainPoints() {
     </div>
   `;
 }
+
+// ── SWARM GATE SECTION ────────────────────────────────────────────────────────────────────
+function SwarmGate() {
+  const [stats, setStats] = useState(null);
+  const [jobs, setJobs] = useState([]);
+  const [err, setErr] = useState(null);
+  const [firing, setFiring] = useState(false);
+  const [fireResult, setFireResult] = useState(null);
+
+  const reload = useCallback(async () => {
+    try {
+      const [s, j] = await Promise.all([
+        apiFetch('/api/v1/swarm/stats').then(r => r.json()),
+        apiFetch('/api/v1/swarm/jobs?limit=15').then(r => r.json()),
+      ]);
+      setStats(s);
+      setJobs(j.jobs || []);
+      setErr(null);
+    } catch (e) {
+      if (e.message !== 'Unauthorized') setErr(String(e));
+    }
+  }, []);
+
+  useEffect(() => {
+    let stop = false;
+    const load = () => {
+      apiFetch('/api/v1/swarm/stats').then(r => r.json())
+        .then(s => { if (!stop) setStats(s); })
+        .catch(e => { if (!stop && e.message !== 'Unauthorized') setErr(String(e)); });
+      apiFetch('/api/v1/swarm/jobs?limit=15').then(r => r.json())
+        .then(j => { if (!stop) setJobs(j.jobs || []); })
+        .catch(() => {});
+    };
+    load();
+    const iv = setInterval(load, 30000);
+    return () => { stop = true; clearInterval(iv); };
+  }, []);
+
+  const fireSwarm = async () => {
+    setFiring(true);
+    setFireResult(null);
+    try {
+      const r = await apiFetch('/api/v1/swarm/scan', { method: 'POST' }).then(r => r.json());
+      if (r.packages && r.packages.length > 0) {
+        const fr = await apiFetch('/api/v1/swarm/fire', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ packages: r.packages }),
+        }).then(r => r.json());
+        setFireResult(fr);
+        reload();
+      } else {
+        setFireResult({ ok: true, jobs: [], count: 0, message: 'No storm targets found' });
+      }
+    } catch (e) {
+      setFireResult({ ok: false, error: String(e) });
+    } finally {
+      setFiring(false);
+    }
+  };
+
+  if (err) return html`<div class="stub"><div class="stub-title">Could not load Swarm Gate</div><div class="stub-body">${err}</div></div>`;
+  if (!stats) return html`<div class="stub"><div class="stub-title">Loading <em>Swarm Gate</em></div><div class="stub-body">Fetching swarm stats...</div></div>`;
+
+  const completed = stats.total_completed || 0;
+  const failed = stats.total_failed || 0;
+  const total = completed + failed;
+  const successRate = total > 0 ? ((completed / total) * 100).toFixed(1) : '0.0';
+
+  return html`
+    <div>
+      <div class="section-h">
+        <div>
+          <div class="section-title">God Mode <em>Swarm Gate</em></div>
+          <div class="section-sub">Satellite scan → Parallel lanes → Script Engine → Kokoro TTS → FFmpeg 1080×1920</div>
+        </div>
+        <div class="topbar-actions">
+          <span style=${{fontFamily:'var(--font-mono)',fontSize:'10px',color:'var(--empire-fog)'}}>
+            Lanes: ${stats.lane_count || 3} · Brain: ${stats.brain_decider_wired ? 'WIRED' : 'OFF'}
+          </span>
+          <button class="btn" onClick=${fireSwarm} disabled=${firing}
+            style=${{padding:'8px 16px',fontSize:'10px'}}>
+            ${firing ? 'FIRING...' : '⚡ FIRE SWARM'}
+          </button>
+        </div>
+      </div>
+
+      ${fireResult ? html`
+      <div class="swarm-result" style=${{marginBottom:'16px',padding:'12px 18px',background:'var(--empire-surface)',border:'1px solid ' + (fireResult.ok ? 'var(--signal-teal-soft)' : 'var(--status-red)'),fontFamily:'var(--font-mono)',fontSize:'10px',color:'var(--empire-silver)'}}>
+        ${fireResult.ok
+          ? 'Swarm fired: ' + (fireResult.count || 0) + ' jobs · ' + (fireResult.stats ? fireResult.stats.total_completed + ' completed' : '')
+          : 'Error: ' + (fireResult.error || 'unknown')}
+      </div>` : null}
+
+      <div class="pulse-grid">
+        <div class="stat-card">
+          <div class="stat-label">TOTAL FIRES</div>
+          <div class="stat-value teal">${stats.total_fires || 0}</div>
+          <div class="stat-meta">swarm fire operations</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">LANES PROCESSED</div>
+          <div class="stat-value cyan">${stats.total_lanes_processed || 0}</div>
+          <div class="stat-meta">total targets through pipeline</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">VIDEOS RENDERED</div>
+          <div class="stat-value teal">${stats.total_videos_rendered || 0}</div>
+          <div class="stat-meta">1080×1920 vertical ads</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">SUCCESS RATE</div>
+          <div class=${'stat-value ' + (parseFloat(successRate) >= 70 ? 'teal' : 'dim')}>${successRate}%</div>
+          <div class="stat-meta">${completed}/${total} completed</div>
+        </div>
+      </div>
+
+      <div class="pulse-grid">
+        <div class="stat-card">
+          <div class="stat-label">COMPLETED</div>
+          <div class="stat-value teal">${completed}</div>
+          <div class="stat-meta">script + audio + video</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">FAILED</div>
+          <div class=${'stat-value ' + (failed > 0 ? 'bad' : 'teal')}>${failed}</div>
+          <div class="stat-meta">timeouts & errors</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">SATELLITE STATUS</div>
+          <div class="stat-value cyan">${((stats.satellite||{}).last_package_count || 0)}</div>
+          <div class="stat-meta">last scan packages</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">SYNTH BRAIN</div>
+          <div class=${'stat-value ' + (stats.synthetic_brain_wired ? 'teal' : 'dim')} style=${{fontSize:'18px'}}>
+            ${stats.synthetic_brain_wired ? 'WIRED' : 'OFFLINE'}
+          </div>
+          <div class="stat-meta">Kokoro TTS + FFmpeg ready</div>
+        </div>
+      </div>
+
+      ${jobs.length > 0 ? html`
+      <div class="compliance-panel">
+        <div class="compliance-h">
+          <div class="compliance-title">Recent Swarm Jobs</div>
+          <div class="compliance-tag">${jobs.length} jobs</div>
+        </div>
+        <div style=${{maxHeight:'400px',overflowY:'auto'}}>
+          ${jobs.map(j => {
+            const statusColor = j.status === 'complete' ? 'var(--signal-teal)' : j.status === 'failed' ? 'var(--status-red)' : 'var(--status-amber)';
+            const decisionColor = j.brain_decision === 'GO' ? 'var(--signal-teal)' : 'var(--empire-mist)';
+            return html`
+            <div class="swarm-job-row" key=${j.id || j.target_id} style=${{display:'grid',gridTemplateColumns:'1fr 80px 60px 80px 60px 80px',gap:'10px',padding:'10px 0',borderBottom:'1px solid var(--empire-divider)',fontFamily:'var(--font-mono)',fontSize:'10px',alignItems:'center'}}>
+              <span style=${{color:'var(--empire-white)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}} title=${j.warehouse_name}>${j.warehouse_name}</span>
+              <span style=${{color:'var(--empire-mist)'}}>${j.metro}</span>
+              <span style=${{color:decisionColor,fontWeight:500}}>${j.brain_decision || '—'}</span>
+              <span style=${{color:'var(--strike-cyan)'}}>${j.strategy ? j.strategy.slice(0,10) : '—'}</span>
+              <span style=${{color:statusColor,fontWeight:500}}>${j.status}</span>
+              <span style=${{color:'var(--empire-fog)',fontSize:'8px'}}>${(j.created_at || '').slice(0,16)}</span>
+            </div>`;
+          })}
+        </div>
+      </div>` : html`<div class="stub" style=${{marginTop:'16px'}}><div class="stub-body">No swarm jobs yet. Click ⚡ FIRE SWARM to run a scan + render cycle.</div></div>`}
+    </div>
+  `;
+}
 // ── PULSE SECTION ─────────────────────────────────────────────────────
 function Pulse({ events, wsConnected }) {
   const [stats, setStats] = useState(null);
@@ -3716,6 +3883,7 @@ function Kanban() {
   const [tasks, setTasks] = useState(null);
   const [err, setErr] = useState(null);
   const [tick, setTick] = useState(0);
+  const [typeFilter, setTypeFilter] = useState('');
 
   const reload = useCallback(async () => {
     try {
@@ -3736,10 +3904,23 @@ function Kanban() {
   if (err) return html`<div class="stub"><div class="stub-title">Could not load Kanban</div><div class="stub-body">${err}</div></div>`;
   if (!tasks) return html`<div class="stub"><div class="stub-body">Loading…</div></div>`;
 
+  const TASK_TYPES = [
+    'scout.find_roofs',
+    'outreach.draft_email',
+    'studio.write_script',
+    'studio.render_reel',
+    'revenue.connect_buyer',
+    'revenue.score_call',
+    'swarm.fire',
+    'swarm.strike_video',
+  ];
+
+  const filtered = typeFilter ? tasks.filter(t => t.task_type === typeFilter) : tasks;
+
   const STATUSES = ['To-Do', 'In Progress', 'Done', 'Failed', 'Blocked', 'Retried', 'Promoted'];
   const byStatus = {};
   for (const s of STATUSES) byStatus[s] = [];
-  for (const t of tasks) {
+  for (const t of filtered) {
     const st = t.status || 'unknown';
     if (byStatus[st]) byStatus[st].push(t);
   }
@@ -3756,8 +3937,16 @@ function Kanban() {
       </div>
 
       <div class="kb-summary">
-        <span class="kb-summary-tag">Total: <strong>${tasks.length} tasks</strong></span>
+        <span class="kb-summary-tag">Total: <strong>${filtered.length} tasks</strong></span>
         <span class="kb-summary-tag">${summary}</span>
+      </div>
+
+      <div class="ld-filter">
+        <span class="ld-filter-tag">Filter by type:</span>
+        <button class=${'ld-filter-btn ' + (typeFilter === '' ? 'active' : '')} onClick=${() => setTypeFilter('')}>All</button>
+        ${TASK_TYPES.map(tt => html`
+          <button class=${'ld-filter-btn ' + (typeFilter === tt ? 'active' : '')} onClick=${() => setTypeFilter(tt)}>${tt}</button>
+        `)}
       </div>
 
       <div class="kb-board">

@@ -33,6 +33,8 @@ TASK_STUDIO_WRITE_SCRIPT    = "studio.write_script"
 TASK_STUDIO_RENDER_REEL     = "studio.render_reel"
 TASK_REVENUE_CONNECT_BUYER  = "revenue.connect_buyer"
 TASK_REVENUE_SCORE_CALL     = "revenue.score_call"
+TASK_SWARM_FIRE             = "swarm.fire"
+TASK_SWARM_STRIKE_VIDEO     = "swarm.strike_video"
 
 ALL_TASK_TYPES = [
     TASK_SCOUT_FIND_ROOFS,
@@ -41,43 +43,49 @@ ALL_TASK_TYPES = [
     TASK_STUDIO_RENDER_REEL,
     TASK_REVENUE_CONNECT_BUYER,
     TASK_REVENUE_SCORE_CALL,
+    TASK_SWARM_FIRE,
+    TASK_SWARM_STRIKE_VIDEO,
 ]
 
 # ── Agent name constants ─────────────────────────────────────────────
-AGENT_SCOUT       = "mesh.scout"
-AGENT_OUTREACH    = "mesh.outreach"
-AGENT_COPYWRITER  = "mesh.copywriter"
-AGENT_RENDER      = "mesh.render"
-AGENT_DISPATCHER  = "mesh.dispatcher"
-AGENT_QUALITY     = "mesh.quality"
+AGENT_SCOUT         = "mesh.scout"
+AGENT_OUTREACH      = "mesh.outreach"
+AGENT_COPYWRITER    = "mesh.copywriter"
+AGENT_RENDER        = "mesh.render"
+AGENT_DISPATCHER    = "mesh.dispatcher"
+AGENT_QUALITY       = "mesh.quality"
+AGENT_SWARM_WORKER  = "mesh.swarm_worker"
 
 # ── Agent → task types mapping ───────────────────────────────────────
 AGENT_TASK_MAP = {
-    AGENT_SCOUT:      [TASK_SCOUT_FIND_ROOFS],
-    AGENT_OUTREACH:   [TASK_OUTREACH_DRAFT_EMAIL],
-    AGENT_COPYWRITER: [TASK_STUDIO_WRITE_SCRIPT],
-    AGENT_RENDER:     [TASK_STUDIO_RENDER_REEL],
-    AGENT_DISPATCHER: [TASK_REVENUE_CONNECT_BUYER],
-    AGENT_QUALITY:    [TASK_REVENUE_SCORE_CALL],
+    AGENT_SCOUT:        [TASK_SCOUT_FIND_ROOFS],
+    AGENT_OUTREACH:     [TASK_OUTREACH_DRAFT_EMAIL],
+    AGENT_COPYWRITER:   [TASK_STUDIO_WRITE_SCRIPT],
+    AGENT_RENDER:       [TASK_STUDIO_RENDER_REEL],
+    AGENT_DISPATCHER:   [TASK_REVENUE_CONNECT_BUYER],
+    AGENT_QUALITY:      [TASK_REVENUE_SCORE_CALL],
+    AGENT_SWARM_WORKER: [TASK_SWARM_FIRE, TASK_SWARM_STRIKE_VIDEO],
 }
 
 AGENT_CAPABILITIES = {
-    AGENT_SCOUT:      ["scout", "prospector", "satellite"],
-    AGENT_OUTREACH:   ["outreach", "email", "drafting"],
-    AGENT_COPYWRITER: ["copywriter", "creative", "scripting"],
-    AGENT_RENDER:     ["render", "ffmpeg", "video"],
-    AGENT_DISPATCHER: ["dispatcher", "buyer", "revenue"],
-    AGENT_QUALITY:    ["quality", "analyst", "scoring"],
+    AGENT_SCOUT:        ["scout", "prospector", "satellite"],
+    AGENT_OUTREACH:     ["outreach", "email", "drafting"],
+    AGENT_COPYWRITER:   ["copywriter", "creative", "scripting"],
+    AGENT_RENDER:       ["render", "ffmpeg", "video"],
+    AGENT_DISPATCHER:   ["dispatcher", "buyer", "revenue"],
+    AGENT_QUALITY:      ["quality", "analyst", "scoring"],
+    AGENT_SWARM_WORKER: ["swarm", "tts", "kokoro", "ollama", "ffmpeg", "video_render"],
 }
 
 # ── Agent display names ──────────────────────────────────────────────
 AGENT_DISPLAY = {
-    AGENT_SCOUT:      "Scout (Prospector)",
-    AGENT_OUTREACH:   "Outreach Agent",
-    AGENT_COPYWRITER: "Copywriter",
-    AGENT_RENDER:     "Render Pro",
-    AGENT_DISPATCHER: "Dispatcher",
-    AGENT_QUALITY:    "Quality Analyst",
+    AGENT_SCOUT:        "Scout (Prospector)",
+    AGENT_OUTREACH:     "Outreach Agent",
+    AGENT_COPYWRITER:   "Copywriter",
+    AGENT_RENDER:       "Render Pro",
+    AGENT_DISPATCHER:   "Dispatcher",
+    AGENT_QUALITY:      "Quality Analyst",
+    AGENT_SWARM_WORKER: "Swarm Worker",
 }
 
 
