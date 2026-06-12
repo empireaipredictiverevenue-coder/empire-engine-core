@@ -107,6 +107,7 @@ ALLOWED_OFFENDERS: set[str] = {
     "empire_brain.py",           # brain router
     "empire_partner_onboarding.py",  # partner onboarding
     "empire_switchboard.py",     # switchboard engine
+    "empire_affiliate_portal.py", # module-level Supabase client for affiliate portal routes
 
     # ── Bots with module-level I/O ──
     "bots/decision_makers.py",
