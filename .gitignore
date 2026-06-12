@@ -45,3 +45,14 @@ SESSION_*.md
 # Local SQLite databases (storm scraper output, etc. — generated at runtime)
 data/*.sqlite
 data/*.sqlite-*
+
+# Generated video + voiceover assets (regenerated per prospect, do not commit)
+builds/**/*.mp4
+builds/**/*.wav
+builds/**/*.mp3
+builds/**/*.png
+builds/**/*.jpg
+
+# Keep the directory structure (target_<name> folders) in git, just not the assets
+!builds/**/
+!builds/**/.gitkeep
