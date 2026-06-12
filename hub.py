@@ -1167,7 +1167,7 @@ _GOV_LOG_MAX = 500   # cap retained entries so the file can't grow unbounded
 
 # ── watchdog config — edit the allowlist to change which services are healed ──
 import asyncio as _gasync
-_GOV_WATCH = {"empire-orchestrator", "empire-live", "empire-voice"}  # auto-heal allowlist
+_GOV_WATCH = {"empire-orchestrator", "empire-live", "empire-voice", "empire-pulse-cron"}  # auto-heal allowlist
 _GOV_WATCH_INTERVAL = 60     # seconds between health checks
 _GOV_MAX_ATTEMPTS = 3        # max auto-restarts per service…
 _GOV_ATTEMPT_WINDOW = 600    # …within this many seconds (10 min) before giving up

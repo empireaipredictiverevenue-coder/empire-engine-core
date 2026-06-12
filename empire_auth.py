@@ -745,7 +745,7 @@ def register_auth_routes(
         response = HTMLResponse(_verified_page(result["operator"], result["session_token"]))
         # secure=False when running on plain HTTP (localhost dev) so the
         # cookie is accepted by the browser; True on production HTTPS.
-        use_secure = self.public_base_url.startswith("https://")
+        use_secure = auth_engine.public_base_url.startswith("https://")
         response.set_cookie(
             key="empire_session",
             value=result["session_token"],
