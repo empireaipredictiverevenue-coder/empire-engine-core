@@ -447,7 +447,7 @@ async def view_pulse():
 
 @app.get("/api/pulse/summary")
 async def pulse_summary(
-    window: str = Query("24h", regex="^(24h|7d|30d)$"),
+    window: str = Query("24h", pattern="^(24h|7d|30d)$"),
     auth: bool = Depends(require_auth),
 ):
     """Return pulse totals + deltas for the given window."""
@@ -459,8 +459,8 @@ async def pulse_summary(
 
 @app.get("/api/pulse/breakdown")
 async def pulse_breakdown(
-    dimension: str = Query("niche", regex="^(niche|channel|contractor|corridor|hour)$"),
-    window: str = Query("7d", regex="^(24h|7d|30d)$"),
+    dimension: str = Query("niche", pattern="^(niche|channel|contractor|corridor|hour)$"),
+    window: str = Query("7d", pattern="^(24h|7d|30d)$"),
     auth: bool = Depends(require_auth),
 ):
     """Return grouped data by a single dimension."""
