@@ -271,11 +271,14 @@ class AuthEngine:
           </div>
         """
         try:
-            await self.send_email(
+            result = await self.send_email(
                 to=email,
                 subject="Empire AI · Your login link",
                 html=html,
             )
+            if not result.get("ok"):
+                log.error(f"[auth] login email send failed: {result.get('error', 'unknown')}")
+                return {"ok": False, "error": "could not send login email"}
             self.stats["logins"] += 1
             return {"ok": True}
         except Exception as e:
@@ -740,12 +743,15 @@ def register_auth_routes(
             """, status_code=401)
 
         response = HTMLResponse(_verified_page(result["operator"], result["session_token"]))
+        # secure=False when running on plain HTTP (localhost dev) so the
+        # cookie is accepted by the browser; True on production HTTPS.
+        use_secure = self.public_base_url.startswith("https://")
         response.set_cookie(
             key="empire_session",
             value=result["session_token"],
             max_age=int(auth_engine.session_ttl.total_seconds()),
             httponly=True,
-            secure=True,
+            secure=use_secure,
             samesite="lax",
             path="/",
         )

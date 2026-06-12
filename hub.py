@@ -16,7 +16,7 @@ from datetime import datetime, timezone
 from typing import Optional
 
 import httpx as _httpx
-from fastapi import FastAPI, Request, Depends, HTTPException
+from fastapi import FastAPI, Request, Depends, HTTPException, Query
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -79,6 +79,7 @@ from empire_mission_control import (
     mission_control_broadcast_loop,
     register_mission_control_routes,
 )
+from empire_pulse import PulseEngine, pulse_view_page
 
 
 logging.basicConfig(level=logging.INFO)
@@ -277,6 +278,12 @@ ai_closer = AICloser(
 # Sales Funnel — will be wired after si_strategy is created (see SI Strategy section below)
 sales_funnel = SalesFunnel(closer=ai_closer)
 
+# Pulse Engine — rollup engine for the /view/pulse insight layer
+pulse_engine = PulseEngine(
+    get_db=get_db,
+    refresh_interval_sec=int(os.environ.get("PULSE_REFRESH_INTERVAL_SEC", "300")),
+)
+
 
 
 # ─────────────────────────────────────────────────────────────────────
@@ -414,6 +421,62 @@ async def closer_score(request: Request, auth: bool = Depends(require_auth)):
 
     result = await ai_closer_score_only(ai_closer, lead, alert_summary=alert_summary, niche=niche)
     return JSONResponse(result)
+
+
+# ── Pulse Routes ────────────────────────────────────────────────
+# GET  /view/pulse              — standalone insight page
+# GET  /api/pulse/summary       — totals + deltas
+# GET  /api/pulse/breakdown     — grouped by dimension
+# GET  /api/pulse/lanes         — per-hour per-niche matrix
+# POST /api/pulse/refresh       — force materialized view refresh (owner-only)
+
+@app.get("/view/pulse", response_class=HTMLResponse)
+async def view_pulse():
+    """Standalone pulse insight page — no sidebar, no chrome."""
+    return HTMLResponse(pulse_view_page())
+
+
+@app.get("/api/pulse/summary")
+async def pulse_summary(
+    window: str = Query("24h", regex="^(24h|7d|30d)$"),
+    auth: bool = Depends(require_auth),
+):
+    """Return pulse totals + deltas for the given window."""
+    try:
+        return JSONResponse(await pulse_engine.summary(window=window))
+    except Exception as e:
+        return JSONResponse({"error": str(e)[:200]}, status_code=500)
+
+
+@app.get("/api/pulse/breakdown")
+async def pulse_breakdown(
+    dimension: str = Query("niche", regex="^(niche|channel|contractor|corridor|hour)$"),
+    window: str = Query("7d", regex="^(24h|7d|30d)$"),
+    auth: bool = Depends(require_auth),
+):
+    """Return grouped data by a single dimension."""
+    try:
+        return JSONResponse(await pulse_engine.breakdown(dimension=dimension, window=window))
+    except Exception as e:
+        return JSONResponse({"error": str(e)[:200]}, status_code=500)
+
+
+@app.get("/api/pulse/lanes")
+async def pulse_lanes(auth: bool = Depends(require_auth)):
+    """Return per-hour per-niche matrix for the heatmap."""
+    try:
+        return JSONResponse(await pulse_engine.lanes())
+    except Exception as e:
+        return JSONResponse({"error": str(e)[:200]}, status_code=500)
+
+
+@app.post("/api/pulse/refresh")
+async def pulse_refresh(op: dict = Depends(require_owner)):
+    """Force-refresh the materialized view. Owner-only."""
+    try:
+        return JSONResponse(await pulse_engine.refresh())
+    except Exception as e:
+        return JSONResponse({"error": str(e)[:200]}, status_code=500)
 
 
 # ── Funnel Routes ──────────────────────────────────────────────────
@@ -956,6 +1019,8 @@ async def startup():
     asyncio.create_task(_si_evolution_loop())
     # Swarm Gate auto-pilot — scan storm forecasts + fire parallel video ads every 30 min
     asyncio.create_task(_swarm_autopilot_loop())
+    # Pulse materialized view refresh — keeps pulse_rollup_hourly fresh every 5 min
+    asyncio.create_task(_pulse_refresh_loop())
     # Mission Control broadcasts every 5s — drives the top status bar in the SPA
     asyncio.create_task(mission_control_broadcast_loop(
         broadcaster=live_broadcaster, get_db=get_db, interval=5.0,
@@ -976,7 +1041,7 @@ import asyncio as _asyncio
 import json as _json
 
 @app.get("/api/v1/drafts/pending")
-async def drafts_pending(limit: int = 50, auth: bool = Depends(require_auth)):
+async def drafts_pending(limit: int = 50, offset: int = 0, auth: bool = Depends(require_auth)):
     db = get_db()
     r = db.table("email_drafts").select("*").eq("status", "pending").order("created_at", desc=True).range(offset, offset + limit - 1).execute()
     has_more = len(r.data or []) == limit
@@ -1329,10 +1394,23 @@ async def _swarm_autopilot_loop():
         await asyncio.sleep(_SWARM_AUTOPILOT_INTERVAL)
 
 
+# ── Pulse Refresh Cron ──────────────────────────────────────
+# Every 5 min, refreshes the pulse_rollup_hourly materialized view
+# so the /view/pulse page always has fresh data.
+
+async def _pulse_refresh_loop():
+    """Background loop: refresh the pulse materialized view every N seconds."""
+    await asyncio.sleep(pulse_engine.refresh_interval_sec)
+    while True:
+        try:
+            await pulse_engine.refresh()
+        except Exception as e:
+            log.debug(f"[pulse] refresh loop error: {e}")
+        await asyncio.sleep(pulse_engine.refresh_interval_sec)
+
+
 # ─── /api/v1/compliance/stats: Compliance dashboard data ──────────────────
 from datetime import datetime as _cdt, timezone as _ctz
-from supabase import create_client as _cc
-import os as _cos
 
 @app.get("/api/v1/compliance/stats")
 async def compliance_stats(auth: bool = Depends(require_auth)):
@@ -1494,19 +1572,6 @@ from datetime import timedelta as _atd
 
 def _get_agent_leads():
     leads = {"storm": 0, "legal": 0, "warehouse": 0, "logistics": 0, "reddit": 0, "linkedin": 0}
-    try:
-        today = _gdt.utcnow().date().isoformat()
-        res = _sb.table("radar_targets").select("source").gte("created_at", today).execute()
-        for row in (res.data or []):
-            s = (row.get("source") or "").lower()
-            if "storm" in s or "weather" in s: leads["storm"] += 1
-            elif "reddit" in s: leads["reddit"] += 1
-    except Exception as e:
-        print(f"[agents] leads error: {e}")
-    return leads
-
-def _get_agent_leads():
-    leads = {"storm":0,"legal":0,"warehouse":0,"logistics":0,"reddit":0,"linkedin":0}
     try:
         today = _gdt.utcnow().date().isoformat()
         res = _sb.table("radar_targets").select("source").gte("created_at", today).execute()

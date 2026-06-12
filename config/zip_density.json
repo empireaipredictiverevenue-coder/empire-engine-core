@@ -1,0 +1,457 @@
+{
+  "73102": {
+    "population": 0,
+    "land_area_sqmi": 0.798,
+    "population_density": 0.0,
+    "estimated_radius": 0.03,
+    "zone_type": "very dense urban"
+  },
+  "73108": {
+    "population": 0,
+    "land_area_sqmi": 7.639,
+    "population_density": 0.0,
+    "estimated_radius": 0.07,
+    "zone_type": "suburban"
+  },
+  "73179": {
+    "population": 0,
+    "land_area_sqmi": 11.795,
+    "population_density": 0.0,
+    "estimated_radius": 0.1,
+    "zone_type": "exurban"
+  },
+  "75001": {
+    "population": 0,
+    "land_area_sqmi": 3.752,
+    "population_density": 0.0,
+    "estimated_radius": 0.07,
+    "zone_type": "suburban"
+  },
+  "75050": {
+    "population": 0,
+    "land_area_sqmi": 25.828,
+    "population_density": 0.0,
+    "estimated_radius": 0.1,
+    "zone_type": "exurban"
+  },
+  "75201": {
+    "population": 0,
+    "land_area_sqmi": 1.376,
+    "population_density": 0.0,
+    "estimated_radius": 0.05,
+    "zone_type": "urban"
+  },
+  "75247": {
+    "population": 0,
+    "land_area_sqmi": 6.621,
+    "population_density": 0.0,
+    "estimated_radius": 0.07,
+    "zone_type": "suburban"
+  },
+  "76011": {
+    "population": 0,
+    "land_area_sqmi": 8.132,
+    "population_density": 0.0,
+    "estimated_radius": 0.07,
+    "zone_type": "suburban"
+  },
+  "76102": {
+    "population": 0,
+    "land_area_sqmi": 4.509,
+    "population_density": 0.0,
+    "estimated_radius": 0.07,
+    "zone_type": "suburban"
+  },
+  "76177": {
+    "population": 0,
+    "land_area_sqmi": 20.602,
+    "population_density": 0.0,
+    "estimated_radius": 0.1,
+    "zone_type": "exurban"
+  },
+  "77002": {
+    "population": 0,
+    "land_area_sqmi": 1.97,
+    "population_density": 0.0,
+    "estimated_radius": 0.05,
+    "zone_type": "urban"
+  },
+  "77007": {
+    "population": 0,
+    "land_area_sqmi": 7.507,
+    "population_density": 0.0,
+    "estimated_radius": 0.07,
+    "zone_type": "suburban"
+  },
+  "77008": {
+    "population": 0,
+    "land_area_sqmi": 6.481,
+    "population_density": 0.0,
+    "estimated_radius": 0.07,
+    "zone_type": "suburban"
+  },
+  "77024": {
+    "population": 0,
+    "land_area_sqmi": 12.971,
+    "population_density": 0.0,
+    "estimated_radius": 0.1,
+    "zone_type": "exurban"
+  },
+  "77029": {
+    "population": 0,
+    "land_area_sqmi": 10.616,
+    "population_density": 0.0,
+    "estimated_radius": 0.1,
+    "zone_type": "exurban"
+  },
+  "77032": {
+    "population": 0,
+    "land_area_sqmi": 23.097,
+    "population_density": 0.0,
+    "estimated_radius": 0.1,
+    "zone_type": "exurban"
+  },
+  "77036": {
+    "population": 0,
+    "land_area_sqmi": 7.275,
+    "population_density": 0.0,
+    "estimated_radius": 0.07,
+    "zone_type": "suburban"
+  },
+  "77041": {
+    "population": 0,
+    "land_area_sqmi": 18.877,
+    "population_density": 0.0,
+    "estimated_radius": 0.1,
+    "zone_type": "exurban"
+  },
+  "77042": {
+    "population": 0,
+    "land_area_sqmi": 6.167,
+    "population_density": 0.0,
+    "estimated_radius": 0.07,
+    "zone_type": "suburban"
+  },
+  "77054": {
+    "population": 0,
+    "land_area_sqmi": 5.347,
+    "population_density": 0.0,
+    "estimated_radius": 0.07,
+    "zone_type": "suburban"
+  },
+  "77056": {
+    "population": 0,
+    "land_area_sqmi": 3.457,
+    "population_density": 0.0,
+    "estimated_radius": 0.07,
+    "zone_type": "suburban"
+  },
+  "77064": {
+    "population": 0,
+    "land_area_sqmi": 14.707,
+    "population_density": 0.0,
+    "estimated_radius": 0.1,
+    "zone_type": "exurban"
+  },
+  "77073": {
+    "population": 0,
+    "land_area_sqmi": 14.56,
+    "population_density": 0.0,
+    "estimated_radius": 0.1,
+    "zone_type": "exurban"
+  },
+  "77084": {
+    "population": 0,
+    "land_area_sqmi": 31.735,
+    "population_density": 0.0,
+    "estimated_radius": 0.12,
+    "zone_type": "rural"
+  },
+  "77086": {
+    "population": 0,
+    "land_area_sqmi": 6.833,
+    "population_density": 0.0,
+    "estimated_radius": 0.07,
+    "zone_type": "suburban"
+  },
+  "77099": {
+    "population": 0,
+    "land_area_sqmi": 6.129,
+    "population_density": 0.0,
+    "estimated_radius": 0.07,
+    "zone_type": "suburban"
+  },
+  "77380": {
+    "population": 0,
+    "land_area_sqmi": 12.429,
+    "population_density": 0.0,
+    "estimated_radius": 0.1,
+    "zone_type": "exurban"
+  },
+  "77396": {
+    "population": 0,
+    "land_area_sqmi": 24.879,
+    "population_density": 0.0,
+    "estimated_radius": 0.1,
+    "zone_type": "exurban"
+  },
+  "77449": {
+    "population": 0,
+    "land_area_sqmi": 27.04,
+    "population_density": 0.0,
+    "estimated_radius": 0.1,
+    "zone_type": "exurban"
+  },
+  "77478": {
+    "population": 0,
+    "land_area_sqmi": 10.021,
+    "population_density": 0.0,
+    "estimated_radius": 0.1,
+    "zone_type": "exurban"
+  },
+  "77598": {
+    "population": 0,
+    "land_area_sqmi": 12.262,
+    "population_density": 0.0,
+    "estimated_radius": 0.1,
+    "zone_type": "exurban"
+  },
+  "78154": {
+    "population": 0,
+    "land_area_sqmi": 32.856,
+    "population_density": 0.0,
+    "estimated_radius": 0.12,
+    "zone_type": "rural"
+  },
+  "78201": {
+    "population": 0,
+    "land_area_sqmi": 7.129,
+    "population_density": 0.0,
+    "estimated_radius": 0.07,
+    "zone_type": "suburban"
+  },
+  "78205": {
+    "population": 0,
+    "land_area_sqmi": 1.173,
+    "population_density": 0.0,
+    "estimated_radius": 0.05,
+    "zone_type": "urban"
+  },
+  "78207": {
+    "population": 0,
+    "land_area_sqmi": 7.3,
+    "population_density": 0.0,
+    "estimated_radius": 0.07,
+    "zone_type": "suburban"
+  },
+  "78209": {
+    "population": 0,
+    "land_area_sqmi": 10.171,
+    "population_density": 0.0,
+    "estimated_radius": 0.1,
+    "zone_type": "exurban"
+  },
+  "78212": {
+    "population": 0,
+    "land_area_sqmi": 6.925,
+    "population_density": 0.0,
+    "estimated_radius": 0.07,
+    "zone_type": "suburban"
+  },
+  "78216": {
+    "population": 0,
+    "land_area_sqmi": 14.07,
+    "population_density": 0.0,
+    "estimated_radius": 0.1,
+    "zone_type": "exurban"
+  },
+  "78217": {
+    "population": 0,
+    "land_area_sqmi": 10.148,
+    "population_density": 0.0,
+    "estimated_radius": 0.1,
+    "zone_type": "exurban"
+  },
+  "78219": {
+    "population": 0,
+    "land_area_sqmi": 15.722,
+    "population_density": 0.0,
+    "estimated_radius": 0.1,
+    "zone_type": "exurban"
+  },
+  "78223": {
+    "population": 0,
+    "land_area_sqmi": 40.912,
+    "population_density": 0.0,
+    "estimated_radius": 0.12,
+    "zone_type": "rural"
+  },
+  "78230": {
+    "population": 0,
+    "land_area_sqmi": 10.493,
+    "population_density": 0.0,
+    "estimated_radius": 0.1,
+    "zone_type": "exurban"
+  },
+  "78232": {
+    "population": 0,
+    "land_area_sqmi": 11.887,
+    "population_density": 0.0,
+    "estimated_radius": 0.1,
+    "zone_type": "exurban"
+  },
+  "78233": {
+    "population": 0,
+    "land_area_sqmi": 13.67,
+    "population_density": 0.0,
+    "estimated_radius": 0.1,
+    "zone_type": "exurban"
+  },
+  "78240": {
+    "population": 0,
+    "land_area_sqmi": 11.172,
+    "population_density": 0.0,
+    "estimated_radius": 0.1,
+    "zone_type": "exurban"
+  },
+  "78247": {
+    "population": 0,
+    "land_area_sqmi": 14.564,
+    "population_density": 0.0,
+    "estimated_radius": 0.1,
+    "zone_type": "exurban"
+  },
+  "78249": {
+    "population": 0,
+    "land_area_sqmi": 14.483,
+    "population_density": 0.0,
+    "estimated_radius": 0.1,
+    "zone_type": "exurban"
+  },
+  "78258": {
+    "population": 0,
+    "land_area_sqmi": 17.407,
+    "population_density": 0.0,
+    "estimated_radius": 0.1,
+    "zone_type": "exurban"
+  },
+  "78613": {
+    "population": 0,
+    "land_area_sqmi": 27.695,
+    "population_density": 0.0,
+    "estimated_radius": 0.1,
+    "zone_type": "exurban"
+  },
+  "78641": {
+    "population": 0,
+    "land_area_sqmi": 124.363,
+    "population_density": 0.0,
+    "estimated_radius": 0.12,
+    "zone_type": "rural"
+  },
+  "78660": {
+    "population": 0,
+    "land_area_sqmi": 44.609,
+    "population_density": 0.0,
+    "estimated_radius": 0.12,
+    "zone_type": "rural"
+  },
+  "78664": {
+    "population": 0,
+    "land_area_sqmi": 16.612,
+    "population_density": 0.0,
+    "estimated_radius": 0.1,
+    "zone_type": "exurban"
+  },
+  "78701": {
+    "population": 0,
+    "land_area_sqmi": 1.517,
+    "population_density": 0.0,
+    "estimated_radius": 0.05,
+    "zone_type": "urban"
+  },
+  "78702": {
+    "population": 0,
+    "land_area_sqmi": 5.006,
+    "population_density": 0.0,
+    "estimated_radius": 0.07,
+    "zone_type": "suburban"
+  },
+  "78703": {
+    "population": 0,
+    "land_area_sqmi": 5.623,
+    "population_density": 0.0,
+    "estimated_radius": 0.07,
+    "zone_type": "suburban"
+  },
+  "78704": {
+    "population": 0,
+    "land_area_sqmi": 8.771,
+    "population_density": 0.0,
+    "estimated_radius": 0.07,
+    "zone_type": "suburban"
+  },
+  "78728": {
+    "population": 0,
+    "land_area_sqmi": 7.749,
+    "population_density": 0.0,
+    "estimated_radius": 0.07,
+    "zone_type": "suburban"
+  },
+  "78734": {
+    "population": 0,
+    "land_area_sqmi": 18.936,
+    "population_density": 0.0,
+    "estimated_radius": 0.1,
+    "zone_type": "exurban"
+  },
+  "78741": {
+    "population": 0,
+    "land_area_sqmi": 7.789,
+    "population_density": 0.0,
+    "estimated_radius": 0.07,
+    "zone_type": "suburban"
+  },
+  "78744": {
+    "population": 0,
+    "land_area_sqmi": 22.603,
+    "population_density": 0.0,
+    "estimated_radius": 0.1,
+    "zone_type": "exurban"
+  },
+  "78745": {
+    "population": 0,
+    "land_area_sqmi": 13.736,
+    "population_density": 0.0,
+    "estimated_radius": 0.1,
+    "zone_type": "exurban"
+  },
+  "78746": {
+    "population": 0,
+    "land_area_sqmi": 22.923,
+    "population_density": 0.0,
+    "estimated_radius": 0.1,
+    "zone_type": "exurban"
+  },
+  "78753": {
+    "population": 0,
+    "land_area_sqmi": 11.348,
+    "population_density": 0.0,
+    "estimated_radius": 0.1,
+    "zone_type": "exurban"
+  },
+  "78758": {
+    "population": 0,
+    "land_area_sqmi": 9.087,
+    "population_density": 0.0,
+    "estimated_radius": 0.07,
+    "zone_type": "suburban"
+  },
+  "78759": {
+    "population": 0,
+    "land_area_sqmi": 14.25,
+    "population_density": 0.0,
+    "estimated_radius": 0.1,
+    "zone_type": "exurban"
+  }
+}

@@ -33,6 +33,247 @@ _GENERIC_STORM_KW = ("storm", "warning", "watch", "advisory")
 
 log = logging.getLogger("empire.orchestrator")
 
+# ── SQLite Storm Bridge ──────────────────────────────────────────
+# Reads VERIFIED alerts from the local SQLite DB (populated by
+# scripts/storm_scraper.py + human review) and converts them to
+# NWS-compatible alert dicts so they can flow through the same
+# process_alert() pipeline as live NWS alerts.
+
+_SQLITE_DB_PATH = "/root/empire-v49/data/storm_alerts.sqlite"
+_CONFIG_ZIPS_PATH = "/root/empire-v49/config/target_zips.json"
+_DENSITY_PATH = "/root/empire-v49/config/zip_density.json"
+
+# Land-area → radius_deg lookup table. Census ZCTA land area is used as a
+# density proxy: small-area zips are dense urban cores, large-area zips
+# are sparse exurban/rural distribution zones.
+_DENSITY_RADIUS_TABLE = (
+    (1.0,   0.03),   # < 1 sqmi  → very dense urban (downtown cores)
+    (3.0,   0.05),   # 1-3 sqmi  → urban / inner-ring
+    (10.0,  0.07),   # 3-10 sqmi → suburban / industrial
+    (30.0,  0.10),   # 10-30 sqmi → exurban / logistics
+    (float("inf"), 0.12),  # > 30 sqmi → rural / distribution
+)
+
+
+def _load_zip_density() -> dict:
+    """Load zip → {land_area_sqmi, population_density} from cached Census data.
+
+    Generated once via Census ZCTA Gazetteer. If the file is missing (e.g.
+    first run before the generator script), returns an empty dict so
+    _load_zip_coords() falls back to _default_radius_deg.
+    """
+    import json as _j
+    try:
+        with open(_DENSITY_PATH) as f:
+            return _j.load(f)
+    except Exception:
+        return {}
+
+
+def _estimate_radius_from_land_area(land_area_sqmi: float) -> float:
+    """Map ZCTA land area (sq mi) → estimated scan radius (deg).
+
+    Smaller land area = denser development = tighter scan box to reduce
+    noise. Larger land area = sparse exurban/rural = wider scan to catch
+    distributed warehouse parks.
+
+    Thresholds (land_area_sqmi → radius_deg):
+        < 1.0   → 0.03  (very dense urban: downtown Dallas, OKC core)
+        1.0-3.0 → 0.05  (urban: Galleria, Capitol, Alamo)
+        3.0-10.0→ 0.07  (suburban/industrial: Stockyards, Westchase)
+        10.0-30→ 0.10  (exurban/logistics: Alliance, Bush airport)
+        > 30.0  → 0.12  (rural/distribution: OKC airport, wide zones)
+    """
+    for threshold, radius in _DENSITY_RADIUS_TABLE:
+        if land_area_sqmi < threshold:
+            return radius
+    return 0.12  # fallback (shouldn't reach here)
+
+
+# Module-level cache for density data (loaded once, shared across calls)
+_density_cache = None
+
+
+def _load_zip_coords() -> dict:
+    """Load zip → {lat, lon, city, state, radius_deg} lookup from config.
+
+    Radius resolution order:
+      1. Explicit radius_deg in config entry (operator-tuned)
+      2. Auto-estimated from Census ZCTA land area (zip_density.json)
+      3. Config _default_radius_deg (0.08)
+
+    This means new zip entries only need lat/lon — radius is auto-calculated
+    from real geospatial data. No manual tuning required.
+    """
+    global _density_cache
+    import json as _j
+    try:
+        with open(_CONFIG_ZIPS_PATH) as f:
+            cfg = _j.load(f)
+    except Exception:
+        return {}
+    default_radius = float(cfg.get("_default_radius_deg", 0.08))
+
+    # Load density data once (cached at module level)
+    if _density_cache is None:
+        _density_cache = _load_zip_density()
+    density_data = _density_cache
+
+    lookup = {}
+    for entry in cfg.get("zips", []):
+        z = entry.get("zip", "")
+        if z and entry.get("lat") is not None and entry.get("lon") is not None:
+            # Resolve radius_deg with the 3-tier fallback chain
+            if "radius_deg" in entry and entry["radius_deg"] is not None:
+                radius = float(entry["radius_deg"])
+            elif z in density_data:
+                land = density_data[z].get("land_area_sqmi", 0)
+                # Guard against zero/bad land area data — fall back to default
+                if land and float(land) > 0:
+                    radius = _estimate_radius_from_land_area(float(land))
+                else:
+                    radius = default_radius
+            else:
+                radius = default_radius
+
+            lookup[z] = {
+                "lat": float(entry["lat"]),
+                "lon": float(entry["lon"]),
+                "city": entry.get("city", ""),
+                "state": entry.get("state", ""),
+                "radius_deg": radius,
+            }
+    return lookup
+
+
+def _build_synthetic_polygon(lat: float, lon: float, radius_deg: float = 0.08) -> list:
+    """Build a small bounding box polygon around a lat/lon point.
+    Returns NWS-compatible coords: [[[lon, lat], ...]] outer ring."""
+    r = radius_deg
+    return [[
+        [lon - r, lat - r],
+        [lon + r, lat - r],
+        [lon + r, lat + r],
+        [lon - r, lat + r],
+        [lon - r, lat - r],
+    ]]
+
+
+def convert_sqlite_verified_to_alerts() -> list:
+    """
+    Read all VERIFIED alerts from the SQLite storm_alerts table and
+    convert them into NWS-compatible alert dicts (with synthetic polygon
+    geometry derived from zip code lat/lon centroids).
+
+    Returns a list of dicts ready for StormOrchestrator.process_alert().
+    Each dict has: id, geometry (Polygon), properties (id, event, severity,
+    urgency, headline, areaDesc, geocode, senderName).
+
+    Only returns alerts where at least one matched zip code has known
+    coordinates in config/target_zips.json.
+    """
+    import json as _j
+    import sqlite3 as _sq
+    from pathlib import Path
+
+    db_path = Path(_SQLITE_DB_PATH)
+    if not db_path.exists():
+        return []
+
+    zip_coords = _load_zip_coords()
+    if not zip_coords:
+        return []
+
+    try:
+        conn = _sq.connect(str(db_path))
+        cur = conn.execute(
+            "SELECT event_id, event_type, severity, certainty, urgency, "
+            "headline, description, area_desc, matched_zips, first_seen, "
+            "last_seen, status "
+            "FROM storm_alerts WHERE status = 'VERIFIED' AND processed = 0 "
+            "ORDER BY last_seen DESC"
+        )
+        rows = cur.fetchall()
+        conn.close()
+    except Exception as e:
+        log.warning(f"[orchestrator] SQLite read failed: {e}")
+        return []
+
+    alerts = []
+    for row in rows:
+        (event_id, event_type, severity, certainty, urgency,
+         headline, description, area_desc, matched_zips_json,
+         first_seen, last_seen, status) = row
+
+        # Parse matched zip codes
+        try:
+            matched_zips = _j.loads(matched_zips_json) if matched_zips_json else []
+        except Exception:
+            matched_zips = []
+
+        if not matched_zips:
+            continue
+
+        # Find the first zip with known coordinates
+        centroid = None
+        for z in matched_zips:
+            coords = zip_coords.get(z)
+            if coords:
+                centroid = coords
+                break
+
+        if not centroid:
+            log.debug(f"[orchestrator] SQLite alert {event_id}: no coords for zips {matched_zips}")
+            continue
+
+        lat, lon = centroid["lat"], centroid["lon"]
+        radius = centroid.get("radius_deg", 0.08)
+        polygon_coords = _build_synthetic_polygon(lat, lon, radius_deg=radius)
+
+        # Map severity: SQLite may use "Moderate" → not in SEVERITY_ALLOWLIST.
+        # Upgrade Moderate → Severe for pipeline compatibility.
+        nws_severity = severity if severity in ("Extreme", "Severe") else "Severe"
+
+        alert = {
+            "id": event_id,
+            "_source": "sqlite_verified",
+            "_matched_zips": matched_zips,
+            "geometry": {
+                "type": "Polygon",
+                "coordinates": polygon_coords,
+            },
+            "properties": {
+                "id": event_id,
+                "event": event_type or "Severe Storm",
+                "severity": nws_severity,
+                "urgency": urgency or "Expected",
+                "headline": headline or "",
+                "areaDesc": area_desc or "",
+                "description": description or "",
+                "geocode": {"UGC": []},
+                "senderName": "EmpireAI-SQLite-Bridge",
+                "effective": first_seen or "",
+                "expires": last_seen or "",
+            },
+        }
+        alerts.append(alert)
+
+    # Mark all processed alerts so the next call (even after hub restart)
+    # doesn't re-read and re-process the same VERIFIED alerts.
+    if alerts:
+        ids = [(a["id"],) for a in alerts]
+        try:
+            conn2 = _sq.connect(str(db_path))
+            conn2.executemany(
+                "UPDATE storm_alerts SET processed = 1 WHERE event_id = ?", ids
+            )
+            conn2.commit()
+            conn2.close()
+        except Exception:
+            pass
+
+    return alerts
+
 
 class StormOrchestrator:
     """
@@ -114,24 +355,36 @@ class StormOrchestrator:
             await self._broadcast({"type": "storm.paused", "reason": "bounce_breaker", "rate": breaker})
             return {"status": "paused_breaker", "rate": breaker}
 
-        # 3. Poll NWS
+        # 3a. Pull VERIFIED alerts from the SQLite storm scraper bridge.
+        #     Human-reviewed alerts get the same priority as live NWS alerts
+        #     and flow through the identical process_alert() pipeline.
+        relevant = []
+        sqlite_verified = convert_sqlite_verified_to_alerts()
+        for sa in sqlite_verified:
+            sid = sa.get("id")
+            if sid and sid not in self._processed_alerts:
+                relevant.append(sa)
+                self._processed_alerts.add(sid)
+        if sqlite_verified:
+            log.info(f"[orchestrator] sqlite bridge: {len(sqlite_verified)} VERIFIED alerts from storm scraper")
+
+        # 3b. Poll NWS
         alerts = await self.scout.get_active_alerts()
-        relevant = self.scout.filter_relevant(alerts)
-        log.info(f"[orchestrator] poll: {len(alerts)} total alerts, {len(relevant)} relevant to TX zones")
+        live_relevant = self.scout.filter_relevant(alerts)
+        for la in live_relevant:
+            lid = self.scout.alert_summary(la).get("id")
+            if lid and lid not in self._processed_alerts:
+                relevant.append(la)
+                self._processed_alerts.add(lid)
+        log.info(f"[orchestrator] poll: {len(alerts)} total alerts, {len(live_relevant)} relevant to TX zones, "
+                 f"{len(sqlite_verified)} from sqlite bridge")
 
         if not relevant:
-            return {"status": "ok", "alerts_total": len(alerts), "alerts_relevant": 0}
+            return {"status": "ok", "alerts_total": len(alerts) + len(sqlite_verified), "alerts_relevant": 0}
 
-        # 4. Dedup against in-process cache + dispatch lanes
-        new_alerts = []
-        for alert in relevant:
-            summary = self.scout.alert_summary(alert)
-            aid = summary.get("id")
-            if aid and aid in self._processed_alerts:
-                continue
-            new_alerts.append(alert)
-            if aid:
-                self._processed_alerts.add(aid)
+        # 4. Determine which alerts are truly new (dedup already handled
+        #     in step 3a/3b — relevant only contains unseen alerts).
+        new_alerts = list(relevant)
 
         if not new_alerts:
             return {"status": "ok", "alerts_total": len(alerts), "alerts_relevant": len(relevant), "new": 0}
@@ -143,7 +396,7 @@ class StormOrchestrator:
         results = await self.lanes.gather([self.process_alert(a) for a in new_alerts])
         await self._broadcast({"type": "storm.tick", "new_alerts": len(new_alerts), "results": [r if not isinstance(r, Exception) else str(r) for r in results][:5]})
 
-        return {"status": "ok", "alerts_relevant": len(relevant), "new": len(new_alerts), "results": len(results)}
+        return {"status": "ok", "alerts_total": len(alerts) + len(sqlite_verified), "alerts_relevant": len(relevant), "new": len(new_alerts), "results": len(results)}
 
     async def process_alert(self, alert: Dict) -> Dict:
         """Process one NWS alert end-to-end."""
@@ -427,7 +680,37 @@ def register_storm_routes(app, orchestrator: StormOrchestrator, require_auth):
         result = await orchestrator.process_alert(fake_alert)
         return {"ok": True, "result": result}
 
-    log.info("[orchestrator] Routes registered · /api/v1/storm/{status,pause,resume,tick,fire-test}")
+    @app.post("/api/v1/storm/process-sqlite")
+    async def storm_process_sqlite(auth: bool = Depends(require_auth)):
+        """Process all VERIFIED alerts from the SQLite storm scraper bridge.
+        Reads VERIFIED alerts from data/storm_alerts.sqlite, converts them
+        to NWS-compatible format, and feeds each through the full strike
+        engine pipeline (process_alert).
+
+        Idempotent: already-processed alerts are skipped via the in-memory
+        dedup cache. Safe to call repeatedly (cron, manual trigger, etc.).
+        """
+        sqlite_alerts = convert_sqlite_verified_to_alerts()
+        if not sqlite_alerts:
+            return {"ok": True, "processed": 0, "message": "No VERIFIED alerts found in SQLite"}
+
+        results = []
+        for alert in sqlite_alerts:
+            # Add to dedup cache before processing so tick() won't re-process
+            orchestrator._processed_alerts.add(alert.get("id"))
+            try:
+                r = await orchestrator.process_alert(alert)
+                results.append({"id": alert.get("id"), "status": r.get("status"), "enrolled": r.get("enrolled", 0)})
+            except Exception as e:
+                results.append({"id": alert.get("id"), "status": "error", "error": str(e)[:200]})
+
+        return {
+            "ok": True,
+            "processed": len(results),
+            "results": results,
+        }
+
+    log.info("[orchestrator] Routes registered · /api/v1/storm/{status,pause,resume,tick,fire-test,process-sqlite}")
 
 from empire_analytics import log_event
 

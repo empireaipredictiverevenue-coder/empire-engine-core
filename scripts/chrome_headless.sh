@@ -13,7 +13,7 @@
 
 set -e
 
-CHROME_BIN="/opt/google/chrome/google-chrome"
+CHROME_BIN="/usr/bin/google-chrome"
 CHROME_PROFILE="/tmp/empire-chrome-profile"
 CHROME_PORT="${CHROME_DEBUG_PORT:-9222}"
 XVFB_DISPLAY=":99"

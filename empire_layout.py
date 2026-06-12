@@ -35,6 +35,7 @@ MODULES = [
     # (slug, num, name, icon, section)
     # section: "ops" → Operations group · "sov" → Sovereign group
     ("pulse",       "01", "Pulse",       "ti-activity-heartbeat", "ops"),
+    ("pulse-full",  "01a", "Pulse Dash",  "ti-chart-bar",          "ops"),
     ("pipeline",    "02", "Pipeline",    "ti-line-dotted",        "ops"),
     ("dispatch",    "03", "Dispatch",    "ti-route",              "ops"),
     ("inbound",     "04", "Inbound",     "ti-phone-incoming",     "ops"),
@@ -49,7 +50,11 @@ MODULES = [
 # Each module slug maps to its URL. `pulse` is the canonical /command page;
 # the rest are /command/<slug>. This keeps the original URL working.
 def _module_href(slug: str) -> str:
-    return "/command" if slug == "pulse" else f"/command/{slug}"
+    if slug == "pulse":
+        return "/command"
+    if slug == "pulse-full":
+        return "/view/pulse"
+    return f"/command/{slug}"
 
 
 def _layout_css() -> str:

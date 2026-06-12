@@ -56,3 +56,4 @@ builds/**/*.jpg
 # Keep the directory structure (target_<name> folders) in git, just not the assets
 !builds/**/
 !builds/**/.gitkeep
+test-ledger/

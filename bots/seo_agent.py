@@ -520,7 +520,7 @@ Write a webpage section optimized for the target keyword. Return ONLY JSON:
         try:
             sb = _get_sb()
             audits = sb.table("seo_audits").select("*").order("created_at", desc=True).limit(20).execute()
-            keywords = sb.table("seo_keywords").select("*").order("conversion_rate", desc=True, nulls="last").limit(50).execute()
+            keywords = sb.table("seo_keywords").select("*").order("conversion_rate", desc=True).limit(50).execute()
             content = sb.table("seo_content").select("*").order("created_at", desc=True).limit(20).execute()
         except Exception as e:
             return {"error": str(e), "audits": [], "keywords": [], "content": []}

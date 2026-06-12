@@ -163,7 +163,7 @@ class VoiceStreamingAgent:
             sb = _get_sb()
             r = sb.table("radar_targets") \
                 .select("id,warehouse_name,address,city,state,phone,phone2,asset_value,damage_severity") \
-                .order("asset_value", desc=True, nulls="last") \
+                .order("asset_value", desc=True) \
                 .limit(10).execute()
             for row in (r.data or []):
                 phone = row.get("phone") or row.get("phone2")

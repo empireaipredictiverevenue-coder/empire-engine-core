@@ -1163,6 +1163,7 @@ function useLiveSocket(onEvent) {
   return { connected, transport };
 }
 
+
 // ── CLOSER SECTION ────────────────────────────────────────────────────────────────────
 function Closer() {
   const [stats, setStats] = useState(null);
@@ -1579,10 +1580,13 @@ function Pulse({ events, wsConnected }) {
   const [stats, setStats] = useState(null);
   const [err, setErr] = useState(null);
   const [tab, setTab] = useState('overview');
+  const [pulseDim, setPulseDim] = useState('niche');
+  const [pulseWindow, setPulseWindow] = useState('24h');
+  const [pulseBreakdown, setPulseBreakdown] = useState(null);
 
   const reload = useCallback(async () => {
     try {
-      const [pb, em, sm, py, ib, pr, co, cl, rv, ac] = await Promise.all([
+      const [pb, em, sm, py, ib, pr, co, cl, rv, ac, ps, pbk, pl] = await Promise.all([
         apiFetch('/api/v1/playbook/summary').then(r => r.json()),
         apiFetch('/api/v1/email/stats').then(r => r.json()),
         apiFetch('/api/v1/sms/stats').then(r => r.json()),
@@ -1593,8 +1597,11 @@ function Pulse({ events, wsConnected }) {
         apiFetch('/api/v1/closer/stats').then(r => r.json()),
         apiFetch('/api/revenue/lanes').then(r => r.json()),
         apiFetch('/api/revenue/accuracy?days=14').then(r => r.json()),
+        apiFetch('/api/pulse/summary?window=24h').then(r => r.json()),
+        apiFetch('/api/pulse/breakdown?dimension=niche&window=7d').then(r => r.json()),
+        apiFetch('/api/pulse/lanes').then(r => r.json()),
       ]);
-      setStats({ pb, em, sm, py, ib, pr, co, cl, rv, ac });
+      setStats(prev => ({ ...prev, pb, em, sm, py, ib, pr, co, cl, rv, ac, ps, pbk, pl }));
       setErr(null);
     } catch (e) {
       if (e.message !== 'Unauthorized') setErr(e.message);
@@ -1609,6 +1616,100 @@ function Pulse({ events, wsConnected }) {
 
   if (err) return html`<div class="stub"><div class="stub-title">Could not load Pulse</div><div class="stub-body">${err}</div></div>`;
   if (!stats) return html`<div class="stub"><div class="stub-body">Loading…</div></div>`;
+
+
+  // ── Pulse API helper functions (defined inside Pulse for state access) ──
+  const renderPulseBreakdown = () => {
+    const bkd = pulseBreakdown || (stats.pbk || {});
+    const groups = bkd.groups || [];
+    const maxRev = groups.reduce((m, g) => Math.max(m, g.revenue || 0), 0);
+
+    if (groups.length === 0) return html`<div class="stub" style=${{marginTop:'16px',padding:'32px 20px'}}><div class="stub-body">No breakdown data for this dimension</div></div>`;
+
+    return html`
+      <div class="pipeline-breakdown" style=${{marginTop:'16px'}}>
+        <div class="pipeline-h">
+          <div class="pipeline-title">Breakdown by <strong>${bkd.dimension || pulseDim}</strong></div>
+          <div class="pipeline-total">${bkd.total_groups || groups.length} groups · ${(bkd.window || '7d')} window</div>
+        </div>
+        ${groups.map(g => {
+          const barW = maxRev > 0 ? Math.max(2, Math.round((g.revenue || 0) / maxRev * 100)) : 0;
+          return html`
+            <div class="rv-bar-row" key=${g.key || g.label}>
+              <div class="rv-bar-label">
+                <span class="rv-bar-lane">${(g.label || g.key || '\u2014').slice(0, 22)}</span>
+                <span class="rv-bar-niche">${(g.calls||0)} calls · ${(g.margin_pct||0).toFixed(1)}% margin</span>
+              </div>
+              <div class="rv-bar-track"><div class="rv-bar-fill" style=${{width: barW + '%', backgroundColor: 'var(--signal-teal)'}}></div></div>
+              <div class="rv-bar-val">$${(g.revenue||0).toLocaleString()}</div>
+              <div class="rv-bar-meta">${(g.spend||0) > 0 ? '$' + (g.spend||0).toLocaleString() + ' sp' : ''}</div>
+            </div>
+          `;
+        })}
+      </div>
+    `;
+  };
+
+  const renderPulseHeatmap = () => {
+    const lanes = stats.pl || {};
+    const niches = (lanes.niches || []).slice(0, 8);
+    const hours = (lanes.hours || []).slice(0, 24);
+
+    if (niches.length === 0 || hours.length === 0) return html`<div class="stub" style=${{marginTop:'16px',padding:'32px 20px'}}><div class="stub-body">No heatmap data available</div></div>`;
+
+    const lookup = {};
+    (lanes.matrix || []).forEach(m => { lookup[m.niche + '|' + m.hour] = m; });
+    const maxRev = (lanes.matrix || []).reduce((mx, m) => Math.max(mx, m.revenue || 0), 0);
+    const hourLabels = hours.map(h => h.slice(11, 13));
+
+    return html`
+      <div class="pipeline-breakdown" style=${{marginTop:'16px',marginBottom:'24px'}}>
+        <div class="pipeline-h">
+          <div class="pipeline-title">Hourly <strong>Heatmap</strong> · 7d</div>
+          <div class="pipeline-tag">${niches.length} niches × ${hours.length} hours · refresh 5min</div>
+        </div>
+        <div style=${{overflowX:'auto'}}>
+          <table class="tbl" style=${{fontSize:'10px',whiteSpace:'nowrap'}}>
+            <thead>
+              <tr>
+                <th style=${{minWidth:'90px'}}>Niche</th>
+                ${hourLabels.map(hl => html`<th style=${{textAlign:'right',minWidth:'48px'}} key=${hl}>${hl}:00</th>`)}
+              </tr>
+            </thead>
+            <tbody>
+              ${niches.map(n => {
+                const cells = hours.map(h => {
+                  const m = lookup[n + '|' + h];
+                  const rev = m ? (m.revenue || 0) : 0;
+                  if (rev <= 0) return html`<td style=${{textAlign:'right',color:'var(--empire-fog)',opacity:0.3}} key=${h}>\u00B7</td>`;
+                  const pct = rev / maxRev;
+                  const bg = pct > 0.4 ? 'rgba(68,229,184,0.35)' : pct > 0.15 ? 'rgba(68,229,184,0.15)' : pct > 0.02 ? 'rgba(68,229,184,0.04)' : 'transparent';
+                  const color = pct > 0.15 ? 'var(--empire-white)' : 'var(--empire-fog)';
+                  const fv = rev > 0 ? '$' + rev.toLocaleString() : '\u00B7';
+                  return html`<td style=${{textAlign:'right',background:bg,color:color,fontFamily:'var(--font-mono)',fontWeight:pct > 0.15 ? 500 : 400}} key=${h}>${fv}</td>`;
+                });
+                return html`<tr key=${n}><td style=${{fontWeight:500,color:'var(--empire-mist)',fontFamily:'var(--font-mono)',fontSize:'10px'}}>${n}</td>${cells}</tr>`;
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    `;
+  };
+
+  const loadPulseSummary = async (w) => {
+    try {
+      const s = await apiFetch('/api/pulse/summary?window=' + w).then(r => r.json());
+      setStats(prev => ({ ...prev, ps: s }));
+    } catch(e) {}
+  };
+
+  const loadPulseBreakdown = async (window, dim) => {
+    try {
+      const b = await apiFetch('/api/pulse/breakdown?dimension=' + dim + '&window=' + window).then(r => r.json());
+      setPulseBreakdown(b);
+    } catch(e) {}
+  };
 
   const strikes = stats.pb?.today?.strikes ?? 0;
   const brain_go = stats.pb?.today?.brain_go ?? 0;
@@ -1649,6 +1750,7 @@ function Pulse({ events, wsConnected }) {
         <button class=${"pulse-tab " + (tab === 'overview' ? 'active' : '')} onClick=${() => setTab('overview')}>Overview</button>
         <button class=${"pulse-tab " + (tab === 'revenue' ? 'active' : '')} onClick=${() => setTab('revenue')}>Revenue</button>
         <button class=${"pulse-tab " + (tab === 'pipeline' ? 'active' : '')} onClick=${() => setTab('pipeline')}>Pipeline</button>
+        <button class=${"pulse-tab " + (tab === 'pulse' ? 'active' : '')} onClick=${() => setTab('pulse')}>Pulse</button>
       </div>
       ${tab === 'overview' ? html`
       <div class="pulse-grid">
@@ -1875,7 +1977,57 @@ ${(() => {
       ` : null}
       ` : null}
 
-      ${tab === 'pipeline' ? html`
+      ${tab === 'pulse' ? html`
+      <div>
+        <div class="section-h" style=${{marginTop:'8px'}}>
+          <div>
+            <div class="section-title">API <em>Pulse</em></div>
+            <div class="section-sub">Materialized view · 5-min refresh · ${((stats.ps||{}).window || '24h')} window</div>
+          </div>
+          <div class="topbar-actions">
+            ${['24h','7d','30d'].map(w => html`
+              <button class=${"pulse-tab " + (pulseWindow === w ? 'active' : '')} style=${{fontSize:'9px',padding:'4px 10px'}} onClick=${() => { setPulseWindow(w); loadPulseSummary(w); loadPulseBreakdown(w, pulseDim); }}>${w}</button>
+            `)}
+          </div>
+        </div>
+
+        <div class="pulse-grid">
+          <div class="stat-card">
+            <div class="stat-label">REVENUE</div>
+            <div class="stat-value teal">$${((stats.ps||{}).revenue||0).toLocaleString()}</div>
+            <div class="stat-meta" style=${{color: ((stats.ps||{}).delta_revenue||0) >= 0 ? 'var(--signal-teal)' : 'var(--status-red)'}}>${((stats.ps||{}).delta_revenue||0) >= 0 ? '▲' : '▼'} $${Math.abs((stats.ps||{}).delta_revenue||0).toLocaleString()} vs prev</div>
+          </div>
+
+          <div class="stat-card">
+            <div class="stat-label">SPEND</div>
+            <div class="stat-value dim">$${((stats.ps||{}).spend||0).toLocaleString()}</div>
+            <div class="stat-meta" style=${{color: ((stats.ps||{}).delta_spend||0) <= 0 ? 'var(--signal-teal)' : 'var(--status-red)'}}>${((stats.ps||{}).delta_spend||0) <= 0 ? '▼' : '▲'} $${Math.abs((stats.ps||{}).delta_spend||0).toLocaleString()} vs prev</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">MARGIN</div>
+            <div class="stat-value teal">${((stats.ps||{}).margin_pct||0).toFixed(1)}%</div>
+            <div class="stat-meta">$${((stats.ps||{}).margin||0).toLocaleString()} net</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">CALLS</div>
+            <div class="stat-value cyan">${((stats.ps||{}).calls||0).toLocaleString()}</div>
+            <div class="stat-meta" style=${{color: ((stats.ps||{}).delta_calls||0) >= 0 ? 'var(--signal-teal)' : 'var(--status-red)'}}>${((stats.ps||{}).delta_calls||0) >= 0 ? '▲' : '▼'} ${Math.abs((stats.ps||{}).delta_calls||0)} vs prev</div>
+          </div>
+        </div>
+
+        <div class="pulse-tabs" style=${{marginTop:'8px'}}>
+          ${['niche','channel','contractor','corridor','hour'].map(d => html`
+            <button class=${"pulse-tab " + (pulseDim === d ? 'active' : '')} style=${{fontSize:'10px',padding:'6px 14px'}} onClick=${() => { setPulseDim(d); loadPulseBreakdown(pulseWindow, d); }}>${d}</button>
+          `)}
+        </div>
+
+        ${renderPulseBreakdown()}
+
+        ${renderPulseHeatmap()}
+      </div>
+      ` : null}
+
+            ${tab === 'pipeline' ? html`
       ${activePartnersList.length > 0 ? html`
       <div class="pipeline-breakdown">
         <div class="pipeline-h">
@@ -2391,19 +2543,19 @@ function AgiLoop(){
   return html`<div class="section-header"><div><div class="section-title">Neural Core</div><div class="section-sub">Live brain · autonomous decisions · 5s refresh</div></div><div class="agi-meta">TICK ${tick} · LIVE<button class=${live?"agi-replay-btn active":"agi-replay-btn"} onClick=${()=>setReplayIdx(null)}>LIVE</button><button class="agi-replay-btn" onClick=${()=>setReplayIdx(r=>r===null?1:Math.min(r+1,hist.length-1))}>PREV</button><button class="agi-replay-btn" onClick=${()=>setReplayIdx(r=>r===null?null:r<=1?null:r-1)}>NEXT</button></div></div><div class="agi-grid"><div class="agi-tile"><div class="agi-tile-label">LEAD VELOCITY</div><div class="agi-tile-val"><em>${snap?.lead_velocity??"--"}</em></div><div class="agi-tile-sub">leads/hr</div></div><div class="agi-tile"><div class="agi-tile-label">REVENUE PULSE</div><div class="agi-tile-val"><em>${snap?.revenue_pulse!=null?(snap.revenue_pulse*100).toFixed(1)+"%":"--"}</em></div><div class="agi-tile-sub">AI confidence</div></div><div class="agi-tile"><div class="agi-tile-label">PROXY HEALTH</div><div class="agi-tile-val"><em>${snap?.proxy_health!=null?(snap.proxy_health*100).toFixed(1)+"%":"--"}</em></div><div class="agi-tile-sub">network health</div></div><div class="agi-tile"><div class="agi-tile-label">AI CALLS</div><div class="agi-tile-val"><em>${snap?.ai_calls_today??"--"}</em></div><div class="agi-tile-sub">brain activations</div></div></div><div class="agi-decisions">
       ${dreamData ? html`
         <div class="agi-decisions-head">
-          <div class="agi-decisions-title">Dream Memory <span style="font-size:0.7em;opacity:0.6;">(cycle #${dreamData.dream_cycle})</span></div>
+          <div class="agi-decisions-title">Dream Memory <span style=${{fontSize:'0.7em',opacity:0.6}}>(cycle #${dreamData.dream_cycle})</span></div>
           <div class="agi-decisions-count">${(dreamData.insights||[]).length} insights · ${(dreamData.rule_suggestions||[]).length} rules${(dreamData.risk_flags||[]).length > 0 ? ` · ⚠ ${(dreamData.risk_flags||[]).length} risks` : ``}</div>
         </div>
         ${(dreamData.insights||[]).slice(0,3).map(i => html`
           <div class="agi-row">
             <div class="agi-row-weight">${i.confidence}/10</div>
-            <div class="agi-row-reason">${i.text} <span style="font-size:0.8em;opacity:0.6;">[${(i.systems||[]).join(", ")}]</span></div>
+            <div class="agi-row-reason">${i.text} <span style=${{fontSize:'0.8em',opacity:0.6}}>[${(i.systems||[]).join(", ")}]</span></div>
           </div>
         `)}
         ${dreamData.wisdom_context ? html`
-          <div class="agi-row" style="border-top:1px solid var(--empire-divider);margin-top:8px;padding-top:12px;">
-            <div class="agi-row-weight" style="color:var(--strike-cyan);">Wisdom</div>
-            <div class="agi-row-reason" style="font-style:italic;">${dreamData.wisdom_context}</div>
+          <div class="agi-row" style=${{borderTop:'1px solid var(--empire-divider)',marginTop:'8px',paddingTop:'12px'}}>
+            <div class="agi-row-weight" style=${{color:'var(--strike-cyan)'}}>Wisdom</div>
+            <div class="agi-row-reason" style=${{fontStyle:'italic'}}>${dreamData.wisdom_context}</div>
           </div>
         ` : }
       ` : }<div class="agi-decisions-head"><div class="agi-decisions-title">Decision Log</div><div class="agi-decisions-count">${decisions.length} entries</div></div>${decisions.map((d,i)=>html`<div class="agi-row"><div class=${"agi-row-weight "+(parseFloat(d.weight)>=1.5?"agi-w-hi":parseFloat(d.weight)>=1.0?"agi-w-mid":"agi-w-lo")}>${d.weight??"·"}<div class="agi-w-bar"></div></div><div class="agi-row-reason">${d.reason??"·"}<button class=${approved.includes(i)?"agi-approve-btn done":"agi-approve-btn"} onClick=${()=>doApprove(i,d.weight)}>${approved.includes(i)?"✓ APPROVED":"AUTO-APPROVE"}</button></div></div>`)}</div>`;
@@ -2748,7 +2900,7 @@ function DonutChart({data, size = 108, strokeWidth = 22, colors = ["var(--signal
           stroke-dasharray=${segLen} ${circ - segLen}
           stroke-dashoffset=${-seg}
           transform="rotate(-90 ${cx} ${cy})"
-          style="cursor:pointer;transition: stroke-dasharray 0.3s var(--ease-snap)"
+          style=${{cursor:'pointer',transition:'stroke-dasharray 0.3s var(--ease-snap)'}}
         ><title>${d.label}: ${d.value} (${pct}%)</title></circle>`;
       })}
       <circle cx=${cx} cy=${cy} r=${r - strokeWidth / 2 + 1} fill="var(--empire-surface)" />
@@ -4534,7 +4686,7 @@ function PanelCourtPanel() {
                     <span class="pc-orbital-agent-wr">${wrPct}%</span>
                     <span class="pc-orbital-agent-wl">${a.wins}W ${a.losses}L</span>
                     ${wonLast ? html`<span class="pc-orbital-agent-won">★ Winner</span>` : ''}
-                    ${isSelected ? html`<span class="pc-orbital-agent-won" style="top:auto;bottom:-8px;color:var(--strike-cyan);border-color:rgba(90,200,250,0.3);">▼ Selected</span>` : ''}
+                    ${isSelected ? html`<span class="pc-orbital-agent-won" style=${{top:'auto',bottom:'-8px',color:'var(--strike-cyan)',borderColor:'rgba(90,200,250,0.3)'}}>▼ Selected</span>` : ''}
                   </div>
                 `;
               })}
@@ -4748,7 +4900,7 @@ function PanelCourtPanel() {
                   ` : ''}
                   ${d.hybrid_reasoning ? html`
                     <div class="pc-judge-block hybrid">
-                      <div class="pc-judge-head">⚡ Hybrid Synthesizer <span style="font-weight:400;opacity:0.7;font-size:0.8em;">(weighted blend of all 5 perspectives)</span></div>
+                      <div class="pc-judge-head">⚡ Hybrid Synthesizer <span style=${{fontWeight:'400',opacity:'0.7',fontSize:'0.8em'}}>(weighted blend of all 5 perspectives)</span></div>
                       <div class="pc-judge-reasoning">${d.hybrid_reasoning}</div>
                     </div>
                   ` : ''}

@@ -214,7 +214,7 @@ class SatelliteStrikeCore:
             r = db.table("radar_targets") \
                 .select("id,warehouse_name,name,address,city,state,phone,phone2,email,asset_value,damage_severity,source,meta") \
                 .or_(or_parts) \
-                .order("asset_value", desc=True, nulls="last") \
+                .order("asset_value", desc=True) \
                 .limit(50) \
                 .execute()
             return r.data or []

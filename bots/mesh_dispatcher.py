@@ -73,7 +73,7 @@ async def find_qualified_leads(limit: int = 10) -> List[Dict]:
         r = _sb.table("radar_targets").select(
             "id,address,phone,city,status,damage_severity,urgency_score,created_at,meta"
         ).eq("status", "active").not_.is_("phone", "null") \
-            .order("urgency_score", desc=True, nulls="last") \
+            .order("urgency_score", desc=True) \
             .order("created_at", desc=True) \
             .limit(limit).execute()
 
