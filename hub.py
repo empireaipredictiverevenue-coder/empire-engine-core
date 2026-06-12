@@ -2474,6 +2474,60 @@ async def update_inbound_lead(request: Request, auth: bool = Depends(require_aut
 
 import fastapi
 
+
+# ── Affiliate auto-tag helper (extracted for testability) ────────────
+def _resolve_affiliate_code_from_request(
+    cookies: dict,
+    query_params: dict,
+    body: dict,
+) -> str | None:
+    """Resolve affiliate_code from three sources in priority order:
+    1. Cookie: affiliate_ref (set by /track/aff/{code} landing page)
+    2. URL query params: ?affiliate_code=XYZ or ?ref=XYZ or ?utm_source=...
+    3. Request body fields: {affiliate_code, ref, utm_source}
+
+    Filters out empty strings and common UTM defaults like "(direct)".
+    Returns the first non-filtered value found, or None.
+    """
+    # 1. Cookie
+    aff = cookies.get("affiliate_ref") or None
+    if aff:
+        return aff
+
+    # 2. URL query params
+    qp = query_params
+    aff = (
+        qp.get("affiliate_code")
+        or qp.get("ref")
+        or _safe_utm_value(qp.get("utm_source"))
+    )
+    if aff:
+        return aff
+
+    # 3. Request body fields
+    aff = (
+        body.get("affiliate_code")
+        or body.get("ref")
+        or _safe_utm_value(body.get("utm_source"))
+    )
+    if aff:
+        return aff
+
+    return None
+
+
+def _safe_utm_value(value: str | None) -> str | None:
+    """Return the UTM value only if it's non-empty and not a default."""
+    if not value:
+        return None
+    v = value.strip()
+    if not v:
+        return None
+    if v.lower() in ("(direct)", "direct", "organic", "social", "email", "none"):
+        return None
+    return v
+
+
 @app.post("/webhook/lead")
 async def webhook_lead(request: fastapi.Request, x_empire_secret: str = fastapi.Header(None)):
     import os
@@ -2519,29 +2573,14 @@ async def webhook_lead(request: fastapi.Request, x_empire_secret: str = fastapi.
         }
         # ── Affiliate auto-tag: cookie → query param → body field ────
         affiliate_code = None
-        # 1. Cookie set by /track/aff/{code} landing page
         try:
-            affiliate_code = request.cookies.get("affiliate_ref") or None
+            affiliate_code = _resolve_affiliate_code_from_request(
+                cookies=dict(request.cookies),
+                query_params=dict(request.query_params),
+                body=data,
+            )
         except Exception:
             pass
-        # 2. URL query params: ?affiliate_code=XYZ or ?utm_source=affiliate_name or ?ref=XYZ
-        if not affiliate_code:
-            try:
-                qp = request.query_params
-                affiliate_code = (
-                    qp.get("affiliate_code")
-                    or qp.get("ref")
-                    or (qp.get("utm_source") if qp.get("utm_source") and qp.get("utm_source") != "(direct)" else None)
-                )
-            except Exception:
-                pass
-        # 3. Request body fields: {affiliate_code, utm_source, ref}
-        if not affiliate_code:
-            affiliate_code = (
-                data.get("affiliate_code")
-                or data.get("ref")
-                or (data.get("utm_source") if data.get("utm_source") and data.get("utm_source") != "(direct)" else None)
-            )
         if affiliate_code:
             payload["affiliate_code"] = affiliate_code
             # Determine source for logging (ordered: cookie > query > body)
