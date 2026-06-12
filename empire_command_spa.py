@@ -3640,7 +3640,7 @@ function Leads() {
     }
   }, []);
 
-  useEffect(() => { reload(); fetchFunnel(); }, [reload, fetchFunnel]);
+  useEffect(() => { reload(); fetchFunnel(); fetchTopLinks(); }, [reload, fetchFunnel, fetchTopLinks]);
 
   const addNote = async (leadId) => {
     const text = (noteText[leadId] || '').trim();
@@ -5083,6 +5083,18 @@ function Affiliates() {
   const [affLinks, setAffLinks] = useState({});
   const [funnelData, setFunnelData] = useState(null);
   const [funnelErr, setFunnelErr] = useState(null);
+  const [topLinks, setTopLinks] = useState(null);
+  const [topLinksErr, setTopLinksErr] = useState(null);
+
+  const fetchTopLinks = useCallback(async () => {
+    try {
+      const r = await apiFetch('/api/v1/affiliates/top-links').then(x => x.json());
+      setTopLinks(r);
+      setTopLinksErr(null);
+    } catch (e) {
+      if (e.message !== 'Unauthorized') setTopLinksErr(e.message);
+    }
+  }, []);
 
   const fetchFunnel = useCallback(async () => {
     try {
@@ -5168,7 +5180,7 @@ function Affiliates() {
           <div class="section-title">Affiliates</div>
           <div class="section-sub">Manage partners · referral links · performance</div>
         </div>
-        <button class="btn ghost" onClick=${() => { reload(); fetchFunnel(); }}>Refresh</button>
+        <button class="btn ghost" onClick=${() => { reload(); fetchFunnel(); fetchTopLinks(); }}>Refresh</button>
       </div>
 
       ${/* Funnel analytics section */ ''}
@@ -5233,6 +5245,60 @@ function Affiliates() {
         </div>
       ` : funnelErr ? html`
         <div class="stub" style=${{marginBottom: '20px'}}><div class="stub-body">Funnel data unavailable: ${funnelErr}</div></div>
+      ` : null}
+
+      ${/* Top Performing Links widget */ ''}
+      ${topLinks ? html`
+        <div class="pipeline-breakdown" style=${{marginBottom: '20px'}}>
+          <div class="pipeline-h">
+            <div class="pipeline-title">Top <strong>Performing Links</strong></div>
+            <div class="pipeline-total">
+              ${topLinks.links_with_clicks || 0} with clicks · 
+              ${topLinks.links_with_leads || 0} with leads · 
+              ${topLinks.total || 0} total links
+            </div>
+          </div>
+          ${topLinks.links && topLinks.links.length > 0 ? html`
+            <div style=${{marginTop: '12px'}}>
+              ${topLinks.links.slice(0, 10).map(l => {
+                const barPct = Math.min(100, Math.round(l.click_to_lead * 2.5));
+                const barColor = l.click_to_lead >= 20 ? 'var(--signal-teal)' : l.click_to_lead >= 5 ? 'var(--status-amber)' : 'var(--empire-fog)';
+                return html`
+                  <div style=${{marginBottom: '10px'}}>
+                    <div style=${{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2px'}}>
+                      <div style=${{display: 'flex', alignItems: 'center', gap: '8px'}}>
+                        <span style=${{fontSize: '10px', color: 'var(--empire-white)', fontWeight: 500, maxWidth: '180px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'}}>${l.label}</span>
+                        <span style=${{fontFamily: 'var(--font-mono)', fontSize: '8px', color: 'var(--empire-fog)'}}>${l.code}</span>
+                        <span style=${{fontSize: '9px', color: 'var(--empire-mist)'}}>${l.buyer_name}</span>
+                      </div>
+                      <div style=${{display: 'flex', gap: '12px', fontFamily: 'var(--font-mono)', fontSize: '9px', alignItems: 'center'}}>
+                        <span style=${{color: 'var(--empire-white)'}}>${l.click_count} <span style=${{color: 'var(--empire-fog)'}}>clicks</span></span>
+                        <span style=${{color: l.lead_count > 0 ? 'var(--strike-cyan)' : 'var(--empire-fog)'}}>${l.lead_count} <span style=${{color: 'var(--empire-fog)'}}>leads</span></span>
+                        <span style=${{color: barColor, fontWeight: 700}}>${l.click_to_lead}%</span>
+                      </div>
+                    </div>
+                    <div style=${{height: '4px', background: 'var(--empire-elevated)', borderRadius: '2px', overflow: 'hidden'}}>
+                      <div style=${{width: barPct + '%', height: '100%', background: barColor, borderRadius: '2px', transition: 'width 0.3s ease'}}></div>
+                    </div>
+                    <div style=${{display: 'flex', gap: '16px', fontFamily: 'var(--font-mono)', fontSize: '8px', color: 'var(--empire-fog)', marginTop: '2px'}}>
+                      <span>${l.lead_to_call}% lead→call</span>
+                      <span>${l.qualified_count} qualified</span>
+                      ${l.revenue > 0 ? html`<span style=${{color: 'var(--signal-teal)'}}>\$${l.revenue.toLocaleString()}</span>` : ''}
+                    </div>
+                  </div>
+                `;
+              })}
+            </div>
+            ${topLinks.links.length > 10 ? html`<div class="stub" style=${{padding: '12px', marginTop: '4px', fontSize: '9px'}}><div class="stub-body">Showing top 10 of ${topLinks.links.length} links with clicks</div></div>` : ''}
+          ` : html`
+            <div class="stub" style=${{marginTop: '16px', padding: '24px 20px'}}>
+              <div class="stub-title">No link activity yet</div>
+              <div class="stub-body">Share affiliate landing URLs or embed tracking pixels to start collecting click data</div>
+            </div>
+          `}
+        </div>
+      ` : topLinksErr ? html`
+        <div class="stub" style=${{marginBottom: '20px'}}><div class="stub-body">Top links unavailable: ${topLinksErr}</div></div>
       ` : null}
 
       <div class="pulse-grid">

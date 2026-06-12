@@ -1142,4 +1142,93 @@ def register_affiliate_routes(
             log.error(f"[affiliate] funnel error: {e}")
             raise HTTPException(500, str(e)[:80])
 
-    log.info("[affiliate] Routes registered - /portal/affiliate/{login,verify,dashboard} + /api/v1/affiliate/{stats,payouts,links,referrals} + /api/v1/affiliates/{list,create-link,toggle-active,funnel}")
+    # ── Top Performing Links ───────────────────────────────────────
+    @app.get("/api/v1/affiliates/top-links")
+    async def aff_top_links(request: Request, limit: int = Query(20, ge=1, le=100)):
+        """
+        Return the top-performing individual affiliate links ranked by
+        click-to-lead conversion rate. Includes click_count, lead_count,
+        conversion rate, buyer name, label/code, and last_click.
+        Requires hub_token auth (operator-only).
+        """
+        auth_header = request.headers.get("Authorization", "")
+        if not hub_token or auth_header != f"Bearer {hub_token}":
+            raise HTTPException(401, "Operator auth required")
+
+        try:
+            # Get all links that have clicks
+            links_res = _sb.table("affiliate_links").select("*") \
+                .order("click_count", desc=True) \
+                .limit(200).execute()
+            all_links = links_res.data or []
+
+            if not all_links:
+                return {"links": [], "total": 0}
+
+            # Build buyer lookup
+            buyer_ids = list(set(l["buyer_id"] for l in all_links))
+            buyers_res = _sb.table("buyers").select("id,buyer_name,niche") \
+                .in_("id", buyer_ids).execute()
+            buyer_map = {}
+            for b in (buyers_res.data or []):
+                buyer_map[str(b["id"])] = b
+
+            # For each link, count attributed inbound leads
+            enriched = []
+            for link in all_links:
+                code = link["code"]
+                click_count = link.get("click_count", 0) or 0
+                buyer_id = str(link["buyer_id"])
+
+                # Count leads with this affiliate_code
+                lead_res = _sb.table("inbound_leads").select("id", count="exact") \
+                    .eq("affiliate_code", code).limit(10000).execute()
+                lead_count = lead_res.count if hasattr(lead_res, 'count') else len(lead_res.data or [])
+
+                # Count calls with this affiliate_code
+                call_res = _sb.table("call_logs").select("id, qualified, fee_earned") \
+                    .eq("affiliate_code", code).execute()
+                calls = call_res.data or []
+                call_count = len(calls)
+                qualified_count = sum(1 for c in calls if c.get("qualified"))
+                revenue = sum(float(c.get("fee_earned", 0) or 0) for c in calls)
+
+                click_to_lead = round(lead_count / max(click_count, 1) * 100, 1)
+                lead_to_call = round(call_count / max(lead_count, 1) * 100, 1)
+
+                buyer = buyer_map.get(buyer_id, {})
+
+                enriched.append({
+                    "code": code,
+                    "label": link.get("label", "") or code,
+                    "buyer_name": buyer.get("buyer_name", "Unknown"),
+                    "niche": buyer.get("niche", ""),
+                    "buyer_id": buyer_id,
+                    "click_count": click_count,
+                    "lead_count": lead_count,
+                    "call_count": call_count,
+                    "qualified_count": qualified_count,
+                    "revenue": round(revenue, 2),
+                    "click_to_lead": click_to_lead,
+                    "lead_to_call": lead_to_call,
+                    "last_click": link.get("last_click"),
+                    "created_at": link.get("created_at"),
+                    "active": link.get("active", True),
+                })
+
+            # Sort by click-to-lead rate descending, then by click_count descending
+            enriched.sort(key=lambda x: (x["click_to_lead"], x["click_count"]), reverse=True)
+
+            top_links = [l for l in enriched if l["click_count"] > 0][:limit]
+
+            return {
+                "links": top_links,
+                "total": len(enriched),
+                "links_with_clicks": sum(1 for l in enriched if l["click_count"] > 0),
+                "links_with_leads": sum(1 for l in enriched if l["lead_count"] > 0),
+            }
+        except Exception as e:
+            log.error(f"[affiliate] top-links error: {e}")
+            raise HTTPException(500, str(e)[:80])
+
+    log.info("[affiliate] Routes registered - /portal/affiliate/{login,verify,dashboard} + /api/v1/affiliate/{stats,payouts,links,referrals} + /api/v1/affiliates/{list,create-link,toggle-active,funnel,top-links}")
