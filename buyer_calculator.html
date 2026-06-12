@@ -1,0 +1,83 @@
+<!--
+EMPIRE V49 · BUYER ROI CALCULATOR
+=================================
+Interactive HTML widget for prospective buyers to estimate revenue.
+Self-contained — drop into any landing page or CRM embed.
+-->
+<div id="roi-calculator-box" style="border: 2px solid #0f172a; padding: 20px; background: #ffffff; font-family: sans-serif; max-width: 420px;">
+    <h3 style="text-transform: uppercase; font-weight: bold; margin-top: 0; font-size: 14px; color: #0f172a;">Calculate Your Revenue Inflow</h3>
+
+    <div style="margin-bottom: 15px;">
+        <label style="font-size: 13px; color: #334155;">Live Storm Leads Per Month:
+            <span id="lead-count-view" style="font-weight: bold; color: #10b981;">25</span>
+        </label>
+        <br>
+        <input type="range" id="leads-slider" min="5" max="100" value="25" style="width: 100%; margin-top: 4px;">
+    </div>
+
+    <div style="margin-bottom: 20px;">
+        <label style="font-size: 13px; color: #334155;">Your Average Commercial Job Value:
+            <span id="job-value-view" style="font-weight: bold; color: #10b981;">$15,000</span>
+        </label>
+        <br>
+        <input type="range" id="value-slider" min="5000" max="50000" step="2500" value="15000" style="width: 100%; margin-top: 4px;">
+    </div>
+
+    <hr style="border: 1px solid #e2e8f0; margin: 16px 0;">
+
+    <div style="background: #f8fafc; padding: 15px; border-radius: 4px;">
+        <p style="margin: 0 0 8px 0; font-size: 13px; color: #334155;">
+            Estimated Closed Deals (10% Close Rate):
+            <span id="deals-view" style="font-weight: bold; color: #0f172a;">2</span>
+        </p>
+        <h4 style="margin: 0; font-size: 16px; text-transform: uppercase; color: #0f172a;">
+            Predictive Gross Revenue:
+            <span id="revenue-view" style="color: #10b981; font-weight: bold;">$37,500</span>
+        </h4>
+    </div>
+
+    <button id="lock-in-btn" style="width: 100%; margin-top: 15px; padding: 12px; background: #0f172a; color: #ffffff; font-weight: bold; border: none; cursor: pointer; font-size: 13px; letter-spacing: 0.04em;">
+        LOCK IN THIS LEAD VOLUME NOW
+    </button>
+
+    <p id="lockin-feedback" style="font-size: 11px; color: #10b981; text-align: center; margin: 8px 0 0 0; display: none;">
+        ✓ Inquiry submitted — a specialist will contact you within 24 hours.
+    </p>
+</div>
+
+<script>
+(function() {
+    const box = document.getElementById('roi-calculator-box');
+    const leadsSlider = box.querySelector('#leads-slider');
+    const valueSlider = box.querySelector('#value-slider');
+    const leadCountView = box.querySelector('#lead-count-view');
+    const jobValueView = box.querySelector('#job-value-view');
+    const dealsView = box.querySelector('#deals-view');
+    const revenueView = box.querySelector('#revenue-view');
+    const lockBtn = box.querySelector('#lock-in-btn');
+    const feedback = box.querySelector('#lockin-feedback');
+
+    function runCalculations() {
+        const leads = parseInt(leadsSlider.value);
+        const jobValue = parseInt(valueSlider.value);
+        const closedDeals = Math.floor(leads * 0.10);
+        const totalRevenue = closedDeals * jobValue;
+
+        leadCountView.innerText = leads;
+        jobValueView.innerText = '$' + jobValue.toLocaleString();
+        dealsView.innerText = closedDeals;
+        revenueView.innerText = '$' + totalRevenue.toLocaleString();
+    }
+
+    leadsSlider.addEventListener('input', runCalculations);
+    valueSlider.addEventListener('input', runCalculations);
+
+    lockBtn.addEventListener('click', function() {
+        feedback.style.display = 'block';
+        lockBtn.disabled = true;
+        lockBtn.style.opacity = '0.5';
+        lockBtn.style.cursor = 'default';
+        lockBtn.innerText = 'SUBMITTED';
+    });
+})();
+</script>
