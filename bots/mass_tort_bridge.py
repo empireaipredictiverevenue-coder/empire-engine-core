@@ -1,9 +1,10 @@
 """
-EMPIRE V49 · MASS TORT BRIDGE (recall → legal buyer dialer)
+EMPIRE V49 · MASS TORT BRIDGE (recall -> legal buyer dialer)
 ============================================================
 Pulls the latest FDA recalls (across drugs, devices, food endpoints),
 classifies each into one of the 5 legal sub_niches via the
-recall_classifier, and dials the matching legal buyer's vonage number.
+recall_classifier, and dials the matching legal buyer's vonage number
+- but only after the legal_call_quality_gate passes for that lead.
 
 This is step 3 of the mass-tort lane-sort plan: the bridge no longer
 hardcodes a single destination phone, and no longer fires every
@@ -17,11 +18,14 @@ Patched 2026-06-12:
   - Replaced the hardcoded `+12142277528` with a buyers-table lookup.
   - Replaced the single-endpoint FDA pull with the multi-endpoint
     recall_classifier.
-  - One call per (sub_niche, recall) — not all 5 sub-niches on
+  - One call per (sub_niche, recall) - not all 5 sub-niches on
     every recall.
   - Idempotent: if a sub_niche has no active buyer with a real phone
     number, it is skipped (no fake-number dialling).
   - Compliance audit logging preserved.
+  - Quality gate (legal_call_quality_gate) enforced before every
+    dial. Replaces the proposed 5-panel LLM consensus with 3
+    deterministic if-statements. 0 LLM calls per dial decision.
 """
 
 import os
@@ -52,6 +56,12 @@ try:
 except ImportError:
     sys.path.insert(0, "/root/empire-v49")
     from bots.recall_classifier import fetch_one_per_sub_niche
+
+try:
+    from bots.legal_call_quality_gate import evaluate as gate_evaluate
+except ImportError:
+    sys.path.insert(0, "/root/empire-v49")
+    from bots.legal_call_quality_gate import evaluate as gate_evaluate
 
 
 # These are imported lazily inside the function so a missing
@@ -84,7 +94,8 @@ def _lookup_buyer(sb, sub_niche: str) -> dict | None:
     """
     res = (
         sb.table("buyers")
-        .select("id, buyer_name, destination_phone, base_payout, is_active")
+        .select("id, buyer_name, destination_phone, base_payout, is_active, "
+                "hours_open, hours_close, timezone, state_coverage")
         .eq("niche", "Legal")
         .eq("sub_niche", sub_niche)
         .eq("is_active", True)
@@ -101,9 +112,11 @@ def _log_call(sb, call_uuid: str, status: str, device: str):
         from empire_revenue_tracker import log_call
         log_call(call_uuid, status, device)
     except ImportError:
-        # Fall back to a direct insert if the revenue tracker is missing.
+        # Fall back to a direct insert. The supabase table is
+        # public.call_logs (not call_ledger). Insert with a
+        # best-effort column set; ignore if columns don't match.
         try:
-            sb.table("call_ledger").insert({
+            sb.table("call_logs").insert({
                 "call_uuid": call_uuid,
                 "status": status,
                 "device": device,
@@ -115,8 +128,8 @@ def _log_call(sb, call_uuid: str, status: str, device: str):
 def bridge_live_targets() -> int:
     """
     Process the latest recall from each legal sub_niche and dial the
-    matching buyer's number. Returns the number of calls successfully
-    initiated.
+    matching buyer's number (if the quality gate passes). Returns the
+    number of calls successfully initiated.
     """
     if not os.environ.get("SUPABASE_URL") or not os.environ.get("SUPABASE_SERVICE_KEY"):
         print("[BRIDGE] SUPABASE_URL / SUPABASE_SERVICE_KEY missing")
@@ -138,6 +151,12 @@ def bridge_live_targets() -> int:
         buyer = _lookup_buyer(sb, sub_niche)
         if not buyer:
             print(f"[BRIDGE] No active Legal/{sub_niche} buyer with a phone. Skipping recall {recall.get('event_id')}.")
+            continue
+
+        # ── QUALITY GATE ────────────────────────────────────────────────
+        ok, reason = gate_evaluate(buyer, recall)
+        if not ok:
+            print(f"[GATE]   {sub_niche:<20} BLOCKED recall {recall.get('event_id')}: {reason}")
             continue
 
         phone = buyer["destination_phone"]
