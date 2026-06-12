@@ -65,6 +65,7 @@ from empire_narrator import Narrator
 from empire_3d_map import register_map_routes
 from empire_switchboard import register_switchboard_routes
 from empire_partner_onboarding import register_partner_routes
+from empire_affiliate_portal import register_affiliate_routes
 from empire_si_brain import SyntheticBrain, register_synthetic_routes
 from empire_si_strategy import StrategyEvolution
 from empire_si_adaptive import AdaptiveEngine
@@ -355,6 +356,14 @@ register_storm_routes(app, storm_orchestrator, require_auth=require_auth)
 register_map_routes(app, scout=storm_orchestrator.scout, get_db=get_db, require_auth=require_auth)
 register_switchboard_routes(app, require_auth=require_auth)
 register_partner_routes(app, require_auth=require_auth)
+register_affiliate_routes(
+    app,
+    sign_token=_hub_sign_token,
+    verify_token=_hub_verify_token,
+    send_email=_send_email,
+    public_base_url=PUBLIC_BASE_URL,
+    hub_token=HUB_TOKEN,
+)
 
 # ── Synthetic Intelligence Brain (Operator → LLM → Kokoro TTS → FFmpeg Render) ──
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
