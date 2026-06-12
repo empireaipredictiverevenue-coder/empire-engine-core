@@ -129,11 +129,39 @@ jobs:
 
       - name: Deploy (on push to master/main)
         if: github.ref_name == 'master' || github.ref_name == 'main'
+        env:
+          DOKKU_HOST: ${{ secrets.DOKKU_HOST }}
+          DOKKU_APP: ${{ secrets.DOKKU_APP || 'empire-ai-uk' }}
         run: |
-          echo "🚀 Deployment would go here (e.g., invoke deploy.sh)"
-          echo "Currently configured for: ${{ github.ref_name }}"
-          # Uncomment and configure for actual deployment:
-          # bash deploy.sh
+          echo "🚀 Deploying to Dokku at $DOKKU_HOST"
+
+          # Set up SSH for Dokku
+          mkdir -p ~/.ssh
+          echo "${{ secrets.DOKKU_SSH_KEY }}" > ~/.ssh/dokku_deploy_key
+          chmod 600 ~/.ssh/dokku_deploy_key
+
+          # Add Dokku as a git remote and push
+          git remote add dokku "dokku@${DOKKU_HOST}:${DOKKU_APP}" 2>/dev/null || true
+          GIT_SSH_COMMAND="ssh -i ~/.ssh/dokku_deploy_key -o StrictHostKeyChecking=accept-new" \
+            git push dokku "HEAD:${{ github.ref_name }}" --force
+
+          echo "✅ Deploy pushed to Dokku"
+
+      - name: Post-deploy smoke test
+        if: github.ref_name == 'master' || github.ref_name == 'main'
+        run: |
+          DEPLOY_URL="${{ secrets.PUBLIC_BASE_URL || 'http://localhost:8000' }}"
+          echo "Smoke testing: $DEPLOY_URL"
+          for i in $(seq 1 30); do
+            if curl -sf "$DEPLOY_URL/api/market-pulse" >/dev/null 2>&1; then
+              echo "✅ Deploy healthy: $DEPLOY_URL"
+              exit 0
+            fi
+            echo "  waiting... ($i/30)"
+            sleep 2
+          done
+          echo "❌ Deploy did not become healthy within 60s"
+          exit 1
 
       - name: Upload CI logs on failure
         if: failure()

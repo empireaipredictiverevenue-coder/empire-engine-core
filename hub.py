@@ -761,6 +761,8 @@ def _apply_switchboard_param(key: str, value) -> bool:
             new_min = int(value)
         except (TypeError, ValueError):
             return False
+        if not isinstance(value, (int, float)) or int(value) != value:
+            return False
         if new_min < 0:
             return False
         _sb_mod._MIN_OFFERED_FOR_RATE = new_min
@@ -799,6 +801,8 @@ def _apply_matching_param(key: str, value) -> bool:
         try:
             new_top_n = int(value)
         except (TypeError, ValueError):
+            return False
+        if not isinstance(value, (int, float)) or int(value) != value:
             return False
         if new_top_n < 1:
             return False

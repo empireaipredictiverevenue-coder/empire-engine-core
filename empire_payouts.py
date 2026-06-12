@@ -803,59 +803,192 @@ class PayoutEngine:
         """
         Build and submit a USDC SPL token transfer via Solana JSON-RPC.
 
-        Requires the `solders` package (lightweight Solana primitives).
-        Install: pip install solders==0.21.0
+        Requires the `solders`, `solana`, and `base58` Python packages.
+        Install: pip install solders solana base58
 
         Returns the transaction signature on success, None on failure.
 
-        IMPLEMENTATION NOTE
-        ───────────────────
-        The full transaction construction (find associated token accounts,
-        build a TransferChecked instruction, sign + serialize, submit) is
-        ~80 lines of careful code. Since this module ships ahead of the
-        first real payout, we provide the scaffolding here and rely on
-        `solders` for the heavy lifting.
+        EDGE CASES HANDLED
+        ──────────────────
+          - Invalid signing key format (not base58, wrong length)
+          - Missing destination ATA (auto-creates via create ATA instruction)
+          - RPC node down / timeout
+          - Transaction not confirmed within EMPIRE_SOLANA_TIMEOUT_SEC
+          - On-chain failure (simulation or execution error)
 
-        If you want this exact code path executable today, swap the
-        placeholder below with a call to a battle-tested wrapper like
-        https://github.com/michaelhly/solana-py · the public API is stable.
-
-        For safety, the default is to RAISE if execution is attempted but
-        the signing path is not fully implemented. This prevents accidentally
-        marking payouts as 'sent' when no real transfer occurred.
+        NETWORK SELECTION
+        ─────────────────
+        Uses EMPIRE_SOLANA_NETWORK env var to switch RPC endpoints:
+          - "devnet"       → https://api.devnet.solana.com
+          - "mainnet-beta" → self.rpc_url (or https://api.mainnet-beta.solana.com)
         """
+        import json
+        import struct
         try:
-            from solders.keypair import Keypair  # noqa: F401
-            from solders.pubkey  import Pubkey   # noqa: F401
-        except ImportError:
-            raise RuntimeError(
-                "[payouts] solders not installed · "
-                "run `pip install solders==0.21.0` to enable signing"
+            import base58
+            from solders.keypair import Keypair
+            from solders.pubkey import Pubkey
+            from solders.transaction import Transaction
+            from solders.instruction import Instruction, AccountMeta
+            from solana.rpc.api import Client
+        except ImportError as e:
+            log.warning(f"[payouts] Missing Solana deps: {e} · run: pip install solders solana base58")
+            return None
+
+        # ── Network selection ──────────────────────────────────────
+        network = os.environ.get("EMPIRE_SOLANA_NETWORK", "mainnet-beta")
+        if network == "devnet":
+            rpc_url = "https://api.devnet.solana.com"
+        else:
+            rpc_url = self.rpc_url or "https://api.mainnet-beta.solana.com"
+        timeout_sec = int(os.environ.get("EMPIRE_SOLANA_TIMEOUT_SEC", "30"))
+        commitment = os.environ.get("EMPIRE_SOLANA_COMMITMENT", "confirmed")
+
+        try:
+            # 1. Decode signing key (base58-encoded 64-byte Ed25519 secret)
+            try:
+                raw_key = base58.b58decode(self.signing_key)
+            except ValueError:
+                # Fallback: JSON-encoded byte array
+                try:
+                    raw_key = bytes(json.loads(self.signing_key))
+                except Exception:
+                    log.error("[payouts] signing key is not valid base58 or JSON byte array")
+                    return None
+
+            if len(raw_key) != 64:
+                log.error(f"[payouts] signing key must be 64 bytes, got {len(raw_key)}")
+                return None
+
+            payer_kp = Keypair.from_bytes(raw_key)
+            payer_pk = payer_kp.pubkey()
+
+            # 2. Parse destination + USDC mint pubkeys
+            dest_pk  = Pubkey.from_string(to_wallet)
+            mint_pk  = Pubkey.from_string(USDC_MINT)
+
+            # 3. Program IDs (Solana system / SPL token / ATA programs)
+            TOKEN_PROGRAM_ID = Pubkey.from_string(
+                "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+            )
+            ATA_PROGRAM_ID = Pubkey.from_string(
+                "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
+            )
+            SYSTEM_PROGRAM_ID = Pubkey.from_string(
+                "11111111111111111111111111111111"
             )
 
-        # ─────────────────────────────────────────────────────────────
-        # PLACEHOLDER · the actual signing happens here.
-        #
-        # The full implementation:
-        #   1. Decode self.signing_key from base58
-        #   2. Build Keypair from the secret
-        #   3. Find the associated token accounts (ATA) for from + to wallets
-        #     using the USDC mint
-        #   4. Build a TransferChecked SPL instruction
-        #   5. Get a recent blockhash from the RPC
-        #   6. Sign the transaction with the vault keypair
-        #   7. Submit via sendTransaction RPC
-        #   8. Confirm via getSignatureStatuses
-        #
-        # We intentionally stop short here to force a deliberate operator
-        # decision before this engine can move real money. The hub.py
-        # integration should explicitly call a verified signing function.
-        # ─────────────────────────────────────────────────────────────
-        raise NotImplementedError(
-            "Solana signing path requires explicit operator setup. "
-            "See docs/PAYOUTS_SIGNING.md for the secure enablement procedure. "
-            "Until enabled, payouts remain in 'approved' status awaiting manual wire."
-        )
+            # 4. Derive Associated Token Account addresses
+            def _derive_ata(owner: Pubkey) -> Pubkey:
+                """Derive the canonical ATA PDA for (owner, USDC mint)."""
+                ata, _nonce = Pubkey.find_program_address(
+                    [bytes(owner), bytes(TOKEN_PROGRAM_ID), bytes(mint_pk)],
+                    ATA_PROGRAM_ID,
+                )
+                return ata
+
+            source_ata = _derive_ata(payer_pk)
+            dest_ata   = _derive_ata(dest_pk)
+
+            # 5. Connect to RPC and check if destination ATA exists
+            client = Client(rpc_url, timeout=timeout_sec)
+
+            dest_ata_info = await asyncio.to_thread(
+                client.get_account_info, dest_ata
+            )
+
+            instructions = []
+
+            # 6. If destination ATA doesn't exist, prepend a create-ATA instruction
+            if dest_ata_info.value is None:
+                log.info(
+                    f"[payouts] Destination ATA {dest_ata} does not exist · "
+                    f"appending create instruction (rent: ~0.002 SOL)"
+                )
+                create_ata_ix = Instruction(
+                    program_id=ATA_PROGRAM_ID,
+                    accounts=[
+                        AccountMeta(pubkey=payer_pk,          is_signer=True,  is_writable=True),
+                        AccountMeta(pubkey=dest_ata,          is_signer=False, is_writable=True),
+                        AccountMeta(pubkey=dest_pk,           is_signer=False, is_writable=False),
+                        AccountMeta(pubkey=mint_pk,           is_signer=False, is_writable=False),
+                        AccountMeta(pubkey=SYSTEM_PROGRAM_ID, is_signer=False, is_writable=False),
+                        AccountMeta(pubkey=TOKEN_PROGRAM_ID,  is_signer=False, is_writable=False),
+                    ],
+                    data=b"",  # No instruction data for create ATA
+                )
+                instructions.append(create_ata_ix)
+
+            # 7. Build TransferChecked SPL instruction
+            # Data layout: 1-byte discriminator (12) + 8-byte amount (u64 LE) + 1-byte decimals
+            amount_base = int(amount_usdc * 1_000_000)  # USDC has 6 decimals
+            data = struct.pack("<B Q B", 12, amount_base, 6)
+
+            transfer_ix = Instruction(
+                program_id=TOKEN_PROGRAM_ID,
+                accounts=[
+                    AccountMeta(pubkey=source_ata, is_signer=False, is_writable=True),
+                    AccountMeta(pubkey=mint_pk,    is_signer=False, is_writable=False),
+                    AccountMeta(pubkey=dest_ata,   is_signer=False, is_writable=True),
+                    AccountMeta(pubkey=payer_pk,   is_signer=True,  is_writable=False),
+                ],
+                data=data,
+            )
+            instructions.append(transfer_ix)
+
+            # 8. Get recent blockhash
+            blockhash_resp = await asyncio.to_thread(
+                client.get_latest_blockhash
+            )
+            recent_blockhash = blockhash_resp.value.blockhash
+
+            # 9. Build, sign, and send transaction
+            tx  = Transaction.new_signed_with_payer(
+                instructions, payer_pk, [payer_kp], recent_blockhash
+            )
+
+            send_resp = await asyncio.to_thread(client.send_transaction, tx)
+            tx_sig = str(send_resp.value)
+            log.info(
+                f"[payouts] Transfer submitted · {amount_usdc} USDC → {to_wallet[:8]}... · "
+                f"sig {tx_sig[:16]}... · network={network}"
+            )
+
+            # 10. Poll for confirmation
+            poll_interval = 2
+            max_polls = max(1, timeout_sec // poll_interval)
+
+            for attempt in range(max_polls):
+                await asyncio.sleep(poll_interval)
+                status_resp = await asyncio.to_thread(
+                    client.get_signature_statuses, [send_resp.value]
+                )
+
+                if status_resp.value and status_resp.value[0] is not None:
+                    status = status_resp.value[0]
+                    status_str = str(status.confirmation_status).lower() if status.confirmation_status else ""
+
+                    if "confirmed" in status_str or "finalized" in status_str:
+                        if status.err:
+                            log.error(
+                                f"[payouts] Tx {tx_sig[:16]}... failed on-chain: {status.err}"
+                            )
+                            return None
+                        log.info(
+                            f"[payouts] Tx {tx_sig[:16]}... confirmed "
+                            f"(attempt {attempt + 1}, {status_str})"
+                        )
+                        return tx_sig
+
+            log.warning(
+                f"[payouts] Tx {tx_sig[:16]}... not confirmed within {timeout_sec}s · "
+                f"submitted but unverified — returning None so retry logic can handle"
+            )
+            return None
+
+        except Exception as e:
+            log.error(f"[payouts] Solana transfer failed: {e}")
+            return None
 
     # ── PUBLIC: MANUAL ATTRIBUTION ───────────────────────────────────────
     async def attribute_manually(
