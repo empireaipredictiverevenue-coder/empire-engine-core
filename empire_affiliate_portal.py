@@ -28,8 +28,19 @@ from datetime import datetime, timezone, timedelta
 from typing import Callable, Optional
 
 from fastapi import FastAPI, Request, HTTPException, Query
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from supabase import create_client
+import base64
+import threading
+
+
+# ── 1x1 TRANSPARENT GIF (base64-encoded) ────────────────────────────
+_PIXEL_GIF_B64 = "R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"
+_PIXEL_GIF = base64.b64decode(_PIXEL_GIF_B64)
+
+# ── TRACKING COOKIE NAME ────────────────────────────────────────────
+_AFF_COOKIE = "affiliate_ref"
+
 
 log = logging.getLogger("empire.affiliate")
 
@@ -468,6 +479,23 @@ loadStats();
 </body></html>"""
 
 
+def _record_aff_click(code: str):
+    """Background worker: increment click_count for an affiliate link and
+    update last_click timestamp. Called from the tracking pixel/landing page."""
+    try:
+        # Fetch current count, increment locally, update
+        cur = _sb.table("affiliate_links").select("click_count")             .eq("code", code).limit(1).execute()
+        if cur.data:
+            current = (cur.data[0].get("click_count") or 0) + 1
+            _sb.table("affiliate_links").update({
+                "click_count": current,
+                "last_click": datetime.now(timezone.utc).isoformat(),
+            }).eq("code", code).execute()
+    except Exception as e:
+        log.warning(f"[affiliate] click recording failed for code {code}: {e}")
+
+
+
 # ── ROUTES ────────────────────────────────────────────────────────────
 def register_affiliate_routes(
     app: FastAPI,
@@ -757,6 +785,8 @@ def register_affiliate_routes(
                     "conversion_count": row.get("conversion_count", 0),
                     "last_click": row.get("last_click"),
                     "url": f"{base}/portal/affiliate/{buyer_id}/verify?ref={row['code']}",
+                    "pixel_url": f"{base}/track/aff/{row['code']}/pixel.gif",
+                    "landing_url": f"{base}/track/aff/{row['code']}",
                 })
             return {"links": links, "total": len(links)}
         except Exception as e:
@@ -911,7 +941,14 @@ def register_affiliate_routes(
                 "conversion_count": 0,
             }).execute()
             log.info(f"[affiliate] link created: {code} for buyer {buyer_id}")
-            return {"ok": True, "code": code, "label": label}
+            base = public_base_url.rstrip("/")
+            return {
+                "ok": True,
+                "code": code,
+                "label": label,
+                "pixel_url": f"{base}/track/aff/{code}/pixel.gif",
+                "landing_url": f"{base}/track/aff/{code}",
+            }
         except Exception as e:
             log.error(f"[affiliate] create link error: {e}")
             raise HTTPException(500, str(e)[:80])
@@ -945,4 +982,67 @@ def register_affiliate_routes(
             log.error(f"[affiliate] toggle error: {e}")
             raise HTTPException(500, str(e)[:80])
 
+    
+    # ── TRACKING PIXEL ────────────────────────────────────────────────
+    @app.get("/track/aff/{code}/pixel.gif")
+    async def aff_track_pixel(code: str):
+        """
+        1x1 transparent tracking pixel. Logs a click for the affiliate link
+        and returns the GIF bytes. Fire-and-forget — the click record
+        happens in a background thread so the pixel loads instantly.
+        """
+        if _sb:
+            try:
+                threading.Thread(
+                    target=_record_aff_click,
+                    args=(code,),
+                    daemon=True,
+                ).start()
+            except Exception:
+                pass
+        return Response(content=_PIXEL_GIF, media_type="image/gif")
+
+    # ── LANDING PAGE URL (sets affiliate cookie) ──────────────────────
+    @app.get("/track/aff/{code}")
+    async def aff_track_landing(code: str, request: Request, ref: str = Query(None)):
+        """
+        Landing page URL that sets an affiliate tracking cookie and
+        redirects. Use this as the public-facing link for affiliates.
+
+        The cookie (`affiliate_ref`) is set with a 30-day expiry and is
+        read by the inbound lead form to auto-tag new leads with the
+        affiliate code.
+        """
+        if _sb:
+            try:
+                threading.Thread(
+                    target=_record_aff_click,
+                    args=(code,),
+                    daemon=True,
+                ).start()
+            except Exception:
+                pass
+
+        # Determine redirect destination
+        dest = "/"
+        # If we have a landing page config for this code, use it
+        try:
+            res = _sb.table("affiliate_links").select("landing_url")                 .eq("code", code).limit(1).execute()
+            if res.data and res.data[0].get("landing_url"):
+                dest = res.data[0]["landing_url"]
+        except Exception:
+            pass
+
+        response = RedirectResponse(url=dest, status_code=302)
+        response.set_cookie(
+            key=_AFF_COOKIE,
+            value=code,
+            max_age=60 * 60 * 24 * 30,  # 30 days
+            httponly=False,  # Must be accessible from JS for inbound forms
+            samesite="lax",
+            path="/",
+        )
+        return response
+
+    # ── Click-recording helper (called in background thread) ──────────
     log.info("[affiliate] Routes registered - /portal/affiliate/{login,verify,dashboard} + /api/v1/affiliate/{stats,payouts,links,referrals} + /api/v1/affiliates/{list,create-link,toggle-active}")

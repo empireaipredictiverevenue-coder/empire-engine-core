@@ -5080,6 +5080,22 @@ function Affiliates() {
   const [linkLabel, setLinkLabel] = useState({});
   const [busy, setBusy] = useState({});
   const [saving, setSaving] = useState({});
+  const [affLinks, setAffLinks] = useState({});
+
+  const fetchAffLinks = useCallback(async (id) => {
+    try {
+      const r = await apiFetch('/api/v1/affiliate/' + id + '/links').then(x => x.json());
+      setAffLinks(l => ({ ...l, [id]: r.links || [] }));
+    } catch (e) {}
+  }, []);
+
+  const toggleExpanded = (id) => {
+    const next = expandedId === id ? null : id;
+    setExpandedId(next);
+    if (next && !affLinks[next]) {
+      fetchAffLinks(next);
+    }
+  };
 
   const reload = useCallback(async () => {
     try {
@@ -5180,7 +5196,7 @@ function Affiliates() {
         </tr></thead>
         <tbody>
           ${affiliates.map(a => html`
-            <tr key=${a.id} style=${{cursor: 'pointer'}} onClick=${() => setExpandedId(expandedId === a.id ? null : a.id)}>
+            <tr key=${a.id} style=${{cursor: 'pointer'}} onClick=${() => toggleExpanded(a.id)}>
               <td><strong>${a.buyer_name}</strong></td>
               <td class="tbl-mono">${a.email}</td>
               <td>${a.niche || '—'}</td>
@@ -5215,7 +5231,7 @@ function Affiliates() {
                       <div class="stat-value cyan" style=${{fontSize: '22px'}}>${a.qualified_calls || 0}</div>
                     </div>
                   </div>
-                  <div style=${{display: 'flex', gap: '10px', alignItems: 'center'}}>
+                  <div style=${{display: 'flex', gap: '10px', alignItems: 'center', marginBottom: '16px'}}>
                     <input class="fld-in mono" style=${{flex: 1}}
                            value=${linkLabel[a.id] || ''}
                            onChange=${e => setLinkLabel(l => ({ ...l, [a.id]: e.target.value }))}
@@ -5226,6 +5242,34 @@ function Affiliates() {
                       ${busy[a.id] ? 'Creating…' : 'Create Link'}
                     </button>
                   </div>
+
+                  ${/* Show existing links with pixel + landing URLs */ ''}
+                  ${(affLinks[a.id] && affLinks[a.id].length > 0) ? html`
+                    <div class="section-sub" style=${{marginBottom: '10px', fontSize: '9px'}}>Referral Links</div>
+                    ${affLinks[a.id].map(l => html`
+                      <div style=${{background: 'var(--empire-surface)', border: '1px solid var(--empire-divider)', padding: '12px 14px', marginBottom: '8px'}}>
+                        <div style=${{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px'}}>
+                          <div>
+                            <span class="bdg ${l.active ? 'active' : 'paused'}" style=${{fontSize: '8px'}}>${l.code}</span>
+                            <span style=${{marginLeft: '8px', fontFamily: 'var(--font-mono)', fontSize: '10px', color: 'var(--empire-silver)'}}>${l.label || ''}</span>
+                          </div>
+                          <div style=${{fontFamily: 'var(--font-mono)', fontSize: '10px', color: 'var(--empire-mist)'}}>
+                            ${l.click_count || 0} clicks · ${l.conversion_count || 0} conversions
+                          </div>
+                        </div>
+                        <div style=${{fontFamily: 'var(--font-mono)', fontSize: '9px', color: 'var(--empire-fog)', lineHeight: '1.8'}}>
+                          <div><span style=${{color: 'var(--signal-teal)'}}>Landing:</span> <a href=${l.landing_url || l.url} target="_blank" style=${{color: 'var(--strike-cyan)'}}>${l.landing_url || l.url}</a></div>
+                          <div><span style=${{color: 'var(--signal-teal)'}}>Pixel:</span> <code style=${{color: 'var(--empire-mist)', background: 'var(--empire-elevated)', padding: '2px 6px'}}>${l.pixel_url || (l.url ? l.url.replace('/verify?ref=', '/track/aff/') + '/pixel.gif' : '')}</code></div>
+                          <div style=${{marginTop: '4px'}}>
+                            <span style=${{color: 'var(--empire-mist)'}}>Embed:</span>
+                            <code style=${{color: 'var(--empire-fog)', background: 'var(--empire-elevated)', padding: '2px 6px', fontSize: '8px', wordBreak: 'break-all'}}>
+                              &lt;img src="${l.pixel_url || (l.url ? l.url.replace('/verify?ref=', '/track/aff/') + '/pixel.gif' : '')}" width="1" height="1" /&gt;
+                            </code>
+                          </div>
+                        </div>
+                      </div>
+                    `)}
+                  ` : html`<div class="section-sub" style=${{marginBottom: '10px', color: 'var(--empire-fog)', fontStyle: 'italic', fontSize: '9px'}}>No referral links yet. Create one above.</div>`}
                 </div>
               </td>
             </tr>` : ''}
