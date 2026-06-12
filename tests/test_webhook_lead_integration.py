@@ -10,7 +10,20 @@ through the actual webhook handler.
 import os
 import pytest
 from unittest.mock import MagicMock, AsyncMock, patch
-from fastapi.testclient import TestClient
+
+
+# ── Helper: extract the last inserted inbound_lead row ────────────
+def _last_inserted_lead(mock_db):
+    """Return the last inserted inbound_lead dict from the mock Supabase.
+
+    pytest shares the same fixture instance between test function and
+    its dependencies (patched_hub → mock_db), so this inspects the
+    exact same MockClient that the webhook handler wrote to.
+    """
+    table = mock_db._tables.get("inbound_leads")
+    if not table or not table._inserted:
+        return None
+    return table._inserted[-1]
 
 
 # ── Set dummy env vars before any hub imports ─────────────────────
@@ -218,7 +231,7 @@ class TestWebhookLeadAuth:
 class TestAffiliateCookieSource:
     """Cookie source wins over query params and body."""
 
-    def test_cookie_affiliate_ref_is_used(self, client, webhook_secret):
+    def test_cookie_affiliate_ref_is_used(self, client, webhook_secret, mock_db):
         resp = client.post(
             "/webhook/lead",
             json=_lead_body(),
@@ -226,12 +239,11 @@ class TestAffiliateCookieSource:
             headers={"x-empire-secret": webhook_secret},
         )
         assert resp.status_code == 200
-        # The mock stores inserted data; verify affiliate_code was passed through
-        # by checking the mock_db fixture via the client's internal state.
-        # We'll rely on the response status and the fact that the code path
-        # reachable — we can't inspect the mock insert directly from here.
+        lead = _last_inserted_lead(mock_db)
+        assert lead is not None
+        assert lead.get("affiliate_code") == "cookie-aff-99"
 
-    def test_cookie_wins_over_query_param(self, client, webhook_secret):
+    def test_cookie_wins_over_query_param(self, client, webhook_secret, mock_db):
         resp = client.post(
             "/webhook/lead?affiliate_code=query-44",
             json=_lead_body(),
@@ -239,8 +251,11 @@ class TestAffiliateCookieSource:
             headers={"x-empire-secret": webhook_secret},
         )
         assert resp.status_code == 200
+        lead = _last_inserted_lead(mock_db)
+        assert lead is not None
+        assert lead.get("affiliate_code") == "cookie-wins"
 
-    def test_cookie_wins_over_body_field(self, client, webhook_secret):
+    def test_cookie_wins_over_body_field(self, client, webhook_secret, mock_db):
         resp = client.post(
             "/webhook/lead",
             json=_lead_body(affiliate_code="body-aff"),
@@ -248,8 +263,11 @@ class TestAffiliateCookieSource:
             headers={"x-empire-secret": webhook_secret},
         )
         assert resp.status_code == 200
+        lead = _last_inserted_lead(mock_db)
+        assert lead is not None
+        assert lead.get("affiliate_code") == "cookie-still-wins"
 
-    def test_empty_cookie_falls_through(self, client, webhook_secret):
+    def test_empty_cookie_falls_through(self, client, webhook_secret, mock_db):
         """Empty cookie should not block query param fallback."""
         resp = client.post(
             "/webhook/lead?affiliate_code=query-fallback",
@@ -258,60 +276,81 @@ class TestAffiliateCookieSource:
             headers={"x-empire-secret": webhook_secret},
         )
         assert resp.status_code == 200
+        lead = _last_inserted_lead(mock_db)
+        assert lead is not None
+        assert lead.get("affiliate_code") == "query-fallback"
 
 
 class TestAffiliateQueryParamSource:
     """Query params are checked when no cookie is present."""
 
-    def test_query_affiliate_code(self, client, webhook_secret):
+    def test_query_affiliate_code(self, client, webhook_secret, mock_db):
         resp = client.post(
             "/webhook/lead?affiliate_code=query-123",
             json=_lead_body(),
             headers={"x-empire-secret": webhook_secret},
         )
         assert resp.status_code == 200
+        lead = _last_inserted_lead(mock_db)
+        assert lead is not None
+        assert lead.get("affiliate_code") == "query-123"
 
-    def test_query_ref_param(self, client, webhook_secret):
+    def test_query_ref_param(self, client, webhook_secret, mock_db):
         resp = client.post(
             "/webhook/lead?ref=ref-from-url",
             json=_lead_body(),
             headers={"x-empire-secret": webhook_secret},
         )
         assert resp.status_code == 200
+        lead = _last_inserted_lead(mock_db)
+        assert lead is not None
+        assert lead.get("affiliate_code") == "ref-from-url"
 
-    def test_query_utm_source(self, client, webhook_secret):
+    def test_query_utm_source(self, client, webhook_secret, mock_db):
         resp = client.post(
             "/webhook/lead?utm_source=partner-roofing",
             json=_lead_body(),
             headers={"x-empire-secret": webhook_secret},
         )
         assert resp.status_code == 200
+        lead = _last_inserted_lead(mock_db)
+        assert lead is not None
+        assert lead.get("affiliate_code") == "partner-roofing"
 
-    def test_query_affiliate_code_beats_ref(self, client, webhook_secret):
+    def test_query_affiliate_code_beats_ref(self, client, webhook_secret, mock_db):
         resp = client.post(
             "/webhook/lead?affiliate_code=ac-wins&ref=ref-loses",
             json=_lead_body(),
             headers={"x-empire-secret": webhook_secret},
         )
         assert resp.status_code == 200
+        lead = _last_inserted_lead(mock_db)
+        assert lead is not None
+        assert lead.get("affiliate_code") == "ac-wins"
 
-    def test_query_affiliate_code_beats_utm(self, client, webhook_secret):
+    def test_query_affiliate_code_beats_utm(self, client, webhook_secret, mock_db):
         resp = client.post(
             "/webhook/lead?affiliate_code=ac-wins&utm_source=utm-loses",
             json=_lead_body(),
             headers={"x-empire-secret": webhook_secret},
         )
         assert resp.status_code == 200
+        lead = _last_inserted_lead(mock_db)
+        assert lead is not None
+        assert lead.get("affiliate_code") == "ac-wins"
 
-    def test_query_ref_beats_utm(self, client, webhook_secret):
+    def test_query_ref_beats_utm(self, client, webhook_secret, mock_db):
         resp = client.post(
             "/webhook/lead?ref=ref-wins&utm_source=utm-loses",
             json=_lead_body(),
             headers={"x-empire-secret": webhook_secret},
         )
         assert resp.status_code == 200
+        lead = _last_inserted_lead(mock_db)
+        assert lead is not None
+        assert lead.get("affiliate_code") == "ref-wins"
 
-    def test_query_direct_utm_is_filtered(self, client, webhook_secret):
+    def test_query_direct_utm_is_filtered(self, client, webhook_secret, mock_db):
         """'(direct)' UTM should be treated as no affiliate source."""
         resp = client.post(
             "/webhook/lead?utm_source=(direct)",
@@ -319,48 +358,64 @@ class TestAffiliateQueryParamSource:
             headers={"x-empire-secret": webhook_secret},
         )
         assert resp.status_code == 200
+        lead = _last_inserted_lead(mock_db)
+        assert lead is not None
+        # No affiliate_code should be set when UTM is filtered
+        assert lead.get("affiliate_code") is None
 
 
 class TestAffiliateBodyFieldSource:
     """Body fields are checked as last resort."""
 
-    def test_body_affiliate_code(self, client, webhook_secret):
+    def test_body_affiliate_code(self, client, webhook_secret, mock_db):
         resp = client.post(
             "/webhook/lead",
             json=_lead_body(affiliate_code="body-aff-777"),
             headers={"x-empire-secret": webhook_secret},
         )
         assert resp.status_code == 200
+        lead = _last_inserted_lead(mock_db)
+        assert lead is not None
+        assert lead.get("affiliate_code") == "body-aff-777"
 
-    def test_body_ref_field(self, client, webhook_secret):
+    def test_body_ref_field(self, client, webhook_secret, mock_db):
         resp = client.post(
             "/webhook/lead",
             json=_lead_body(ref="body-ref-888"),
             headers={"x-empire-secret": webhook_secret},
         )
         assert resp.status_code == 200
+        lead = _last_inserted_lead(mock_db)
+        assert lead is not None
+        assert lead.get("affiliate_code") == "body-ref-888"
 
-    def test_body_utm_source(self, client, webhook_secret):
+    def test_body_utm_source(self, client, webhook_secret, mock_db):
         resp = client.post(
             "/webhook/lead",
             json=_lead_body(utm_source="body-utm-999"),
             headers={"x-empire-secret": webhook_secret},
         )
         assert resp.status_code == 200
+        lead = _last_inserted_lead(mock_db)
+        assert lead is not None
+        assert lead.get("affiliate_code") == "body-utm-999"
 
-    def test_body_affiliate_code_beats_ref(self, client, webhook_secret):
+    def test_body_affiliate_code_beats_ref(self, client, webhook_secret, mock_db):
         resp = client.post(
             "/webhook/lead",
             json=_lead_body(affiliate_code="ac-wins", ref="ref-loses"),
             headers={"x-empire-secret": webhook_secret},
         )
         assert resp.status_code == 200
+        lead = _last_inserted_lead(mock_db)
+        assert lead is not None
+        assert lead.get("affiliate_code") == "ac-wins"
 
 
 class TestAffiliatePriorityOrdering:
     """End-to-end priority: cookie > query param > body field."""
 
-    def test_cookie_wins_over_query_and_body(self, client, webhook_secret):
+    def test_cookie_wins_over_query_and_body(self, client, webhook_secret, mock_db):
         resp = client.post(
             "/webhook/lead?affiliate_code=query-xx",
             json=_lead_body(affiliate_code="body-yy"),
@@ -368,24 +423,33 @@ class TestAffiliatePriorityOrdering:
             headers={"x-empire-secret": webhook_secret},
         )
         assert resp.status_code == 200
+        lead = _last_inserted_lead(mock_db)
+        assert lead is not None
+        assert lead.get("affiliate_code") == "cookie-zz"
 
-    def test_query_wins_over_body(self, client, webhook_secret):
+    def test_query_wins_over_body(self, client, webhook_secret, mock_db):
         resp = client.post(
             "/webhook/lead?affiliate_code=query-abc",
             json=_lead_body(affiliate_code="body-xyz"),
             headers={"x-empire-secret": webhook_secret},
         )
         assert resp.status_code == 200
+        lead = _last_inserted_lead(mock_db)
+        assert lead is not None
+        assert lead.get("affiliate_code") == "query-abc"
 
-    def test_body_fallback_when_no_cookie_or_query(self, client, webhook_secret):
+    def test_body_fallback_when_no_cookie_or_query(self, client, webhook_secret, mock_db):
         resp = client.post(
             "/webhook/lead",
             json=_lead_body(affiliate_code="body-only"),
             headers={"x-empire-secret": webhook_secret},
         )
         assert resp.status_code == 200
+        lead = _last_inserted_lead(mock_db)
+        assert lead is not None
+        assert lead.get("affiliate_code") == "body-only"
 
-    def test_no_affiliate_source_returns_success(self, client, webhook_secret):
+    def test_no_affiliate_source_returns_success(self, client, webhook_secret, mock_db):
         """No affiliate info anywhere should still succeed."""
         resp = client.post(
             "/webhook/lead",
@@ -394,6 +458,9 @@ class TestAffiliatePriorityOrdering:
         )
         assert resp.status_code == 200
         assert resp.json()["status"] == "success"
+        lead = _last_inserted_lead(mock_db)
+        assert lead is not None
+        assert lead.get("affiliate_code") is None
 
 
 class TestWebhookBodyParsing:
@@ -418,7 +485,7 @@ class TestWebhookBodyParsing:
         )
         assert resp.status_code == 400
 
-    def test_response_contains_expected_fields(self, client, webhook_secret):
+    def test_response_contains_expected_fields(self, client, webhook_secret, mock_db):
         resp = client.post(
             "/webhook/lead",
             json=_lead_body(name="Acme Warehouse"),
@@ -430,3 +497,9 @@ class TestWebhookBodyParsing:
         assert "funnel_route" in data
         assert "closer_result" in data
         assert data["funnel_route"] == "ROUTE_TO_VOICE_PIPELINE"
+        lead = _last_inserted_lead(mock_db)
+        assert lead is not None
+        # Verify other payload fields survived the round-trip
+        assert lead.get("name") == "Acme Warehouse"
+        assert lead.get("source") == "webhook_test"
+        assert lead.get("id") == data["id"]
