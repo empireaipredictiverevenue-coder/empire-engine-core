@@ -26,6 +26,18 @@ def _last_inserted_lead(mock_db):
     return table._inserted[-1]
 
 
+def _all_inserted_leads(mock_db):
+    """Return all inbound_lead dicts inserted into the mock Supabase.
+
+    Useful for multi-request tests that need to assert on the full
+    sequence of stored records.
+    """
+    table = mock_db._tables.get("inbound_leads")
+    if not table:
+        return []
+    return list(table._inserted)
+
+
 # ── Set dummy env vars before any hub imports ─────────────────────
 # These are consumed at module-import time in hub.py.  We provide
 # plausible values so the engines construct without crashing; actual
@@ -461,6 +473,77 @@ class TestAffiliatePriorityOrdering:
         lead = _last_inserted_lead(mock_db)
         assert lead is not None
         assert lead.get("affiliate_code") is None
+
+# ═══════════════════════════════════════════════════════════════════
+# MULTI-REQUEST SEQUENCE
+# ═══════════════════════════════════════════════════════════════════
+
+
+class TestMultiRequestSequence:
+    """Send multiple leads in sequence and verify id uniqueness and
+    affiliate_code correctness per request."""
+
+    def test_three_leads_each_get_unique_ids_and_correct_affiliate(
+        self, client, webhook_secret, mock_db,
+    ):
+        # ── Lead 1: cookie source ──
+        resp1 = client.post(
+            "/webhook/lead",
+            json=_lead_body(name="Warehouse Alpha"),
+            cookies={"affiliate_ref": "cookie-alpha"},
+            headers={"x-empire-secret": webhook_secret},
+        )
+        assert resp1.status_code == 200
+        r1 = resp1.json()
+
+        # ── Lead 2: query param source ──
+        resp2 = client.post(
+            "/webhook/lead?affiliate_code=query-beta",
+            json=_lead_body(name="Warehouse Beta"),
+            headers={"x-empire-secret": webhook_secret},
+        )
+        assert resp2.status_code == 200
+        r2 = resp2.json()
+
+        # ── Lead 3: body field source ──
+        resp3 = client.post(
+            "/webhook/lead",
+            json=_lead_body(name="Warehouse Gamma", affiliate_code="body-gamma"),
+            headers={"x-empire-secret": webhook_secret},
+        )
+        assert resp3.status_code == 200
+        r3 = resp3.json()
+
+        # ── Verify unique IDs across responses ──
+        ids = {r1["id"], r2["id"], r3["id"]}
+        assert len(ids) == 3, f"Expected 3 unique IDs, got {len(ids)}"
+        for i, rid in enumerate([r1["id"], r2["id"], r3["id"]], 1):
+            assert rid is not None and rid != "", f"Lead {i} has empty/null ID"
+
+        # ── Verify all 3 rows stored in mock DB ──
+        leads = _all_inserted_leads(mock_db)
+        assert len(leads) == 3, f"Expected 3 rows, got {len(leads)}"
+
+        # ── Verify each row has the correct affiliate_code ──
+        assert leads[0].get("affiliate_code") == "cookie-alpha", (
+            f"Lead 0: expected cookie-alpha, got {leads[0].get('affiliate_code')!r}"
+        )
+        assert leads[1].get("affiliate_code") == "query-beta", (
+            f"Lead 1: expected query-beta, got {leads[1].get('affiliate_code')!r}"
+        )
+        assert leads[2].get("affiliate_code") == "body-gamma", (
+            f"Lead 2: expected body-gamma, got {leads[2].get('affiliate_code')!r}"
+        )
+
+        # ── Verify response IDs match stored row IDs ──
+        assert leads[0].get("id") == r1["id"]
+        assert leads[1].get("id") == r2["id"]
+        assert leads[2].get("id") == r3["id"]
+
+        # ── Verify names survived the round-trip ──
+        assert leads[0].get("name") == "Warehouse Alpha"
+        assert leads[1].get("name") == "Warehouse Beta"
+        assert leads[2].get("name") == "Warehouse Gamma"
 
 
 class TestWebhookBodyParsing:
