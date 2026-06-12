@@ -2517,6 +2517,14 @@ async def webhook_lead(request: fastapi.Request, x_empire_secret: str = fastapi.
             "source": data.get("source", "web"),
             "raw_jsonb": data
         }
+        # ── Affiliate auto-tag: read affiliate_ref cookie if present ────
+        try:
+            cookie_code = request.cookies.get("affiliate_ref")
+            if cookie_code:
+                payload["affiliate_code"] = cookie_code
+                log.info(f"[hub] webhook lead tagged with affiliate_code={cookie_code} from cookie")
+        except Exception:
+            pass
         result = client.table("inbound_leads").insert(payload).execute()
         new_id = result.data[0]["id"] if result.data else None
 
