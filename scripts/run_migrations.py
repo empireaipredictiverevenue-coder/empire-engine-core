@@ -52,51 +52,166 @@ CREATE TABLE IF NOT EXISTS schema_migrations (
 
 
 def parse_sql_statements(content):
-    """Split SQL content into individual statements, respecting semicolons in strings and blocks."""
+    """Split SQL content into individual statements, respecting:
+       - single-quoted strings ('...') with '' escapes
+       - double-quoted identifiers ("...") with "" escapes
+       - dollar-quoted blocks ($tag$...$tag$ or $$...$$)
+       - line comments (-- ... to end of line)
+       - block comments (/* ... */)
+       - balanced parentheses (only top-level ; splits)
+    """
     statements = []
     current = []
     paren_depth = 0
-    in_string = False
-    string_char = None
+    i = 0
+    n = len(content)
+    in_single = False   # '...'
+    in_double = False   # "..."
+    in_dollar = False   # $tag$ ... $tag$
+    dollar_tag = None   # e.g. "$$" or "$func$"
+    in_line_comment = False
+    in_block_comment = False
 
-    for char in content:
-        current.append(char)
-
-        # Track string boundaries
-        if char in ("'", '"') and (len(current) < 2 or current[-2] != '\\'):
-            if not in_string:
-                in_string = True
-                string_char = char
-            elif char == string_char:
-                in_string = False
-                string_char = None
-
-        # Track parentheses (only outside strings)
-        if not in_string:
-            if char == '(':
-                paren_depth += 1
-            elif char == ')':
-                paren_depth -= 1
-            elif char == ';' and paren_depth == 0:
-                stmt = ''.join(current).strip()
-                # Skip pure comments or empty statements
-                if stmt and not stmt.startswith('--') and stmt != ';':
-                    # Filter out pure comment lines from the statement
-                    lines = stmt.split('\n')
-                    filtered_lines = [l for l in lines if not l.strip().startswith('--')]
-                    clean_stmt = '\n'.join(filtered_lines).strip()
-                    if clean_stmt and clean_stmt != ';':
-                        statements.append(clean_stmt)
-                current = []
-
-    # Handle trailing statement without semicolon
-    remaining = ''.join(current).strip()
-    if remaining and remaining != ';':
-        lines = remaining.split('\n')
-        filtered_lines = [l for l in lines if not l.strip().startswith('--')]
-        clean = '\n'.join(filtered_lines).strip()
-        if clean:
+    def emit():
+        stmt = ''.join(current).strip()
+        current.clear()
+        if not stmt or stmt == ';':
+            return
+        # Drop pure-comment lines; keep lines that have SQL on them
+        lines = stmt.split('\n')
+        kept = [ln for ln in lines if ln.strip() and not ln.strip().startswith('--')]
+        clean = '\n'.join(kept).strip()
+        if clean and clean != ';':
             statements.append(clean)
+
+    while i < n:
+        ch = content[i]
+        nxt = content[i + 1] if i + 1 < n else ''
+
+        # Line comment: -- to end of line
+        if in_line_comment:
+            current.append(ch)
+            if ch == '\n':
+                in_line_comment = False
+            i += 1
+            continue
+
+        # Block comment: /* ... */
+        if in_block_comment:
+            current.append(ch)
+            if ch == '*' and nxt == '/':
+                current.append(nxt)
+                in_block_comment = False
+                i += 2
+                continue
+            i += 1
+            continue
+
+        # Inside a dollar-quoted block: look for the matching close tag
+        if in_dollar:
+            current.append(ch)
+            if ch == '$' and content[i:i + len(dollar_tag)] == dollar_tag:
+                # Append remaining tag chars and close
+                tag_len = len(dollar_tag)
+                current.extend(list(dollar_tag[1:]))
+                in_dollar = False
+                dollar_tag = None
+                i += tag_len  # '$' already counted, advance past rest of tag
+                continue
+            i += 1
+            continue
+
+        # Inside a single-quoted string: '' is an escape
+        if in_single:
+            current.append(ch)
+            if ch == "'" and nxt == "'":
+                current.append(nxt)
+                i += 2
+                continue
+            if ch == "'":
+                in_single = False
+            i += 1
+            continue
+
+        # Inside a double-quoted identifier: "" is an escape
+        if in_double:
+            current.append(ch)
+            if ch == '"' and nxt == '"':
+                current.append(nxt)
+                i += 2
+                continue
+            if ch == '"':
+                in_double = False
+            i += 1
+            continue
+
+        # Not in any string/comment. Look for openings.
+        if ch == '-' and nxt == '-':
+            current.append(ch)
+            current.append(nxt)
+            in_line_comment = True
+            i += 2
+            continue
+
+        if ch == '/' and nxt == '*':
+            current.append(ch)
+            current.append(nxt)
+            in_block_comment = True
+            i += 2
+            continue
+
+        if ch == "'":
+            current.append(ch)
+            in_single = True
+            i += 1
+            continue
+
+        if ch == '"':
+            current.append(ch)
+            in_double = True
+            i += 1
+            continue
+
+        # Dollar-quote open: read $tag$ where tag is [A-Za-z0-9_]* (or empty)
+        if ch == '$':
+            j = i + 1
+            tag_chars = []
+            while j < n and (content[j].isalnum() or content[j] == '_'):
+                tag_chars.append(content[j])
+                j += 1
+            if j < n and content[j] == '$':
+                # Real dollar-quote opener
+                current.append(ch)
+                current.extend(tag_chars)
+                current.append('$')
+                in_dollar = True
+                dollar_tag = '$' + ''.join(tag_chars) + '$'
+                i = j + 1
+                continue
+            # Not a dollar-quote opener (e.g. $1 parameter) — treat as normal char
+            current.append(ch)
+            i += 1
+            continue
+
+        # Parentheses
+        if ch == '(':
+            paren_depth += 1
+        elif ch == ')':
+            paren_depth -= 1
+
+        current.append(ch)
+
+        # Statement terminator (top-level ; outside any quote/comment/parens)
+        if ch == ';' and paren_depth == 0:
+            emit()
+            i += 1
+            continue
+
+        i += 1
+
+    # Trailing statement without semicolon
+    if current:
+        emit()
 
     return statements
 
@@ -123,11 +238,12 @@ def list_migrations():
 
 def _connect():
     """Open a fresh psycopg2 connection. Caller closes."""
+    password = os.environ.get("DB_PASSWORD") or SUPABASE_SERVICE_KEY
     return psycopg2.connect(
         host=DB_HOST,
         port=DB_PORT,
         user=DB_USER,
-        password=SUPABASE_SERVICE_KEY,
+        password=password,
         dbname=DB_NAME,
         connect_timeout=10,
         sslmode='require',
