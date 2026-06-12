@@ -2517,14 +2517,36 @@ async def webhook_lead(request: fastapi.Request, x_empire_secret: str = fastapi.
             "source": data.get("source", "web"),
             "raw_jsonb": data
         }
-        # ── Affiliate auto-tag: read affiliate_ref cookie if present ────
+        # ── Affiliate auto-tag: cookie → query param → body field ────
+        affiliate_code = None
+        # 1. Cookie set by /track/aff/{code} landing page
         try:
-            cookie_code = request.cookies.get("affiliate_ref")
-            if cookie_code:
-                payload["affiliate_code"] = cookie_code
-                log.info(f"[hub] webhook lead tagged with affiliate_code={cookie_code} from cookie")
+            affiliate_code = request.cookies.get("affiliate_ref") or None
         except Exception:
             pass
+        # 2. URL query params: ?affiliate_code=XYZ or ?utm_source=affiliate_name or ?ref=XYZ
+        if not affiliate_code:
+            try:
+                qp = request.query_params
+                affiliate_code = (
+                    qp.get("affiliate_code")
+                    or qp.get("ref")
+                    or (qp.get("utm_source") if qp.get("utm_source") and qp.get("utm_source") != "(direct)" else None)
+                )
+            except Exception:
+                pass
+        # 3. Request body fields: {affiliate_code, utm_source, ref}
+        if not affiliate_code:
+            affiliate_code = (
+                data.get("affiliate_code")
+                or data.get("ref")
+                or (data.get("utm_source") if data.get("utm_source") and data.get("utm_source") != "(direct)" else None)
+            )
+        if affiliate_code:
+            payload["affiliate_code"] = affiliate_code
+            # Determine source for logging (ordered: cookie > query > body)
+            _src = "cookie" if request.cookies.get("affiliate_ref") else ("query" if request.query_params.get("affiliate_code") or request.query_params.get("ref") or request.query_params.get("utm_source") else "body")
+            log.info(f"[hub] webhook lead tagged with affiliate_code={affiliate_code} (source: {_src})")
         result = client.table("inbound_leads").insert(payload).execute()
         new_id = result.data[0]["id"] if result.data else None
 
