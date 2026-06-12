@@ -156,6 +156,16 @@ class AGIGovernor:
         except Exception as e:
             log.debug(f"[agi.governor] outcome record failed: {e}")
 
+    def get_niche_win_rate(self, niche: str) -> float:
+        """Pass-through to SI StrategyEvolution for closer threshold adaptation."""
+        try:
+            si_instance = AGIGovernor.get_si_strategy()
+            if si_instance is not None:
+                return si_instance.get_niche_win_rate(niche)
+        except Exception:
+            pass
+        return 0.0
+
 
 # Cache the latest health snapshot so the SPA /api/agents/status can read it
 # without re-querying Supabase on every request.

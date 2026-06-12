@@ -54,8 +54,8 @@ _SPA_CSS = """
 .boot-tag { font-family: var(--font-mono); font-size: 10px; color: var(--empire-mist); letter-spacing: 0.28em; text-transform: uppercase; }
 
 /* ── SIDEBAR ──────────────────────────────────────────────────────── */
-.nav { background: var(--empire-surface); border-right: 1px solid var(--empire-divider); padding: 24px 0; }
-.nav-brand { padding: 0 24px 20px; border-bottom: 1px solid var(--empire-divider); margin-bottom: 16px; }
+.nav { background: var(--empire-surface); border-right: 1px solid var(--empire-divider); padding: 16px 0 24px; overflow-y: auto; max-height: 100vh; scrollbar-width: thin; scrollbar-color: var(--empire-divider) transparent; }
+.nav-brand { padding: 0 20px 16px; border-bottom: 1px solid var(--empire-divider); margin-bottom: 8px; }
 .nav-brand-row { display: flex; align-items: baseline; gap: 6px; }
 .nav-brand-e { font-family: var(--font-display); font-weight: 700; font-size: 18px; letter-spacing: 0.18em; }
 .nav-brand-ai { font-family: var(--font-display); font-weight: 700; font-size: 18px; letter-spacing: 0.18em; color: var(--strike-cyan); }
@@ -65,6 +65,18 @@ _SPA_CSS = """
 .nav-item.active { color: var(--signal-teal); background: var(--signal-teal-soft); border-left-color: var(--signal-teal); }
 .nav-item-dot { display: inline-block; width: 4px; height: 4px; border-radius: var(--radius-pill); background: var(--empire-fog); margin-right: 14px; flex-shrink: 0; }
 .nav-item.active .nav-item-dot { background: var(--signal-teal); box-shadow: var(--glow-signal); }
+
+/* ── NAV GROUPS (collapsible) ───────────────────────────────── */
+.nav-group { margin-bottom: 2px; }
+.nav-group-header { display: flex; align-items: center; gap: 8px; width: 100%; padding: 9px 20px 9px 16px; background: transparent; border: none; cursor: pointer; transition: all 0.15s var(--ease-snap); font-family: var(--font-mono); font-size: 9px; color: var(--empire-fog); letter-spacing: 0.18em; text-transform: uppercase; border-left: 2px solid transparent; }
+.nav-group-header:hover { background: var(--empire-elevated); color: var(--empire-mist); }
+.nav-group-icon { font-size: 11px; flex-shrink: 0; opacity: 0.7; }
+.nav-group-label { flex: 1; text-align: left; }
+.nav-group-count { font-size: 8px; color: var(--empire-fog); opacity: 0.5; background: var(--empire-elevated); padding: 1px 5px; border-radius: 3px; }
+.nav-group-chevron { font-size: 7px; transition: transform 0.2s var(--ease-snap); opacity: 0.4; }
+.nav-group-header.collapsed .nav-group-chevron { transform: rotate(-90deg); }
+.nav-group-items { overflow: hidden; max-height: 2000px; transition: max-height 0.25s var(--ease-out-empire), opacity 0.2s var(--ease-snap); opacity: 1; }
+.nav-group-items.collapsed { max-height: 0; opacity: 0; }
 
 /* ── TOP BAR ──────────────────────────────────────────────────────── */
 .main { display: flex; flex-direction: column; min-width: 0; }
@@ -85,6 +97,12 @@ _SPA_CSS = """
 .section-title { font-weight: 200; font-size: 26px; letter-spacing: -0.03em; }
 .section-title em { font-style: italic; color: var(--signal-teal); font-weight: 500; }
 .section-sub { font-family: var(--font-mono); font-size: 10px; color: var(--empire-mist); letter-spacing: 0.14em; text-transform: uppercase; }
+
+/* ── PULSE TABS ──────────────────────────────────────────────────── */
+.pulse-tabs { display: flex; gap: 0; margin-bottom: 24px; border-bottom: 1px solid var(--empire-divider); }
+.pulse-tab { padding: 10px 22px; font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--empire-mist); cursor: pointer; border-bottom: 2px solid transparent; transition: all 0.15s var(--ease-snap); background: none; border-top: none; border-left: none; border-right: none; }
+.pulse-tab:hover { color: var(--empire-white); }
+.pulse-tab.active { color: var(--signal-teal); border-bottom-color: var(--signal-teal); }
 
 /* ── STAT CARDS ───────────────────────────────────────────────────── */
 .pulse-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px; }
@@ -648,6 +666,29 @@ n/* ── ACTIVITY LOG ──────────────────�
 .rv-acc-legend-swatch.forecast{background:var(--strike-cyan)}
 .rv-acc-legend-swatch.actual{background:var(--signal-teal)}
 
+
+/* ── PAIN POINTS ─────────────────────────────────────────────── */
+.pp-niches-bar { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 24px; }
+.pp-niche-tab { display: flex; align-items: center; gap: 10px; padding: 10px 18px; background: var(--empire-surface); border: 1px solid var(--empire-border); cursor: pointer; transition: all 0.15s var(--ease-snap); border-radius: 6px; font-family: var(--font-mono); }
+.pp-niche-tab:hover { border-color: var(--empire-border-hi); background: var(--empire-elevated); }
+.pp-niche-tab.active { border-color: var(--signal-teal-soft); background: rgba(68,229,184,0.04); }
+.pp-niche-name { font-size: 12px; color: var(--empire-white); font-weight: 500; }
+.pp-niche-count { font-size: 9px; color: var(--empire-mist); letter-spacing: 0.08em; }
+.pp-niche-cr { font-size: 11px; color: var(--signal-teal); font-weight: 500; }
+.pp-card { background: var(--empire-elevated); border: 1px solid var(--empire-divider); padding: 16px 18px; transition: border-color 0.15s var(--ease-snap); }
+.pp-card:hover { border-color: var(--empire-border-hi); }
+.pp-card-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+.pp-card-label { font-weight: 500; font-size: 14px; color: var(--empire-white); }
+.pp-card-weight { font-family: var(--font-mono); font-size: 12px; font-weight: 600; }
+.pp-card-hook { font-size: 11px; color: var(--strike-cyan); line-height: 1.5; margin-bottom: 6px; }
+.pp-card-resolution { font-size: 11px; color: var(--empire-silver); line-height: 1.5; margin-bottom: 6px; }
+.pp-card-proof { font-family: var(--font-mono); font-size: 9px; color: var(--empire-mist); letter-spacing: 0.04em; margin-bottom: 12px; padding: 6px 10px; background: var(--empire-surface); border-radius: 4px; }
+.pp-card-stats { display: flex; gap: 16px; margin-bottom: 8px; }
+.pp-card-stat { font-family: var(--font-mono); font-size: 9px; color: var(--empire-fog); letter-spacing: 0.04em; }
+.pp-w-bar-wrap { height: 4px; background: var(--empire-surface); border-radius: 2px; overflow: hidden; }
+.pp-w-bar { height: 100%; border-radius: 2px; transition: width 0.6s var(--ease-out-empire); min-width: 2px; }
+.pp-export-bar { display: flex; gap: 10px; margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--empire-divider); align-items: center; }
+
 /* ── EXPORT BUTTONS ────────────────────────────────────────────────────────────── */
 .rv-accuracy-actions{display:flex;gap:8px;align-items:center}
 .rv-export-btn{font-family:var(--font-mono);font-size:9px;letter-spacing:.1em;text-transform:uppercase;padding:5px 12px;border-radius:4px;cursor:pointer;font-weight:600;transition:all .15s var(--ease-snap);background:transparent}
@@ -1149,30 +1190,56 @@ async function apiFetch(path, opts = {}) {
 }
 
 // ── ROUTING ───────────────────────────────────────────────────────────
-const SECTIONS = [
-  { id: 'pulse',         label: 'Pulse',         sub: 'Live overview' },
-  { id: 'pipeline',      label: 'Pipeline',       sub: 'Email & SMS · state machine' },
-  { id: 'dispatch',      label: 'Dispatch',       sub: 'Contractor matching' },
-  { id: 'inbound',       label: 'Inbound',        sub: 'Calls · triage · recordings' },
-  { id: 'payouts',       label: 'Payouts',        sub: 'Pending · approvals · history' },
-  { id: 'contractors',   label: 'Contractors',    sub: 'Applications & approvals' },
-  { id: 'console',       label: 'Console',        sub: 'Sovereign natural-language ops' },
-  { id: 'audit',         label: 'Audit',          sub: 'Operator action history' },
-  { id: 'operators',     label: 'Operators',      sub: 'Roster · roles · invites' },
-  { id: 'neural-core',   label: 'Neural Core',    sub: 'Live brain · autonomous decisions · 5s refresh' },
-  { id: 'holo-map',      label: 'Holo Map',       sub: 'Live storm grid · 3D target overlay' },
-  { id: 'governor',      label: 'Governor',       sub: 'AGI governor · weight control · guardrails' },
-  { id: 'sniper-fleet',  label: 'Sniper Fleet',   sub: 'Active agents · lane status · targeting' },
-  { id: 'health-monitor',label: 'Health Monitor', sub: 'Agent mesh · system health · overseer' },
-  { id: 'leads',         label: 'Leads',          sub: 'Inbound leads · pipeline · intake' },
-  { id: 'kanban',        label: 'Kanban',         sub: 'Agent task queue · pipeline stages' },
-  { id: 'revenue',       label: 'Revenue',        sub: 'Predictive revenue · per-lane MRR · LLM forecast' },
-  { id: 'si-strategy',   label: 'SI Strategy',    sub: 'Evolution · genomes · win rates' },
-  { id: 'si-adaptive',   label: 'SI Adaptive',    sub: 'Subsystem adoption · parameter propagation' },
-  { id: 'panel_court',      label: 'Panel Court',    sub: '10-Agent ensemble · voting · learning' },
-  { id: 'seo',           label: 'SEO',            sub: 'Audits · keywords · content · genome' },
-  { id: 'partners',      label: 'Partners',       sub: 'Buyers · pending · approvals' },
+const NAV_GROUPS = [
+  {
+    id: 'ops', label: 'COMMAND', icon: '📡', defaultOpen: true,
+    items: [
+      { id: 'pulse',         label: 'Pulse',         sub: 'Live overview' },
+      { id: 'pipeline',      label: 'Pipeline',       sub: 'Email & SMS · state machine' },
+      { id: 'dispatch',      label: 'Dispatch',       sub: 'Contractor matching' },
+      { id: 'inbound',       label: 'Inbound',        sub: 'Calls · triage · recordings' },
+      { id: 'leads',         label: 'Leads',          sub: 'Inbound leads · pipeline · intake' },
+      { id: 'kanban',        label: 'Kanban',         sub: 'Agent task queue · pipeline stages' },
+    ]
+  },
+  {
+    id: 'revenue', label: 'REVENUE', icon: '💰', defaultOpen: true,
+    items: [
+      { id: 'payouts',       label: 'Payouts',        sub: 'Pending · approvals · history' },
+      { id: 'contractors',   label: 'Contractors',    sub: 'Applications & approvals' },
+      { id: 'partners',      label: 'Partners',       sub: 'Buyers · pending · approvals' },
+      { id: 'revenue',       label: 'Revenue',        sub: 'Predictive revenue · per-lane MRR · LLM forecast' },
+      { id: 'closer',       label: 'Closer',         sub: 'AI pipeline · funnel · stats' },
+      { id: 'pain-points',  label: 'Pain Points',    sub: 'Niche scripts · weights · conversion' },
+      { id: 'swarm-gate',   label: 'Swarm Gate',     sub: 'Parallel video ads · scan → fire' },
+    ]
+  },
+  {
+    id: 'intel', label: 'INTELLIGENCE', icon: '🧠', defaultOpen: false,
+    items: [
+      { id: 'neural-core',   label: 'Neural Core',    sub: 'Live brain · autonomous decisions · 5s refresh' },
+      { id: 'holo-map',      label: 'Holo Map',       sub: 'Live storm grid · 3D target overlay' },
+      { id: 'si-strategy',   label: 'SI Strategy',    sub: 'Evolution · genomes · win rates' },
+      { id: 'si-adaptive',   label: 'SI Adaptive',    sub: 'Subsystem adoption · parameter propagation' },
+      { id: 'panel_court',      label: 'Panel Court',    sub: '10-Agent ensemble · voting · learning' },
+      { id: 'seo',           label: 'SEO',            sub: 'Audits · keywords · content · genome' },
+    ]
+  },
+  {
+    id: 'system', label: 'SYSTEM', icon: '⚙️', defaultOpen: false,
+    items: [
+      { id: 'console',       label: 'Console',        sub: 'Sovereign natural-language ops' },
+      { id: 'operators',     label: 'Operators',      sub: 'Roster · roles · invites' },
+      { id: 'audit',         label: 'Audit',          sub: 'Operator action history' },
+      { id: 'governor',      label: 'Governor',       sub: 'AGI governor · weight control · guardrails' },
+      { id: 'sniper-fleet',  label: 'Sniper Fleet',   sub: 'Active agents · lane status · targeting' },
+      { id: 'health-monitor',label: 'Health Monitor', sub: 'Agent mesh · system health · overseer' },
+    ]
+  },
 ];
+
+// Flattened lookup (built from GROUPS) for hash → section resolution
+const SECTIONS = NAV_GROUPS.reduce((flat, g) => flat.concat(g.items), []);
 
 function currentSection() {
   const hash = (window.location.hash || '#/pulse').replace(/^#\//, '');
@@ -1262,14 +1329,259 @@ function useLiveSocket(onEvent) {
   return { connected, transport };
 }
 
+// ── CLOSER SECTION ────────────────────────────────────────────────────────────────────
+function Closer() {
+  const [stats, setStats] = useState(null);
+  const [err, setErr] = useState(null);
+  useEffect(() => {
+    let stop = false;
+    const load = () => {
+      apiFetch('/api/v1/closer/stats').then(r => r.json())
+        .then(s => { if (!stop) { setStats(s); setErr(null); } })
+        .catch(e => { if (!stop) setErr(String(e)); });
+    };
+    load();
+    const iv = setInterval(load, 15000);
+    return () => { stop = true; clearInterval(iv); };
+  }, []);
+  if (err) return html`<div class="stub"><div class="stub-title">Could not load Closer</div><div class="stub-body">${err}</div></div>`;
+  if (!stats) return html`<div class="stub"><div class="stub-title">Loading <em>Closer</em></div><div class="stub-body">Fetching pipeline stats...</div></div>`;
+  const total = (stats.leads_processed || 0);
+  const goRate = total > 0 ? ((stats.brain_go || 0) / total * 100).toFixed(1) : '0.0';
+  const noGoRate = total > 0 ? ((stats.brain_no_go || 0) / total * 100).toFixed(1) : '0.0';
+  return html`
+    <div>
+      <div class="section-h">
+        <div>
+          <div class="section-title">AI <em>Closer</em></div>
+          <div class="section-sub">AGI voice pipeline · brain → strategy → call/nurture</div>
+        </div>
+        <div class="topbar-actions">
+          <span style=${{fontFamily:'var(--font-mono)',fontSize:'10px',color:'var(--empire-fog)'}}>
+            Stream ≥${(stats.stream_confidence||0.7).toFixed(1)} · Static ≥${(stats.static_confidence||0.4).toFixed(1)}
+          </span>
+        </div>
+      </div>
+      <div class="pulse-grid">
+        <div class="stat-card">
+          <div class="stat-label">LEADS PROCESSED</div>
+          <div class="stat-value">${total}</div>
+          <div class="stat-meta">total inbound through pipeline</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">BRAIN GO</div>
+          <div class="stat-value teal">${stats.brain_go || 0}</div>
+          <div class="stat-meta">${goRate}% · LLM-approved leads</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">BRAIN NO-GO</div>
+          <div class="stat-value dim">${stats.brain_no_go || 0}</div>
+          <div class="stat-meta">${noGoRate}% · skipped / nurtured</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">ERRORS</div>
+          <div class=${'stat-value ' + ((stats.errors||0) > 0 ? 'bad' : 'teal')}>${stats.errors || 0}</div>
+          <div class="stat-meta">pipeline health</div>
+        </div>
+      </div>
+      <div class="pulse-grid">
+        <div class="stat-card">
+          <div class="stat-label">AGI STREAM CALLS</div>
+          <div class="stat-value cyan">${stats.agi_stream_calls || 0}</div>
+          <div class="stat-meta">live Kokoro TTS · high confidence</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">STATIC CALLS</div>
+          <div class="stat-value teal">${stats.static_calls || 0}</div>
+          <div class="stat-meta">Vonage NCCO · medium confidence</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">NURTURE ROUTED</div>
+          <div class="stat-value dim">${stats.nurture_routed || 0}</div>
+          <div class="stat-meta">SMS/email drip · low confidence</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">CONVERSION</div>
+          <div class="stat-value teal">${total > 0 ? (((stats.agi_stream_calls||0) + (stats.static_calls||0)) / total * 100).toFixed(1) + '%' : '0.0%'}</div>
+          <div class="stat-meta">calls / total leads</div>
+        </div>
+      </div>
+      <div class="compliance-panel" style=${{marginTop:'16px'}}>
+        <div class="compliance-h">
+          <div class="compliance-title">Wired Dependencies</div>
+          <div class="compliance-tag">LIVE STATUS</div>
+        </div>
+        <div class="compliance-grid">
+          <div class="compliance-card">
+            <div class="compliance-card-label">BRAIN DECIDER</div>
+            <div class=${'compliance-card-value ' + (stats.brain_decider_wired ? 'ok' : 'bad')}>
+              ${stats.brain_decider_wired ? 'WIRED' : 'OFFLINE'}
+            </div>
+          </div>
+          <div class="compliance-card">
+            <div class="compliance-card-label">VOICE ROUTER</div>
+            <div class=${'compliance-card-value ' + (stats.voice_router_wired ? 'ok' : 'bad')}>
+              ${stats.voice_router_wired ? 'WIRED' : 'OFFLINE'}
+            </div>
+          </div>
+          <div class="compliance-card">
+            <div class="compliance-card-label">SMS ENGINE</div>
+            <div class=${'compliance-card-value ' + (stats.sms_engine_wired ? 'ok' : 'bad')}>
+              ${stats.sms_engine_wired ? 'WIRED' : 'OFFLINE'}
+            </div>
+          </div>
+          <div class="compliance-card">
+            <div class="compliance-card-label">EMAIL ENGINE</div>
+            <div class=${'compliance-card-value ' + (stats.email_engine_wired ? 'ok' : 'bad')}>
+              ${stats.email_engine_wired ? 'WIRED' : 'OFFLINE'}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+
+// ── PAIN POINTS SECTION ────────────────────────────────────────────────────────────────────
+function PainPoints() {
+  const [data, setData] = useState(null);
+  const [err, setErr] = useState(null);
+  const [activeNiche, setActiveNiche] = useState(null);
+  useEffect(() => {
+    let stop = false;
+    const load = () => {
+      apiFetch('/api/v1/pain-points/snapshot').then(r => r.json())
+        .then(d => { if (!stop) { setData(d); setErr(null); } })
+        .catch(e => { if (!stop) setErr(String(e)); });
+    };
+    load();
+    const iv = setInterval(load, 30000);
+    return () => { stop = true; clearInterval(iv); };
+  }, []);
+  if (err) return html`<div class="stub"><div class="stub-title">Could not load Pain Points</div><div class="stub-body">${err}</div></div>`;
+  if (!data) return html`<div class="stub"><div class="stub-title">Loading <em>Pain Points</em></div><div class="stub-body">Fetching pain point profiles...</div></div>`;
+
+  const niches = Object.entries(data.by_niche || {}).sort();
+  const selectedNiche = activeNiche && data.by_niche[activeNiche] ? activeNiche : (niches[0] ? niches[0][0] : null);
+  const nicheData = selectedNiche ? data.by_niche[selectedNiche] : null;
+  const points = nicheData ? nicheData.pain_points : [];
+  const totalAttempts = nicheData ? nicheData.total_attempts : 0;
+  const totalSuccesses = nicheData ? nicheData.total_successes : 0;
+  const overallCR = totalAttempts > 0 ? (totalSuccesses / totalAttempts * 100).toFixed(1) : '0.0';
+
+  return html`
+    <div>
+      <div class="section-h">
+        <div>
+          <div class="section-title">Pain <em>Points</em></div>
+          <div class="section-sub">Niche scripts · conversion weights · AI closer integration</div>
+        </div>
+        <div class="topbar-actions">
+          <span style=${{fontFamily:'var(--font-mono)',fontSize:'10px',color:'var(--empire-fog)'}}>
+            ${data.niches || 0} niches · ${data.total_pain_points || 0} profiles
+          </span>
+        </div>
+      </div>
+      <div class="pulse-grid">
+        <div class="stat-card">
+          <div class="stat-label">NICHES TRACKED</div>
+          <div class="stat-value teal">${data.niches || 0}</div>
+          <div class="stat-meta">storm, hail, flood, legal, etc.</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">PAIN POINTS</div>
+          <div class="stat-value teal">${data.total_pain_points || 0}</div>
+          <div class="stat-meta">niche-specific profiles</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">TOTAL ATTEMPTS</div>
+          <div class="stat-value cyan">${totalAttempts}</div>
+          <div class="stat-meta">${selectedNiche || '—'} niche</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">OVERALL CONV RATE</div>
+          <div class="stat-value ${overallCR > 30 ? 'teal' : 'dim'}">${overallCR}%</div>
+          <div class="stat-meta">${totalSuccesses} successes</div>
+        </div>
+      </div>
+
+      <div class="pp-niches-bar">
+        ${niches.map(([niche, nd]) => {
+          const nicr = nd.total_attempts > 0 ? (nd.total_successes / nd.total_attempts * 100).toFixed(0) : 0;
+          return html`<button
+            class=${"pp-niche-tab " + (selectedNiche === niche ? 'active' : '')}
+            onClick=${() => setActiveNiche(niche)}
+            key=${niche}
+          >
+            <span class="pp-niche-name">${niche}</span>
+            <span class="pp-niche-count">${nd.pain_points.length}pp</span>
+            <span class="pp-niche-cr">${nicr}%</span>
+          </button>`;
+        })}
+      </div>
+
+      ${points.length > 0 ? html`
+      <div class="pipeline-breakdown">
+        <div class="pipeline-h">
+          <div class="pipeline-title">${selectedNiche} · Pain Points</div>
+          <div class="pipeline-total">${totalAttempts} attempts · ${overallCR}% conv</div>
+        </div>
+        <div class="pipeline-grid">
+          ${points.map(pp => {
+            const cr = pp.attempts > 0 ? (pp.conversion_rate * 100).toFixed(1) : '0.0';
+            const wColor = pp.weight >= 0.6 ? 'var(--signal-teal)' : pp.weight >= 0.5 ? 'var(--status-amber)' : 'var(--status-red)';
+            const crColor = pp.conversion_rate >= 0.6 ? 'var(--signal-teal)' : pp.conversion_rate >= 0.3 ? 'var(--status-amber)' : 'var(--status-red)';
+            return html`<div class="pp-card" key=${pp.id}>
+              <div class="pp-card-top">
+                <div class="pp-card-label">${pp.label}</div>
+                <div class="pp-card-weight" style=${{color: wColor}}>${pp.weight.toFixed(2)} wt</div>
+              </div>
+              <div class="pp-card-hook">🗣 ${pp.hook}</div>
+              <div class="pp-card-resolution">✓ ${pp.resolution.slice(0, 80)}</div>
+              <div class="pp-card-proof">📊 ${pp.proof}</div>
+              <div class="pp-card-stats">
+                <span class="pp-card-stat">${pp.attempts} attempts</span>
+                <span class="pp-card-stat">${pp.successes} won</span>
+                <span class="pp-card-stat" style=${{color: crColor}}>${cr}% CR</span>
+              </div>
+              <div class="pp-w-bar-wrap">
+                <div class="pp-w-bar" style=${{width: (pp.weight * 100) + '%', backgroundColor: wColor}}></div>
+              </div>
+            </div>`;
+          })}
+        </div>
+      </div>
+      ` : html`<div class="stub"><div class="stub-body">No pain points for ${selectedNiche} yet.</div></div>`}
+
+      <div class="pp-export-bar">
+        <button class="rv-export-btn csv" onClick=${() => {
+          apiFetch('/api/v1/pain-points/export/csv').then(r => r.blob()).then(blob => {
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url; a.download = 'empire_pain_points.csv';
+            a.click(); URL.revokeObjectURL(url);
+          });
+        }}>Download CSV</button>
+        <button class="rv-export-btn pdf" onClick=${() => {
+          apiFetch('/api/v1/pain-points/export/report').then(r => r.text()).then(html => {
+            const w = window.open('', '_blank');
+            w.document.write(html); w.document.close();
+          });
+        }}>View Report</button>
+      </div>
+    </div>
+  `;
+}
 // ── PULSE SECTION ─────────────────────────────────────────────────────
 function Pulse({ events, wsConnected }) {
   const [stats, setStats] = useState(null);
   const [err, setErr] = useState(null);
+  const [tab, setTab] = useState('overview');
 
   const reload = useCallback(async () => {
     try {
-      const [pb, em, sm, py, ib, pr, co] = await Promise.all([
+      const [pb, em, sm, py, ib, pr, co, cl, rv, ac] = await Promise.all([
         apiFetch('/api/v1/playbook/summary').then(r => r.json()),
         apiFetch('/api/v1/email/stats').then(r => r.json()),
         apiFetch('/api/v1/sms/stats').then(r => r.json()),
@@ -1277,8 +1589,11 @@ function Pulse({ events, wsConnected }) {
         apiFetch('/api/v1/inbound/stats').then(r => r.json()),
         apiFetch('/api/v1/partner/all').then(r => r.json()),
         apiFetch('/api/v1/compliance/stats').then(r => r.json()),
+        apiFetch('/api/v1/closer/stats').then(r => r.json()),
+        apiFetch('/api/revenue/lanes').then(r => r.json()),
+        apiFetch('/api/revenue/accuracy?days=14').then(r => r.json()),
       ]);
-      setStats({ pb, em, sm, py, ib, pr, co });
+      setStats({ pb, em, sm, py, ib, pr, co, cl, rv, ac });
       setErr(null);
     } catch (e) {
       if (e.message !== 'Unauthorized') setErr(e.message);
@@ -1316,6 +1631,10 @@ function Pulse({ events, wsConnected }) {
     .reduce((sum, p) => sum + ((parseFloat(p.base_payout) || 0) * (parseFloat(p.fee_rate) || 0.01) + (parseFloat(p.per_call_fee) || 0)), 0);
   const projectedMRR = Math.round(totalMonthlyRetainer + (totalPerCallFee * 22));
 
+  // ── Revenue bar chart: top 8 lanes by MRR ──
+  const rvLanes = ((stats.rv||{}).lanes || []).slice(0, 8);
+  const maxMRR = rvLanes.reduce((m, l) => Math.max(m, l.mrr_projected || 0), 0);
+
   return html`
     <div>
       <div class="section-h">
@@ -1325,7 +1644,12 @@ function Pulse({ events, wsConnected }) {
         </div>
         <div class="section-sub">Auto-refresh · 30s</div>
       </div>
-
+      <div class="pulse-tabs">
+        <button class=${"pulse-tab " + (tab === 'overview' ? 'active' : '')} onClick=${() => setTab('overview')}>Overview</button>
+        <button class=${"pulse-tab " + (tab === 'revenue' ? 'active' : '')} onClick=${() => setTab('revenue')}>Revenue</button>
+        <button class=${"pulse-tab " + (tab === 'pipeline' ? 'active' : '')} onClick=${() => setTab('pipeline')}>Pipeline</button>
+      </div>
+      ${tab === 'overview' ? html`
       <div class="pulse-grid">
         <div class="stat-card">
           <div class="stat-label">Strikes Today</div>
@@ -1357,41 +1681,39 @@ function Pulse({ events, wsConnected }) {
           <div class="stat-value teal">$${projectedMRR}</div>
           <div class="stat-meta">$${totalMonthlyRetainer} retainers · $${Math.round(totalPerCallFee * 22)} per-call fees</div>
         </div>
+        <div class="stat-card">
+          <div class="stat-label">Closer Pipeline</div>
+          <div class="stat-value teal">${((stats.cl||{}).leads_processed || 0)}</div>
+          <div class="stat-meta">leads processed</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Brain GO / NO-GO</div>
+          <div class="stat-value ${((stats.cl||{}).brain_go||0) > 0 ? 'teal' : 'dim'}">${(stats.cl||{}).brain_go || 0} / ${(stats.cl||{}).brain_no_go || 0}</div>
+          <div class="stat-meta">${(stats.cl||{}).brain_go + (stats.cl||{}).brain_no_go > 0 ? ((stats.cl||{}).brain_go / ((stats.cl||{}).brain_go + (stats.cl||{}).brain_no_go) * 100).toFixed(0) : 0}% GO rate</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Stream / Static Calls</div>
+          <div class="stat-value cyan">${(stats.cl||{}).agi_stream_calls || 0} / ${(stats.cl||{}).static_calls || 0}</div>
+          <div class="stat-meta">${(stats.cl||{}).nurture_routed || 0} nurtures · ${(stats.cl||{}).errors || 0} errors</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">24h Revenue</div>
+          <div class="stat-value teal">$${((stats.rv||{}).totals||{}).revenue_24h != null ? Number(((stats.rv||{}).totals||{}).revenue_24h).toLocaleString() : '--'}</div>
+          <div class="stat-meta">${((stats.rv||{}).totals||{}).active_buyers || 0} buyers · ${((stats.rv||{}).totals||{}).calls_24h || 0} calls</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Revenue Health</div>
+          <div class="stat-value ${((stats.rv||{}).health||{}).status === 'healthy' || ((stats.rv||{}).health||{}).status === 'surging' ? 'teal' : ((stats.rv||{}).health||{}).status === 'warning' ? 'dim' : 'bad'}">${((stats.rv||{}).health||{}).status || '--'}</div>
+          <div class="stat-meta">${((stats.rv||{}).health||{}).alerts ? ((stats.rv||{}).health||{}).alerts.length : 0} alerts</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Lanes Active</div>
+          <div class="stat-value cyan">${((stats.rv||{}).totals||{}).lanes_active || 0}/32</div>
+          <div class="stat-meta">$${((stats.rv||{}).totals||{}).mrr_projected != null ? Number(((stats.rv||{}).totals||{}).mrr_projected).toLocaleString() : '--'} MRR projected</div>
+        </div>
       </div>
 
-      ${activePartnersList.length > 0 ? html`
-      <div class="pipeline-breakdown">
-        <div class="pipeline-h">
-          <div class="pipeline-title">Pipeline Breakdown</div>
-          <div class="pipeline-total">$${totalPipelineValue}/call · $${totalMonthlyRetainer}/mo retainers</div>
-        </div>
-        <div class="pipeline-grid">
-          ${activePartnersList.map(p => {
-            const payout = parseFloat(p.base_payout) || 0;
-            const feeRate = parseFloat(p.fee_rate) || 0.01;
-            const perCallFee = parseFloat(p.per_call_fee) || 0;
-            const retainer = parseFloat(p.monthly_retainer) || 0;
-            const empireFeePerCall = Math.round((payout * feeRate + perCallFee) * 100) / 100;
-            const monthlyPotential = retainer + (empireFeePerCall * 22);
-            const states = Array.isArray(p.state_coverage) ? p.state_coverage.join(', ') : (p.state_coverage || '—');
-            return html`
-              <div class="pipeline-card" onClick=${() => window.location.hash = '#/partners?focus=' + encodeURIComponent(p.id)} style=${{cursor: 'pointer'}}>
-                <div class="pipeline-card-name">${p.buyer_name || '—'}</div>
-                <div class="pipeline-card-detail">${p.niche || '—'} · ${states}</div>
-                <div class="pipeline-card-payout">$${payout}<span class="pipeline-card-per">/call</span></div>
-                <div class="pipeline-card-fees">
-                  <span class="pipeline-fee-tag">$${empireFeePerCall}/call fee</span>
-                  ${retainer > 0 ? html`<span class="pipeline-fee-tag retainer">$${retainer}/mo retainer</span>` : ''}
-                </div>
-                <div class="pipeline-card-monthly">~$${monthlyPotential}/mo projected</div>
-              </div>
-            `;
-          })}
-        </div>
-      </div>
-      ` : ''}
-
-      ${(() => {
+${(() => {
         const co = stats.co;
         if (!co) return '';
         const blockedToday = co.blocked_today || 0;
@@ -1471,6 +1793,121 @@ function Pulse({ events, wsConnected }) {
             </div>`}
       </div>
     </div>
+      ` : null}
+
+      ${tab === 'revenue' ? html`
+      ${rvLanes.length > 0 ? html`
+      <div class="pipeline-breakdown">
+        <div class="pipeline-h">
+          <div class="pipeline-title">Revenue · Top Lanes</div>
+          <div class="pipeline-total">$${maxMRR.toLocaleString()} peak MRR</div>
+        </div>
+        <div class="pipeline-grid" style="grid-template-columns:1fr">
+          ${rvLanes.map(l => {
+            const barW = maxMRR > 0 ? Math.max(2, Math.round((l.mrr_projected / maxMRR) * 100)) : 0;
+            const barColor = (l.mrr_projected || 0) > 500 ? 'var(--signal-teal)' : (l.mrr_projected || 0) > 100 ? 'var(--strike-cyan)' : 'var(--empire-mist)';
+            return html`<div class="rv-bar-row" key=${l.lane_id}>
+              <div class="rv-bar-label">
+                <span class="rv-bar-lane">L${l.lane_id}</span>
+                <span class="rv-bar-niche">${(l.niche || '').slice(0, 18)}</span>
+              </div>
+              <div class="rv-bar-track">
+                <div class="rv-bar-fill" style=${{width: barW + '%', backgroundColor: barColor}}></div>
+              </div>
+              <div class="rv-bar-val">$${(l.mrr_projected || 0).toLocaleString()}</div>
+              <div class="rv-bar-meta">${l.calls_24h || 0}c · ${l.active_buyers || 0}b</div>
+            </div>`;
+          })}
+        </div>
+      </div>
+      ` : null}
+
+      ${(stats.ac||{}).series ? html`
+      <div class="rv-accuracy-panel">
+        <div class="rv-accuracy-head">
+          <div class="rv-accuracy-title">Forecast · Actual</div>
+          <div class="rv-accuracy-summary">
+            ${(() => {
+              const ser = (stats.ac||{}).series || [];
+              const last14 = ser.slice(0, 14);
+              const avgAcc = last14.length > 0 ? Math.round(last14.reduce((s, d) => s + (d.accuracy_pct || 0), 0) / last14.length) : 0;
+              const accColor = avgAcc >= 80 ? 'var(--signal-teal)' : avgAcc >= 50 ? 'var(--status-amber)' : 'var(--status-red)';
+              return html`<span style=${{color: accColor}}>${avgAcc}% avg accuracy</span> · ${last14.length}d`;
+            })()}
+          </div>
+        </div>
+        <div class="rv-accuracy-chart">
+          ${(() => {
+            const ser = (stats.ac||{}).series || [];
+            const last14 = ser.slice(0, 14).reverse();
+            const maxVal = last14.reduce((m, d) => Math.max(m, d.forecasted_fee || 0, d.actual_revenue || 0), 0);
+            return last14.map(d => {
+              const forecastW = maxVal > 0 ? Math.max(2, Math.round((d.forecasted_fee / maxVal) * 100)) : 0;
+              const actualW = maxVal > 0 ? Math.max(2, Math.round((d.actual_revenue / maxVal) * 100)) : 0;
+              const accColor = d.accuracy_pct >= 80 ? 'var(--signal-teal)' : d.accuracy_pct >= 50 ? 'var(--status-amber)' : 'var(--status-red)';
+              const dateLabel = (d.date || '').slice(5);
+              return html`<div class="rv-acc-row" key=${d.date}>
+                <div class="rv-acc-date">${dateLabel}</div>
+                <div class="rv-acc-bars">
+                  <div class="rv-acc-bar-wrap">
+                    <div class="rv-acc-bar forecast" style=${{width: forecastW + '%'}}></div>
+                    <span class="rv-acc-bar-label">$${(d.forecasted_fee || 0).toLocaleString()} fcst</span>
+                  </div>
+                  <div class="rv-acc-bar-wrap">
+                    <div class="rv-acc-bar actual" style=${{width: actualW + '%'}}></div>
+                    <span class="rv-acc-bar-label">$${(d.actual_revenue || 0).toLocaleString()} actual</span>
+                  </div>
+                </div>
+                <div class="rv-acc-pct" style=${{color: accColor}}>
+                  ${d.accuracy_pct != null ? d.accuracy_pct + '%' : '—'}
+                </div>
+              </div>`;
+            });
+          })()}
+        </div>
+        <div class="rv-accuracy-legend">
+          <div class="rv-acc-legend-item"><span class="rv-acc-legend-swatch forecast"></span> Forecast</div>
+          <div class="rv-acc-legend-item"><span class="rv-acc-legend-swatch actual"></span> Actual</div>
+          <div class="rv-acc-legend-item"><span style="color:var(--signal-teal)">≥80%</span> <span style="color:var(--status-amber)">50–79%</span> <span style="color:var(--status-red)"><50%</span></div>
+        </div>
+      </div>
+      ` : null}
+      ` : null}
+
+      ${tab === 'pipeline' ? html`
+      ${activePartnersList.length > 0 ? html`
+      <div class="pipeline-breakdown">
+        <div class="pipeline-h">
+          <div class="pipeline-title">Pipeline Breakdown</div>
+          <div class="pipeline-total">$${totalPipelineValue}/call · $${totalMonthlyRetainer}/mo retainers</div>
+        </div>
+        <div class="pipeline-grid">
+          ${activePartnersList.map(p => {
+            const payout = parseFloat(p.base_payout) || 0;
+            const feeRate = parseFloat(p.fee_rate) || 0.01;
+            const perCallFee = parseFloat(p.per_call_fee) || 0;
+            const retainer = parseFloat(p.monthly_retainer) || 0;
+            const empireFeePerCall = Math.round((payout * feeRate + perCallFee) * 100) / 100;
+            const monthlyPotential = retainer + (empireFeePerCall * 22);
+            const states = Array.isArray(p.state_coverage) ? p.state_coverage.join(', ') : (p.state_coverage || '—');
+            return html`
+              <div class="pipeline-card" onClick=${() => window.location.hash = '#/partners?focus=' + encodeURIComponent(p.id)} style=${{cursor: 'pointer'}}>
+                <div class="pipeline-card-name">${p.buyer_name || '—'}</div>
+                <div class="pipeline-card-detail">${p.niche || '—'} · ${states}</div>
+                <div class="pipeline-card-payout">$${payout}<span class="pipeline-card-per">/call</span></div>
+                <div class="pipeline-card-fees">
+                  <span class="pipeline-fee-tag">$${empireFeePerCall}/call fee</span>
+                  ${retainer > 0 ? html`<span class="pipeline-fee-tag retainer">$${retainer}/mo retainer</span>` : ''}
+                </div>
+                <div class="pipeline-card-monthly">~$${monthlyPotential}/mo projected</div>
+              </div>
+            `;
+          })}
+        </div>
+      </div>
+      ` : ''}
+
+      
   `;
 }
 
@@ -4466,6 +4903,7 @@ function App() {
   const [operator, setOperator] = useState(null);
   const [bootError, setBootError] = useState(null);
   const [section, setSection] = useState(currentSection());
+  const [collapsed, setCollapsed] = useState({});
   const [events, setEvents] = useState([]);
   const eventCounter = useRef(0);
 
@@ -4540,7 +4978,24 @@ function App() {
           </div>
           <div class="nav-tag">Operator Console · V49</div>
         </div>
-        ${SECTIONS.map(s => html`
+        ${NAV_GROUPS.map(g => html`
+      <div class="nav-group" key=${g.id}>
+        <button type="button" class=${"nav-group-header " + (collapsed[g.id] === undefined ? (g.defaultOpen ? '' : 'collapsed') : (collapsed[g.id] ? 'collapsed' : ''))}
+                onClick=${() => setCollapsed({...collapsed, [g.id]: collapsed[g.id] === undefined ? !g.defaultOpen : !collapsed[g.id]})}>
+          <span class="nav-group-icon">${g.icon}</span>
+          <span class="nav-group-label">${g.label}</span>
+          <span class="nav-group-count">${g.items.length}</span>
+          <span class="nav-group-chevron">▼</span>
+        </button>
+        <div class=${"nav-group-items " + ((collapsed[g.id] === undefined ? g.defaultOpen : !collapsed[g.id]) ? '' : 'collapsed')}>
+          ${g.items.map(s => html`
+            <a key=${s.id} class=${'nav-item ' + (s.id === section ? 'active' : '')} href=${'#/' + s.id}>
+              <span class="nav-item-dot"></span>${s.label}
+            </a>
+          `)}
+        </div>
+      </div>
+    `)}
           <a key=${s.id} class=${'nav-item ' + (s.id === section ? 'active' : '')} href=${'#/' + s.id}>
             <span class="nav-item-dot"></span>${s.label}
           </a>
@@ -4577,6 +5032,9 @@ function App() {
             active.id === 'neural-core'   ? html`<${AgiLoop} />` :
             active.id === 'holo-map'      ? html`<${HoloMap} />` :
             active.id === 'partners'      ? html`<${Partners} />` :
+            active.id === 'closer'        ? html`<${Closer} />` :
+            active.id === 'pain-points'   ? html`<${PainPoints} />` :
+            active.id === 'swarm-gate'    ? html`<${SwarmGate} />` :
             active.id === 'operators'     ? html`<${Operators} />` :
             active.id === 'governor'      ? html`<${Governor} />` :
             active.id === 'sniper-fleet'  ? html`<${SniperFleet} />` :

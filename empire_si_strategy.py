@@ -49,7 +49,7 @@ import os
 import random
 from collections import defaultdict
 from datetime import datetime, timezone
-from typing import Callable, Optional
+from typing import Callable, Optional, Any
 
 log = logging.getLogger("empire.si.strategy")
 
@@ -65,6 +65,11 @@ WIN_RATE_TO_KEEP = 0.15     # below this, strategy gets discarded
 
 GENOME_TRAITS = ["aggressiveness", "risk_tolerance", "outreach_intensity",
                  "price_premium", "narrow_focus"]
+
+# Pain point traits are PREfixed with "pp_" and loaded dynamically from
+# the PainPointLibrary. The evolve() method ignores pp_ traits during
+# random mutation (they're managed by PainPointLibrary.record_outcome).
+PAIN_POINT_TRAIT_PREFIX = "pp_"
 
 
 # ── BASE STRATEGY DNA ─────────────────────────────────────────────────────
@@ -121,6 +126,8 @@ class StrategyEvolution:
         self._evolution_runs = 0
         self._last_evolution_ts: Optional[str] = None
         self._evolution_events: list[dict] = []  # recent evolution event history
+        # Pain point reference — wired by hub.py after PainPointLibrary is created
+        self._pain_points: Optional[Any] = None
         self._seed_strategies()
 
     def _seed_strategies(self):
@@ -191,6 +198,21 @@ class StrategyEvolution:
         # Revenue bonus: scales score up for high-revenue outcomes
         revenue_bonus = min(2.0, avg_revenue / 100.0) if avg_revenue > 0 else 1.0
         s["score"] = win_rate * revenue_bonus * confidence
+
+        # ── Pain point effectiveness bonus ──────────────────────
+        # Strategies in niches with high-performing pain points get a
+        # score multiplier, making them more likely to be selected and
+        # less likely to be deactivated.
+        if self._pain_points and niche != "__base__":
+            try:
+                pp_traits = self._pain_points.get_genome_traits(niche)
+                if pp_traits:
+                    avg_pp_weight = sum(pp_traits.values()) / max(len(pp_traits), 1)
+                    # Multiplier: 0.9 (worst pain points) to 1.15 (best)
+                    pp_bonus = 0.85 + (0.35 * avg_pp_weight)
+                    s["score"] = s["score"] * pp_bonus
+            except Exception:
+                pass
 
     # ── EVOLVE ────────────────────────────────────────────────────────────
     def evolve(self, niche: Optional[str] = None) -> list[dict]:
@@ -316,6 +338,28 @@ class StrategyEvolution:
             if len(self._evolution_events) > 100:
                 self._evolution_events = self._evolution_events[-100:]
 
+        # Cross-lane transfer learning: seed globally best strategy into underperforming niches
+        all_scored = [s for s in self._strategies.values() if s.get("is_active") and s["runs"] >= MIN_SAMPLES_FOR_CONFIDENCE]
+        if all_scored:
+            global_best = max(all_scored, key=lambda x: x["score"])
+            for n, strategies in niches.items():
+                if n == "__base__" or n == global_best["niche"]:
+                    continue
+                niche_best_score = max((s["score"] for s in strategies), default=0)
+                if global_best["score"] > niche_best_score * 1.2:
+                    self._generations[n] += 1
+                    gen = self._generations[n]
+                    new_name = f"XFER_{global_best['name']}_gen{gen}"
+                    new_sid = f"evolved_{new_name.lower()}_{n.lower().replace(' ','_')}"
+                    self._strategies[new_sid] = {
+                        "id": new_sid, "name": new_name, "niche": n,
+                        "genome": dict(global_best["genome"]),
+                        "runs": 0, "wins": 0, "total_revenue": 0.0, "score": 0.0,
+                        "generation": gen, "parent": global_best["name"], "is_active": True,
+                    }
+                    self._lookup[(n, new_name)] = new_sid
+                    events.append({"type": "cross_pollinate", "from": global_best["niche"], "to": n, "strategy": new_name})
+
         return events
 
     # ── GET BEST STRATEGY FOR NICHE ──────────────────────────────────────
@@ -332,6 +376,43 @@ class StrategyEvolution:
         return best
 
     # ── GET DANCE FOR STRATEGY ───────────────────────────────────────────
+
+    def get_niche_win_rate(self, niche: str) -> float:
+        """Return the win rate (0.0-1.0) of the best active strategy for a niche.
+        
+        Used by the AI Closer to dynamically adjust routing thresholds.
+        High win rate -> lower thresholds (more aggressive calling).
+        Low win rate -> raise thresholds (more conservative).
+        """
+        best = self.best_for_niche(niche)
+        if not best:
+            return 0.0
+        key = (niche, best)
+        sid = self._lookup.get(key)
+        if sid and self._strategies[sid]["runs"] > 0:
+            return min(1.0, self._strategies[sid]["wins"] / self._strategies[sid]["runs"])
+        return 0.0
+
+    # ── PAIN POINT GENOME INTEGRATION ───────────────────────────────
+    def set_pain_points(self, pain_points: Any) -> None:
+        """Wire the PainPointLibrary so strategy genomes include pain point weights."""
+        self._pain_points = pain_points
+
+    def get_genome_with_pain_points(self, strategy_name: str, niche: str = "__base__") -> dict:
+        """Return the strategy genome merged with pain point weights for this niche.
+        
+        Used by the AI Closer's _select_strategy to choose strategies that
+        align with the best-performing pain points for a niche.
+        """
+        genome = self.get_genome(strategy_name, niche)
+        if self._pain_points and niche != "__base__":
+            try:
+                pp_traits = self._pain_points.get_genome_traits(niche)
+                genome.update(pp_traits)
+            except Exception:
+                pass
+        return genome
+
     def get_genome(self, strategy_name: str, niche: str = "__base__") -> dict:
         """Return the genome for a strategy, with fallback to base archetype."""
         key = (niche, strategy_name)

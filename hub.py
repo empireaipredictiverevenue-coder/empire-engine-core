@@ -68,6 +68,11 @@ from empire_partner_onboarding import register_partner_routes
 from empire_si_brain import SyntheticBrain, register_synthetic_routes
 from empire_si_strategy import StrategyEvolution
 from empire_si_adaptive import AdaptiveEngine
+from empire_ai_closer import AICloser, ai_closer_score_only
+from empire_pain_points import PainPointLibrary
+from empire_satellite_strike import SatelliteStrikeCore
+from empire_swarm_gate import GodModeSwarmGate
+from conversion_funnel import SalesFunnel
 from empire_mission_control import (
     mission_control_snapshot,
     mission_control_broadcast_loop,
@@ -254,6 +259,42 @@ storm_orchestrator = StormOrchestrator(
     bounce_breaker_pct=float(os.environ.get("STORM_BOUNCE_BREAKER_PCT", "5")),
 )
 
+# Pain Points Library — niche-specific pain point profiles, conversion tracking, script integration
+pain_points = PainPointLibrary(get_db=get_db)
+
+# ── Satellite Strike Core + God Mode Swarm Gate ──────────────────
+# Scans storm forecasts → filters warehouse targets → parallel video ads.
+# Each lane runs Script Engine → Kokoro TTS → FFmpeg 1080x1920 Render.
+satellite_strike = SatelliteStrikeCore(
+    get_db=get_db,
+    lookback_hours=int(os.environ.get("SATELLITE_LOOKBACK_HOURS", "24")),
+    min_risk_rank=int(os.environ.get("SATELLITE_MIN_RISK_RANK", "4")),
+    max_packages=int(os.environ.get("SATELLITE_MAX_PACKAGES", "32")),
+)
+
+swarm_gate = GodModeSwarmGate(
+    get_db=get_db,
+    brain_decider=brain_decider,
+    si_strategy=si_strategy,
+    pain_points=pain_points,
+    lane_count=int(os.environ.get("SWARM_LANE_COUNT", "3")),
+    lane_timeout=int(os.environ.get("SWARM_LANE_TIMEOUT_SEC", "120")),
+)
+
+# AI Closer — AGI-brained voice pipeline (BrainDecider → VoiceStreaming → SI feedback)
+ai_closer = AICloser(
+    brain_decider=brain_decider,
+    voice_router=voice_router,
+    sms_engine=sms_engine,
+    email_engine=email_engine,
+    get_db=get_db,
+    operator_number=os.environ.get("EMPIRE_OPERATOR_NUMBER", ""),
+    pain_points=pain_points,
+)
+
+# Sales Funnel — routes inbound leads through the AI Closer pipeline
+sales_funnel = SalesFunnel(closer=ai_closer)
+
 
 
 # ─────────────────────────────────────────────────────────────────────
@@ -338,6 +379,320 @@ register_synthetic_routes(app, brain=synthetic_brain, require_auth=require_auth,
 register_mission_control_routes(app, get_db=get_db)
 
 
+# ── AI Closer Routes ────────────────────────────────────────────────
+# POST /api/v1/closer/run  — run the full AGI closer pipeline on a lead
+# GET  /api/v1/closer/stats — closer stats snapshot
+# POST /api/v1/closer/score — score a lead without placing a call
+
+@app.post("/api/v1/closer/run")
+async def closer_run(request: Request, auth: bool = Depends(require_auth)):
+    """Run the full AGI-brained closer pipeline on a lead.
+    Body: {lead: {name, phone, email, ...}, alert_summary?: {event, severity, ...}, niche?: "..."}
+    """
+    try:
+        body = await request.json() if request.headers.get("content-type", "").startswith("application/json") else {}
+    except Exception:
+        raise HTTPException(400, "Invalid JSON")
+
+    lead = body.get("lead") or body
+    alert_summary = body.get("alert_summary")
+    niche = body.get("niche")
+
+    if not isinstance(lead, dict):
+        raise HTTPException(400, "lead must be a dict")
+    if not lead.get("name") and not lead.get("warehouse_name"):
+        raise HTTPException(400, "lead must have name or warehouse_name")
+
+    result = await ai_closer.close(lead, alert_summary=alert_summary, niche=niche)
+    return JSONResponse(result)
+
+
+@app.get("/api/v1/closer/stats")
+async def closer_stats(auth: bool = Depends(require_auth)):
+    """Return AI Closer stats snapshot for the SPA / mission control."""
+    return JSONResponse(ai_closer.snapshot())
+
+
+@app.post("/api/v1/closer/score")
+async def closer_score(request: Request, auth: bool = Depends(require_auth)):
+    """Score a lead through brain + strategy without placing a call.
+    Body: {lead: {name, phone, ...}, alert_summary?: {...}, niche?: "..."}
+    """
+    try:
+        body = await request.json() if request.headers.get("content-type", "").startswith("application/json") else {}
+    except Exception:
+        raise HTTPException(400, "Invalid JSON")
+
+    lead = body.get("lead") or body
+    alert_summary = body.get("alert_summary")
+    niche = body.get("niche")
+
+    if not isinstance(lead, dict):
+        raise HTTPException(400, "lead must be a dict")
+
+    result = await ai_closer_score_only(ai_closer, lead, alert_summary=alert_summary, niche=niche)
+    return JSONResponse(result)
+
+
+# ── Funnel Routes ──────────────────────────────────────────────────
+# POST /api/v1/funnel/run  — route a lead through SalesFunnel → AI Closer
+
+@app.post("/api/v1/funnel/run")
+async def funnel_run(request: Request, auth: bool = Depends(require_auth)):
+    """Route a lead through the SalesFunnel → AI Closer pipeline.
+    Body: {lead: {name, phone, email, ...}, intent?: "high"|"medium"|"low", alert_summary?: {...}}
+    """
+    try:
+        body = await request.json() if request.headers.get("content-type", "").startswith("application/json") else {}
+    except Exception:
+        raise HTTPException(400, "Invalid JSON")
+
+    lead = body.get("lead") or body
+    intent = body.get("intent", "medium")
+    alert_summary = body.get("alert_summary")
+
+    if not isinstance(lead, dict):
+        raise HTTPException(400, "lead must be a dict")
+
+    # Run through SalesFunnel first
+    route = sales_funnel.optimize_conversion({"intent": intent})
+
+    # If routed to closer, run the full pipeline
+    closer_result = None
+    if route in ("ROUTE_TO_AGI_CLOSER", "ROUTE_TO_VOICE_PIPELINE"):
+        try:
+            closer_result = await ai_closer.close(lead, alert_summary=alert_summary)
+        except Exception as e:
+            closer_result = {"error": str(e)[:200]}
+
+    return JSONResponse({
+        "funnel_route": route,
+        "closer_result": closer_result,
+    })
+
+
+# ── Swarm Gate Routes ─────────────────────────────────────────
+# POST /api/v1/swarm/scan   — run satellite scan for storm targets
+# POST /api/v1/swarm/fire   — fire the swarm gate on scanned packages
+# GET  /api/v1/swarm/stats  — swarm gate stats snapshot
+# GET  /api/v1/swarm/jobs   — recent swarm gate job results
+
+@app.post("/api/v1/swarm/scan")
+async def swarm_scan(auth: bool = Depends(require_auth)):
+    """Run the Satellite Strike Core scan: pull storm forecasts + cross-reference warehouse targets.
+    Returns strike packages ready for the Swarm Gate."""
+    packages = await satellite_strike.scan()
+    return JSONResponse({
+        "ok": True,
+        "packages": [
+            {
+                "target_id": p.target_id,
+                "warehouse_name": p.warehouse_name,
+                "address": p.address,
+                "city": p.city,
+                "state": p.state,
+                "metro": p.metro,
+                "asset_value": p.asset_value,
+                "storm_event": p.storm_event,
+                "storm_severity": p.storm_severity,
+                "risk_level": p.risk_level,
+                "risk_rank": p.risk_rank,
+                "niche": p.niche,
+                "phone": p.phone[:6] + "****" if p.phone else "",
+            }
+            for p in packages
+        ],
+        "count": len(packages),
+        "scan_snapshot": satellite_strike.snapshot(),
+    })
+
+
+@app.post("/api/v1/swarm/fire")
+async def swarm_fire(request: Request, auth: bool = Depends(require_auth)):
+    """Fire the God Mode Swarm Gate. Scans first if no packages provided.
+    Body (optional): {packages: [...], auto_script: true, auto_audio: true, auto_render: true}
+    If no packages, auto-scans via SatelliteStrikeCore."""
+    try:
+        body = await request.json() if request.headers.get("content-type", "").startswith("application/json") else {}
+    except Exception:
+        body = {}
+
+    packages = body.get("packages")
+    if not packages:
+        scanned = await satellite_strike.scan()
+        packages = [
+            {
+                "target_id": p.target_id,
+                "warehouse_name": p.warehouse_name,
+                "address": p.address,
+                "city": p.city,
+                "state": p.state,
+                "metro": p.metro,
+                "phone": p.phone,
+                "email": p.email,
+                "asset_value": p.asset_value,
+                "damage_severity": p.damage_severity,
+                "storm_event": p.storm_event,
+                "storm_severity": p.storm_severity,
+                "storm_urgency": p.storm_urgency,
+                "risk_level": p.risk_level,
+                "risk_rank": p.risk_rank,
+                "niche": p.niche,
+                "source": p.source,
+                "meta": p.meta,
+            }
+            for p in scanned
+        ]
+
+    auto_script = body.get("auto_script", True)
+    auto_audio = body.get("auto_audio", True)
+    auto_render = body.get("auto_render", True)
+
+    jobs = await swarm_gate.fire(packages, auto_script, auto_audio, auto_render)
+
+    return JSONResponse({
+        "ok": True,
+        "jobs": [
+            {
+                "target_id": j.target_id,
+                "warehouse_name": j.warehouse_name,
+                "metro": j.metro,
+                "niche": j.niche,
+                "risk_level": j.risk_level,
+                "brain_decision": j.brain_decision,
+                "brain_confidence": j.brain_confidence,
+                "strategy": j.strategy,
+                "script": j.script[:120] if j.script else "",
+                "audio_path": j.audio_path[:80] if j.audio_path else "",
+                "video_status": j.video_status,
+                "status": j.status,
+                "error": j.error[:200] if j.error else "",
+            }
+            for j in jobs
+        ],
+        "count": len(jobs),
+        "stats": swarm_gate.snapshot(),
+    })
+
+
+@app.get("/api/v1/swarm/stats")
+async def swarm_stats(auth: bool = Depends(require_auth)):
+    """Swarm Gate stats snapshot — cumulative totals, lane count, wiring status."""
+    return JSONResponse({
+        **swarm_gate.snapshot(),
+        "satellite": satellite_strike.snapshot(),
+    })
+
+
+@app.get("/api/v1/swarm/jobs")
+async def swarm_jobs(limit: int = 20, auth: bool = Depends(require_auth)):
+    """Recent Swarm Gate job results from the database."""
+    try:
+        db = get_db()
+        r = db.table("swarm_gate_jobs") \
+            .select("*") \
+            .order("created_at", desc=True) \
+            .limit(min(limit, 100)) \
+            .execute()
+        return JSONResponse({"jobs": r.data or [], "count": len(r.data or [])})
+    except Exception as e:
+        return JSONResponse({"jobs": [], "count": 0, "error": str(e)[:80]})
+
+
+# ── Pain Points Routes ─────────────────────────────────────────
+# GET  /api/v1/pain-points/snapshot   — full library state
+# GET  /api/v1/pain-points/export/csv — CSV export
+# GET  /api/v1/pain-points/export/report — HTML report
+
+@app.get("/api/v1/pain-points/snapshot")
+async def pain_points_snapshot(auth: bool = Depends(require_auth)):
+    """Return full pain points library state: per-niche points with weights, conversion rates."""
+    return JSONResponse(pain_points.snapshot())
+
+
+@app.get("/api/v1/pain-points/export/csv")
+async def pain_points_export_csv(auth: bool = Depends(require_auth)):
+    """Export pain points data as CSV file download."""
+    csv_content = pain_points.export_csv()
+    return Response(
+        content=csv_content,
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=empire_pain_points.csv"},
+    )
+
+
+@app.get("/api/v1/pain-points/export/report", response_class=HTMLResponse)
+async def pain_points_export_report(auth: bool = Depends(require_auth)):
+    """Print-friendly HTML report of pain point effectiveness (Ctrl+P to save as PDF)."""
+    snap = pain_points.snapshot()
+    rows_html = ""
+    for niche, niche_data in sorted(snap.get("by_niche", {}).items()):
+        points = niche_data.get("pain_points", [])
+        rows_html += f'<tr class="niche-header"><td colspan="7"><strong>{niche}</strong> · {len(points)} pain points</td></tr>'
+        for pp in points:
+            w = pp['weight']
+            cr = pp['conversion_rate']
+            w_color = "#44E5B8" if w >= 0.6 else ("#FFB800" if w >= 0.5 else "#FF4444")
+            cr_color = "#44E5B8" if cr >= 0.6 else ("#FFB800" if cr >= 0.3 else "#FF4444")
+            rows_html += f"""<tr>
+              <td>{pp['label']}</td>
+              <td style="color:{w_color}">{w}</td>
+              <td class="num">{pp['attempts']}</td>
+              <td class="num">{pp['successes']}</td>
+              <td class="num" style="color:{cr_color}">{cr}</td>
+              <td class="hook">{pp['hook'][:80]}</td>
+              <td class="proof">{pp['proof'][:80]}</td>
+            </tr>"""
+
+    return HTMLResponse(f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Empire AI · Pain Points Report</title>
+  <style>
+    * {{ margin:0; padding:0; box-sizing:border-box; }}
+    body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0a0a0f; color: #e2e8f0; padding: 48px 64px; }}
+    .report {{ max-width: 1100px; margin: 0 auto; }}
+    h1 {{ font-size: 22px; font-weight: 200; letter-spacing: -0.02em; margin-bottom: 4px; }}
+    h1 em {{ color: #44E5B8; font-style: italic; font-weight: 500; }}
+    .sub {{ font-family: 'SF Mono', 'Fira Code', monospace; font-size: 10px; color: #94a3b8; letter-spacing: 0.14em; text-transform: uppercase; margin-bottom: 20px; }}
+    .summary {{ display: flex; gap: 24px; margin-bottom: 28px; }}
+    .sum-card {{ background: #14141e; border: 1px solid #1e293b; padding: 16px 20px; flex: 1; }}
+    .sum-label {{ font-family: monospace; font-size: 9px; color: #64748b; letter-spacing: 0.14em; text-transform: uppercase; margin-bottom: 8px; }}
+    .sum-value {{ font-family: monospace; font-size: 24px; color: #f8fafc; font-weight: 500; }}
+    .sum-value.teal {{ color: #44E5B8; }}
+    table {{ width: 100%; border-collapse: collapse; background: #14141e; border: 1px solid #1e293b; margin-top: 16px; }}
+    thead th {{ font-family: monospace; font-size: 9px; color: #64748b; letter-spacing: 0.14em; text-transform: uppercase; text-align: left; padding: 12px 14px; border-bottom: 1px solid #1e293b; background: #0f0f17; }}
+    tbody td {{ padding: 10px 14px; border-bottom: 1px solid #1e293b; font-family: monospace; font-size: 10px; }}
+    tbody tr:last-child td {{ border-bottom: none; }}
+    .niche-header td {{ background: #0f0f17; font-size: 12px; padding: 14px 14px 10px; color: #f8fafc; }}
+    .num {{ text-align: right; }}
+    .hook {{ color: #94a3b8; font-size: 9px; }}
+    .proof {{ color: #64748b; font-size: 9px; }}
+    .footer {{ margin-top: 32px; font-family: monospace; font-size: 9px; color: #475569; letter-spacing: 0.08em; }}
+    @media print {{ body {{ background: #fff; color: #000; padding: 24px; }} .sum-card, table {{ background: #fff; border-color: #ccc; }} thead th {{ background: #f5f5f5; }} }}
+  </style>
+</head>
+<body>
+  <div class="report">
+    <h1>Empire AI <em>Pain Points</em></h1>
+    <div class="sub">Niche-specific pain point profiles · Weights & Conversion Rates</div>
+    <div class="summary">
+      <div class="sum-card"><div class="sum-label">Niches</div><div class="sum-value teal">{snap.get('niches', 0)}</div></div>
+      <div class="sum-card"><div class="sum-label">Pain Points</div><div class="sum-value">{snap.get('total_pain_points', 0)}</div></div>
+    </div>
+    <table>
+      <thead><tr>
+        <th>Pain Point</th><th>Weight</th><th class="num">Attempts</th><th class="num">Successes</th><th class="num">Conv Rate</th><th>Hook</th><th>Proof</th>
+      </tr></thead>
+      <tbody>{rows_html}</tbody>
+    </table>
+    <div class="footer">Empire AI V49 · Pain Points Library · Auto-generated report</div>
+  </div>
+</body>
+</html>""")
+
+
 # ─────────────────────────────────────────────────────────────────────
 # SI STRATEGY EVOLUTION + ADAPTIVE ENGINE
 # ─────────────────────────────────────────────────────────────────────
@@ -351,6 +706,7 @@ register_mission_control_routes(app, get_db=get_db)
 # to the si_parameters table.
 # ─────────────────────────────────────────────────────────────────────
 si_strategy = StrategyEvolution(get_db=get_db)
+si_strategy.set_pain_points(pain_points)
 # Expose the SI strategy instance on the class so empire_mission_control
 # can read the live snapshot without re-instantiating a parallel world.
 try:
@@ -586,6 +942,8 @@ async def startup():
     asyncio.create_task(hourly_digest.run())
     asyncio.create_task(seo_run_loop())
     asyncio.create_task(_si_evolution_loop())
+    # Swarm Gate auto-pilot — scan storm forecasts + fire parallel video ads every 30 min
+    asyncio.create_task(_swarm_autopilot_loop())
     # Mission Control broadcasts every 5s — drives the top status bar in the SPA
     asyncio.create_task(mission_control_broadcast_loop(
         broadcaster=live_broadcaster, get_db=get_db, interval=5.0,
@@ -934,6 +1292,29 @@ async def _gov_watchdog_loop():
 @app.on_event("startup")
 async def _gov_start_watchdog():
     _gasync.create_task(_gov_watchdog_loop())
+
+
+# ── Swarm Gate Auto-Pilot ───────────────────────────────────
+_SWARM_AUTOPILOT_INTERVAL = int(os.environ.get("SWARM_AUTOPILOT_INTERVAL_SEC", "1800"))
+
+
+async def _swarm_autopilot_loop():
+    """Background loop: every 30 min, scan storm forecasts + fire parallel video ads."""
+    import time as _sw_t
+    await asyncio.sleep(60)  # let the hub finish booting first
+    while True:
+        try:
+            packages = await satellite_strike.scan()
+            if packages:
+                log.info(f"[swarm.autopilot] scan found {len(packages)} targets — firing swarm")
+                jobs = await swarm_gate.fire(packages)
+                completed = sum(1 for j in jobs if j.status == "complete")
+                log.info(f"[swarm.autopilot] fire complete: {completed}/{len(jobs)} jobs succeeded")
+            else:
+                log.debug("[swarm.autopilot] scan: no targets found")
+        except Exception as e:
+            log.warning(f"[swarm.autopilot] cycle error: {e}")
+        await asyncio.sleep(_SWARM_AUTOPILOT_INTERVAL)
 
 
 # ─── /api/v1/compliance/stats: Compliance dashboard data ──────────────────
@@ -2052,7 +2433,36 @@ async def webhook_lead(request: fastapi.Request, x_empire_secret: str = fastapi.
         }
         result = client.table("inbound_leads").insert(payload).execute()
         new_id = result.data[0]["id"] if result.data else None
-        return JSONResponse({"status": "success", "id": new_id})
+
+        # ── Route through SalesFunnel → AI Closer pipeline ─────────
+        intent = data.get("intent", "medium")
+        funnel_route = sales_funnel.optimize_conversion({"intent": intent})
+        closer_result = None
+        if funnel_route in ("ROUTE_TO_AGI_CLOSER", "ROUTE_TO_VOICE_PIPELINE"):
+            # Fire-and-forget: closer runs in background so webhook responds fast.
+            # Closer logs all results to ai_closer_decisions table.
+            asyncio.create_task(ai_closer.close(
+                {
+                    "name": name,
+                    "phone": data.get("phone", ""),
+                    "email": data.get("email", ""),
+                    "city": data.get("metro", ""),
+                },
+                alert_summary={
+                    "event": "Inbound Lead",
+                    "severity": "Moderate",
+                    "urgency": "Normal",
+                    "area": data.get("metro", ""),
+                },
+            ))
+            closer_result = {"status": "queued"}
+
+        return JSONResponse({
+            "status": "success",
+            "id": new_id,
+            "funnel_route": funnel_route,
+            "closer_result": closer_result,
+        })
     except Exception as e:
         return JSONResponse({"error": f'Database write error: {str(e)}'}, status_code=500)
 if __name__ == "__main__":
