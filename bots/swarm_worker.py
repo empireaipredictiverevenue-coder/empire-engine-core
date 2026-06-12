@@ -65,7 +65,14 @@ def _get_sb():
     global _sb
     if _sb is None and SUPABASE_URL and SUPABASE_KEY:
         from supabase import create_client
-        _sb = create_client(SUPABASE_URL, SUPABASE_KEY)
+        try:
+            _sb = create_client(SUPABASE_URL, SUPABASE_KEY)
+            log.info(f"[swarm_worker] Supabase connected: {SUPABASE_URL[:40]}...")
+        except Exception as e:
+            log.warning(f"[swarm_worker] Supabase connect failed: {e}")
+            _sb = None
+    elif _sb is None:
+        log.info(f"[swarm_worker] Supabase skipped: URL={'SET' if SUPABASE_URL else 'MISSING'} KEY={'SET' if SUPABASE_KEY else 'MISSING'}")
     return _sb
 
 
@@ -102,7 +109,7 @@ def _fetch_manifest_from_db() -> List[Dict]:
         r = sb.table("radar_targets") \
             .select("warehouse_name,city,asset_value,phone,phone2,damage_severity") \
             .not_.is_("phone", "null") \
-            .order("asset_value", desc=True, nulls="last") \
+            .order("asset_value", desc=True) \
             .limit(12) \
             .execute()
         if not r.data:
@@ -218,19 +225,19 @@ class SwarmOrchestrationNode:
             log.info(f"[swarm_worker] {lead['company']}: using prebuilt script (video-only mode)")
         else:
             # Step 1: Craft hyper-targeted direct response ad script via Ollama
-        system_rules = (
-            "You are the senior direct-response engine for Empire AI. Write aggressive, high-energy "
-            "crisis marketing copy. Output a single, valid JSON object with one key: 'marketing_script'. "
-            "Do not include markdown wraps."
-        )
-        user_prompt = (
-            f"Write exactly 3 fast, punchy sentences for {lead['company']} in {lead['city']}. "
-            f"Reference their massive {lead['roof_sq_ft']} square foot commercial roof layer hit by recent storms. "
-            f"Tell them to secure emergency material allocations by calling {lead['inbound_route']} immediately."
-        )
+            system_rules = (
+                "You are the senior direct-response engine for Empire AI. Write aggressive, high-energy "
+                "crisis marketing copy. Output a single, valid JSON object with one key: 'marketing_script'. "
+                "Do not include markdown wraps."
+            )
+            user_prompt = (
+                f"Write exactly 3 fast, punchy sentences for {lead['company']} in {lead['city']}. "
+                f"Reference their massive {lead['roof_sq_ft']} square foot commercial roof layer hit by recent storms. "
+                f"Tell them to secure emergency material allocations by calling {lead['inbound_route']} immediately."
+            )
 
-        brain_response = await self.request_local_brain(system_rules, user_prompt)
-        script_text = brain_response.get("marketing_script", "Commercial storm damage assistance line open.")
+            brain_response = await self.request_local_brain(system_rules, user_prompt)
+            script_text = brain_response.get("marketing_script", "Commercial storm damage assistance line open.")
 
         # ── TTS phase ───────────────────────────────────────────
         # swarm.strike_video: skip TTS (video-only — no audio needed)
@@ -349,7 +356,7 @@ class SwarmOrchestrationNode:
                 )
                 return task
         except Exception as e:
-            log.debug(f"[swarm_worker] claim_mesh_task failed (RPC may not exist): {e}")
+            log.warning(f"[swarm_worker] claim_mesh_task RPC failed: {e}")
         return None
 
     async def _update_mesh_task(
@@ -365,13 +372,12 @@ class SwarmOrchestrationNode:
         if not sb:
             return
         try:
-            import json as _json
             update = {"status": status}
             utcnow = datetime.now(timezone.utc).isoformat()
             if status in ("Done", "Failed"):
                 update["completed_at"] = utcnow
             if result:
-                update["result"] = _json.dumps(result)[:2000]
+                update["result"] = json.dumps(result)[:2000]
             if error:
                 update["error"] = str(error)[:2000]
             sb.table("agent_task_queue").update(update).eq("ticket_id", ticket_id).execute()
@@ -518,7 +524,7 @@ async def run_loop(interval_hours: float = 6.0):
     fleet_interval_sec = interval_hours * 3600
 
     while True:
-        now_sec = asyncio.get_event_loop().time()
+        now_sec = asyncio.get_running_loop().time()
         try:
             # ── Always try mesh queue first ──
             mesh_done = await node.process_mesh_tasks(max_tasks=3)
@@ -548,9 +554,18 @@ def run():
 if __name__ == "__main__":
     if "--loop" in sys.argv:
         run()
-    else:
+    elif "--mesh-only" in sys.argv:
+        # Single-pass mesh-only: claim and process tasks, then exit
         node = SwarmOrchestrationNode()
+        processed = asyncio.run(node.process_mesh_tasks(max_tasks=3))
+        print(f"\n==> MESH TASKS PROCESSED: {processed}")
+    else:
+        # Default: mesh first, then fleet fire
+        node = SwarmOrchestrationNode()
+        mesh_done = asyncio.run(node.process_mesh_tasks(max_tasks=3))
+        if mesh_done > 0:
+            print(f"\n==> MESH TASKS PROCESSED: {mesh_done}")
+        # Always fire fleet after mesh check
         results = asyncio.run(node.boot_swarm_fleet())
-
         print("\n==> SWARM CAMPAIGN GENERATION METRICS REGISTERED:")
         print(json.dumps(results, indent=4))
