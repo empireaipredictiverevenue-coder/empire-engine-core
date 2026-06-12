@@ -27,9 +27,8 @@ import hashlib
 from datetime import datetime, timezone, timedelta
 from typing import Callable, Optional
 
-from fastapi import FastAPI, Request, HTTPException, Depends, Query
+from fastapi import FastAPI, Request, HTTPException, Query
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from supabase import create_client
 
 log = logging.getLogger("empire.affiliate")
@@ -823,4 +822,127 @@ def register_affiliate_routes(
             log.error(f"[affiliate] referrals error: {e}")
             raise HTTPException(500, str(e)[:80])
 
-    log.info("[affiliate] Routes registered - /portal/affiliate/{login,verify,dashboard} + /api/v1/affiliate/{stats,payouts,links,referrals}")
+    # ── OPERATOR API: LIST ALL AFFILIATES ──────────────────────────────
+    @app.get("/api/v1/affiliates/list")
+    async def aff_list(request: Request):
+        """List all buyers (affiliates) with their stats and link counts.
+        Requires hub_token auth (operator-only)."""
+        auth_header = request.headers.get("Authorization", "")
+        if not hub_token or auth_header != f"Bearer {hub_token}":
+            raise HTTPException(401, "Operator auth required")
+
+        try:
+            buyers = _sb.table("buyers").select("id, buyer_name, email, niche, is_active, status, fee_rate, created_at") \
+                .order("created_at", desc=True) \
+                .execute()
+            result = []
+            for b in (buyers.data or []):
+                bid = str(b["id"])
+                link_res = _sb.table("affiliate_links").select("id") \
+                    .eq("buyer_id", bid).execute()
+                link_count = len(link_res.data or [])
+                active_links = sum(1 for l in (link_res.data or []) if l.get("active"))
+                # Try stats from view
+                stats = _sb.table("affiliate_stats").select("*") \
+                    .eq("buyer_id", bid).limit(1).execute()
+                s = stats.data[0] if stats.data else {}
+                result.append({
+                    "id": bid,
+                    "buyer_name": b.get("buyer_name", ""),
+                    "email": b.get("email", ""),
+                    "niche": b.get("niche", ""),
+                    "is_active": b.get("is_active", False),
+                    "status": b.get("status", ""),
+                    "fee_rate": float(b.get("fee_rate", 0.01)),
+                    "created_at": str(b.get("created_at", "")),
+                    "link_count": link_count,
+                    "active_links": active_links,
+                    "total_leads": s.get("total_leads", 0),
+                    "total_calls": s.get("total_calls", 0),
+                    "qualified_calls": s.get("qualified_calls", 0),
+                    "total_revenue": s.get("total_revenue", 0),
+                    "commission_earned": s.get("commission_earned", 0),
+                })
+            return {"affiliates": result, "total": len(result)}
+        except Exception as e:
+            log.error(f"[affiliate] list error: {e}")
+            raise HTTPException(500, str(e)[:80])
+
+    # ── OPERATOR API: CREATE REFERRAL LINK ────────────────────────────
+    @app.post("/api/v1/affiliates/{buyer_id}/create-link")
+    async def aff_create_link(buyer_id: str, request: Request):
+        """Create a new referral link for an affiliate. Requires hub_token auth."""
+        auth_header = request.headers.get("Authorization", "")
+        if not hub_token or auth_header != f"Bearer {hub_token}":
+            raise HTTPException(401, "Operator auth required")
+
+        try:
+            body = await request.json()
+        except Exception:
+            body = {}
+
+        label = (body.get("label") or "").strip()
+        if not label:
+            raise HTTPException(400, "label is required")
+
+        # Verify buyer exists
+        buyer_res = _sb.table("buyers").select("id, buyer_name") \
+            .eq("id", buyer_id).limit(1).execute()
+        if not buyer_res.data:
+            raise HTTPException(404, "Buyer not found")
+
+        # Generate unique code
+        base_code = label.lower().replace(" ", "-").replace("_", "-")[:20]
+        code = base_code
+        for attempt in range(10):
+            dup = _sb.table("affiliate_links").select("id") \
+                .eq("code", code).limit(1).execute()
+            if not dup.data:
+                break
+            code = f"{base_code}-{attempt+2}"
+
+        try:
+            _sb.table("affiliate_links").insert({
+                "buyer_id": buyer_id,
+                "code": code,
+                "label": label,
+                "active": True,
+                "click_count": 0,
+                "conversion_count": 0,
+            }).execute()
+            log.info(f"[affiliate] link created: {code} for buyer {buyer_id}")
+            return {"ok": True, "code": code, "label": label}
+        except Exception as e:
+            log.error(f"[affiliate] create link error: {e}")
+            raise HTTPException(500, str(e)[:80])
+
+    # ── OPERATOR API: TOGGLE AFFILIATE ACTIVE STATUS ──────────────────
+    @app.post("/api/v1/affiliates/{buyer_id}/toggle-active")
+    async def aff_toggle_active(buyer_id: str, request: Request):
+        """Toggle a buyer's is_active flag. Requires hub_token auth."""
+        auth_header = request.headers.get("Authorization", "")
+        if not hub_token or auth_header != f"Bearer {hub_token}":
+            raise HTTPException(401, "Operator auth required")
+
+        try:
+            body = await request.json()
+        except Exception:
+            body = {}
+
+        active = body.get("is_active")
+        if active is None:
+            raise HTTPException(400, "is_active field required")
+
+        if not isinstance(active, bool):
+            raise HTTPException(400, "is_active must be boolean")
+
+        try:
+            _sb.table("buyers").update({"is_active": active}) \
+                .eq("id", buyer_id).execute()
+            log.info(f"[affiliate] toggled buyer {buyer_id} active={active}")
+            return {"ok": True, "buyer_id": buyer_id, "is_active": active}
+        except Exception as e:
+            log.error(f"[affiliate] toggle error: {e}")
+            raise HTTPException(500, str(e)[:80])
+
+    log.info("[affiliate] Routes registered - /portal/affiliate/{login,verify,dashboard} + /api/v1/affiliate/{stats,payouts,links,referrals} + /api/v1/affiliates/{list,create-link,toggle-active}")

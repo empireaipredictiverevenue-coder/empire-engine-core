@@ -1046,6 +1046,7 @@ const NAV_GROUPS = [
       { id: 'closer',       label: 'Closer',         sub: 'AI pipeline · funnel · stats' },
       { id: 'pain-points',  label: 'Pain Points',    sub: 'Niche scripts · weights · conversion' },
       { id: 'swarm-gate',   label: 'Swarm Gate',     sub: 'Parallel video ads · scan → fire' },
+      { id: 'affiliates',   label: 'Affiliates',    sub: 'Manage · referral links · stats' },
     ]
   },
   {
@@ -5071,6 +5072,171 @@ function SEOPanel() {
   `;
 }
 
+// ── AFFILIATES MANAGEMENT ───────────────────────────────────────────
+function Affiliates() {
+  const [affiliates, setAffiliates] = useState(null);
+  const [err, setErr] = useState(null);
+  const [expandedId, setExpandedId] = useState(null);
+  const [linkLabel, setLinkLabel] = useState({});
+  const [busy, setBusy] = useState({});
+  const [saving, setSaving] = useState({});
+
+  const reload = useCallback(async () => {
+    try {
+      const r = await apiFetch('/api/v1/affiliates/list').then(x => x.json());
+      setAffiliates(r.affiliates || []);
+      setErr(null);
+    } catch (e) {
+      if (e.message !== 'Unauthorized') setErr(e.message);
+    }
+  }, []);
+  useEffect(() => { reload(); }, [reload]);
+
+  const toggleActive = async (id, current) => {
+    setSaving(s => ({ ...s, [id]: true }));
+    try {
+      await apiFetch('/api/v1/affiliates/' + id + '/toggle-active', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ is_active: !current }),
+      });
+      await reload();
+    } catch (e) {
+      alert('Failed: ' + e.message);
+    }
+    setSaving(s => ({ ...s, [id]: false }));
+  };
+
+  const createLink = async (id) => {
+    const label = linkLabel[id] || '';
+    if (!label.trim()) return;
+    setBusy(b => ({ ...b, [id]: true }));
+    try {
+      await apiFetch('/api/v1/affiliates/' + id + '/create-link', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ label: label.trim() }),
+      });
+      setLinkLabel(l => ({ ...l, [id]: '' }));
+      await reload();
+    } catch (e) {
+      alert('Failed: ' + e.message);
+    }
+    setBusy(b => ({ ...b, [id]: false }));
+  };
+
+  if (err) return html`<div class="stub"><div class="stub-body">${err}</div></div>`;
+  if (!affiliates) return html`<div class="stub"><div class="stub-body">Loading…</div></div>`;
+
+  const active = affiliates.filter(a => a.is_active);
+  const totalRevenue = affiliates.reduce((s, a) => s + (a.total_revenue || 0), 0);
+  const totalCommission = affiliates.reduce((s, a) => s + (a.commission_earned || 0), 0);
+  const totalCalls = affiliates.reduce((s, a) => s + (a.total_calls || 0), 0);
+
+  return html`
+    <div>
+      <div class="section-h">
+        <div>
+          <div class="section-title">Affiliates</div>
+          <div class="section-sub">Manage partners · referral links · performance</div>
+        </div>
+        <button class="btn ghost" onClick=${reload}>Refresh</button>
+      </div>
+
+      <div class="pulse-grid">
+        <div class="stat-card">
+          <div class="stat-label">Total Affiliates</div>
+          <div class="stat-value teal">${affiliates.length}</div>
+          <div class="stat-meta">${active.length} active</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Revenue</div>
+          <div class="stat-value teal">$${totalRevenue.toLocaleString()}</div>
+          <div class="stat-meta">attributed to affiliates</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Commission</div>
+          <div class="stat-value cyan">$${totalCommission.toLocaleString()}</div>
+          <div class="stat-meta">earned by affiliates</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Calls</div>
+          <div class="stat-value">${totalCalls.toLocaleString()}</div>
+          <div class="stat-meta">across all affiliates</div>
+        </div>
+      </div>
+
+      <table class="tbl">
+        <thead><tr>
+          <th>Name</th>
+          <th>Email</th>
+          <th>Niche</th>
+          <th>Fee Rate</th>
+          <th>Links</th>
+          <th>Revenue</th>
+          <th>Commission</th>
+          <th>Status</th>
+          <th></th>
+        </tr></thead>
+        <tbody>
+          ${affiliates.map(a => html`
+            <tr key=${a.id} style=${{cursor: 'pointer'}} onClick=${() => setExpandedId(expandedId === a.id ? null : a.id)}>
+              <td><strong>${a.buyer_name}</strong></td>
+              <td class="tbl-mono">${a.email}</td>
+              <td>${a.niche || '—'}</td>
+              <td class="tbl-num">${(a.fee_rate * 100).toFixed(1)}%</td>
+              <td class="tbl-num">${a.active_links || 0}/${a.link_count || 0}</td>
+              <td class="tbl-num teal">$${(a.total_revenue || 0).toLocaleString()}</td>
+              <td class="tbl-num cyan">$${(a.commission_earned || 0).toLocaleString()}</td>
+              <td>
+                <span class="bdg ${a.is_active ? 'active' : 'paused'}">
+                  ${a.is_active ? 'Active' : (a.status || 'Inactive')}
+                </span>
+              </td>
+              <td>
+                <button class="tbl-action ${a.is_active ? 'danger' : 'go'}"
+                        disabled=${saving[a.id]}
+                        onClick=${(e) => { e.stopPropagation(); toggleActive(a.id, a.is_active); }}>
+                  ${saving[a.id] ? '…' : (a.is_active ? 'Deactivate' : 'Activate')}
+                </button>
+              </td>
+            </tr>
+            ${expandedId === a.id ? html`
+            <tr key=${a.id + '-detail'}>
+              <td colspan="9" style=${{padding: '0', borderBottom: '1px solid var(--empire-divider)'}}>
+                <div style=${{padding: '16px 24px', background: 'var(--empire-elevated)'}}>
+                  <div style=${{display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '14px'}}>
+                    <div class="stat-card" style=${{padding: '14px 16px'}}>
+                      <div class="stat-label">Leads</div>
+                      <div class="stat-value" style=${{fontSize: '22px'}}>${a.total_leads || 0}</div>
+                    </div>
+                    <div class="stat-card" style=${{padding: '14px 16px'}}>
+                      <div class="stat-label">Qualified Calls</div>
+                      <div class="stat-value cyan" style=${{fontSize: '22px'}}>${a.qualified_calls || 0}</div>
+                    </div>
+                  </div>
+                  <div style=${{display: 'flex', gap: '10px', alignItems: 'center'}}>
+                    <input class="fld-in mono" style=${{flex: 1}}
+                           value=${linkLabel[a.id] || ''}
+                           onChange=${e => setLinkLabel(l => ({ ...l, [a.id]: e.target.value }))}
+                           placeholder="New referral link label…" />
+                    <button class="btn"
+                            disabled=${busy[a.id] || !(linkLabel[a.id] || '').trim()}
+                            onClick=${() => createLink(a.id)}>
+                      ${busy[a.id] ? 'Creating…' : 'Create Link'}
+                    </button>
+                  </div>
+                </div>
+              </td>
+            </tr>` : ''}
+          `.join('')}
+          ${affiliates.length === 0 ? html`<tr><td class="tbl-empty" colspan="9">No affiliates found. Add buyers to get started.</td></tr>` : ''}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
 function App() {
 
 
@@ -5214,6 +5380,7 @@ function App() {
             active.id === 'governor'      ? html`<${Governor} />` :
             active.id === 'sniper-fleet'  ? html`<${SniperFleet} />` :
             active.id === 'health-monitor' ? html`<${HealthMonitor} />` :
+            active.id === 'affiliates'    ? html`<${Affiliates} />` :
             html`<${Stub} section=${active} />`
           }
         </section>
