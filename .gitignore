@@ -41,3 +41,7 @@ synthetic_brain.log
 # Rendered/generated video templates (regenerated at runtime, large binaries)
 templates/**/*.mp4
 SESSION_*.md
+
+# Local SQLite databases (storm scraper output, etc. — generated at runtime)
+data/*.sqlite
+data/*.sqlite-*

@@ -1,0 +1,16 @@
+{
+  "_comment": "Target zip codes for the NWS storm scraper. Edit and the 12h cron worker picks them up on next run. These are the high-volume commercial / industrial warehouse zones in TX/OK that the buyer pipeline is targeting.",
+  "_updated": "2026-06-12",
+  "zips": [
+    {"zip": "75201", "city": "Dallas",     "state": "TX", "niche_hint": "downtown_commercial"},
+    {"zip": "75247", "city": "Dallas",     "state": "TX", "niche_hint": "industrial_warehouse"},
+    {"zip": "76102", "city": "Fort Worth", "state": "TX", "niche_hint": "commercial_center"},
+    {"zip": "76177", "city": "Fort Worth", "state": "TX", "niche_hint": "alliance_logistics"},
+    {"zip": "73102", "city": "Oklahoma City", "state": "OK", "niche_hint": "business_hub"},
+    {"zip": "73108", "city": "Oklahoma City", "state": "OK", "niche_hint": "stockyards_industrial"},
+    {"zip": "75001", "city": "Addison",    "state": "TX", "niche_hint": "commercial_corridor"},
+    {"zip": "75050", "city": "Grand Prairie", "state": "TX", "niche_hint": "warehouse_infrastructure"},
+    {"zip": "76011", "city": "Arlington",  "state": "TX", "niche_hint": "industrial_entertainment"},
+    {"zip": "73179", "city": "Oklahoma City", "state": "OK", "niche_hint": "airport_distribution"}
+  ]
+}
