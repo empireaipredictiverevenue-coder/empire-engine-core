@@ -10,7 +10,7 @@ Within each source: affiliate_code > ref > utm_source.
 """
 
 import pytest
-from hub import _resolve_affiliate_code_from_request, _safe_utm_value
+from empire_affiliate_utils import _resolve_affiliate_code_from_request, _safe_utm_value
 
 
 # ── _safe_utm_value unit tests ───────────────────────────────────────
