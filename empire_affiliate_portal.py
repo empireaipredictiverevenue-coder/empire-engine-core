@@ -1045,4 +1045,101 @@ def register_affiliate_routes(
         return response
 
     # ── Click-recording helper (called in background thread) ──────────
-    log.info("[affiliate] Routes registered - /portal/affiliate/{login,verify,dashboard} + /api/v1/affiliate/{stats,payouts,links,referrals} + /api/v1/affiliates/{list,create-link,toggle-active}")
+    # ── OPERATOR API: AFFILIATE FUNNEL (CTR analytics) ────────────────
+    @app.get("/api/v1/affiliates/funnel")
+    async def aff_funnel(request: Request):
+        """
+        Return the conversion funnel for each affiliate:
+        clicks → leads → calls → qualified → revenue.
+        Requires hub_token auth (operator-only).
+        """
+        auth_header = request.headers.get("Authorization", "")
+        if not hub_token or auth_header != f"Bearer {hub_token}":
+            raise HTTPException(401, "Operator auth required")
+
+        try:
+            # Get all buyers with their links and codes
+            buyers = _sb.table("buyers").select("id, buyer_name, email, niche, is_active, fee_rate") \
+                .order("created_at", desc=True) \
+                .execute()
+
+            funnel_data = []
+            totals = {"clicks": 0, "leads": 0, "calls": 0, "qualified": 0, "revenue": 0.0}
+
+            for b in (buyers.data or []):
+                bid = str(b["id"])
+
+                # Get this buyer's link codes
+                link_res = _sb.table("affiliate_links").select("code, click_count") \
+                    .eq("buyer_id", bid).execute()
+                codes = [l["code"] for l in (link_res.data or [])]
+                total_clicks = sum(l.get("click_count", 0) or 0 for l in (link_res.data or []))
+
+                if not codes:
+                    continue
+
+                # Count attributed inbound leads
+                lead_res = _sb.table("inbound_leads").select("id", count="exact") \
+                    .in_("affiliate_code", codes).limit(10000).execute()
+                lead_count = lead_res.count if hasattr(lead_res, 'count') else len(lead_res.data or [])
+
+                # Count attributed calls + qualified + revenue
+                call_res = _sb.table("call_logs").select("id, qualified, fee_earned") \
+                    .in_("affiliate_code", codes).execute()
+                calls = call_res.data or []
+                call_count = len(calls)
+                qualified_count = sum(1 for c in calls if c.get("qualified"))
+                revenue = sum(float(c.get("fee_earned", 0) or 0) for c in calls)
+
+                # Compute conversion rates
+                click_to_lead = round(lead_count / max(total_clicks, 1) * 100, 1)
+                lead_to_call = round(call_count / max(lead_count, 1) * 100, 1)
+                call_to_qualified = round(qualified_count / max(call_count, 1) * 100, 1)
+                qualified_to_revenue = round(revenue / max(qualified_count, 1), 2)
+                overall_ctr = round(qualified_count / max(total_clicks, 1) * 100, 2)
+
+                funnel_data.append({
+                    "buyer_id": bid,
+                    "buyer_name": b.get("buyer_name", ""),
+                    "niche": b.get("niche", ""),
+                    "is_active": b.get("is_active", False),
+                    "fee_rate": float(b.get("fee_rate", 0.01)),
+                    "link_count": len(codes),
+                    "funnel": {
+                        "clicks": total_clicks,
+                        "leads": lead_count,
+                        "calls": call_count,
+                        "qualified": qualified_count,
+                        "revenue": round(revenue, 2),
+                    },
+                    "rates": {
+                        "click_to_lead": click_to_lead,
+                        "lead_to_call": lead_to_call,
+                        "call_to_qualified": call_to_qualified,
+                        "qualified_to_revenue": qualified_to_revenue,
+                        "overall_ctr": overall_ctr,
+                    },
+                })
+
+                totals["clicks"] += total_clicks
+                totals["leads"] += lead_count
+                totals["calls"] += call_count
+                totals["qualified"] += qualified_count
+                totals["revenue"] += round(revenue, 2)
+
+            # Compute aggregate rates
+            totals["click_to_lead"] = round(totals["leads"] / max(totals["clicks"], 1) * 100, 1)
+            totals["lead_to_call"] = round(totals["calls"] / max(totals["leads"], 1) * 100, 1)
+            totals["call_to_qualified"] = round(totals["qualified"] / max(totals["calls"], 1) * 100, 1)
+            totals["overall_ctr"] = round(totals["qualified"] / max(totals["clicks"], 1) * 100, 2)
+
+            return {
+                "funnel": funnel_data,
+                "totals": totals,
+                "affiliate_count": len(funnel_data),
+            }
+        except Exception as e:
+            log.error(f"[affiliate] funnel error: {e}")
+            raise HTTPException(500, str(e)[:80])
+
+    log.info("[affiliate] Routes registered - /portal/affiliate/{login,verify,dashboard} + /api/v1/affiliate/{stats,payouts,links,referrals} + /api/v1/affiliates/{list,create-link,toggle-active,funnel}")

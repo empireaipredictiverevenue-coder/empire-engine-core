@@ -3640,7 +3640,7 @@ function Leads() {
     }
   }, []);
 
-  useEffect(() => { reload(); }, [reload]);
+  useEffect(() => { reload(); fetchFunnel(); }, [reload, fetchFunnel]);
 
   const addNote = async (leadId) => {
     const text = (noteText[leadId] || '').trim();
@@ -5081,6 +5081,18 @@ function Affiliates() {
   const [busy, setBusy] = useState({});
   const [saving, setSaving] = useState({});
   const [affLinks, setAffLinks] = useState({});
+  const [funnelData, setFunnelData] = useState(null);
+  const [funnelErr, setFunnelErr] = useState(null);
+
+  const fetchFunnel = useCallback(async () => {
+    try {
+      const r = await apiFetch('/api/v1/affiliates/funnel').then(x => x.json());
+      setFunnelData(r);
+      setFunnelErr(null);
+    } catch (e) {
+      if (e.message !== 'Unauthorized') setFunnelErr(e.message);
+    }
+  }, []);
 
   const fetchAffLinks = useCallback(async (id) => {
     try {
@@ -5106,7 +5118,7 @@ function Affiliates() {
       if (e.message !== 'Unauthorized') setErr(e.message);
     }
   }, []);
-  useEffect(() => { reload(); }, [reload]);
+  useEffect(() => { reload(); fetchFunnel(); }, [reload, fetchFunnel]);
 
   const toggleActive = async (id, current) => {
     setSaving(s => ({ ...s, [id]: true }));
@@ -5156,8 +5168,72 @@ function Affiliates() {
           <div class="section-title">Affiliates</div>
           <div class="section-sub">Manage partners · referral links · performance</div>
         </div>
-        <button class="btn ghost" onClick=${reload}>Refresh</button>
+        <button class="btn ghost" onClick=${() => { reload(); fetchFunnel(); }}>Refresh</button>
       </div>
+
+      ${/* Funnel analytics section */ ''}
+      ${funnelData ? html`
+        <div class="pipeline-breakdown" style=${{marginBottom: '20px'}}>
+          <div class="pipeline-h">
+            <div class="pipeline-title">Conversion <strong>Funnel</strong></div>
+            <div class="pipeline-total">${funnelData.affiliate_count || 0} affiliates</div>
+          </div>
+          <div style=${{display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '12px', marginBottom: '16px'}}>
+            <div class="stat-card" style=${{padding: '14px 16px'}}>
+              <div class="stat-label" style=${{fontSize: '9px'}}>CLICKS</div>
+              <div class="stat-value" style=${{fontSize: '22px'}}>${funnelData.totals.clicks.toLocaleString()}</div>
+              <div class="stat-meta">100%</div>
+            </div>
+            <div class="stat-card" style=${{padding: '14px 16px'}}>
+              <div class="stat-label" style=${{fontSize: '9px'}}>LEADS</div>
+              <div class="stat-value cyan" style=${{fontSize: '22px'}}>${funnelData.totals.leads.toLocaleString()}</div>
+              <div class="stat-meta">${funnelData.totals.click_to_lead || 0}% of clicks</div>
+            </div>
+            <div class="stat-card" style=${{padding: '14px 16px'}}>
+              <div class="stat-label" style=${{fontSize: '9px'}}>CALLS</div>
+              <div class="stat-value" style=${{fontSize: '22px'}}>${funnelData.totals.calls.toLocaleString()}</div>
+              <div class="stat-meta">${funnelData.totals.lead_to_call || 0}% of leads</div>
+            </div>
+            <div class="stat-card" style=${{padding: '14px 16px'}}>
+              <div class="stat-label" style=${{fontSize: '9px'}}>QUALIFIED</div>
+              <div style=${{fontSize: '22px', color: 'var(--status-amber)', fontFamily: 'var(--font-mono)', fontWeight: 500}} style=${{fontSize: '22px'}}>${funnelData.totals.qualified.toLocaleString()}</div>
+              <div class="stat-meta">${funnelData.totals.call_to_qualified || 0}% of calls</div>
+            </div>
+            <div class="stat-card" style=${{padding: '14px 16px'}}>
+              <div class="stat-label" style=${{fontSize: '9px'}}>REVENUE</div>
+              <div class="stat-value teal" style=${{fontSize: '22px'}}>$${funnelData.totals.revenue.toLocaleString()}</div>
+              <div class="stat-meta">${funnelData.totals.overall_ctr || 0}% overall CTR</div>
+            </div>
+          </div>
+          ${/* Funnel bar chart per affiliate */ ''}
+          <div class="section-sub" style=${{marginBottom: '8px', fontSize: '9px'}}>Per-affiliate funnel</div>
+          ${funnelData.funnel.slice(0, 20).map(a => {
+            const fs = a.funnel;
+            const maxVal = Math.max(fs.clicks, 1);
+            return html`
+            <div style=${{marginBottom: '12px'}}>
+              <div style=${{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px'}}>
+                <span style=${{fontSize: '11px', color: 'var(--empire-white)', fontWeight: 500}}>${a.buyer_name}</span>
+                <span style=${{fontFamily: 'var(--font-mono)', fontSize: '9px', color: 'var(--empire-fog)'}}>
+                  ${a.niche || '—'} · ${a.link_count} links · ${a.rates.overall_ctr}% CTR
+                </span>
+              </div>
+              <div style=${{display: 'flex', gap: '4px', height: '18px', alignItems: 'center'}}>
+                <div style=${{flex: '1', height: '100%', display: 'flex', borderRadius: '3px', overflow: 'hidden', background: 'var(--empire-elevated)'}}>
+                  <div style=${{width: Math.max(2, (fs.clicks / maxVal) * 60) + '%', height: '100%', background: 'var(--empire-surface)', borderRight: '1px solid var(--empire-divider)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '8px', color: 'var(--empire-mist)', fontFamily: 'var(--font-mono)', minWidth: '20px'}}>${fs.clicks}</div>
+                  <div style=${{width: Math.max(2, (fs.leads / maxVal) * 50) + '%', height: '100%', background: 'rgba(90,200,250,0.2)', borderRight: '1px solid var(--empire-divider)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '8px', color: 'var(--strike-cyan)', fontFamily: 'var(--font-mono)', minWidth: '20px'}}>${fs.leads}</div>
+                  <div style=${{width: Math.max(2, (fs.calls / maxVal) * 40) + '%', height: '100%', background: 'rgba(255,184,0,0.2)', borderRight: '1px solid var(--empire-divider)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '8px', color: 'var(--status-amber)', fontFamily: 'var(--font-mono)', minWidth: '20px'}}>${fs.calls}</div>
+                  <div style=${{width: Math.max(2, (fs.qualified / maxVal) * 30) + '%', height: '100%', background: 'rgba(68,229,184,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '8px', color: 'var(--signal-teal)', fontFamily: 'var(--font-mono)', minWidth: '20px'}}>${fs.qualified}</div>
+                </div>
+                <span style=${{fontFamily: 'var(--font-mono)', fontSize: '9px', color: 'var(--signal-teal)', fontWeight: 500, minWidth: '65px', textAlign: 'right'}}>$${fs.revenue.toLocaleString()}</span>
+              </div>
+            </div>
+          `})}
+          ${funnelData.funnel.length > 20 ? html`<div class="stub" style=${{padding: '12px', marginTop: '8px', fontSize: '9px'}}><div class="stub-body">Showing top 20 of ${funnelData.funnel.length} affiliates</div></div>` : ''}
+        </div>
+      ` : funnelErr ? html`
+        <div class="stub" style=${{marginBottom: '20px'}}><div class="stub-body">Funnel data unavailable: ${funnelErr}</div></div>
+      ` : null}
 
       <div class="pulse-grid">
         <div class="stat-card">
