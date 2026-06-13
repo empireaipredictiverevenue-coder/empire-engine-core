@@ -2930,13 +2930,13 @@ from empire_affiliate_utils import _resolve_affiliate_code_from_request, _safe_u
 
 
 @app.post("/webhook/lead")
-async def webhook_lead(request: fastapi.Request, x_empire_secret: str = fastapi.Header(None)):
+async def webhook_lead(request: fastapi.Request, x_empire_secret: str = fastapi.Header(None, alias="x_empire_secret")):
     import os
     from fastapi.responses import JSONResponse
     from supabase import create_client
     import compliance
 
-    expected_secret = os.environ.get("WEBHOOK_SECRET", "empire_v49_secret")
+    expected_secret = os.environ.get("WEBHOOK_SECRET") or "empire_v49_default_webhook_secret"
     if x_empire_secret != expected_secret:
         return JSONResponse({"error": "Unauthorized"}, status_code=401)
 
