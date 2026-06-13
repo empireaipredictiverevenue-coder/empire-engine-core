@@ -64,6 +64,7 @@ from empire_reply_qualifier import ReplyQualifier
 from empire_narrator import Narrator
 from empire_3d_map import register_map_routes
 from empire_switchboard import register_switchboard_routes
+from empire_niche_terrain import NicheTerrain
 from empire_partner_onboarding import register_partner_routes
 from empire_affiliate_portal import register_affiliate_routes
 from empire_si_brain import SyntheticBrain, register_synthetic_routes
@@ -81,6 +82,31 @@ from empire_mission_control import (
     register_mission_control_routes,
 )
 from empire_pulse import PulseEngine, pulse_view_page
+from empire_data_bridge import register_bridge_routes as register_data_bridge_routes, start_bridge_processor, init_bridge_db
+from empire_bridge import BridgeEngine, register_bridge_routes as register_bridge_engine_routes
+from empire_voice_control import VoiceController
+from empire_brain_personality import BrainPersonality
+from empire_strike_packs import StrikePackCatalog, SubscriptionEngine, DeliveryFilter, register_strike_pack_routes
+from empire_carrier_portfolio import PortfolioManager, StormMatcher, StormReportEngine, register_carrier_routes
+
+# Empire AI Suite — 3-Product Monetization Gateway
+from suite_core import (
+    SuiteSubscriptionEngine,
+    SuiteGuard,
+    register_suite_routes,
+    _init_suite_db as _init_suite_db_sqlite,
+)
+from products.inbound_router import InboundRouter, InboundRouterRoutes
+from products.data_vault import DataVault, DataVaultRoutes
+from products.buyer_spy import BuyerSpy, BuyerSpyRoutes
+from products.omni_bridge import OmniBridge, OmniBridgeRoutes
+from products.agent_orchestrator import AgentOrchestrator, AgentOrchestratorRoutes
+from products.b2b_pro import B2BPro, B2BProRoutes
+from hook_analytics import HookRoutes
+
+# Strategist & Analytics Agents
+from empire_strategist import StrategistAgent
+from empire_analytics_agent import AnalyticsAgent
 
 
 logging.basicConfig(level=logging.INFO)
@@ -240,8 +266,13 @@ console = SovereignConsole(
 ai_router = AIRouter(get_db=get_db)
 brain_decider = BrainDecider(router=ai_router)
 
+# Phase 9: Brain Personality — operator-configurable persona per niche
+brain_personality = BrainPersonality(get_db=get_db)
+brain_decider.personality = brain_personality
+
 # Agentic features layer
 email_drafter = EmailDrafter(router=ai_router, get_db=get_db)
+email_drafter.personality = brain_personality  # Phase 9.5: personality-aware email drafting
 ai_enricher = AIEnricher(router=ai_router)
 reply_qualifier = ReplyQualifier(router=ai_router)
 narrator = Narrator(broadcaster=live_broadcaster)
@@ -279,12 +310,45 @@ ai_closer = AICloser(
 # Sales Funnel — will be wired after si_strategy is created (see SI Strategy section below)
 sales_funnel = SalesFunnel(closer=ai_closer)
 
+# Voice Controller — wraps BrainDecider + VoiceRouter + BrainMemory
+voice_controller = VoiceController(
+    voice_router=voice_router,
+    brain_decider=brain_decider,
+    brain_memory=brain_memory,
+    get_db=get_db,
+    operator_number=os.environ.get("EMPIRE_OPERATOR_NUMBER", ""),
+    broadcaster=live_broadcaster,
+    ntfy_topic=NTFY_TOPIC,
+    ntfy_token=NTFY_TOKEN,
+)
+
+# Bridge Engine — voice-first full-screen interface
+bridge_engine = BridgeEngine(
+    get_db=get_db,
+    voice_controller=voice_controller,
+    broadcaster=live_broadcaster,
+)
+
 # Pulse Engine — rollup engine for the /view/pulse insight layer
 pulse_engine = PulseEngine(
     get_db=get_db,
     refresh_interval_sec=int(os.environ.get("PULSE_REFRESH_INTERVAL_SEC", "300")),
 )
 
+# Strike Packs — product catalog + subscription engine + delivery filter
+strike_pack_catalog = StrikePackCatalog(get_db=get_db)
+strike_pack_subscriptions = SubscriptionEngine(get_db=get_db, catalog=strike_pack_catalog)
+strike_pack_delivery = DeliveryFilter(get_db=get_db, catalog=strike_pack_catalog, subscriptions=strike_pack_subscriptions)  # reserved for lead-dispatch pipeline
+
+# Carrier Portfolio — Insurance Intelligence product
+carrier_portfolio_manager = PortfolioManager(get_db=get_db)
+carrier_storm_matcher = StormMatcher(get_db=get_db, manager=carrier_portfolio_manager)
+carrier_report_engine = StormReportEngine(
+    get_db=get_db,
+    manager=carrier_portfolio_manager,
+    send_email=_send_email,
+    public_base_url=PUBLIC_BASE_URL,
+)
 
 
 # ─────────────────────────────────────────────────────────────────────
@@ -356,6 +420,19 @@ register_storm_routes(app, storm_orchestrator, require_auth=require_auth)
 register_map_routes(app, scout=storm_orchestrator.scout, get_db=get_db, require_auth=require_auth)
 register_switchboard_routes(app, require_auth=require_auth)
 register_partner_routes(app, require_auth=require_auth)
+register_data_bridge_routes(app, get_db=get_db, require_auth=require_auth)
+register_bridge_engine_routes(
+    app, bridge_engine,
+    require_auth=require_auth,
+    public_base_url=PUBLIC_BASE_URL,
+)
+register_strike_pack_routes(
+    app,
+    catalog=strike_pack_catalog,
+    subscriptions=strike_pack_subscriptions,
+    require_auth=require_auth,
+    require_owner=require_owner,
+)
 register_affiliate_routes(
     app,
     sign_token=_hub_sign_token,
@@ -364,6 +441,110 @@ register_affiliate_routes(
     public_base_url=PUBLIC_BASE_URL,
     hub_token=HUB_TOKEN,
 )
+
+# ── Niche Social Terrain — learn habits + map communities per niche ──
+niche_terrain = NicheTerrain()
+
+@app.get("/api/v6/terrain/map")
+async def terrain_map(niche: str = "", auth: bool = Depends(require_auth)):
+    """Return the social terrain map. ?niche= filters to one niche."""
+    return JSONResponse(niche_terrain.get_terrain_map(niche or None))
+
+
+@app.get("/api/v6/terrain/habits")
+async def terrain_habits(niche: str = "", auth: bool = Depends(require_auth)):
+    """Return learned habit traits. ?niche= filters to one niche."""
+    return JSONResponse(niche_terrain.get_habits(niche or None))
+
+
+@app.post("/api/v6/terrain/discover")
+async def terrain_discover(niche: str, depth: str = "standard", auth: bool = Depends(require_auth)):
+    """Trigger an LLM discovery scan for a niche's social terrain.
+    Query params: niche (required), depth (quick|standard|deep)
+    """
+    result = await niche_terrain.discover_terrain(niche, depth)
+    status = 200 if result.get("ok") else 400
+    return JSONResponse(result, status_code=status)
+
+
+@app.get("/api/v6/terrain/intel")
+async def terrain_intel(niche: str = "", auth: bool = Depends(require_auth)):
+    """Consolidated intelligence: where to be, when, with what content.
+    ?niche= filters to one niche or returns all."""
+    return JSONResponse(niche_terrain.terrain_intel(niche or None))
+
+
+@app.get("/api/v6/terrain/stats")
+async def terrain_stats(auth: bool = Depends(require_auth)):
+    """Niche Terrain snapshot — stats, niches tracked, communities mapped."""
+    return JSONResponse(niche_terrain.snapshot())
+
+
+register_carrier_routes(
+    app,
+    manager=carrier_portfolio_manager,
+    matcher=carrier_storm_matcher,
+    report_engine=carrier_report_engine,
+    require_auth=require_auth,
+)
+
+# ── Suite Gateway — 3-Product Monetization ───────────────────────────
+suite_subscriptions = SuiteSubscriptionEngine(get_db=get_db)
+suite_guard = SuiteGuard(subscriptions=suite_subscriptions)
+register_suite_routes(
+    app,
+    require_auth=require_auth,
+    subscriptions=suite_subscriptions,
+    guard=suite_guard,
+)
+# Product 1: Inbound Router
+suite_inbound_router = InboundRouter(
+    guard=lambda a, f: suite_guard.check_access(a, f),
+    log_usage=lambda a, p, e, q=1, u="count", m=None: suite_guard.log_usage(a, p, e, q, u, m),
+)
+InboundRouterRoutes(suite_inbound_router, require_auth=require_auth).register(app)
+# Product 2: Data Vault
+suite_data_vault = DataVault(
+    guard=lambda a, f: suite_guard.check_access(a, f),
+    log_usage=lambda a, p, e, q=1, u="count", m=None: suite_guard.log_usage(a, p, e, q, u, m),
+)
+DataVaultRoutes(suite_data_vault, require_auth=require_auth).register(app)
+# Product 3: Buyer Spy AI
+suite_buyer_spy = BuyerSpy(
+    guard=lambda a, f: suite_guard.check_access(a, f),
+    log_usage=lambda a, p, e, q=1, u="count", m=None: suite_guard.log_usage(a, p, e, q, u, m),
+)
+BuyerSpyRoutes(suite_buyer_spy, require_auth=require_auth).register(app)
+
+# Product 4: Omni Bridge — Deepgram STT → Zernio social distribution
+suite_omni_bridge = OmniBridge(
+    guard=lambda a, f: suite_guard.check_access(a, f),
+    buyer_spy=lambda a, t, m=None: suite_buyer_spy.analyze_transcript(a, t, m),
+    log_usage=lambda a, p, e, q=1, u="count", m=None: suite_guard.log_usage(a, p, e, q, u, m),
+)
+OmniBridgeRoutes(suite_omni_bridge, require_auth=require_auth).register(app)
+
+# Product 5: Agent Orchestrator — spawn + step autonomous agents
+suite_agent_orchestrator = AgentOrchestrator(
+    guard=lambda a, f: suite_guard.check_access(a, f),
+    log_usage=lambda a, p, e, q=1, u="count", m=None: suite_guard.log_usage(a, p, e, q, u, m),
+)
+AgentOrchestratorRoutes(suite_agent_orchestrator, require_auth=require_auth).register(app)
+
+# Product 6: B2B Pro — property intel, lead network, contractor prospecting
+suite_b2b_pro = B2BPro(
+    guard=lambda a, f: suite_guard.check_access(a, f),
+    log_usage=lambda a, p, e, q=1, u="count", m=None: suite_guard.log_usage(a, p, e, q, u, m),
+)
+B2BProRoutes(suite_b2b_pro, require_auth=require_auth).register(app)
+
+# ── Hook & Trend Decider Engine ────────────────────────────────────────
+HookRoutes(require_auth=require_auth).register(app)
+
+# ── Strategist & Analytics Agents ───────────────────────────────────
+strategist_agent = StrategistAgent(get_db=get_db)
+analytics_agent = AnalyticsAgent(get_db=get_db)
+
 
 # ── Synthetic Intelligence Brain (Operator → LLM → Kokoro TTS → FFmpeg Render) ──
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -375,6 +556,166 @@ register_synthetic_routes(app, brain=synthetic_brain, require_auth=require_auth,
 
 # Mission Control — always-visible top status bar (AGI/SI/Brain/Revenue/Lanes/Compliance/Network)
 register_mission_control_routes(app, get_db=get_db)
+
+# ── Brain Personality Routes ──────────────────────────────────
+# GET  /api/brain/personality/snapshot       — full personality config + available profiles
+# POST /api/brain/personality/set            — update global per-niche personality
+# GET  /api/brain/personality/history        — operator preference change log
+# GET  /api/brain/personality/operator/{id}  — per-operator override snapshot
+# POST /api/brain/personality/operator/set   — set per-operator per-niche override
+# POST /api/brain/personality/operator/remove — remove per-operator override
+
+@app.get("/api/brain/personality/snapshot")
+async def brain_personality_snapshot(auth: bool = Depends(require_auth)):
+    """Return full brain personality snapshot: per-niche configs, available profiles, stats."""
+    return JSONResponse(brain_personality.snapshot())
+
+
+@app.post("/api/brain/personality/set")
+async def brain_personality_set(request: Request, auth: bool = Depends(require_auth)):
+    """Set or update the global personality config for a niche.
+    Body: {
+      niche: "__global__" | "Roofing Restoration" | ...,
+      persona: "conservative" | "aggressive" | "balanced",
+      operator_id?: "...",
+      confidence_threshold?: 0.0-1.0,
+      urgency_floor?: 1-10,
+      temperature?: 0.0-1.0,
+      custom_prompt_suffix?: "...",
+      operator_notes?: "...",
+    }
+    """
+    try:
+        body = await request.json() if request.headers.get("content-type", "").startswith("application/json") else {}
+    except Exception:
+        raise HTTPException(400, "Invalid JSON")
+
+    result = await brain_personality.set_personality(
+        niche=body.get("niche", "__global__"),
+        persona=body.get("persona", "balanced"),
+        operator_id=body.get("operator_id", ""),
+        confidence_threshold=body.get("confidence_threshold"),
+        urgency_floor=body.get("urgency_floor"),
+        temperature=body.get("temperature"),
+        custom_prompt_suffix=body.get("custom_prompt_suffix", ""),
+        operator_notes=body.get("operator_notes", ""),
+    )
+    status = 200 if result.get("ok") else 400
+    return JSONResponse(result, status_code=status)
+
+
+@app.get("/api/brain/personality/history")
+async def brain_personality_history(
+    niche: str = "",
+    limit: int = 50,
+    auth: bool = Depends(require_auth),
+):
+    """Return operator preference change history, optionally filtered by niche."""
+    entries = await brain_personality.history(niche=niche, limit=limit)
+    return JSONResponse({"entries": entries, "count": len(entries)})
+
+
+@app.get("/api/brain/personality/operator/{operator_id}")
+async def brain_personality_operator(operator_id: str, auth: bool = Depends(require_auth)):
+    """Return per-operator personality override snapshot."""
+    return JSONResponse(brain_personality.operator_snapshot(operator_id))
+
+
+@app.post("/api/brain/personality/operator/set")
+async def brain_personality_operator_set(request: Request, auth: bool = Depends(require_auth)):
+    """Set or update a per-operator personality override.
+    Body: {
+      operator_id: "...",
+      niche: "__global__" | "Roofing Restoration" | ...,
+      persona: "conservative" | "aggressive" | "balanced",
+      confidence_threshold?: 0.0-1.0,
+      urgency_floor?: 1-10,
+      temperature?: 0.0-1.0,
+      custom_prompt_suffix?: "...",
+    }
+    """
+    try:
+        body = await request.json() if request.headers.get("content-type", "").startswith("application/json") else {}
+    except Exception:
+        raise HTTPException(400, "Invalid JSON")
+    result = await brain_personality.set_operator_personality(
+        operator_id=body.get("operator_id", ""),
+        niche=body.get("niche", "__global__"),
+        persona=body.get("persona", "balanced"),
+        confidence_threshold=body.get("confidence_threshold"),
+        urgency_floor=body.get("urgency_floor"),
+        temperature=body.get("temperature"),
+        custom_prompt_suffix=body.get("custom_prompt_suffix", ""),
+    )
+    status = 200 if result.get("ok") else 400
+    return JSONResponse(result, status_code=status)
+
+
+@app.post("/api/brain/personality/operator/remove")
+async def brain_personality_operator_remove(request: Request, auth: bool = Depends(require_auth)):
+    """Remove a per-operator personality override.
+    Body: {operator_id: "...", niche: "..."}
+    """
+    try:
+        body = await request.json() if request.headers.get("content-type", "").startswith("application/json") else {}
+    except Exception:
+        raise HTTPException(400, "Invalid JSON")
+    result = await brain_personality.remove_operator_personality(
+        operator_id=body.get("operator_id", ""),
+        niche=body.get("niche", "__global__"),
+    )
+    status = 200 if result.get("ok") else 400
+    return JSONResponse(result, status_code=status)
+
+# ── Strategist & Analytics Routes ───────────────────────────────────
+@app.get("/api/strategist/overview")
+async def strategist_overview(auth: bool = Depends(require_auth)):
+    return JSONResponse(strategist_agent.overview())
+
+
+@app.get("/api/strategist/niche/{niche}")
+async def strategist_niche(niche: str, auth: bool = Depends(require_auth)):
+    return JSONResponse(strategist_agent.niche_analysis(niche))
+
+
+@app.get("/api/strategist/recommendations")
+async def strategist_recommendations(auth: bool = Depends(require_auth)):
+    return JSONResponse(strategist_agent.recommendations())
+
+
+@app.get("/api/strategist/trends")
+async def strategist_trends(auth: bool = Depends(require_auth)):
+    return JSONResponse(strategist_agent.trends())
+
+
+@app.get("/api/strategist/narrative")
+async def strategist_narrative(auth: bool = Depends(require_auth)):
+    return JSONResponse(strategist_agent.generate_narrative())
+
+
+@app.get("/api/analytics/kpi")
+async def analytics_kpi(auth: bool = Depends(require_auth)):
+    return JSONResponse(analytics_agent.kpi())
+
+
+@app.get("/api/analytics/funnel")
+async def analytics_funnel(auth: bool = Depends(require_auth)):
+    return JSONResponse(analytics_agent.funnel())
+
+
+@app.get("/api/analytics/timeseries")
+async def analytics_timeseries(metric: str = "revenue", days: int = 14, auth: bool = Depends(require_auth)):
+    return JSONResponse(analytics_agent.timeseries(metric=metric, days=max(1, min(days, 90))))
+
+
+@app.get("/api/analytics/anomalies")
+async def analytics_anomalies(auth: bool = Depends(require_auth)):
+    return JSONResponse(analytics_agent.detect_anomalies())
+
+
+@app.get("/api/analytics/export")
+async def analytics_export(auth: bool = Depends(require_auth)):
+    return JSONResponse(analytics_agent.export())
 
 
 # ── AI Closer Routes ────────────────────────────────────────────────
@@ -1018,6 +1359,12 @@ async def _si_evolution_loop():
 @app.on_event("startup")
 async def startup():
     log.info("Empire V49 · Starting up")
+    # Suite Core — init local SQLite tables (product_subscriptions, etc.)
+    _init_suite_db_sqlite()
+
+    # Data Bridge Engine — init DB + start background processor
+    init_bridge_db()
+    start_bridge_processor(get_db)
     asyncio.create_task(brain_learning.nightly_tune_loop())
     asyncio.create_task(sms_engine.dispatcher_loop())
     asyncio.create_task(email_engine.dispatcher_loop())
@@ -1034,6 +1381,8 @@ async def startup():
     asyncio.create_task(mission_control_broadcast_loop(
         broadcaster=live_broadcaster, get_db=get_db, interval=5.0,
     ))
+    # Niche Terrain background scan — discovers new communities + learns habits every 30 min
+    asyncio.create_task(_niche_terrain_scan_loop())
     log.info("Empire V49 · Operational")
 
 
@@ -1378,6 +1727,22 @@ async def _gov_watchdog_loop():
 @app.on_event("startup")
 async def _gov_start_watchdog():
     _gasync.create_task(_gov_watchdog_loop())
+
+
+# ── Niche Terrain Background Scan ───────────────────────────
+_NICHE_TERRAIN_SCAN_INTERVAL = 1800  # 30 minutes
+
+
+async def _niche_terrain_scan_loop():
+    """Background loop: every 30 min, discover sparse niches + learn habits."""
+    await asyncio.sleep(120)  # let the hub finish booting first
+    while True:
+        try:
+            await niche_terrain.scan_cycle()
+            log.debug("[niche_terrain] background scan complete")
+        except Exception as e:
+            log.warning(f"[niche_terrain] scan cycle error: {e}")
+        await asyncio.sleep(_NICHE_TERRAIN_SCAN_INTERVAL)
 
 
 # ── Swarm Gate Auto-Pilot ───────────────────────────────────
@@ -1792,6 +2157,92 @@ async def seo_genome_history(limit: int = 20):
         })
     except Exception as e:
         return JSONResponse({"generations": [], "count": 0, "error": str(e)[:80]})
+
+
+@app.get("/api/seo/research")
+async def seo_research_get(research_type: str = "full", address: str = "", zip_code: str = "", metro: str = "", niche: str = "Roofing Restoration"):
+    """Run deep research via the SEO ResearchAgent. Supports all research types.
+    Query params: research_type, address, zip_code, metro, niche
+    """
+    try:
+        from bots.seo_agent import get_seo_agent
+        agent = get_seo_agent()
+        return JSONResponse(await agent.research(
+            address=address, zip_code=zip_code,
+            metro=metro, niche=niche,
+            research_type=research_type,
+        ))
+    except Exception as e:
+        return JSONResponse({"error": str(e)[:200]}, status_code=500)
+
+
+@app.post("/api/seo/generate")
+async def seo_generate_post(req: Request):
+    """Generate content via the SEO ContentAgent.
+    Body: {
+      content_type, address, metro, niche, style?
+      property_data?, neighborhood_data?, storm_data?
+    }
+    """
+    try:
+        body = await req.json() if req.headers.get("content-type", "").startswith("application/json") else {}
+        from bots.seo_agent import get_seo_agent
+        agent = get_seo_agent()
+        return JSONResponse(await agent.generate(
+            content_type=body.get("content_type", "landing_page"),
+            address=body.get("address", ""),
+            metro=body.get("metro", ""),
+            niche=body.get("niche", "Roofing Restoration"),
+            property_data=body.get("property_data"),
+            neighborhood_data=body.get("neighborhood_data"),
+            storm_data=body.get("storm_data"),
+            style=body.get("style", "cinematic"),
+        ))
+    except Exception as e:
+        return JSONResponse({"error": str(e)[:200]}, status_code=500)
+
+
+@app.post("/api/seo/pipeline")
+async def seo_pipeline_post(req: Request):
+    """End-to-end research → generate pipeline.
+    Body: {address, zip_code, metro, niche, style?, generate_types?}
+    """
+    try:
+        body = await req.json() if req.headers.get("content-type", "").startswith("application/json") else {}
+        from bots.seo_agent import get_seo_agent
+        agent = get_seo_agent()
+        return JSONResponse(await agent.research_and_generate(
+            address=body.get("address", ""),
+            zip_code=body.get("zip_code", ""),
+            metro=body.get("metro", ""),
+            niche=body.get("niche", "Roofing Restoration"),
+            style=body.get("style", "cinematic"),
+            generate_types=body.get("generate_types"),
+        ))
+    except Exception as e:
+        return JSONResponse({"error": str(e)[:200]}, status_code=500)
+
+
+@app.get("/api/seo/research-agent/stats")
+async def seo_research_agent_stats():
+    """Return ResearchAgent performance snapshot."""
+    try:
+        from bots.research_agent import get_research_agent
+        agent = get_research_agent()
+        return JSONResponse(await agent.performance_snapshot())
+    except Exception as e:
+        return JSONResponse({"error": str(e)[:80]}, status_code=500)
+
+
+@app.get("/api/seo/content-agent/stats")
+async def seo_content_agent_stats():
+    """Return ContentAgent performance snapshot."""
+    try:
+        from bots.content_agent import get_content_agent
+        agent = get_content_agent()
+        return JSONResponse(await agent.performance_snapshot())
+    except Exception as e:
+        return JSONResponse({"error": str(e)[:80]}, status_code=500)
 
 
 @app.get("/api/seo/config")

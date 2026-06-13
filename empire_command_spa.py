@@ -1058,6 +1058,9 @@ const NAV_GROUPS = [
       { id: 'si-adaptive',   label: 'SI Adaptive',    sub: 'Subsystem adoption · parameter propagation' },
       { id: 'panel_court',      label: 'Panel Court',    sub: '10-Agent ensemble · voting · learning' },
       { id: 'seo',           label: 'SEO',            sub: 'Audits · keywords · content · genome' },
+      { id: 'personality',    label: 'Personality',    sub: 'Brain persona · per-niche config · thresholds' },
+      { id: 'strategist',    label: 'Strategist',     sub: 'Strategic intel · analysis · narratives' },
+      { id: 'analytics',     label: 'Analytics',      sub: 'KPIs · funnel · trends · anomalies' },
     ]
   },
   {
@@ -1069,6 +1072,7 @@ const NAV_GROUPS = [
       { id: 'governor',      label: 'Governor',       sub: 'AGI governor · weight control · guardrails' },
       { id: 'sniper-fleet',  label: 'Sniper Fleet',   sub: 'Active agents · lane status · targeting' },
       { id: 'health-monitor',label: 'Health Monitor', sub: 'Agent mesh · system health · overseer' },
+      { id: 'bridge',         label: 'Bridge',         sub: 'Voice-first interface · full-screen' },
     ]
   },
 ];
@@ -3322,6 +3326,637 @@ function AgentFleetPanel() {
   `;
 }
 
+
+
+// ── STRATEGIST ── Strategic intelligence agent
+
+// ── BRAIN PERSONALITY ── Operator-configurable persona per niche������
+function Personality() {
+  const [data, setData] = useState(null);
+  const [niche, setNiche] = useState('__global__');
+  const [persona, setPersona] = useState('balanced');
+  const [saving, setSaving] = useState(false);
+  const [saveMsg, setSaveMsg] = useState(null);
+  const [history, setHistory] = useState([]);
+  const [tab, setTab] = useState('config');
+  const [confThresh, setConfThresh] = useState(0.6);
+  const [tempVal, setTempVal] = useState(0.1);
+  const [urgFloor, setUrgFloor] = useState(5);
+  const [promptSuffix, setPromptSuffix] = useState('');
+  const [operatorId, setOperatorId] = useState('');
+  const [opOverrides, setOpOverrides] = useState({});
+  const [opTab, setOpTab] = useState('global');
+
+  const reload = useCallback(async () => {
+    try {
+      const [snap, hist] = await Promise.all([
+        apiFetch('/api/brain/personality/snapshot').then(r => r.json()),
+        apiFetch('/api/brain/personality/history').then(r => r.json()),
+      ]);
+      setData(snap);
+      setHistory(hist.entries || []);
+      const c = (snap.configs || {})[niche] || snap.configs['__global__'] || {};
+      setConfThresh(c.confidence_threshold || 0.6);
+      setTempVal(c.temperature || 0.1);
+      setUrgFloor(c.urgency_floor || 5);
+      setPersona(c.persona || 'balanced');
+    } catch (e) {
+      if (e.message !== 'Unauthorized') console.error(e);
+    }
+  }, [niche]);
+
+  const loadOperatorOverrides = async (opId) => {
+    if (!opId) { setOpOverrides({}); return; }
+    try {
+      const r = await apiFetch('/api/brain/personality/operator/' + encodeURIComponent(opId)).then(r => r.json());
+      setOpOverrides(r.overrides || {});
+    } catch (e) { console.error(e); }
+  };
+
+  useEffect(() => { reload(); }, [reload]);
+
+  useEffect(() => {
+    if (!data) return;
+    const c = (tab === 'operator' ? (opOverrides[niche] || opOverrides['__global__'] || {}) : (data.configs || {})[niche] || data.configs['__global__'] || {});
+    setConfThresh(c.confidence_threshold != null ? c.confidence_threshold : 0.6);
+    setTempVal(c.temperature != null ? c.temperature : 0.1);
+    setUrgFloor(c.urgency_floor != null ? c.urgency_floor : 5);
+    setPersona(c.persona || 'balanced');
+    setPromptSuffix(c.custom_prompt_suffix || '');
+  }, [niche, data, opOverrides, tab]);
+
+  const save = async () => {
+    setSaving(true);
+    setSaveMsg(null);
+    try {
+      let url = '/api/brain/personality/set';
+      let body = { niche, persona, confidence_threshold: confThresh, urgency_floor: urgFloor, temperature: tempVal, custom_prompt_suffix: promptSuffix };
+      if (tab === 'operator' && operatorId) {
+        url = '/api/brain/personality/operator/set';
+        body.operator_id = operatorId;
+      }
+      const r = await apiFetch(url, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(body),
+      }).then(r => r.json());
+      setSaveMsg(r.ok ? 'Saved' : 'Error: ' + (r.error || 'unknown'));
+      if (r.ok && tab === 'operator') loadOperatorOverrides(operatorId);
+      else if (r.ok) reload();
+    } catch (e) {
+      setSaveMsg('Error: ' + e.message);
+    }
+    setSaving(false);
+  };
+
+  const removeOpOverride = async (n) => {
+    if (!operatorId) return;
+    try {
+      await apiFetch('/api/brain/personality/operator/remove', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ operator_id: operatorId, niche: n }),
+      });
+      loadOperatorOverrides(operatorId);
+    } catch (e) { console.error(e); }
+  };
+
+  if (!data) return html`<div class="stub"><div class="stub-body">Loading personality...</div></div>`;
+
+  const configs = data.configs || {};
+  const profiles = data.profiles_available || [];
+  const details = data.profile_details || {};
+  const nicheKeys = Object.keys(configs).filter(k => k !== '__global__').sort();
+  const globCfg = configs['__global__'] || {};
+
+  const slider = (label, val, setter, min, max, step, color) => html`
+    <div class="fld">
+      <div style=${{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+        <div class="fld-lbl">${label}</div>
+        <span style=${{fontFamily:'var(--font-mono)',fontSize:'12px',color: color || 'var(--signal-teal)',fontWeight:500}}>${typeof val === 'number' ? (step < 1 ? val.toFixed(3) : val) : val}</span>
+      </div>
+      <input type="range" min=${min} max=${max} step=${step} value=${val}
+        onInput=${e => { const v = parseFloat(e.target.value); setter(v); }}
+        style=${{width:'100%',height:'4px',appearance:'none',background:'var(--empire-elevated)',borderRadius:'2px',outline:'none',cursor:'pointer'}} />
+    </div>
+  `;
+
+  return html`
+    <div class="section-h">
+      <div>
+        <div class="section-title">Brain <em>Personality</em></div>
+        <div class="section-sub">Configure brain persona per niche \u00b7 thresholds \u00b7 tone</div>
+      </div>
+      <div class="topbar-actions">
+        <button class="pulse-tab" style=${{opacity: saveMsg ? 1 : 0.5,fontSize:'10px'}}>${saveMsg || 'Idle'}</button>
+      </div>
+    </div>
+
+    <div class="pulse-tabs" style=${{marginTop:'8px'}}>
+      <button class=${"pulse-tab " + (tab === 'config' ? 'active' : '')} onClick=${() => { setTab('config'); setOpTab('global'); }}>Configuration</button>
+      <button class=${"pulse-tab " + (tab === 'profiles' ? 'active' : '')} onClick=${() => setTab('profiles')}>Profiles</button>
+      <button class=${"pulse-tab " + (tab === 'operator' ? 'active' : '')} onClick=${() => setTab('operator')}>Per-Operator</button>
+      <button class=${"pulse-tab " + (tab === 'history' ? 'active' : '')} onClick=${() => setTab('history')}>History</button>
+    </div>
+
+    ${tab === 'config' ? html`
+    <div class="pipeline-breakdown" style=${{marginTop:'16px'}}>
+      <div class="pipeline-h">
+        <div class="pipeline-title">Per-Niche <strong>Configuration</strong></div>
+        <div class="pipeline-total">${nicheKeys.length + 1} configs \u00b7 ${profiles.length} profiles</div>
+      </div>
+
+      <div style=${{display:'flex',gap:'12px',alignItems:'center',marginBottom:'16px',padding:'14px 16px',background:'var(--empire-surface)',border:'1px solid var(--empire-border)'}}>
+        <select value=${niche} onChange=${e => { setNiche(e.target.value); }} style=${{flex:1,padding:'8px 10px',background:'var(--empire-elevated)',border:'1px solid var(--empire-border)',color:'var(--empire-mist)',fontFamily:'var(--font-mono)',fontSize:'11px',outline:'none'}}>
+          <option value="__global__">__global__ (default)</option>
+          ${nicheKeys.map(k => html`<option value=${k} key=${k}>${k}</option>`)}
+        </select>
+        <div style=${{display:'flex',gap:'4px'}}>
+          ${profiles.map(p => html`
+            <button class=${"pulse-tab " + (persona === p ? 'active' : '')} style=${{fontSize:'9px',padding:'5px 10px'}} onClick=${() => setPersona(p)} key=${p}>${p}</button>
+          `)}
+        </div>
+      </div>
+
+      <div class="split" style=${{marginBottom:'12px'}}>
+        <div class="panel">
+          <div class="panel-head">Thresholds</div>
+          ${slider('Confidence Threshold', confThresh, setConfThresh, 0.0, 1.0, 0.01, 'var(--signal-teal)')}
+          ${slider('Temperature', tempVal, setTempVal, 0.0, 1.0, 0.01, 'var(--strike-cyan)')}
+          ${slider('Urgency Floor', urgFloor, setUrgFloor, 1, 10, 1, 'var(--status-amber)')}
+        </div>
+        <div class="panel">
+          <div class="panel-head">Custom Prompt Suffix</div>
+          <textarea value=${promptSuffix} onInput=${e => setPromptSuffix(e.target.value)}
+            style=${{width:'100%',minHeight:'80px',background:'var(--empire-elevated)',border:'1px solid var(--empire-border)',padding:'8px 10px',color:'var(--empire-silver)',fontFamily:'var(--font-mono)',fontSize:'10px',outline:'none',resize:'vertical'}}
+            placeholder="Extra instructions appended to brain prompt for this niche..." />
+          <div style=${{marginTop:'8px'}}>
+            <button class="btn" style=${{fontSize:'10px',padding:'8px 16px'}} onClick=${save} disabled=${saving}>${saving ? 'Saving...' : 'Apply Configuration'}</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel" style=${{marginTop:'8px'}}>
+        <div class="panel-head">System Prompt Preview <span style=${{color:'var(--empire-fog)',fontWeight:400}}>(simulated for ${niche})</span></div>
+        <pre style=${{background:'var(--empire-elevated)',border:'1px solid var(--empire-divider)',padding:'12px 14px',color:'var(--empire-silver)',fontFamily:'var(--font-mono)',fontSize:'9px',lineHeight:'1.6',overflowX:'auto',whiteSpace:'pre-wrap',maxHeight:'200px',overflowY:'auto'}}>${data.prompt_preview || 'No preview available'}</pre>
+      </div>
+
+      <table class="tbl" style=${{width:'100%',fontSize:'10px',marginTop:'16px'}}>
+        <thead>
+          <tr>
+            <th>Niche</th>
+            <th>Persona</th>
+            <th style=${{textAlign:'right'}}>Conf Threshold</th>
+            <th style=${{textAlign:'right'}}>Urgency</th>
+            <th style=${{textAlign:'right'}}>Temp</th>
+            <th>Notes</th>
+            <th>Source</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr style=${{background:'rgba(68,229,184,0.04)',fontWeight:500}}>
+            <td>__global__</td>
+            <td><span class="rv-bar-lane">${globCfg.persona || 'balanced'}</span></td>
+            <td class="tbl-num">${(globCfg.confidence_threshold || 0.6).toFixed(3)}</td>
+            <td class="tbl-num">${globCfg.urgency_floor || 5}</td>
+            <td class="tbl-num">${(globCfg.temperature || 0.1).toFixed(3)}</td>
+            <td style=${{color:'var(--empire-fog)',fontSize:'9px'}}>${(globCfg.operator_notes || '') || '-'}</td>
+            <td><span class="bdg active" style=${{fontSize:'8px'}}>global</span></td>
+          </tr>
+          ${nicheKeys.map(n => {
+            const c = configs[n] || {};
+            return html`<tr key=${n}>
+              <td>${n}</td>
+              <td><span class="rv-bar-lane">${c.persona || 'balanced'}</span></td>
+              <td class="tbl-num">${(c.confidence_threshold || 0.6).toFixed(3)}</td>
+              <td class="tbl-num">${c.urgency_floor || 5}</td>
+              <td class="tbl-num">${(c.temperature || 0.1).toFixed(3)}</td>
+              <td style=${{color:'var(--empire-fog)',fontSize:'9px'}}>${(c.operator_notes || '') || '-'}</td>
+              <td><span class="bdg active" style=${{fontSize:'8px'}}>global</span></td>
+            </tr>`;
+          })}
+        </tbody>
+      </table>
+    </div>
+    ` : null}
+
+    ${tab === 'profiles' ? html`
+    <div class="pipeline-breakdown" style=${{marginTop:'16px'}}>
+      <div class="pipeline-h">
+        <div class="pipeline-title">Available <strong>Personalities</strong></div>
+        <div class="pipeline-total">${profiles.length} profiles</div>
+      </div>
+      <div style=${{display:'flex',gap:'16px',flexWrap:'wrap'}}>
+        ${profiles.map(p => {
+          const pd = details[p] || {};
+          const isActive = persona === p;
+          return html`
+          <div class="stat-card" style=${{flex:'1',minWidth:'180px',cursor:'pointer',borderColor: isActive ? 'var(--signal-teal)' : 'var(--empire-border)', opacity: isActive ? 1 : 0.7}} onClick=${() => setPersona(p)} key=${p}>
+            <div class="stat-label">${pd.label || p}</div>
+            <div class="stat-meta" style=${{color:'var(--empire-mist)',fontSize:'11px',marginBottom:'12px'}}>${pd.description || ''}</div>
+            ${pd.confidence_threshold != null ? html`
+            <div style=${{display:'flex',flexDirection:'column',gap:'8px'}}>
+              <div style=${{display:'flex',justifyContent:'space-between',fontFamily:'var(--font-mono)',fontSize:'10px'}}>
+                <span style=${{color:'var(--empire-fog)'}}>Confidence</span>
+                <span style=${{color: isActive ? 'var(--signal-teal)' : 'var(--empire-mist)'}}>${pd.confidence_threshold.toFixed(2)}</span>
+              </div>
+              <div style=${{height:'3px',background:'var(--empire-elevated)',borderRadius:'2px',overflow:'hidden'}}>
+                <div style=${{height:'100%',width: (pd.confidence_threshold * 100) + '%',background: isActive ? 'var(--signal-teal)' : 'var(--empire-fog)',borderRadius:'2px',transition:'width 0.4s var(--ease-out-empire)'}}></div>
+              </div>
+              <div style=${{display:'flex',justifyContent:'space-between',fontFamily:'var(--font-mono)',fontSize:'10px'}}>
+                <span style=${{color:'var(--empire-fog)'}}>Temperature</span>
+                <span style=${{color: isActive ? 'var(--signal-teal)' : 'var(--empire-mist)'}}>${pd.temperature != null ? pd.temperature.toFixed(2) : '0.10'}</span>
+              </div>
+              <div style=${{display:'flex',justifyContent:'space-between',fontFamily:'var(--font-mono)',fontSize:'10px'}}>
+                <span style=${{color:'var(--empire-fog)'}}>Fallback</span>
+                <span style=${{color: pd.go_fallback === 'GO' ? 'var(--status-amber)' : 'var(--empire-mist)'}}>${pd.go_fallback || 'NO_GO'}</span>
+              </div>
+            </div>
+            ` : null}
+            ${isActive ? html`<div style=${{marginTop:'10px',fontSize:'9px',color:'var(--signal-teal)',fontFamily:'var(--font-mono)',letterSpacing:'0.08em'}}>ACTIVE</div>` : null}
+          </div>
+          `;
+        })}
+      </div>
+      <div style=${{marginTop:'20px'}}>
+        <div class="panel-head" style=${{marginBottom:'12px'}}>Tone Instructions <span style=${{color:'var(--empire-fog)',fontWeight:400}}>(what the LLM sees)</span></div>
+        ${profiles.map(p => {
+          const pd = details[p] || {};
+          const isActive = persona === p;
+          return html`
+            <div style=${{marginBottom:'10px',padding:'10px 14px',background: isActive ? 'var(--empire-surface)' : 'var(--empire-elevated)',border:'1px solid ' + (isActive ? 'var(--signal-teal-soft)' : 'var(--empire-divider)'),borderRadius:'6px'}} key=${p}>
+              <div style=${{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'6px'}}>
+                <strong style=${{color:'var(--empire-white)',fontSize:'12px'}}>${pd.label || p}</strong>
+                <span style=${{fontFamily:'var(--font-mono)',fontSize:'9px',color: isActive ? 'var(--signal-teal)' : 'var(--empire-fog)'}}>${p}</span>
+              </div>
+              <div style=${{fontFamily:'var(--font-mono)',fontSize:'9px',color:'var(--empire-silver)',lineHeight:'1.6',whiteSpace:'pre-wrap'}}>
+                ${pd.tone_instruction || ""}
+              </div>
+            </div>`;
+        })}
+      </div>
+    </div>
+    ` : null}
+
+    ${tab === 'operator' ? html`
+    <div class="pipeline-breakdown" style=${{marginTop:'16px'}}>
+      <div class="pipeline-h">
+        <div class="pipeline-title">Per-Operator <strong>Overrides</strong></div>
+        <div class="pipeline-total">Override global personality per operator</div>
+      </div>
+
+      <div style=${{display:'flex',gap:'12px',alignItems:'center',marginBottom:'16px',padding:'14px 16px',background:'var(--empire-surface)',border:'1px solid var(--empire-border)'}}>
+        <div class="fld" style=${{flex:1,margin:0}}>
+          <div class="fld-lbl" style=${{marginBottom:'4px'}}>Operator ID</div>
+          <input class="fld-in mono" value=${operatorId} onInput=${e => { setOperatorId(e.target.value); loadOperatorOverrides(e.target.value); }} placeholder="Paste operator UUID..." style=${{width:'100%'}} />
+        </div>
+      </div>
+
+      ${operatorId ? html`
+      <div style=${{marginBottom:'16px'}}>
+        <div class="pulse-tabs" style=${{borderBottom:'1px solid var(--empire-divider)',marginBottom:'12px'}}>
+          <button class=${"pulse-tab " + (opTab === 'global' ? 'active' : '')} onClick=${() => setOpTab('global')}>Global Override</button>
+          <button class=${"pulse-tab " + (opTab === 'niche' ? 'active' : '')} onClick=${() => setOpTab('niche')}>Per-Niche Override</button>
+          <button class=${"pulse-tab " + (opTab === 'active' ? 'active' : '')} onClick=${() => setOpTab('active')}>Active Overrides</button>
+        </div>
+
+        ${opTab === 'global' ? html`
+        <div class="panel">
+          <div class="panel-head">Operator Global Default</div>
+          <div style=${{display:'flex',gap:'12px',alignItems:'center',marginBottom:'12px'}}>
+            ${profiles.map(p => html`
+              <button class=${"pulse-tab " + (persona === p ? 'active' : '')} style=${{fontSize:'9px',padding:'5px 10px'}} onClick=${() => setPersona(p)} key=${p}>${p}</button>
+            `)}
+          </div>
+          ${slider('Confidence Threshold', confThresh, setConfThresh, 0.0, 1.0, 0.01)}
+          ${slider('Temperature', tempVal, setTempVal, 0.0, 1.0, 0.01)}
+          <div style=${{marginTop:'10px'}}>
+            <button class="btn" style=${{fontSize:'10px',padding:'8px 16px'}} onClick=${save} disabled=${saving}>${saving ? 'Saving...' : 'Set Global Override'}</button>
+          </div>
+        </div>
+        ` : null}
+
+        ${opTab === 'niche' ? html`
+        <div class="panel">
+          <div class="panel-head">Per-Niche Override</div>
+          <div style=${{display:'flex',gap:'12px',alignItems:'center',marginBottom:'12px'}}>
+            <select value=${niche} onChange=${e => setNiche(e.target.value)} style=${{padding:'8px 10px',background:'var(--empire-elevated)',border:'1px solid var(--empire-border)',color:'var(--empire-mist)',fontFamily:'var(--font-mono)',fontSize:'11px',outline:'none',flex:1}}>
+              <option value="__global__">__global__</option>
+              ${nicheKeys.map(k => html`<option value=${k} key=${k}>${k}</option>`)}
+            </select>
+          </div>
+          <div style=${{display:'flex',gap:'4px',marginBottom:'12px'}}>
+            ${profiles.map(p => html`
+              <button class=${"pulse-tab " + (persona === p ? 'active' : '')} style=${{fontSize:'9px',padding:'5px 10px'}} onClick=${() => setPersona(p)} key=${p}>${p}</button>
+            `)}
+          </div>
+          ${slider('Confidence Threshold', confThresh, setConfThresh, 0.0, 1.0, 0.01)}
+          ${slider('Temperature', tempVal, setTempVal, 0.0, 1.0, 0.01)}
+          <div style=${{marginTop:'10px'}}>
+            <button class="btn" style=${{fontSize:'10px',padding:'8px 16px'}} onClick=${save} disabled=${saving}>${saving ? 'Saving...' : 'Set Niche Override'}</button>
+          </div>
+        </div>
+        ` : null}
+
+        ${opTab === 'active' ? html`
+        <div class="panel">
+          <div class="panel-head">Active Operator Overrides</div>
+          ${Object.keys(opOverrides).length === 0 ? html`
+            <div class="stub" style=${{padding:'24px 14px'}}><div class="stub-body">No operator overrides for this operator</div></div>
+          ` : html`
+          <table class="tbl" style=${{width:'100%',fontSize:'10px'}}>
+            <thead><tr><th>Niche</th><th>Persona</th><th style=${{textAlign:'right'}}>Conf</th><th style=${{textAlign:'right'}}>Temp</th><th></th></tr></thead>
+            <tbody>
+              ${Object.entries(opOverrides).map(([n, c]) => html`<tr key=${n}>
+                <td>${n}</td>
+                <td><span class="rv-bar-lane">${c.persona || 'balanced'}</span></td>
+                <td class="tbl-num">${(c.confidence_threshold || 0.6).toFixed(3)}</td>
+                <td class="tbl-num">${(c.temperature || 0.1).toFixed(3)}</td>
+                <td><button class="tbl-action danger" onClick=${() => removeOpOverride(n)}>Remove</button></td>
+              </tr>`)}
+            </tbody>
+          </table>
+          `}
+        </div>
+        ` : null}
+      </div>
+      ` : html`
+      <div class="stub" style=${{padding:'32px 20px'}}><div class="stub-body">Enter an Operator ID above to configure per-operator personality overrides</div></div>
+      `}
+    </div>
+    ` : null}
+
+    ${tab === 'history' ? html`
+    <div class="pipeline-breakdown" style=${{marginTop:'16px'}}>
+      <div class="pipeline-h">
+        <div class="pipeline-title">Operator Preference <strong>Log</strong></div>
+        <div class="pipeline-total">${history.length} changes</div>
+      </div>
+      ${history.length === 0 ? html`
+        <div class="stub" style=${{padding:'24px 14px'}}><div class="stub-body">No preference changes logged yet</div></div>
+      ` : html`
+      <div style=${{maxHeight:'500px',overflowY:'auto'}}>
+      <table class="tbl" style=${{width:'100%',fontSize:'10px'}}>
+        <thead><tr><th>Time</th><th>Operator</th><th>Niche</th><th>Field</th><th>From</th><th>To</th></tr></thead>
+        <tbody>
+          ${history.map((h, i) => html`<tr key=${i}>
+            <td style=${{fontFamily:'var(--font-mono)',fontSize:'9px',whiteSpace:'nowrap'}}>${(h.created_at || '').slice(11,19)}</td>
+            <td style=${{fontSize:'9px'}}>${(h.operator_id || '').slice(0,8)}</td>
+            <td style=${{fontSize:'10px'}}>${h.niche}</td>
+            <td><span class="rv-bar-lane">${h.field}</span></td>
+            <td style=${{color:'var(--empire-fog)',fontFamily:'var(--font-mono)',fontSize:'9px',wordBreak:'break-all',maxWidth:'120px'}}>${h.old_value || '-'}</td>
+            <td style=${{color:'var(--signal-teal)',fontFamily:'var(--font-mono)',fontSize:'9px',wordBreak:'break-all',maxWidth:'120px'}}>${h.new_value || '-'}</td>
+          </tr>`)}
+        </tbody>
+      </table>
+      </div>
+      `}
+    </div>
+    ` : null}
+  `;
+}
+function Strategist() {
+  const [data, setData] = useState(null);
+  const [niche, setNiche] = useState(null);
+  const [nicheDetail, setNicheDetail] = useState(null);
+  const [narrative, setNarrative] = useState(null);
+  const [tab, setTab] = useState('overview');
+  const [err, setErr] = useState(null);
+
+  const reload = useCallback(async () => {
+    try {
+      const [ov, rc, tr, na] = await Promise.all([
+        apiFetch('/api/strategist/overview').then(r => r.json()),
+        apiFetch('/api/strategist/recommendations').then(r => r.json()),
+        apiFetch('/api/strategist/trends').then(r => r.json()),
+        apiFetch('/api/strategist/narrative').then(r => r.json()),
+      ]);
+      setData({overview: ov, recommendations: rc, trends: tr});
+      setNarrative(na);
+      setErr(null);
+    } catch (e) {
+      if (e.message !== 'Unauthorized') setErr(e.message);
+    }
+  }, []);
+
+  useEffect(() => { reload(); const iv = setInterval(reload, 30000); return () => clearInterval(iv); }, [reload]);
+  useEffect(() => {
+    if (niche) {
+      apiFetch('/api/strategist/niche/' + encodeURIComponent(niche)).then(r => r.json()).then(setNicheDetail).catch(() => {});
+    } else {
+      setNicheDetail(null);
+    }
+  }, [niche]);
+
+  if (err) return html`<div class="stub"><div class="stub-title">Strategist Error</div><div class="stub-body">${err}</div></div>`;
+  if (!data) return html`<div class="stub"><div class="stub-body">Loading strategist...</div></div>`;
+
+  const niches = (data.overview?.by_niche || []);
+  const maxScore = niches.reduce((m, n) => Math.max(m, n.strategy_score || 0), 0);
+
+  return html`
+    <div class="section-header"><div><div class="section-title"><em>Strategist</em></div><div class="section-sub">Strategic intelligence · niche analysis · narratives</div></div></div>
+    <div class="pulse-tabs" style={{marginTop:'8px'}}>
+      <button class=${'pulse-tab' + (tab==='overview' ? ' active' : '')} onClick=${()=>setTab('overview')}>Overview</button>
+      <button class=${'pulse-tab' + (tab==='niches' ? ' active' : '')} onClick=${()=>setTab('niches')}>Niches</button>
+      <button class=${'pulse-tab' + (tab==='recommendations' ? ' active' : '')} onClick=${()=>setTab('recommendations')}>Recommendations</button>
+      <button class=${'pulse-tab' + (tab==='narrative' ? ' active' : '')} onClick=${()=>setTab('narrative')}>Narrative</button>
+    </div>
+
+    ${tab === 'overview' ? html`
+    <div class="pulse-grid" style={{marginTop:'12px'}}>
+      <div class="stat-card"><div class="stat-label">NICHES TRACKED</div><div class="stat-value teal">${data.overview?.niche_count || 0}</div></div>
+      <div class="stat-card"><div class="stat-label">AVG STRATEGY SCORE</div><div class="stat-value" style="color:var(--strike-cyan)">${((data.overview?.avg_score||0)*100).toFixed(0)}%</div></div>
+      <div class="stat-card"><div class="stat-label">TRENDS ACTIVE</div><div class="stat-value">${(data.trends?.trends||[]).length}</div></div>
+      <div class="stat-card"><div class="stat-label">RECOMMENDATIONS</div><div class="stat-value teal">${(data.recommendations?.recommendations||[]).length}</div></div>
+    </div>
+    ` : null}
+
+    ${tab === 'niches' ? html`
+    <div class="pipeline-breakdown" style={{marginTop:'12px'}}>
+      <div class="pipeline-h"><div class="pipeline-title">Niche <strong>Strategy Scores</strong></div></div>
+      ${niches.length > 0 ? niches.map(n => html`
+        <div class="rv-bar-row" key=${n.name} style={{cursor:'pointer'}} onClick=${()=>{ setNiche(n.name); setTab('recommendations'); }}>
+          <div class="rv-bar-label"><span class="rv-bar-lane">${(n.name||'').slice(0,22)}</span><span class="rv-bar-niche">${n.strategy||'no strategy'}</span></div>
+          <div class="rv-bar-track"><div class="rv-bar-fill" style=${{width:maxScore>0?Math.round((n.strategy_score||0)/maxScore*100)+'%':'0%', backgroundColor:'var(--signal-teal)'}}></div></div>
+          <div class="rv-bar-val">${((n.strategy_score||0)*100).toFixed(0)}%</div>
+          <div class="rv-bar-meta">${n.win_rate||0}% win</div>
+        </div>
+      `) : html`<div class="stub-body">No niche data available</div>`}
+    </div>
+    ` : null}
+
+    ${tab === 'recommendations' ? html`
+      ${niche ? html`
+      <div class="pipeline-breakdown" style={{marginTop:'12px'}}>
+        <div class="pipeline-h"><div class="pipeline-title">Deep Analysis: <strong>${niche}</strong></div><button class="agi-replay-btn" onClick=${()=>{setNiche(null);}}>All niches</button></div>
+        ${nicheDetail ? html`
+          <div class="pulse-grid">
+            <div class="stat-card"><div class="stat-label">STRATEGY SCORE</div><div class="stat-value teal">${((nicheDetail.strategy_score||0)*100).toFixed(0)}%</div></div>
+            <div class="stat-card"><div class="stat-label">WIN RATE</div><div class="stat-value" style="color:var(--strike-cyan)">${(nicheDetail.win_rate||0).toFixed(0)}%</div></div>
+            <div class="stat-card"><div class="stat-label">TRIALS</div><div class="stat-value">${nicheDetail.trials||0}</div></div>
+            <div class="stat-card"><div class="stat-label">GENOME</div><div class="stat-value teal" style="font-size:12px">${nicheDetail.genome||'--'}</div></div>
+          </div>
+          ${nicheDetail.genome_traits ? html`
+          <div class="pipeline-breakdown" style={{marginTop:'16px'}}>
+            <div class="pipeline-h"><div class="pipeline-title">Genome <strong>Traits</strong></div></div>
+            ${Object.entries(nicheDetail.genome_traits).map(([trait, val]) => html`
+              <div class="rv-bar-row" key=${trait}>
+                <div class="rv-bar-label"><span class="rv-bar-lane">${(trait||'').slice(0,22)}</span></div>
+                <div class="rv-bar-track"><div class="rv-bar-fill" style=${{width:Math.round(Math.min(1,Math.max(0,val||0))*100)+'%', backgroundColor:'var(--strike-cyan)'}}></div></div>
+                <div class="rv-bar-val">${(val||0).toFixed(2)}</div>
+              </div>
+            `)}
+          </div>
+          ` : null}
+        ` : html`<div class="stub-body" style={{padding:'24px'}}>Click a niche card in the Niches tab to see deep strategy analysis.</div>`}
+      </div>
+      ` : html`
+      <div class="pipeline-breakdown" style={{marginTop:'12px'}}>
+        <div class="pipeline-h"><div class="pipeline-title">Strategic <strong>Recommendations</strong></div></div>
+        ${(data.recommendations?.recommendations||[]).map((r,i) => html`
+          <div key=${i} style={{padding:'12px 14px', borderBottom:'1px solid var(--empire-border)', fontSize:'12px', lineHeight:1.6}}>
+            <span style={{color:'var(--signal-teal)', fontFamily:'var(--font-mono)', fontSize:'10px', fontWeight:600, textTransform:'uppercase', marginRight:8}}>${r.priority||'INFO'}</span>
+            ${r.text || r.recommendation || ''}
+            <div style={{marginTop:4, fontSize:'10px', color:'var(--empire-fog)'}}>${r.niche ? 'Niche: ' + r.niche : ''} ${r.expected_impact ? '· Impact: ' + r.expected_impact : ''}</div>
+          </div>
+        `)}
+        ${!(data.recommendations?.recommendations||[]).length ? html`<div class="stub-body">No recommendations yet.</div>` : null}
+      </div>
+      `}
+    ` : null}
+
+    ${tab === 'narrative' ? html`
+    <div style={{marginTop:'12px', padding:'20px 24px', background:'rgba(15,23,42,0.5)', border:'1px solid var(--empire-border)', borderRadius:12, lineHeight:1.8, fontSize:'13px'}}>
+      ${narrative?.narrative ? narrative.narrative.split('\n').map((p,i) => html`<p key=${i} style={{marginBottom:12}}>${p}</p>`) : html`<div class="stub-body">No narrative generated yet.</div>`}
+      ${narrative?.key_insights ? html`<div style={{marginTop:16}}><strong style={{color:'var(--signal-teal)'}}>Key Insights:</strong><ul>${narrative.key_insights.map((ins,i) => html`<li key=${i} style={{marginTop:6}}>${ins}</li>`)}</ul></div>` : null}
+      ${narrative?.timestamp ? html`<div style={{marginTop:16, fontSize:'9px', color:'var(--empire-fog)', fontFamily:'var(--font-mono)'}}>Generated: ${narrative.timestamp}</div>` : null}
+    </div>
+    ` : null}
+  `;
+}
+
+// ── ANALYTICS ── Analytics intelligence agent
+function Analytics() {
+  const [data, setData] = useState(null);
+  const [tab, setTab] = useState('overview');
+  const [metric, setMetric] = useState('revenue');
+  const [err, setErr] = useState(null);
+
+  const reload = useCallback(async () => {
+    try {
+      const [kp, fn, ts, an, ex] = await Promise.all([
+        apiFetch('/api/analytics/kpi').then(r => r.json()),
+        apiFetch('/api/analytics/funnel').then(r => r.json()),
+        apiFetch('/api/analytics/timeseries?metric=' + metric + '&days=14').then(r => r.json()),
+        apiFetch('/api/analytics/anomalies').then(r => r.json()),
+        apiFetch('/api/analytics/export').then(r => r.json()),
+      ]);
+      setData({kpi: kp, funnel: fn, timeseries: ts, anomalies: an, export: ex});
+      setErr(null);
+    } catch (e) {
+      if (e.message !== 'Unauthorized') setErr(e.message);
+    }
+  }, [metric]);
+
+  useEffect(() => { reload(); const iv = setInterval(reload, 30000); return () => clearInterval(iv); }, [reload]);
+
+  if (err) return html`<div class="stub"><div class="stub-title">Analytics Error</div><div class="stub-body">${err}</div></div>`;
+  if (!data) return html`<div class="stub"><div class="stub-body">Loading analytics...</div></div>`;
+
+  const kpi = data.kpi || {};
+  const funnel = data.funnel || {};
+  const ts = data.timeseries || {};
+  const anomalies = data.anomalies || {};
+  const series = ts.series || [];
+  const maxVal = series.reduce((m, p) => Math.max(m, p.value||0), 0);
+  const anomalyList = anomalies.anomalies || [];
+
+  return html`
+    <div class="section-header"><div><div class="section-title"><em>Analytics</em></div><div class="section-sub">KPIs · funnel · trends · anomalies</div></div></div>
+    <div class="pulse-tabs" style={{marginTop:'8px'}}>
+      <button class=${'pulse-tab' + (tab==='overview' ? ' active' : '')} onClick=${()=>setTab('overview')}>Overview</button>
+      <button class=${'pulse-tab' + (tab==='funnel' ? ' active' : '')} onClick=${()=>setTab('funnel')}>Funnel</button>
+      <button class=${'pulse-tab' + (tab==='trends' ? ' active' : '')} onClick=${()=>setTab('trends')}>Trends</button>
+      <button class=${'pulse-tab' + (tab==='anomalies' ? ' active' : '')} onClick=${()=>setTab('anomalies')}>Anomalies</button>
+    </div>
+
+    ${tab === 'overview' ? html`
+    <div class="pulse-grid" style={{marginTop:'12px'}}>
+      <div class="stat-card"><div class="stat-label">TOTAL REVENUE</div><div class="stat-value teal">${(kpi.total_revenue||0).toLocaleString()}</div></div>
+      <div class="stat-card"><div class="stat-label">TOTAL CALLS</div><div class="stat-value" style="color:var(--strike-cyan)">${kpi.total_calls||0}</div></div>
+      <div class="stat-card"><div class="stat-label">CONVERSION RATE</div><div class="stat-value teal">${((kpi.conversion_rate||0)*100).toFixed(1)}%</div></div>
+      <div class="stat-card"><div class="stat-label">ACTIVE LEADS</div><div class="stat-value">${kpi.active_leads||0}</div></div>
+    </div>
+    ${kpi.health_score != null ? html`
+    <div class="stat-card" style={{marginTop:'8px'}}>
+      <div class="stat-label">SYSTEM HEALTH</div>
+      <div class="stat-value" style="color:${(kpi.health_score||0) > 0.7 ? 'var(--signal-teal)' : (kpi.health_score||0) > 0.4 ? '#FFB800' : '#FF4444'}">${((kpi.health_score||0)*100).toFixed(0)}%</div>
+    </div>
+    ` : null}
+    ` : null}
+
+    ${tab === 'funnel' ? html`
+    <div class="pipeline-breakdown" style={{marginTop:'12px'}}>
+      <div class="pipeline-h"><div class="pipeline-title">Conversion <strong>Funnel</strong></div></div>
+      ${['impressions','qualifications','outreaches','responses','deals'].map((stage, i) => {
+        const val = funnel[stage] || 0;
+        const prev = funnel[['impressions','qualifications','outreaches','responses','deals'][i-1]];
+        const drop = prev ? ((prev - val) / prev * 100).toFixed(0) : null;
+        return html`
+          <div class="rv-bar-row" key=${stage}>
+            <div class="rv-bar-label"><span class="rv-bar-lane">${stage.charAt(0).toUpperCase() + stage.slice(1)}</span></div>
+            <div class="rv-bar-track"><div class="rv-bar-fill" style=${{width:Math.round((val/(funnel.impressions||1))*100)+'%', backgroundColor:i===4?'var(--signal-teal)':i===3?'var(--strike-cyan)':'rgba(68,229,184,0.2)'}}></div></div>
+            <div class="rv-bar-val">${val}</div>
+            <div class="rv-bar-meta">${drop ? '-' + drop + '% drop' : ''}</div>
+          </div>
+        `;
+      })}
+    </div>
+    ` : null}
+
+    ${tab === 'trends' ? html`
+    <div class="pipeline-breakdown" style={{marginTop:'12px'}}>
+      <div class="pipeline-h">
+        <div class="pipeline-title">Time Series: <strong>${metric}</strong></div>
+        <div class="topbar-actions">
+          ${['revenue','calls','conversions'].map(m => html`
+            <button class=${'pulse-tab ' + (metric===m?'active':'')} style={{fontSize:'9px',padding:'4px 10px'}} onClick=${()=>setMetric(m)}>${m}</button>
+          `)}
+        </div>
+      </div>
+      <div style={{padding:'16px 0'}}>
+        ${series.map((p, i) => html`
+          <div class="rv-bar-row" key=${i}>
+            <div class="rv-bar-label"><span class="rv-bar-lane" style={{fontSize:'9px',minWidth:'70px'}}>${(p.date||'').slice(5,10)}</span></div>
+            <div class="rv-bar-track"><div class="rv-bar-fill" style=${{width:maxVal>0?Math.round((p.value||0)/maxVal*100)+'%':'0%', backgroundColor:'var(--signal-teal)', opacity:0.7}}></div></div>
+            <div class="rv-bar-val" style={{fontSize:'10px'}}>${(p.value||0).toLocaleString()}</div>
+          </div>
+        `)}
+        ${series.length === 0 ? html`<div class="stub-body">No time series data yet.</div>` : null}
+      </div>
+    </div>
+    ` : null}
+
+    ${tab === 'anomalies' ? html`
+    <div class="pipeline-breakdown" style={{marginTop:'12px'}}>
+      <div class="pipeline-h"><div class="pipeline-title">Detected <strong>Anomalies</strong></div></div>
+      ${anomalyList.map((a, i) => html`
+        <div key=${i} style={{padding:'12px 14px', borderBottom:'1px solid var(--empire-border)'}}>
+          <div style={{display:'flex', justifyContent:'space-between', marginBottom:4}}>
+            <span style={{color:'var(--signal-teal)', fontWeight:600, fontSize:'12px'}}>${a.metric||a.type||'Anomaly'}</span>
+            <span style={{fontFamily:'var(--font-mono)', fontSize:'10px', color:a.severity==='high'?'#FF4444':a.severity==='medium'?'#FFB800':'var(--empire-fog)'}}>${(a.severity||'info').toUpperCase()}</span>
+          </div>
+          <div style={{fontSize:'11px', color:'var(--empire-fog)', lineHeight:1.5}}>${a.message || a.description || ''}</div>
+          ${a.date ? html`<div style={{marginTop:4, fontSize:'9px', fontFamily:'var(--font-mono)', color:'var(--empire-fog)', opacity:0.5}}>${a.date}</div>` : null}
+        </div>
+      `)}
+      ${anomalyList.length === 0 ? html`<div class="stub-body">No anomalies detected.</div>` : null}
+    </div>
+    ` : null}
+  `;
+}
+
 function HealthMonitor() {
   const [data, setData] = useState(null);
   const [err, setErr] = useState(null);
@@ -5566,6 +6201,10 @@ function App() {
             active.id === 'governor'      ? html`<${Governor} />` :
             active.id === 'sniper-fleet'  ? html`<${SniperFleet} />` :
             active.id === 'health-monitor' ? html`<${HealthMonitor} />` :
+            active.id === 'personality'   ? html`<${Personality} />` :
+            active.id === 'strategist'    ? html`<${Strategist} />` :
+            active.id === 'analytics'     ? html`<${Analytics} />` :
+            active.id === 'bridge'        ? html`<${Bridge} />` :
             active.id === 'affiliates'    ? html`<${Affiliates} />` :
             html`<${Stub} section=${active} />`
           }
