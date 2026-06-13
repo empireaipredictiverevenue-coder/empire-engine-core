@@ -40,6 +40,13 @@ STALE_PATTERNS = [
     (r'forecasted\s+1\s*%\s+fee', 'forecasted 1% fee (docstring)'),
     (r'claim\s+settled,\s+1\s*%\s+fee', 'claim settled, 1% fee (funnel desc)'),
     (r'contractor\s+share\s+of\s+the\s+1\s*%', 'contractor share of the 1%'),
+    # Numeric code defaults that should be 0.03, not 0.01
+    (r'COMMISSION_RATE\s*=\s*0\.01', 'COMMISSION_RATE = 0.01 (code constant)'),
+    (r'["\']fee_rate["\']\s*[:,=]\s*0\.01', 'fee_rate = 0.01 (dict/JSON key)'),
+    (r'(?<![\w.])fee_rate\s*=\s*0\.01', 'fee_rate = 0.01 (bare variable)'),
+    (r'\|\|\s*0\.01(?=\s*[;)])', 'JS fallback || 0.01 (code default)'),
+    (r'asset_val\s*\*\s*0\.01', 'asset_val * 0.01 (code multiplier)'),
+    (r'get\(["\']fee_rate["\']\s*,\s*0\.01\)', 'get("fee_rate", 0.01) (payload default)'),
 ]
 
 # Files / patterns we ignore. Reasons:
@@ -51,6 +58,7 @@ ALLOW = [
     'bots/agi_revenue.py:159',     # .1% accuracy formatting
     'bots/predictive_revenue.py:383',  # revenue dipped >30% threshold
     'bots/predictive_revenue.py:869',  # >20% threshold
+    'empire_command_spa.py:5354',    # tempMax - tempMin || 0.01 (chart scale, not fee)
     'bots/panel_court.py:83-85',   # scoring weights (40%, 30%, etc.)
     'docs/personality_comparison_report.md',  # historical 0.700 confidence scores
     'empire_brain_personality.py:93',  # "10% hit rate" example

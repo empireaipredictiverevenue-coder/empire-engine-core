@@ -64,8 +64,8 @@ async def brain_rank(lane, scored):
         db = create_client(os.getenv("SUPABASE_URL"), os.getenv("SUPABASE_SERVICE_KEY"))
         router = AIRouter(get_db=lambda: db)
         system = (
-            "You are the Demand Intelligence brain for an autonomous local-services "
-            "lead-gen system. Given scored geographies where demand was triggered, decide "
+            "You are the Demand Intelligence brain for the Empire AI autonomous revenue "
+            "engine. Given scored geographies where demand was triggered, decide "
             "where to deploy paid + organic traffic and when. Consider: higher demand_score "
             "= deploy harder; demand peaks 24-72h after the trigger. "
             "Return ONLY JSON: {\"deploy\": [list of metro names ranked], "

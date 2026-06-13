@@ -312,7 +312,7 @@ class SovereignConsole:
             action_specs.append(f"  • {name}{tag} — {spec['description']}\n      params: {params_desc}")
 
         system_prompt = (
-            "You are the action router for Empire AI, a storm-driven lead generation platform. "
+            "You are the action router for the Empire AI autonomous revenue engine. "
             "Your job is to translate an operator's natural-language command into ONE structured "
             "action from the allowed set below.\n\n"
             "ALLOWED ACTIONS:\n"

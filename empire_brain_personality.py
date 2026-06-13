@@ -311,8 +311,8 @@ class BrainPersonality:
 
         if not base_prompt:
             base_prompt = (
-                "You are the decision engine for a B2B storm-damage "
-                "lead-generation system. Given a storm alert and a target "
+                "You are the decision engine for the Empire AI autonomous "
+                "revenue engine. Given a storm alert and a target "
                 "business, decide whether to enroll them in outreach.\n\n"
                 "Return ONLY valid JSON with these keys:\n"
                 "  - decision: \"GO\" or \"NO_GO\"\n"

@@ -600,7 +600,7 @@ def comprehensive_forecast() -> dict:
 # Module-level calibration state (tuned by AGI and self-correction)
 _REVENUE_CALIBRATION: dict = {
     "close_rate": 0.15,           # global close rate (adjusted by learning)
-    "commission_rate": 0.01,      # whale fee rate
+    "commission_rate": 0.03,      # whale fee rate (bumped 2026-06-13)
     "confidence_decay": 1.0,      # how much to trust the LLM narrative
     "tuned_at": None,
     "tuned_by": "default",

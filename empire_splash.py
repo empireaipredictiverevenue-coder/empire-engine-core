@@ -132,7 +132,18 @@ def splash_page(redirect_to: str = "/command") -> str:
       color: var(--empire-mist);
       letter-spacing: 0.42em;
       text-transform: uppercase;
-      margin-bottom: 48px;
+      margin-bottom: 20px;
+    }
+
+    .splash-sub {
+      font-family: var(--font-ui);
+      font-size: 15px;
+      color: var(--empire-mist);
+      max-width: 420px;
+      margin: 0 auto 36px;
+      line-height: 1.6;
+      letter-spacing: 0.01em;
+      padding: 0 20px;
     }
 
     .splash-prompt {
@@ -215,6 +226,29 @@ def splash_page(redirect_to: str = "/command") -> str:
       }
     }
 
+    .splash-auth {
+      position: fixed;
+      top: 20px; right: 24px;
+      z-index: 5;
+    }
+    .splash-auth a {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      color: var(--empire-fog);
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      text-decoration: none;
+      padding: 8px 14px;
+      border: 1px solid var(--empire-border);
+      border-radius: var(--radius-sm);
+      transition: all 0.2s var(--ease-out-empire);
+    }
+    .splash-auth a:hover {
+      color: var(--signal-teal);
+      border-color: var(--signal-teal);
+      box-shadow: var(--glow-soft);
+    }
+
     .splash-foot {
       position: fixed;
       bottom: 24px; left: 0; right: 0;
@@ -225,6 +259,14 @@ def splash_page(redirect_to: str = "/command") -> str:
       letter-spacing: 0.32em;
       text-transform: uppercase;
       z-index: 3;
+    }
+    .splash-foot a {
+      color: var(--empire-mist);
+      text-decoration: none;
+      transition: color 0.2s;
+    }
+    .splash-foot a:hover {
+      color: var(--signal-teal);
     }
     """
 
@@ -301,7 +343,9 @@ def splash_page(redirect_to: str = "/command") -> str:
     <span class="splash-empire">EMPIRE</span>
     <span class="splash-ai">AI</span>
   </div>
-  <div class="splash-tag">Predictive Revenue</div>
+  <div class="splash-tag">Autonomous Revenue Engine</div>
+
+  <div class="splash-sub">Multi-niche lead generation, voice &amp; SMS outreach, AI closing, contractor networks, and SEO — one autonomous platform across every vertical.</div>
 
   <button class="splash-prompt" type="button" id="splash-engage" aria-label="Enter the empire">
     <span class="splash-prompt-dot"></span>
@@ -309,11 +353,19 @@ def splash_page(redirect_to: str = "/command") -> str:
   </button>
 </main>
 
+<div class="splash-auth">
+  <a href="/auth/login">Sign in</a>
+</div>
+
 <div class="splash-progress">
   <div class="splash-progress-fill" id="progress"></div>
 </div>
 
-<div class="splash-foot">Sovereign Operator · V49</div>
+<div class="splash-foot">
+  <a href="https://empire-ai.co.uk">empire-ai.co.uk</a>
+  &nbsp;·&nbsp;
+  <a href="/docs">API</a>
+</div>
 
 <script>
 (function() {{

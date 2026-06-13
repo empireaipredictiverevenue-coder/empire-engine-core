@@ -37,7 +37,7 @@ THE FULL FLYWHEEL
             ↓ (Empire AI is NOT the filer · the owner files)
             ↓
   STEP 8  Outcome recorded (POST /api/v1/record-outcome)
-            ↓ settled = success, 1% fee due
+            ↓ settled = success, 3% fee due
             ↓
   STEP 9  USDC fee paid to Solana wallet
             ↓ Solana revenue watcher detects (every 2min)

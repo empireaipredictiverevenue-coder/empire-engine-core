@@ -6,16 +6,17 @@ write back when you're done.
 
 ## The Locked Directive
 `/root/empire-v49/STARTING_POINT.md` is the source of truth for the business.
-**Do not read past this paragraph without reading it.** Success metric, in order:
+**Do not read past this paragraph without reading it.**
 
-  1. Splash live at empire-ai.co.uk
-  2. 1 real lead in Supabase
-  3. 1 real contractor recruited
-  4. 1 real fee earned
+Empire AI is an **Autonomous Revenue Engine** — multi-niche, multi-product.
+Success metrics, in order:
 
-Until those are hit, anything not on that path is parking-lot work. If you're
-about to build a SaaS billing layer, predictive AGI module, or cinematic
-dashboard, stop. The lock is in STARTING_POINT.md, not here.
+  1. Splash live at empire-ai.co.uk  …………… ✅
+  2. 1 real lead in Supabase  …………………… 🔄
+  3. 1 real contractor recruited  …………… ⬜
+  4. 1 real fee earned  ………………………… ⬜
+
+The lock is in STARTING_POINT.md, not here. Don't build outside the lane.
 
 ## Who Is Working
 The fleet is bigger than the two agents. Last enumerated 2026-06-13

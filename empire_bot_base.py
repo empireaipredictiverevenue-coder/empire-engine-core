@@ -8,7 +8,8 @@ AGI · SI · PREDICTIVE REVENUE WIRING:
   - AGI Governor: strategy_for_niche() selects best strategy per niche
   - SI Strategy: best_for_niche() evolves genome per strike outcome
   - Predictive Revenue: estimates per-strike revenue for prioritization
-    REVENUE = asset_value × 0.01 × niche_win_rate × urgency_multiplier
+    REVENUE = asset_value × 0.03 × niche_win_rate × urgency_multiplier
+    (bumped from 0.01 on 2026-06-13)
 """
 
 import random
@@ -19,7 +20,7 @@ from typing import Dict, Optional, Any
 log = logging.getLogger("empire.bot")
 
 # ── Predictive Revenue Formula ────────────────────────────────────
-COMMISSION_RATE = 0.01
+COMMISSION_RATE = 0.03  # 3% per-claim fee (bumped 2026-06-13)
 URGENCY_MULTIPLIERS = {
     "Extreme": 2.5, "Severe": 1.8, "Moderate": 1.2, "Minor": 0.8,
 }

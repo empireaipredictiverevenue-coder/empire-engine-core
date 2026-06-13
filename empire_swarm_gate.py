@@ -365,7 +365,7 @@ class GodModeSwarmGate:
         )
 
         if asset_val > 0:
-            fee = round(asset_val * 0.01)
+            fee = round(asset_val * 0.03)
             script += (
                 f"We've identified {name} with an estimated asset value of ${asset_val:,.0f}. "
                 f"Our success-only fee on a settled claim would be approximately ${fee:,.0f}. "

@@ -19,7 +19,7 @@ except ImportError:
 
 log = logging.getLogger("empire.brain.decide")
 
-BRAIN_SYSTEM_PROMPT = """You are the decision engine for a B2B storm-damage lead-generation system.
+BRAIN_SYSTEM_PROMPT = """You are the decision engine for the Empire AI autonomous revenue engine.
 Given a storm alert and a target business, decide whether to enroll them in outreach.
 
 Return ONLY valid JSON with these keys:

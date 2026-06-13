@@ -374,7 +374,7 @@ def register_partner_routes(app: FastAPI, require_auth: Optional[Callable] = Non
             "notes":            notes,
             "timezone":         "America/Chicago",
             "base_payout":      0,
-            "fee_rate":         0.01,
+            "fee_rate":         0.03,
             "per_call_fee":     0,
             "monthly_retainer": 0,
             "daily_cap":        10,

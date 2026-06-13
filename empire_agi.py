@@ -18,7 +18,7 @@ _db = create_client(SUPABASE_URL, SUPABASE_KEY) if (SUPABASE_URL and SUPABASE_KE
 
 from empire_ai_router import AIRouter
 
-AGI_SYSTEM = """You are the AGI optimizer for an autonomous storm-driven lead-gen system.
+AGI_SYSTEM = """You are the AGI optimizer for the Empire AI autonomous revenue engine.
 
 Given current system stats, decide a new weight value between 0.5 and 2.0 that the
 storm-target scorer should use.

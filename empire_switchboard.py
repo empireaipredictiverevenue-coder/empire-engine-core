@@ -4,6 +4,7 @@ from zoneinfo import ZoneInfo
 from supabase import create_client
 
 from empire_utils import tz_for_areacode
+from conversion_funnel import COMMISSION_RATE
 
 log = logging.getLogger("empire.switchboard")
 _sb = create_client(os.getenv("SUPABASE_URL"), os.getenv("SUPABASE_SERVICE_KEY"))
@@ -186,7 +187,7 @@ def register_switchboard_routes(app, require_auth=None):
                 "hours_open": int(payload.get("hours_open", 8)),
                 "hours_close": int(payload.get("hours_close", 20)),
                 "base_payout": float(payload.get("base_payout", 0)),
-                "fee_rate": float(payload.get("fee_rate", 0.01)),
+                "fee_rate": float(payload.get("fee_rate", COMMISSION_RATE)),
                 "destination_phone": payload.get("destination_phone",""),
                 "daily_cap": int(payload.get("daily_cap", 100)),
                 "is_active": True,

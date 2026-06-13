@@ -57,7 +57,7 @@ import httpx
 from fastapi import FastAPI, Request, HTTPException, Depends, BackgroundTasks
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.responses import JSONResponse, PlainTextResponse
-
+from conversion_funnel import COMMISSION_RATE
 
 log = logging.getLogger("empire.voice")
 
@@ -417,7 +417,7 @@ def ncco_outbound_strike(
             "limit":    1800,
         })
 
-    fee = round(asset_value * 0.01, 0)
+    fee = round(asset_value * COMMISSION_RATE, 0)
     pitch = (
         "This is Empire AI Predictive Cloud. "
         "Our system detected severe weather activity at your facility. "
@@ -621,7 +621,7 @@ def ncco_dynamic_outbound(
             "limit":    1800,
         })
 
-    fee = round(asset_value * 0.01, 0)
+    fee = round(asset_value * COMMISSION_RATE, 0)
 
     if confidence >= 0.7:
         # High-confidence GO — confident storm pitch with asset details
@@ -1142,11 +1142,11 @@ def register_voice_routes(
             payout_value = float(cl.get("payout_value") or 0)
 
             # 2. If buyer assigned, get their fee_rate for fee computation
-            fee_rate = 0.01  # default 1% fee
+            fee_rate = COMMISSION_RATE  # default 3% (from conversion_funnel)
             if buyer_id:
                 buyer_res = db.table("buyers").select("fee_rate").eq("id", buyer_id).limit(1).execute()
                 if buyer_res.data:
-                    fee_rate = float(buyer_res.data[0].get("fee_rate") or 0.01)
+                    fee_rate = float(buyer_res.data[0].get("fee_rate") or COMMISSION_RATE)
 
             # 3. Compute fee_earned
             fee_earned = round(payout_value * fee_rate, 2)

@@ -15,6 +15,7 @@ Phase 1 wires Pulse end-to-end; other sections render a placeholder.
 """
 
 from empire_tokens import EMPIRE_FONTS, EMPIRE_TOKENS_CSS, EMPIRE_BASE_CSS
+from conversion_funnel import COMMISSION_RATE
 
 
 def command_spa_page() -> str:
@@ -31,6 +32,7 @@ def command_spa_page() -> str:
 </head>
 <body>
   <div id="root"></div>
+  <script>const EMPIRE_FEE_RATE = {COMMISSION_RATE};</script>
   <script type="importmap">
   {{
     "imports": {{
@@ -1735,7 +1737,7 @@ function Pulse({ events, wsConnected }) {
   const totalMonthlyRetainer = activePartnersList
     .reduce((sum, p) => sum + (parseFloat(p.monthly_retainer) || 0), 0);
   const totalPerCallFee = activePartnersList
-    .reduce((sum, p) => sum + ((parseFloat(p.base_payout) || 0) * (parseFloat(p.fee_rate) || 0.01) + (parseFloat(p.per_call_fee) || 0)), 0);
+    .reduce((sum, p) => sum + ((parseFloat(p.base_payout) || 0) * (parseFloat(p.fee_rate) || 0.03) + (parseFloat(p.per_call_fee) || 0)), 0);
   const projectedMRR = Math.round(totalMonthlyRetainer + (totalPerCallFee * 22));
 
   // ── Revenue bar chart: top 8 lanes by MRR ──
@@ -2042,7 +2044,7 @@ ${(() => {
         <div class="pipeline-grid">
           ${activePartnersList.map(p => {
             const payout = parseFloat(p.base_payout) || 0;
-            const feeRate = parseFloat(p.fee_rate) || 0.01;
+            const feeRate = parseFloat(p.fee_rate) || EMPIRE_FEE_RATE;
             const perCallFee = parseFloat(p.per_call_fee) || 0;
             const retainer = parseFloat(p.monthly_retainer) || 0;
             const empireFeePerCall = Math.round((payout * feeRate + perCallFee) * 100) / 100;

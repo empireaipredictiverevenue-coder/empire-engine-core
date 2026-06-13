@@ -275,7 +275,7 @@ WHAT YOU HAVE NOW
   ✓ Vonage Voice Engine · hybrid-ready, in-house SIP migration path
   ✓ SMS Sequence Engine · 5-touch drip, TCPA-compliant
   ✓ Contractor Strike Portal · magic-link dispatch
-  ✓ Solana Revenue Watcher · auto-detects 1% fee payments
+  ✓ Solana Revenue Watcher · auto-detects 3% fee payments
   ✓ Calibration Layer · brain self-tunes from settled outcomes
   ✓ Manus Operator hook · armed and ready
   ✓ TCPA opt-out registry · global · honored on re-enrollment

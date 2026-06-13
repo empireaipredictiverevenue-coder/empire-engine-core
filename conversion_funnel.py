@@ -18,7 +18,7 @@ from typing import Optional, Any
 log = logging.getLogger("empire.funnel")
 
 # ── Predictive Revenue Formula Constants ──────────────────────────
-COMMISSION_RATE = 0.01       # 1% of asset value
+COMMISSION_RATE = 0.03       # 3% of asset value (bumped 2026-06-13)
 URGENCY_MULTIPLIERS = {
     "Extreme": 2.5,
     "Severe":  1.8,
@@ -58,7 +58,8 @@ class SalesFunnel:
         BrainDecider → Strategy (SI genome) → Voice streaming / static call.
 
         Predictive Revenue formula per lead:
-          REVENUE = asset_value × 0.01 × niche_win_rate × urgency_multiplier
+          REVENUE = asset_value × commission_rate × niche_win_rate × urgency_multiplier
+          (commission_rate = 0.03 as of 2026-06-13)
         """
         intent = click_data.get('intent', 'medium')
         asset_value = float(click_data.get('asset_value', 0) or 0)
