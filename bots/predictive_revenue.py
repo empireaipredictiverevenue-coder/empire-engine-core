@@ -36,7 +36,7 @@ BASE_VALUE = {
     "multi-niche": 6000, "multi": 6000, "insurance claim": 9000,
     "default": 6000,
 }
-COMMISSION_RATE = 0.01  # 1% whale fee
+COMMISSION_RATE = 0.03  # 3% whale fee (was 1%; bumped 2026-06-13 per Phil)
 
 # ── Lane → Niche mapping (from mesh_orchestrator) ───────────────────
 _NICHE_TO_LANES: dict = {}  # niche → [lane_id, ...]

@@ -14,7 +14,7 @@ ALTER TABLE public.buyers
 
 COMMENT ON COLUMN public.buyers.monthly_retainer IS 'Fixed monthly fee charged to partner (USD). 0 = no retainer.';
 COMMENT ON COLUMN public.buyers.per_call_fee IS 'Flat per-call fee added on top of percentage fee (USD). 0 = no flat fee.';
-COMMENT ON COLUMN public.buyers.fee_rate IS 'Percentage fee charged per-call (e.g. 0.01 = 1%, 0.05 = 5%).';
+COMMENT ON COLUMN public.buyers.fee_rate IS 'Percentage fee charged per-claim (default 0.03 = 3%, 0.05 = 5%).';
 
 -- Verify columns were added
 SELECT column_name, data_type, is_nullable, column_default

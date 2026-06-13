@@ -625,7 +625,7 @@ def register_affiliate_routes(
                 "email": buyer["email"],
                 "niche": buyer.get("niche", ""),
                 "status": buyer.get("status", ""),
-                "fee_rate": float(buyer.get("fee_rate", 0.01)),
+                "fee_rate": float(buyer.get("fee_rate", 0.03)),
             },
             "expires_at": expires_at,
         }
@@ -733,7 +733,7 @@ def register_affiliate_routes(
             # Get buyer's fee rate
             buyer_res = _sb.table("buyers").select("fee_rate, buyer_name") \
                 .eq("id", buyer_id).limit(1).execute()
-            fee_rate = float(buyer_res.data[0].get("fee_rate", 0.01)) if buyer_res.data else 0.01
+            fee_rate = float(buyer_res.data[0].get("fee_rate", 0.03)) if buyer_res.data else 0.03
             buyer_name = buyer_res.data[0].get("buyer_name", "") if buyer_res.data else ""
 
             # Query call_logs with affiliate_code matching any of the buyer's codes
@@ -883,7 +883,7 @@ def register_affiliate_routes(
                     "niche": b.get("niche", ""),
                     "is_active": b.get("is_active", False),
                     "status": b.get("status", ""),
-                    "fee_rate": float(b.get("fee_rate", 0.01)),
+                    "fee_rate": float(b.get("fee_rate", 0.03)),
                     "created_at": str(b.get("created_at", "")),
                     "link_count": link_count,
                     "active_links": active_links,
@@ -1103,7 +1103,7 @@ def register_affiliate_routes(
                     "buyer_name": b.get("buyer_name", ""),
                     "niche": b.get("niche", ""),
                     "is_active": b.get("is_active", False),
-                    "fee_rate": float(b.get("fee_rate", 0.01)),
+                    "fee_rate": float(b.get("fee_rate", 0.03)),
                     "link_count": len(codes),
                     "funnel": {
                         "clicks": total_clicks,

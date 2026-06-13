@@ -63,7 +63,7 @@ buyer_payload = {
     "is_active": True,
     "state_coverage": ["TX", "NY", "FL", "CA", "IL"],
     "base_payout": 400.00,
-    "fee_rate": 0.01,
+    "fee_rate": 0.03,
     "per_call_fee": 0,
     "monthly_retainer": 2000,
     "daily_cap": 50,

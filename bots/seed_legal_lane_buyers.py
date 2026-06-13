@@ -125,7 +125,7 @@ def _buyer_payload(sub_niche: str, cfg: dict) -> dict:
         "status": "ACTIVE",
         "state_coverage": cfg["state_coverage"],
         "base_payout": cfg["base_payout"],
-        "fee_rate": 0.01,
+        "fee_rate": 0.03,
         "per_call_fee": 0,
         "monthly_retainer": 0,
         "daily_cap": 50,

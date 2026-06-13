@@ -12,7 +12,7 @@ AGI · SI · PREDICTIVE REVENUE INJECTION:
   - AGI Governor: strategy_for_niche() selects optimal call strategy
   - SI Strategy: best_for_niche() evolves genome per call outcome
   - Predictive Revenue: per-target revenue estimation for priority
-    REVENUE = asset_value × 0.01 × niche_win_rate × urgency_multiplier
+    REVENUE = asset_value × 0.03 × niche_win_rate × urgency_multiplier
 
 Pipeline per cycle:
   1. _next_target() pulls highest-asset unconverted radar_target
@@ -256,7 +256,7 @@ class VoiceStreamingAgent:
             try:
                 win_rate = self._agi_governor.get_niche_win_rate(niche) or 0.1
                 urgency_mult = 1.8 if (target.get("damage_severity") or "").lower() in ("severe", "extreme") else 1.2
-                predicted_revenue = round(asset_value * 0.01 * win_rate * urgency_mult, 2)
+                predicted_revenue = round(asset_value * 0.03 * win_rate * urgency_mult, 2)
                 log.info(f"[voice_streaming] predicted revenue: ${predicted_revenue:,.2f} for {target.get('warehouse_name', '?')}")
             except Exception:
                 pass

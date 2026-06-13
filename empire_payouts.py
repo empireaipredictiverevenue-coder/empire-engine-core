@@ -498,6 +498,7 @@ class PayoutEngine:
         return None
 
     def _compute_splits(self, amount_usdc: float, rule: dict) -> dict:
+        # TODO(fee-decision-pending): 70/20/10 split unchanged 2026-06-13; only gross 1%→3%. Revisit split with Phil.
         """Compute the three splits to 4 decimal places. Last bucket absorbs rounding."""
         contractor_amt = round(amount_usdc * float(rule["contractor_pct"]), 4)
         ops_amt        = round(amount_usdc * float(rule["ops_pct"]), 4)

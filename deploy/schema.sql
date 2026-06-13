@@ -312,6 +312,7 @@ CREATE TABLE IF NOT EXISTS payout_rules (
   CHECK (ABS(contractor_pct + ops_pct + vault_pct - 1.0) < 0.001)
 );
 
+-- TODO(fee-decision-pending): revisit 70/20/10 split with Phil. Current split is unchanged; only gross bumped 1% → 3% on 2026-06-13. (See commit message.)
 INSERT INTO payout_rules (name, contractor_pct, ops_pct, vault_pct)
 VALUES ('Default 70/20/10', 0.70, 0.20, 0.10)
 ON CONFLICT DO NOTHING;

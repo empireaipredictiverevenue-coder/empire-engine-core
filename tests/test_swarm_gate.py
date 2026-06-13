@@ -908,7 +908,7 @@ class TestScriptEngineStrategies:
 
         script = jobs[0].script
         assert "$7,500,000" in script
-        assert "$75,000" in script  # fee = 7.5M * 0.01
+        assert "$225,000" in script  # fee = 7.5M * 0.03 (was 0.01; bumped 2026-06-13)
 
     def test_script_no_asset_value_omits_fee(self):
         brain = _mock_brain_decider()

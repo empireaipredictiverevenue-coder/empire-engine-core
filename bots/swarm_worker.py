@@ -18,7 +18,7 @@ AGI · SI · PREDICTIVE REVENUE INJECTION:
   - AGI Governor: scores targets by niche win rate for lane prioritization
   - SI Strategy: best_for_niche() selects optimal genome for script generation
   - Predictive Revenue: estimates per-target revenue for sort order
-    REVENUE = asset_value × 0.01 × niche_win_rate × urgency_multiplier
+    REVENUE = asset_value × 0.03 × niche_win_rate × urgency_multiplier
 
 Complements the hub-wired empire_swarm_gate.py (which uses HTTP calls
 to synthetic_brain). This bot runs independently and can be deployed
@@ -457,7 +457,7 @@ class SwarmOrchestrationNode:
                 except Exception:
                     pass
             urgency_mult = 1.8 if "Severe" in t.get("damage_severity", "") else 1.2
-            return round(asset * 0.01 * win_rate * urgency_mult, 4)
+            return round(asset * 0.03 * win_rate * urgency_mult, 4)
         return sorted(targets, key=_score, reverse=True)
 
     async def boot_swarm_fleet(self, manifest: Optional[List[Dict]] = None) -> List[Dict[str, Any]]:

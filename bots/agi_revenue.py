@@ -63,7 +63,7 @@ Rules:
   - If one niche consistently underperforms: reduce its close_rate multiplier
   - If one niche's MRR far exceeds others: boost its close_rate multiplier
   - Never move any parameter by more than 25% in one tick
-  - Default close_rate is 0.15, commission_rate is 0.01
+  - Default close_rate is 0.15, commission_rate is 0.03
 
 Return ONLY JSON: {"close_rate": float, "commission_rate": float, "confidence_decay": float,
                     "per_niche": {"Nicole Name": float, ...}, "reasoning": "one sentence why"}
@@ -76,7 +76,7 @@ def _load_calibration() -> dict:
         from bots.predictive_revenue import _REVENUE_CALIBRATION
         return dict(_REVENUE_CALIBRATION)
     except Exception:
-        return {"close_rate": 0.15, "commission_rate": 0.01, "confidence_decay": 1.0,
+        return {"close_rate": 0.15, "commission_rate": 0.03, "confidence_decay": 1.0,
                 "accuracy_7d": 0.0, "samples_7d": 0}
 
 
@@ -97,7 +97,7 @@ def _apply_calibration(tuned: dict) -> bool:
         if "commission_rate" in tuned:
             cm = float(tuned["commission_rate"])
             cm = max(0.005, min(0.05, cm))
-            old_cm = pr._REVENUE_CALIBRATION.get("commission_rate", 0.01)
+            old_cm = pr._REVENUE_CALIBRATION.get("commission_rate", 0.03)
             cm = max(old_cm * 0.75, min(old_cm * 1.25, cm))
             # Update BOTH sources of truth: calibration dict AND module constant
             pr._REVENUE_CALIBRATION["commission_rate"] = round(cm, 4)
