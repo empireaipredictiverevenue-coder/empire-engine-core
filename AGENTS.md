@@ -18,18 +18,62 @@ about to build a SaaS billing layer, predictive AGI module, or cinematic
 dashboard, stop. The lock is in STARTING_POINT.md, not here.
 
 ## Who Is Working
-Two agents are wired into this project right now:
+The fleet is bigger than the two agents. Last enumerated 2026-06-13
+07:46 UTC via `ps -ef | grep python` and `ss -tlnp`. This section is
+the source of truth; if it drifts, run those commands and update.
 
+### Coordinator (1)
+  - **agent_orchestrator** — `uvicorn agent_orchestrator:app :8042`
+    (PID 3099292, 2 workers). Re-exported from `products/agent_orchestrator.py`.
+    Log: `/root/empire-v49/logs/agent_orchestrator.log`.
+    The router. Speaks HTTP; assumes every backend is on localhost.
+
+### Live services (7, all started 2026-06-13 ~06:13)
+  - **hub** — `python3 hub.py :8000` (PID 3512073). Main FastAPI app.
+    Restarted 2026-06-13 06:46. Talk to this for /api/v1/* routes.
+  - **synthetic_brain** — `uvicorn synthetic_brain:app :8005` (PID 2603245).
+    The LLM brain. Uses Ollama (PID 2955959, :11434) and llama-server
+    (PID 3450892, :46841) for inference. Reached by hub + matrix.
+  - **sovereign_agi_matrix** — `matrix/sovereign_agi_matrix.py :8010`
+    (PID 3451695). One of the 5 matrix modules.
+  - **universal_matrix** — `universal/universal_matrix.py :8040`
+    (PID 3451691).
+  - **matrix_main** — `matrix/main.py :8045` (PID 3451718). Probably the
+    matrix orchestrator-side; check `matrix/main.py` header.
+  - **roi_marketing_matrix** — `strategy/roi_marketing_matrix.py :8020`
+    (PID 3451711).
+  - **landing_matrix** — `landing/landing_matrix.py :8030` (PID 3451703).
+
+### Profile-aware agents (2)
   - **default** (this profile) — the operator agent. Phil's main point of
-    contact via the Empire1aibot Telegram bot. Owns: server, gateway,
-    Supabase, splash, hub. SOUL: `/root/.hermes/SOUL.md`.
+    contact via the Empire1aibot Telegram bot. SOUL:
+    `/root/.hermes/SOUL.md`. Owns: server, gateway, Supabase, splash, hub.
   - **empireaipredictiverevenue-coder** — the predictive-revenue coder.
     Active in git history (`git log --format='%an' | sort -u`). Owns:
     strike pipeline, predictive revenue modules, AGI calibration. Email:
-    empireaipredictiverevenue@proton.me (for git audit only; not a chat).
+    empireaipredictiverevenue@proton.me (git audit only; not a chat).
 
-If you're a new agent and don't recognize your name above: introduce yourself
-in the kanban before doing work (see Coordination below).
+### Gateway / dashboard
+  - **hermes gateway** (PID 2593898) — Telegram poller on Empire1aibot,
+    chat 808657420. The mainline for Phil's DMs.
+  - **hermes dashboard** (PID 2995516) — `:9119`, served by the same
+    gateway binary. Internal-only, not exposed publicly.
+
+### Cron-driven agents (5 entries, NOT counted as "live services")
+  - `empire_brain.py` — every hour at :00, → `logs/bridge.log`.
+  - `automate_empire.sh` — every hour at :30, → `logs/agents.log`. The
+    predictive-revenue coder's main cron tick.
+  - `hermes-backup.sh` — daily 03:00, → `~/hermes-backup/cron.log`.
+  - `opt/empire-pipeline/run_safe.sh` — every 2h 06:00-22:00 Central.
+    The storm lead pipeline. The actual revenue path.
+  - `scripts/run_storm_scraper.sh` — daily 00:00 and 12:00,
+    → `logs/storm_scraper.log`.
+
+If you're a new service and don't see yourself above: edit this file and
+add a row. The fleet changes often; this list drifts.
+
+If you're a brand-new agent and don't recognize your name anywhere:
+introduce yourself in the kanban before doing work (see Coordination).
 
 ## Coordination Protocol — Read This
 **Use the kanban. Not chat. Not memory. Not the SOUL.** The kanban is the only
