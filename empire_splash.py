@@ -333,7 +333,7 @@ def splash_page(redirect_to: str = "/command") -> str:
     <span class="splash-empire">EMPIRE</span>
     <span class="splash-ai">AI</span>
   </div>
-  <div class="splash-tag">Autonomous Revenue Engine</div>
+  <div class="splash-tag">Predictive Revenue</div>
 
 
   <button class="splash-prompt" type="button" id="splash-engage" aria-label="Enter the empire">
