@@ -40,6 +40,26 @@ import httpx
 
 sys.path.insert(0, "/root/empire-v49")
 
+# Lazy imports for research + content agents (avoid circular imports at module level)
+_research_agent = None
+_content_agent = None
+
+
+def _get_research_agent():
+    global _research_agent
+    if _research_agent is None:
+        from bots.research_agent import get_research_agent
+        _research_agent = get_research_agent()
+    return _research_agent
+
+
+def _get_content_agent():
+    global _content_agent
+    if _content_agent is None:
+        from bots.content_agent import get_content_agent
+        _content_agent = get_content_agent()
+    return _content_agent
+
 try:
     from dotenv import load_dotenv
     load_dotenv("/root/.env", override=True)
@@ -114,35 +134,7 @@ NICHE_KEYWORDS = {
 }
 
 
-# ── OLLAMA QUERY HELPER ──────────────────────────────────────────────
-async def _ollama_json(prompt: str, system: str, temperature: float = 0.4) -> Dict:
-    """Query local Ollama for structured JSON output."""
-    try:
-        async with httpx.AsyncClient(timeout=60.0) as client:
-            r = await client.post(
-                f"{OLLAMA_URL.rstrip('/')}/api/chat",
-                json={
-                    "model": "llama3.2:3b",
-                    "messages": [
-                        {"role": "system", "content": system},
-                        {"role": "user", "content": prompt},
-                    ],
-                    "stream": False,
-                    "format": "json",
-                    "options": {"temperature": temperature, "num_predict": 400},
-                },
-            )
-            r.raise_for_status()
-            raw = r.json().get("message", {}).get("content", "{}")
-            clean = raw.strip()
-            if "```json" in clean:
-                clean = clean.split("```json")[1].split("```")[0].strip()
-            elif "```" in clean:
-                clean = clean.split("```")[1].split("```")[0].strip()
-            return json.loads(clean)
-    except Exception as e:
-        log.error(f"[seo] Ollama call failed: {e}")
-        return {"_error": str(e)}
+from bots._llm import llm_json as _llm_json
 
 
 # ── SEO AGENT ────────────────────────────────────────────────────────
@@ -154,6 +146,8 @@ class SEOAgent:
     - Researches and tracks keyword performance
     - Generates optimized content via LLM
     - Learns which optimizations drive leads (genome evolution)
+    - Orchestrates deep research (property, market, competitor, storm)
+    - Generates full landing page content (property, neighborhood, storm risk)
     """
 
     def __init__(self):
@@ -163,9 +157,25 @@ class SEOAgent:
             "keywords_tracked": 0,
             "content_generated": 0,
             "leads_attributed": 0,
+            "research_runs": 0,
+            "landing_pages": 0,
         }
         self._evolution_runs = 0
         self._last_evolution: Optional[str] = None
+        self._research = None  # lazy ResearchAgent
+        self._content = None  # lazy ContentAgent
+
+    @property
+    def _r(self):
+        if self._research is None:
+            self._research = _get_research_agent()
+        return self._research
+
+    @property
+    def _c(self):
+        if self._content is None:
+            self._content = _get_content_agent()
+        return self._content
 
     # ── AUDIT WEBSITE ────────────────────────────────────────────────
     async def audit_site(self, url: str, niche: str = "Local SEO & HVAC") -> Dict:
@@ -194,7 +204,7 @@ Return ONLY JSON with these fields:
             f"Return JSON only."
         )
 
-        result = await _ollama_json(prompt, system, temperature=0.3)
+        result = await _llm_json(prompt, system, temperature=0.3)
         if "_error" in result:
             return {"overall_score": 50, "error": result["_error"]}
 
@@ -246,7 +256,7 @@ for a local business. Return ONLY a JSON array of objects:
             f"Generate {seed_count} high-intent long-tail keywords. Return JSON array only."
         )
 
-        result = await _ollama_json(prompt, system, temperature=0.5)
+        result = await _llm_json(prompt, system, temperature=0.5)
         if "_error" in result:
             return []
 
@@ -305,7 +315,7 @@ Write a webpage section optimized for the target keyword. Return ONLY JSON:
             f"Return JSON only."
         )
 
-        result = await _ollama_json(prompt, system, temperature=0.5)
+        result = await _llm_json(prompt, system, temperature=0.5)
         if "_error" in result:
             return None
 
@@ -514,6 +524,190 @@ Write a webpage section optimized for the target keyword. Return ONLY JSON:
         log.info(f"[seo] dream rule applied: {matched_trait} {old_val}→{new_val} (confidence={rule.get('confidence')})")
         return True
 
+    # ── DEEP RESEARCH (delegates to ResearchAgent) ───────────────────────
+    async def research(
+        self,
+        address: str = "",
+        zip_code: str = "",
+        metro: str = "",
+        niche: str = "Roofing Restoration",
+        research_type: str = "full",
+    ) -> Dict:
+        """
+        Run deep research via the ResearchAgent. Supports single-type or
+        full aggregate research across property, market, competitor, storm,
+        neighborhood, and buyer intent.
+
+        Args:
+            address: Property address to research
+            zip_code: ZIP code for storm/neighborhood research
+            metro: Metro area for market/competitor research
+            niche: Service niche
+            research_type: "full" | "property" | "market" | "competitor" |
+                           "storm" | "neighborhood" | "buyer_intent"
+        """
+        agent = self._r
+        self.stats["research_runs"] += 1
+
+        if research_type == "full":
+            return await agent.full_research(
+                address=address, zip_code=zip_code,
+                metro=metro, niche=niche,
+            )
+        elif research_type == "property":
+            return await agent.research_property(address, zip_code, metro)
+        elif research_type == "market":
+            return await agent.research_market(metro, niche)
+        elif research_type == "competitor":
+            return await agent.research_competitors(metro, niche)
+        elif research_type == "storm":
+            return await agent.research_storm_history(zip_code, metro)
+        elif research_type == "neighborhood":
+            return await agent.research_neighborhood(zip_code, metro)
+        elif research_type == "buyer_intent":
+            return await agent.research_buyer_intent(niche, metro)
+        else:
+            return await agent.full_research(
+                address=address, zip_code=zip_code,
+                metro=metro, niche=niche,
+            )
+
+    # ── CONTENT GENERATION (delegates to ContentAgent) ───────────────────
+    async def generate(
+        self,
+        content_type: str = "landing_page",
+        address: str = "",
+        metro: str = "",
+        niche: str = "Roofing Restoration",
+        property_data: Optional[Dict] = None,
+        neighborhood_data: Optional[Dict] = None,
+        storm_data: Optional[Dict] = None,
+        research_package: Optional[Dict] = None,
+        style: str = "cinematic",
+    ) -> Dict:
+        """
+        Generate content via the ContentAgent. Supports all content types.
+
+        Args:
+            content_type: "landing_page" | "property_desc" | "neighborhood" |
+                          "storm_risk" | "social_og" | "email_content"
+            address: Property address for context
+            metro: Metro area
+            niche: Service niche
+            property_data: Property research data (from research agent)
+            neighborhood_data: Neighborhood research data
+            storm_data: Storm history research data
+            research_package: Full research package (from research() with type="full")
+            style: Landing page style ("cinematic" | "modern" | "classic")
+        """
+        agent = self._c
+
+        # If a full research package is provided, use its components
+        if research_package:
+            property_data = property_data or research_package.get("property")
+            neighborhood_data = neighborhood_data or research_package.get("neighborhood")
+            storm_data = storm_data or research_package.get("storm_history")
+
+        if content_type == "landing_page":
+            self.stats["landing_pages"] += 1
+            return await agent.generate_landing_page(
+                address=address, metro=metro, niche=niche,
+                property_data=property_data,
+                neighborhood_data=neighborhood_data,
+                storm_data=storm_data,
+                style=style,
+            )
+        elif content_type == "property_desc":
+            return await agent.generate_property_description(
+                property_data or {}, niche,
+            )
+        elif content_type == "neighborhood":
+            return await agent.generate_neighborhood_guide(
+                neighborhood_data or {}, metro,
+            )
+        elif content_type == "storm_risk":
+            return await agent.generate_storm_risk_content(
+                storm_data or {}, property_data, niche,
+            )
+        elif content_type == "social_og":
+            return await agent.generate_social_og(
+                address=address, metro=metro, niche=niche,
+            )
+        elif content_type == "email_content":
+            return await agent.generate_email_content(
+                property_data or {}, storm_data, niche,
+            )
+        elif content_type == "bulk":
+            result = await agent.bulk_generate_for_research(
+                research_package or {
+                    "address": address, "metro": metro, "niche": niche,
+                    "property": property_data,
+                    "neighborhood": neighborhood_data,
+                    "storm_history": storm_data,
+                }
+            )
+            self.stats["landing_pages"] += 1 if result.get("landing_page") else 0
+            return result
+        else:
+            return await agent.generate_landing_page(
+                address=address, metro=metro, niche=niche,
+                property_data=property_data,
+                neighborhood_data=neighborhood_data,
+                storm_data=storm_data,
+                style=style,
+            )
+
+    # ── RESEARCH → GENERATE PIPELINE ──────────────────────────────────
+    async def research_and_generate(
+        self,
+        address: str = "",
+        zip_code: str = "",
+        metro: str = "",
+        niche: str = "Roofing Restoration",
+        style: str = "cinematic",
+        generate_types: Optional[List[str]] = None,
+    ) -> Dict:
+        """
+        End-to-end pipeline:
+        1. Run full research on the property + metro
+        2. Generate all content types from the research
+
+        Returns {"research": {...}, "content": {...}}
+        """
+        log.info(f"[seo] research_and_generate: {address} / {metro} / {niche}")
+
+        # Phase 1: Full research
+        research_pkg = await self._r.full_research(
+            address=address, zip_code=zip_code,
+            metro=metro, niche=niche,
+        )
+        self.stats["research_runs"] += 1
+
+        # Phase 2: Generate content from research
+        if generate_types and len(generate_types) == 1:
+            content_result = await self.generate(
+                content_type=generate_types[0],
+                address=address, metro=metro, niche=niche,
+                research_package=research_pkg,
+                style=style,
+            )
+        else:
+            content_result = await self._c.bulk_generate_for_research(research_pkg)
+            landing = content_result.get("landing_page")
+            if landing:
+                self.stats["landing_pages"] += 1
+
+        self.stats["content_generated"] += content_result.get("content_count", 1)
+
+        return {
+            "research": research_pkg,
+            "content": content_result,
+            "address": address,
+            "metro": metro,
+            "niche": niche,
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+        }
+
     # ── GET PERFORMANCE SNAPSHOT ─────────────────────────────────────
     async def performance_snapshot(self) -> Dict:
         """Full SEO performance snapshot for the SPA dashboard."""
@@ -540,6 +734,8 @@ Write a webpage section optimized for the target keyword. Return ONLY JSON:
                 "keywords_tracked": self.stats["keywords_tracked"],
                 "content_generated": self.stats["content_generated"],
                 "leads_attributed": self.stats["leads_attributed"],
+                "research_runs": self.stats["research_runs"],
+                "landing_pages": self.stats["landing_pages"],
                 "total_conversions": total_conversions,
                 "total_revenue": round(total_revenue, 2),
                 "avg_conversion_rate": avg_conv,
@@ -561,7 +757,7 @@ Write a webpage section optimized for the target keyword. Return ONLY JSON:
         3. Evolve genome if enough data
         """
         targets = niches or list(NICHE_KEYWORDS.keys())
-        results = {"keywords_found": 0, "content_generated": 0, "errors": 0}
+        results = {"keywords_found": 0, "content_generated": 0, "researches": 0, "landing_pages": 0, "errors": 0}
 
         for niche in targets:
             try:
@@ -579,6 +775,9 @@ Write a webpage section optimized for the target keyword. Return ONLY JSON:
                     )
                     if content:
                         results["content_generated"] += 1
+
+                # Phase 3 (deep research → landing page) skipped in auto-loop.
+                # Call POST /api/seo/pipeline with a real property address instead.
 
             except Exception as e:
                 log.error(f"[seo] cycle error for {niche}: {e}")
@@ -638,7 +837,7 @@ async def run_loop(interval_hours: float = None):
                 "status": "ACTIVE",
                 "last_ping": datetime.now(timezone.utc).isoformat(),
                 "enabled": True,
-                "capabilities": ["seo", "content", "keyword_research", "audit"],
+                "capabilities": ["seo", "content", "keyword_research", "audit", "research", "content_generation", "landing_page"],
             }, on_conflict="agent_name").execute()
         except Exception:
             pass
