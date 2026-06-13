@@ -116,7 +116,7 @@ TEMPLATES = {
         (
             "{prefix} Severe weather flagged at your facility ({target_short}). "
             "Our predictive system detects possible roof/structural damage. "
-            "1% success fee only if a claim settles. "
+            "3% success fee only if a claim settles. "
             "Reply YES for free assessment. Reply STOP to opt out."
         ),
         # Touch 1 — 1 hour later. Urgency.

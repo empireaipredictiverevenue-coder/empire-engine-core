@@ -119,7 +119,7 @@ def score_lead(lead, close_rate=None):
 
 
 def pipeline_forecast():
-    """Aggregate TCV + forecasted 1% fee across today's radar_targets.
+    """Aggregate TCV + forecasted 3% fee across today's radar_targets.
     Logs to pipeline_health. Kept for backward compatibility with hub.py
     and empire_switchboard.py."""
     try:

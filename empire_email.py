@@ -153,7 +153,7 @@ def _build_email(
     sender_name: str,
 ) -> tuple[str, str]:
     """Returns (subject, html_body). Step 0-3."""
-    fee = "1%"
+    fee = "3%"
     if step == 0:
         subject = f"Storm activity detected near {target_short}"
         body = f"""
@@ -171,7 +171,7 @@ def _build_email(
             deadline — your specific policy terms govern any actual claim.
           </p>
           <div style="margin:24px 0;padding:18px 20px;background:#15263F;border-left:3px solid #44E5B8;font-size:13px;color:#c8d4e4;line-height:1.7;">
-            <strong style="color:#f8fafd;">How we work:</strong> 1% success fee on a settled
+            <strong style="color:#f8fafd;">How we work:</strong> 3% success fee on a settled
             claim — paid by the property owner from the settlement, not upfront. If
             no claim is filed or no settlement is reached, you owe us nothing.
           </div>
@@ -197,7 +197,7 @@ def _build_email(
           </p>
           <ul style="font-size:14px;line-height:1.8;color:#a1a1aa;margin:0 0 14px;padding-left:20px;">
             <li>Insurance claims filed inside the 72-hour window typically settle higher</li>
-            <li>Empire's 1% success fee is paid only on settlement — no upfront cost</li>
+            <li>Empire's 3% success fee is paid only on settlement — no upfront cost</li>
             <li>If we find no damage, the assessment is free and we move on</li>
           </ul>
           <p style="font-size:14px;line-height:1.7;color:#a1a1aa;margin:14px 0 0;">
@@ -218,7 +218,7 @@ def _build_email(
           <p style="font-size:14px;line-height:1.7;color:#a1a1aa;margin:0 0 14px;">
             If damage exists, you decide whether to file a claim with your carrier. We do
             not represent the insurer or the claim. We coordinate the contractor side
-            only. Empire's 1% fee is paid from the settlement, after it lands.
+            only. Empire's 3% fee is paid from the settlement, after it lands.
           </p>
           <p style="font-size:14px;line-height:1.7;color:#a1a1aa;margin:14px 0 0;">
             If there's no damage, no fee. No claim, no fee. That's the entire model.

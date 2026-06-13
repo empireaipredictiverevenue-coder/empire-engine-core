@@ -304,7 +304,7 @@ def _signup_form_html() -> str:
     <h1>Apply to the <em>Empire</em> Network</h1>
     <p class="sub">
       Empire AI dispatches storm-verified commercial repair leads to vetted
-      local contractors. Independent contractor agreement · 1% success fee
+      local contractors. Independent contractor agreement · 3% success fee
       on settled claims is paid by the property owner, not by you.
     </p>
 
@@ -393,7 +393,7 @@ def _signup_form_html() -> str:
       </ol>
       <br>
       <strong>How payment works:</strong> Empire AI tracks the underlying
-      insurance claim. On settlement, your contractor share of the 1%
+      insurance claim. On settlement, your contractor share of the 3%
       success fee is wired automatically. No upfront cost, no monthly fee.
       You operate as an independent business and verify all property owner
       details directly.
@@ -850,7 +850,7 @@ def register_contractor_routes(
             <div style="margin-top:24px;padding:16px;background:#18181b;border-left:2px solid #10b981;font-size:12px;line-height:1.7;color:#a1a1aa;">
               <strong style="color:#d4d4d8;">How payment works:</strong><br>
               When the underlying claim settles, your contractor share of the
-              1% success fee is wired automatically. No upfront cost, no monthly fee.
+              3% success fee is wired automatically. No upfront cost, no monthly fee.
             </div>
           </div>
         """

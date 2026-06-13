@@ -9,7 +9,7 @@ The operator's daily scorecard. Shows the complete revenue funnel:
   Replied    → inbound SMS or callback received
   Dispatched → contractor accepted via magic link
   Completed  → contractor marked job done
-  Settled    → claim settled, 1% fee earned
+  Settled    → claim settled, 3% fee earned
 
 Funnel conversion at each stage. Per-corridor breakdown. Daily/weekly/monthly
 time window. Auto-refreshes via WebSocket events.
@@ -144,7 +144,7 @@ def register_attribution_routes(
         except Exception:
             completed = 0
 
-        # ── STAGE 7: Settled (1% fee paid) ──────────────────────────────
+        # ── STAGE 7: Settled (3% fee paid) ──────────────────────────────
         try:
             res = db.table("claim_outcomes").select("id, actual_payout, actual_fee", count="exact") \
                 .eq("outcome", "settled") \
@@ -532,7 +532,7 @@ def attribution_view(token: str = "") -> str:
         { key: 'replied',    name: 'Replied',    desc: 'Inbound message or callback' },
         { key: 'dispatched', name: 'Dispatched', desc: 'Contractor accepted dispatch' },
         { key: 'completed',  name: 'Completed',  desc: 'Contractor finished job' },
-        { key: 'settled',    name: 'Settled',    desc: 'Claim settled, 1% fee earned' },
+        { key: 'settled',    name: 'Settled',    desc: 'Claim settled, 3% fee earned' },
       ];
 
       async function loadFunnel(days) {

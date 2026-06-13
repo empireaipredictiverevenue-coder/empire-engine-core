@@ -1,7 +1,7 @@
 """
 EMPIRE V49 · SOLANA PAYOUT SPLITS
 ====================================
-The last piece. Claim settles → 1% fee lands in Empire's USDC vault →
+The last piece. Claim settles → 3% fee lands in Empire's USDC vault →
 this engine splits per-rule and sends each contractor their share
 automatically. Calibration loop closes.
 
@@ -22,7 +22,7 @@ when USDC arrives. This engine takes over from there:
 PAYOUT RULE EXAMPLE
 ───────────────────
 For a $250K settled claim:
-  - Empire 1% fee = $2,500 USDC arrives
+  - Empire 3% fee = $7,500 USDC arrives
   - Default split:
       Contractor (70%): $1,750
       Operations  (20%):   $500

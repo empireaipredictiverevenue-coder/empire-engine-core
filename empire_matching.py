@@ -883,7 +883,7 @@ def register_matching_routes(
                   <li>Reach out to the property owner within 4 hours</li>
                   <li>Schedule on-site assessment ASAP — 72hr insurance window</li>
                   <li>Mark complete via your contractor portal once done</li>
-                  <li>Empire's 1% fee + your share triggers on settled claim</li>
+                  <li>Empire's 3% fee + your share triggers on settled claim</li>
                 </ol>
               </div>
             """
