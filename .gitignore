@@ -58,3 +58,6 @@ builds/**/*.jpg
 !builds/**/
 !builds/**/.gitkeep
 test-ledger/
+
+# Obsidian vault per-user app config (theme, spellcheck, font prefs — not portable)
+notes/.obsidian/
