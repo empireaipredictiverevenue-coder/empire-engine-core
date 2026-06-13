@@ -89,6 +89,10 @@ from empire_brain_personality import BrainPersonality
 from empire_strike_packs import StrikePackCatalog, SubscriptionEngine, DeliveryFilter, register_strike_pack_routes
 from empire_carrier_portfolio import PortfolioManager, StormMatcher, StormReportEngine, register_carrier_routes
 
+# Phase 10: Multi-tenant organizations + per-tenant billing
+from empire_organizations import OrganizationEngine, register_organization_routes
+from empire_tenant_billing import TenantBillingEngine, register_tenant_billing_routes
+
 # Empire AI Suite — 3-Product Monetization Gateway
 from suite_core import (
     SuiteSubscriptionEngine,
@@ -224,6 +228,12 @@ payout_engine = PayoutEngine(
     ntfy_token=NTFY_TOKEN,
 )
 
+# Phase 10: Organization engine — manages tenants, white-label, quotas
+org_engine = OrganizationEngine(get_db=get_db)
+
+# Phase 10: Tenant billing engine — per-org subscriptions, usage metering
+tenant_billing = TenantBillingEngine(get_db=get_db)
+
 auth_engine = AuthEngine(
     get_db=get_db,
     send_email=_send_email,
@@ -232,6 +242,7 @@ auth_engine = AuthEngine(
     public_base_url=PUBLIC_BASE_URL,
     legacy_hub_token=HUB_TOKEN,
     session_ttl_hours=12,
+    org_engine=org_engine,  # Phase 10: multi-tenant RLS context
 )
 
 inbound_triage = InboundCallTriage(
@@ -440,6 +451,22 @@ register_affiliate_routes(
     send_email=_send_email,
     public_base_url=PUBLIC_BASE_URL,
     hub_token=HUB_TOKEN,
+)
+
+# ── Phase 10: Multi-Tenant Organization Routes ────────────────────
+register_organization_routes(
+    app,
+    org_engine=org_engine,
+    require_auth=require_auth,
+    require_owner=require_owner,
+)
+
+# ── Phase 10: Tenant Billing Routes ───────────────────────────────
+register_tenant_billing_routes(
+    app,
+    billing_engine=tenant_billing,
+    require_auth=require_auth,
+    require_owner=require_owner,
 )
 
 # ── Niche Social Terrain — learn habits + map communities per niche ──

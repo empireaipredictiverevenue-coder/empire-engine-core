@@ -199,6 +199,7 @@ class AuthEngine:
         public_base_url: str,
         legacy_hub_token: str = "",
         session_ttl_hours: int = SESSION_TTL_HOURS_DEFAULT,
+        org_engine: Optional['OrganizationEngine'] = None,  # Phase 10: multi-tenant
     ):
         self.get_db           = get_db
         self.sign_token       = sign_token
@@ -208,6 +209,7 @@ class AuthEngine:
         self.legacy_hub_token = legacy_hub_token
         self.session_ttl      = timedelta(hours=session_ttl_hours)
         self.bearer           = HTTPBearer(auto_error=False)
+        self.org_engine       = org_engine  # Phase 10: org context for RLS
         self.stats = {
             "logins":           0,
             "sessions_created": 0,
@@ -224,7 +226,7 @@ class AuthEngine:
 
         try:
             db = self.get_db()
-            res = db.table("operators").select("id, name, role, active") \
+            res = db.table("operators").select("id, name, role, active, org_id") \
                 .eq("email", email).limit(1).execute()
             if not res.data:
                 # Don't reveal whether email exists — return ok regardless
@@ -238,13 +240,16 @@ class AuthEngine:
             log.error(f"[auth] DB lookup failed: {e}")
             return {"ok": False, "error": "service error"}
 
-        # Build the magic link token
+        # Phase 10: include org_id in magic link payload for immediate org context
+        operator_org_id = str(operator.get("org_id") or "")
+
         payload = {
-            "operator_id": str(operator["id"]),
-            "email":       email,
-            "exp":         int(time.time()) + LOGIN_LINK_TTL_SECONDS,
-            "iat":         int(time.time()),
-            "kind":        "login_link",
+            "operator_id":       str(operator["id"]),
+            "email":             email,
+            "exp":               int(time.time()) + LOGIN_LINK_TTL_SECONDS,
+            "iat":               int(time.time()),
+            "kind":              "login_link",
+            "org_id":            operator_org_id,
         }
         token = self.sign_token(payload)
         link = f"{self.public_base_url}/auth/verify?t={token}"
@@ -298,9 +303,11 @@ class AuthEngine:
             return {"ok": False, "error": "invalid or expired link"}
 
         operator_id = payload.get("operator_id")
+        # Phase 10: resolve org_id from payload (set during send_login_link)
+        resolved_org_id = payload.get("org_id", "")
         try:
             db = self.get_db()
-            res = db.table("operators").select("id, name, email, role, active") \
+            res = db.table("operators").select("id, name, email, role, active, org_id") \
                 .eq("id", operator_id).limit(1).execute()
             if not res.data or not res.data[0].get("active"):
                 return {"ok": False, "error": "account not active"}
@@ -340,6 +347,7 @@ class AuthEngine:
             action="login",
             target_type="session",
             ip=ip,
+            org_id=str(operator.get("org_id") or resolved_org_id),
         )
 
         return {
@@ -347,10 +355,11 @@ class AuthEngine:
             "session_token": session_token,
             "expires_at":    expires.isoformat(),
             "operator":      {
-                "id":    str(operator["id"]),
-                "name":  operator["name"],
-                "email": operator["email"],
-                "role":  operator["role"],
+                "id":     str(operator["id"]),
+                "name":   operator["name"],
+                "email":  operator["email"],
+                "role":   operator["role"],
+                "org_id": str(operator.get("org_id") or resolved_org_id),
             },
         }
 
@@ -376,6 +385,8 @@ class AuthEngine:
         Auth priority:
           1. Authorization: Bearer <session_token> (per-operator)
           2. Authorization: Bearer <legacy_hub_token> (cron / backwards compat)
+
+        Phase 10: Returns org_id when available for multi-tenant RLS.
         """
         creds: Optional[HTTPAuthorizationCredentials] = await self.bearer(request)
         token = None
@@ -401,6 +412,7 @@ class AuthEngine:
                 "email":  "system@empire-ai",
                 "role":   "owner",
                 "legacy": True,
+                "org_id": None,  # Phase 10: no org context for legacy token
             }
 
         # Session token lookup
@@ -421,8 +433,8 @@ class AuthEngine:
             if expires_at < datetime.now(timezone.utc):
                 return None
 
-            # Pull the operator
-            op_res = db.table("operators").select("id, name, email, role, active") \
+            # Pull the operator (Phase 10: include org_id)
+            op_res = db.table("operators").select("id, name, email, role, active, org_id") \
                 .eq("id", session["operator_id"]).limit(1).execute()
             if not op_res.data:
                 return None
@@ -435,6 +447,7 @@ class AuthEngine:
                 "email":  operator["email"],
                 "role":   operator["role"],
                 "legacy": False,
+                "org_id": str(operator["org_id"]) if operator.get("org_id") else None,
             }
         except Exception as e:
             log.error(f"[auth] resolve failed: {e}")
@@ -446,7 +459,24 @@ class AuthEngine:
         if not operator:
             self.stats["rejections"] += 1
             raise HTTPException(401, "Authentication required")
+        # Phase 10: Set org context for RLS on every authenticated request
+        await self.resolve_org_context(operator)
         return operator
+
+    # ── PUBLIC: SET ORG CONTEXT FOR RLS (defense-in-depth) ────────────
+    async def resolve_org_context(self, operator: dict) -> None:
+        """
+        Phase 10: Stub for PostgreSQL session-level RLS context.
+
+        NOTE: This app uses SUPABASE_SERVICE_KEY which bypasses all RLS.
+        The RLS policies in migration 015/ are defense-in-depth for a
+        future switch to user-level anon keys. At that point, this method
+        would call `SELECT set_config(...)` via a Supabase RPC function.
+
+        Currently a no-op — the application layer enforces org isolation
+        through the OrganizationEngine, not through PostgreSQL RLS.
+        """
+        pass
 
     # ── PUBLIC: AUDIT LOG ENTRY ─────────────────────────────────────────
     async def audit(
@@ -460,6 +490,7 @@ class AuthEngine:
         target_id:      str = "",
         details:        Optional[dict] = None,
         ip:             str = "",
+        org_id:         str = "",  # Phase 10: tenant-scoped audit
     ) -> None:
         """Persist an audit log entry. Best-effort — never raises."""
         try:
@@ -475,6 +506,7 @@ class AuthEngine:
                 "resource_id":    target_id[:80] if target_id else None,
                 "details":        details or {},
                 "ip":             ip[:60] if ip else None,
+                "org_id":         org_id or None,  # Phase 10: tenant-scoped audit
             }).execute()
             self.stats["audit_entries"] += 1
         except Exception as e:
@@ -494,6 +526,7 @@ class AuthEngine:
         invited_by_id: str,
         invited_by_name: str = "",
         invited_by_email: str = "",
+        org_id: str = "",  # Phase 10: assign to organization
     ) -> dict:
         """Owner invites a new operator. Creates the row + sends a login link."""
         if role not in ROLE_HIERARCHY:
@@ -512,6 +545,7 @@ class AuthEngine:
                 "role":       role,
                 "active":     True,
                 "invited_by": invited_by_id if invited_by_id != "legacy-hub-token" else None,
+                "org_id":     org_id or None,  # Phase 10: assign to organization
             }).execute()
 
             await self.audit(
@@ -522,6 +556,7 @@ class AuthEngine:
                 target_type="operator",
                 target_id=str(ins.data[0]["id"]) if ins.data else None,
                 details={"email": email, "role": role},
+                org_id=org_id,
             )
         except Exception as e:
             log.error(f"[auth] invite insert failed: {e}")
