@@ -1,6 +1,6 @@
 ---
-tags: [vonage, voice, telco, status-blocked]
-status: needs-dashboard-rotation
+tags: [vonage, voice, telco, partial-blocked]
+status: creds-rotated-routes-missing
 last_diag: 2026-06-13
 ---
 
@@ -8,56 +8,59 @@ last_diag: 2026-06-13
 
 Live-call voice wiring for Empire-AI.
 
-## Identity (current in /root/.env)
+## Identity (current in /root/.env, 2026-06-13)
 
 - Number: `+12142277528`
-- Auth: JWT, private key at `/root/vonage_private.key`
-- Application ID: `f0fb5906-a75d-4a2c-90ad-981cce01cd7f`
+- Auth: JWT, private key at `/root/vonage_private.key` (sha256: `2e95316d...71a4`)
+- Application ID: `231873a5-68d1-4028-8ffb-000853072332` (renamed `Empire-AI_Voice`)
 - API key: `f1e9d2a1` (legacy rest.nexmo.com auth)
-- Working endpoint host: `api.nexmo.com` (NOT `api.vonage.com` —
-  that one returns 403 from an unrelated AWS load balancer)
+- API secret: set (10 chars)
+- Working endpoint host: `api.nexmo.com` (NOT `api.vonage.com`)
 
-## Status — BLOCKED, dashboard-side rotation required (2026-06-13)
+## Status - CREDS FIXED, ROUTES MISSING (2026-06-13)
 
-Both auth methods return 401 from the live API:
+Credentials were rotated this session after the old private key was
+compromised via a chat paste. New app created in dashboard with fresh
+keypair; on-disk public key matches the dashboards stored public key.
 
-| probe                                  | result | meaning                                     |
-|----------------------------------------|--------|---------------------------------------------|
-| api.nexmo.com Basic (key:secret)       | 401    | key+secret pair rejected                    |
-| api.nexmo.com JWT (RS256 from priv)    | 401    | private key + app id pair rejected          |
-| rest.nexmo.com key+secret query        | 401    | same on legacy endpoint                     |
-| api.nexmo.com /v2/applications/.../oauth-keys JWT | 401 | same                                   |
+### Auth probes (POST-rotation)
 
-The `private.key` was committed to the repo or exposed in logs at some
-point — see `docs/KEY_ROTATION.md` ("Emergency Rotation: Vonage Private
-Key"). The 401 is the dashboard telling us the app or key has been
-revoked/rotated server-side.
+| probe                                            | result | meaning                              |
+|--------------------------------------------------|--------|--------------------------------------|
+| rest.nexmo.com /account/get-balance (key:secret) | 200    | balance 9.73 EUR - account healthy   |
+| api.nexmo.com /v1/applications/{id} (key:secret) | 200    | app retrievable                      |
 
-## Unblock procedure (from docs/KEY_ROTATION.md)
+The pre-rotation 401s on the JWT path may have been a red herring - once
+the account creds are valid, the app-level JWT path may also work. Not
+re-verified this session; defer to next.
 
-1. `openssl genrsa -out private_new.key 2048`
-2. Dashboard: https://dashboard.nexmo.com/applications → Create new app
-   → upload new public key → enable Voice capability → copy new app id
-3. `cp private_new.key /root/vonage_private.key && chmod 600`
-4. Update `VONAGE_APPLICATION_ID` in `/root/.env`
-5. `pm2 restart empire-hub` (so it picks up the new key)
-6. `pm2 restart synthetic_brain` (so the brain's HMAC sig path re-checks)
-7. Smoke: `python3 -c "from empire_outbound_dialer import OutboundDialer; print('OK')"`
-8. Delete the old app from the dashboard
+### Vonage app voice webhooks (per /v1/applications/{id} response)
 
-## Per-call flow (when unblocked)
+  - `answer_url` -> `https://empire-ai.co.uk/webhook/vonage-answer` (POST)
+  - `event_url`  -> `https://empire-ai.co.uk/webhook/vonage-event` (POST)
 
-1. Vonage dials the lead.
-2. Call audio is patched via websocket to [[Empire_AI_Brain]]
-   (`synthetic_brain:app` on port 8005).
-3. Brain renders live Kokoro TTS (voice_id + HMAC signature from
-   `POST /api/v1/synthetic/register_stream`).
-4. Streamed back into the call in real time.
+### NEXT BLOCKER - the hub has no routes for these
+
+`grep` of hub.py: only `/webhook/lead` is registered. `/webhook/vonage-answer`
+and `/webhook/vonage-event` are 404. Until those routes exist, every
+inbound vonage call is a 404 -> `sip_status=502` -> failed.
+
+The vonage webhook log earlier today showed hundreds of:
+  `GET /webhooks/answer?status=failed&sip_status=502` from 216.147.2.x
+confirming every inbound call was rejected.
+
+### Building the routes (next session)
+
+- `empire_voice.py` already has `ncco_dynamic_inbound`, `ncco_dynamic_outbound`,
+  and `VoiceRouter`. They just need to be wired into hub routes.
+- Answer route must return NCCO JSON. Event route is informational only
+  (logs call status, durations, etc.).
+- Reference: the dashboard already points the right URLs at the right
+  paths - only the server side is missing.
 
 ## Related
 
-- [[Empire_AI_Brain]] — synthesis server (now online with rotated key
-  after 2026-06-13, see note there)
-- [[Empire-AI-Fleet]] — port map
-- [[Parking_Lot]] — outreach agent runtime is parked, blocked on
-  this Vonage 401 + 1 real lead + 1 real contractor.
+- [[Empire_AI_Brain]] - synthesis server (online, key rotated 2026-06-13)
+- [[Empire-AI-Fleet]] - port map
+- [[Parking_Lot]] - outreach agent runtime is parked, blocked on:
+  (a) these missing webhook routes, (b) 1 real lead, (c) 1 real contractor.
