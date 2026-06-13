@@ -352,8 +352,6 @@ def splash_page(redirect_to: str = "/command") -> str:
 
 <div class="splash-foot">
   <a href="https://empire-ai.co.uk">Autonomous Engine</a>
-  &nbsp;·&nbsp;
-  <a href="/docs">API</a>
 </div>
 
 <script>
