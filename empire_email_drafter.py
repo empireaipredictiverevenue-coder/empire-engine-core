@@ -3,6 +3,10 @@ EMPIRE V49 · EMAIL DRAFTER
 ===========================
 Llama 3.1 8b writes per-storm-per-warehouse drafts.
 Drafts land in email_drafts table with status='pending'.
+
+Phase 9 Polish: Personality-aware drafting. When a BrainPersonality instance
+is provided, the drafter adjusts its system prompt and temperature per niche
+(same way BrainDecider does).
 """
 import logging
 from typing import Dict, Optional, Callable
@@ -37,6 +41,8 @@ class EmailDrafter:
     def __init__(self, router: AIRouter, get_db: Callable):
         self.router = router
         self._get_db = get_db
+        # Optional Phase 9.5 personality engine for niche-adjusted tone
+        self.personality = None
 
     async def draft_for_target(
         self,
@@ -48,12 +54,35 @@ class EmailDrafter:
     ) -> Optional[Dict]:
         """
         Generate a draft, insert into email_drafts. Returns the draft row dict or None.
+        Uses personality-adjusted system prompt if personality engine is wired.
         """
         name = target.get("warehouse_name") or "Facility"
         addr = target.get("address") or ""
         event = alert_summary.get("event") or "severe weather"
         area = alert_summary.get("area") or "your area"
         severity = alert_summary.get("severity") or "Severe"
+
+        # Personality-adjusted system prompt + temperature
+        system_prompt = DRAFTER_SYSTEM
+        temperature = 0.5
+
+        # Extract niche from brain_decision or target
+        niche = brain_decision.get("niche", "") or target.get("niche", "__global__")
+        if self.personality is not None and niche:
+            try:
+                system_prompt = self.personality.build_system_prompt(
+                    niche, base_prompt=DRAFTER_SYSTEM
+                )
+                temperature = self.personality.recommended_temperature(niche)
+                # Bump temperature slightly for creative drafting vs deterministic decisions
+                temperature = min(1.0, temperature + 0.15)
+                log.debug(
+                    f"[drafter] personality-adjusted draft for {niche}: "
+                    f"persona={self.personality.personality_for_niche(niche).get('persona')} "
+                    f"temp={temperature}"
+                )
+            except Exception as e:
+                log.debug(f"[drafter] personality adjustment skipped: {e}")
 
         prompt = f"""Draft an outreach email for this scenario:
 
@@ -70,13 +99,15 @@ Return JSON only, no preamble."""
         result = await self.router.generate_json(
             prompt=prompt,
             task="email.draft",
-            system=DRAFTER_SYSTEM,
-            temperature=0.5,
+            system=system_prompt,
+            temperature=temperature,
             max_tokens=500,
             context={
                 "target": name,
                 "storm": event,
                 "severity": severity,
+                "niche": niche,
+                "personality_adjusted": self.personality is not None,
             },
         )
 
@@ -118,6 +149,8 @@ Return JSON only, no preamble."""
                     "target_addr": addr,
                     "severity": severity,
                     "model_used": "llama3.1:latest",
+                    "personality_adjusted": self.personality is not None,
+                    "niche": niche,
                 },
             }
             r = db.table("email_drafts").insert(row).execute()
