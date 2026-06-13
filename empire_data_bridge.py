@@ -264,33 +264,20 @@ def _try_forward_to_inbound(get_db: Callable, row: dict) -> str:
     if not lead_name and not lead_phone:
         return "skipped: no recognisable lead data"
 
-    # Build the inbound lead record
+    # Build the inbound lead record (columns known to exist)
+    # Full bridge metadata is in customer_profiles.lead_retention_data (local SQLite)
     inbound_record = {
-        "id": row.get("event_id", str(uuid.uuid4())),
         "name": lead_name[:200],
         "phone": lead_phone[:20] if lead_phone else None,
-        "address": lead_address[:300] if lead_address else None,
-        "city": lead_city[:100] if lead_city else None,
+        "metro": lead_city[:100] if lead_city else None,
         "source": lead_source[:100],
-        "meta": _json.dumps({
-            "bridge_event_type": row.get("event_type", ""),
-            "bridge_source": row.get("source_platform", ""),
-            "raw_payload": payload,
-        }),
-        "notes": _json.dumps([{
-            "text": f"Auto-ingested via bridge ({row.get('source_platform', '?')} · {row.get('event_type', '?')})",
-            "operator": "bridge",
-            "timestamp": datetime.now(timezone.utc).isoformat(timespec="seconds"),
-        }]),
     }
+    email_from_payload = payload.get("email") or payload.get("contact_email") or ""
+    if email_from_payload:
+        inbound_record["email"] = email_from_payload[:200]
 
     try:
         db = get_db()
-        # Check for duplicate by source + event_id
-        existing = db.table("inbound_leads").select("id").eq("id", inbound_record["id"]).limit(1).execute()
-        if existing.data:
-            return "skipped: duplicate event_id already in inbound_leads"
-
         result = db.table("inbound_leads").insert(inbound_record).execute()
         if not result.data:
             return "insert returned no data"
