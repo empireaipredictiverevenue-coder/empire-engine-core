@@ -47,7 +47,7 @@ USDC_MINT = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
 # We use the devnet-specific USDC mint here.
 DEVNET_USDC_MINT = "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU"
 
-DEVNET_RPC = "https://api.devnet.solana.com"
+DEVNET_RPC = os.environ.get("SOLANA_RPC_URL", "https://api.devnet.solana.com")
 TOKEN_PROGRAM = Pubkey.from_string("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA")
 ATA_PROGRAM = Pubkey.from_string("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL")
 SYSTEM_PROGRAM = Pubkey.from_string("11111111111111111111111111111111")
@@ -219,24 +219,39 @@ def main():
     print("Section 1.B — Solana devnet smoke test")
     print("=" * 70)
 
-    # 1. Fresh keypair
-    print("\n[1] Generate throwaway devnet keypair")
-    signer = Keypair()
-    print(f"    pubkey:  {signer.pubkey()}")
-    print(f"    secret:  {len(bytes(signer))} bytes (NOT shown — never stored)")
+    # 1. Use the pre-funded keypair (faucet-funded) so the airdrop has somewhere to land.
+    #    The key is in /root/.hermes/tmp/devnet_test_key.json (chmod 600).
+    print("\n[1] Load pre-funded devnet keypair (faucet-funded)")
+    import json as _json
+    key_file = os.environ.get("DEVNET_TEST_KEY_FILE", "/root/.hermes/tmp/devnet_test_key.json")
+    if os.path.exists(key_file):
+        raw = bytes(_json.load(open(key_file)))
+        if len(raw) != 64:
+            print(f"  ERR: {key_file} has {len(raw)} bytes, need 64")
+            sys.exit(2)
+        signer = Keypair.from_bytes(raw)
+        print(f"    pubkey:  {signer.pubkey()}")
+        print(f"    secret:  64 bytes (loaded from {key_file}, file is 0600)")
+    else:
+        print(f"  ERR: {key_file} not found")
+        print(f"  Generate one with: /root/sniper_env/bin/python3 -c \"import json,os; from solders.keypair import Keypair; kp=Keypair(); open('/root/.hermes/tmp/devnet_test_key.json','w').write(json.dumps(list(bytes(kp)))); os.chmod('/root/.hermes/tmp/devnet_test_key.json',0o600); print(kp.pubkey())\"")
+        print(f"  Then airdrop devnet SOL to that pubkey at https://faucet.solana.com")
+        sys.exit(2)
 
     recipient = Keypair().pubkey()
     print(f"    recipient: {recipient} (also fresh)")
 
-    # 2. Connect + airdrop
-    print("\n[2] Connect to devnet RPC + airdrop")
+    # 2. Confirm the keypair has devnet SOL (faucet-funded, not via requestAirdrop)
+    print("\n[2] Confirm the signer has devnet SOL")
     client = Client(DEVNET_RPC, timeout=30)
-    try:
-        airdrop_sol(client, signer.pubkey(), amount_sol=1.0)
-    except Exception as e:
-        print(f"  airdrop failed: {e}")
-        print("  common cause: devnet faucet rate-limited. retry in a few minutes.")
+    bal_resp = client.get_balance(signer.pubkey())
+    bal = bal_resp.value
+    print(f"    balance: {bal / 1e9} SOL ({bal} lamports)")
+    if bal < 10_000_000:  # less than 0.01 SOL, won't even pay tx fees
+        print(f"  ERR: balance too low. Airdrop devnet SOL at https://faucet.solana.com to:")
+        print(f"    pubkey: {signer.pubkey()}")
         sys.exit(2)
+    print(f"    ok, balance is enough for tx fees (~0.000005 SOL each) + ATA rent (~0.002 SOL)")
 
     # 3. Build + send
     print("\n[3] Build + send 0.01 USDC transfer (devnet USDC mint)")
