@@ -109,7 +109,7 @@ WIRE-UP IN hub.py
         get_db=                  get_db,
         empire_vault_wallet=     os.environ.get("USDC_WALLET", ""),
         empire_ops_wallet=       os.environ.get("USDC_OPS_WALLET", ""),
-        empire_signing_key=      os.environ.get("SOLANA_SIGNING_KEY", ""),
+        empire_signing_key=      os.environ.get("SOLANA_SIGNING_KEY") or os.environ.get("EMPIRE_SIGNING_KEY", ""),
         solana_rpc_url=          os.environ.get("SOLANA_RPC_URL",
                                                 "https://api.mainnet-beta.solana.com"),
         auto_approve_under_usd=  float(os.environ.get("EMPIRE_PAYOUT_AUTO_USD", "0")),
@@ -178,7 +178,7 @@ log = logging.getLogger("empire.payouts")
 # CONFIG
 # ─────────────────────────────────────────────────────────────────────────────
 # USDC SPL token mint on Solana mainnet
-USDC_MINT = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
+USDC_MINT = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"  # default mainnet; see _build_and_send_usdc_transfer for EMPIRE_USDC_MINT override
 
 # Retry policy for failed transactions
 MAX_RETRIES        = 3
@@ -866,7 +866,8 @@ class PayoutEngine:
 
             # 2. Parse destination + USDC mint pubkeys
             dest_pk  = Pubkey.from_string(to_wallet)
-            mint_pk  = Pubkey.from_string(USDC_MINT)
+            mint_str = os.environ.get("EMPIRE_USDC_MINT", USDC_MINT)
+            mint_pk  = Pubkey.from_string(mint_str)
 
             # 3. Program IDs (Solana system / SPL token / ATA programs)
             TOKEN_PROGRAM_ID = Pubkey.from_string(
