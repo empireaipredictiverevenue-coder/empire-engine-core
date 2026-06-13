@@ -1737,12 +1737,46 @@ function Pulse({ events, wsConnected }) {
   const totalMonthlyRetainer = activePartnersList
     .reduce((sum, p) => sum + (parseFloat(p.monthly_retainer) || 0), 0);
   const totalPerCallFee = activePartnersList
-    .reduce((sum, p) => sum + ((parseFloat(p.base_payout) || 0) * (parseFloat(p.fee_rate) || 0.03) + (parseFloat(p.per_call_fee) || 0)), 0);
+    .reduce((sum, p) => sum + ((parseFloat(p.base_payout) || 0) * (parseFloat(p.fee_rate) || EMPIRE_FEE_RATE) + (parseFloat(p.per_call_fee) || 0)), 0);
   const projectedMRR = Math.round(totalMonthlyRetainer + (totalPerCallFee * 22));
+  const projectedPerCallFees = Math.round(totalPerCallFee * 22);
 
   // ── Revenue bar chart: top 8 lanes by MRR ──
   const rvLanes = ((stats.rv||{}).lanes || []).slice(0, 8);
   const maxMRR = rvLanes.reduce((m, l) => Math.max(m, l.mrr_projected || 0), 0);
+
+  // Pipeline breakdown content (extracted to reduce template nesting depth)
+  const pipelineBreakdownHtml = activePartnersList.length > 0 ? html`
+      <div class="pipeline-breakdown">
+        <div class="pipeline-h">
+          <div class="pipeline-title">Pipeline Breakdown</div>
+          <div class="pipeline-total">${totalPipelineValue}/call · ${totalMonthlyRetainer}/mo retainers</div>
+        </div>
+        <div class="pipeline-grid">
+          ${activePartnersList.map(p => {
+            const payout = parseFloat(p.base_payout) || 0;
+            const feeRate = parseFloat(p.fee_rate) || EMPIRE_FEE_RATE;
+            const perCallFee = parseFloat(p.per_call_fee) || 0;
+            const retainer = parseFloat(p.monthly_retainer) || 0;
+            const empireFeePerCall = Math.round((payout * feeRate + perCallFee) * 100) / 100;
+            const monthlyPotential = retainer + (empireFeePerCall * 22);
+            const states = Array.isArray(p.state_coverage) ? p.state_coverage.join(', ') : (p.state_coverage || '—');
+            return html`
+              <div class="pipeline-card" onClick=${() => window.location.hash = '#/partners?focus=' + encodeURIComponent(p.id)} style=${{cursor: 'pointer'}}>
+                <div class="pipeline-card-name">${p.buyer_name || '—'}</div>
+                <div class="pipeline-card-detail">${p.niche || '—'} · ${states}</div>
+                <div class="pipeline-card-payout">$${payout}<span class="pipeline-card-per">/call</span></div>
+                <div class="pipeline-card-fees">
+                  <span class="pipeline-fee-tag">$${empireFeePerCall}/call fee</span>
+                  ${retainer > 0 ? html`<span class="pipeline-fee-tag retainer">$${retainer}/mo retainer</span>` : ''}
+                </div>
+                <div class="pipeline-card-monthly">~$${monthlyPotential}/mo projected</div>
+              </div>
+            `;
+          })}
+        </div>
+      </div>
+    ` : '';
 
   return html`
     <div>
@@ -1789,7 +1823,7 @@ function Pulse({ events, wsConnected }) {
         <div class="stat-card">
           <div class="stat-label">Projected MRR</div>
           <div class="stat-value teal">$${projectedMRR}</div>
-          <div class="stat-meta">$${totalMonthlyRetainer} retainers · $${Math.round(totalPerCallFee * 22)} per-call fees</div>
+          <div class="stat-meta">$${totalMonthlyRetainer} retainers · $${projectedPerCallFees} per-call fees</div>
         </div>
         <div class="stat-card">
           <div class="stat-label">Closer Pipeline</div>
@@ -2035,37 +2069,8 @@ ${(() => {
       ` : null}
 
             ${tab === 'pipeline' ? html`
-      ${activePartnersList.length > 0 ? html`
-      <div class="pipeline-breakdown">
-        <div class="pipeline-h">
-          <div class="pipeline-title">Pipeline Breakdown</div>
-          <div class="pipeline-total">$${totalPipelineValue}/call · $${totalMonthlyRetainer}/mo retainers</div>
-        </div>
-        <div class="pipeline-grid">
-          ${activePartnersList.map(p => {
-            const payout = parseFloat(p.base_payout) || 0;
-            const feeRate = parseFloat(p.fee_rate) || EMPIRE_FEE_RATE;
-            const perCallFee = parseFloat(p.per_call_fee) || 0;
-            const retainer = parseFloat(p.monthly_retainer) || 0;
-            const empireFeePerCall = Math.round((payout * feeRate + perCallFee) * 100) / 100;
-            const monthlyPotential = retainer + (empireFeePerCall * 22);
-            const states = Array.isArray(p.state_coverage) ? p.state_coverage.join(', ') : (p.state_coverage || '—');
-            return html`
-              <div class="pipeline-card" onClick=${() => window.location.hash = '#/partners?focus=' + encodeURIComponent(p.id)} style=${{cursor: 'pointer'}}>
-                <div class="pipeline-card-name">${p.buyer_name || '—'}</div>
-                <div class="pipeline-card-detail">${p.niche || '—'} · ${states}</div>
-                <div class="pipeline-card-payout">$${payout}<span class="pipeline-card-per">/call</span></div>
-                <div class="pipeline-card-fees">
-                  <span class="pipeline-fee-tag">$${empireFeePerCall}/call fee</span>
-                  ${retainer > 0 ? html`<span class="pipeline-fee-tag retainer">$${retainer}/mo retainer</span>` : ''}
-                </div>
-                <div class="pipeline-card-monthly">~$${monthlyPotential}/mo projected</div>
-              </div>
-            `;
-          })}
-        </div>
-      </div>
-      ` : ''}
+      ${pipelineBreakdownHtml}
+      ` : null}
 
       
   `;
