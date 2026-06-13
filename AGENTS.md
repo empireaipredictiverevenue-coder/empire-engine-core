@@ -19,30 +19,50 @@ dashboard, stop. The lock is in STARTING_POINT.md, not here.
 
 ## Who Is Working
 The fleet is bigger than the two agents. Last enumerated 2026-06-13
-07:46 UTC via `ps -ef | grep python` and `ss -tlnp`. This section is
-the source of truth; if it drifts, run those commands and update.
+08:35 UTC. This section is the source of truth; if it drifts, run
+`python3 scripts/dump_fleet.py` to refresh and update.
 
-### Coordinator (1)
+### Coordinators (2, both non-PM2)
   - **agent_orchestrator** — `uvicorn agent_orchestrator:app :8042`
-    (PID 3099292, 2 workers). Re-exported from `products/agent_orchestrator.py`.
-    Log: `/root/empire-v49/logs/agent_orchestrator.log`.
+    (PID 3099292, 2 workers + 2 forks). Re-exported from
+    `products/agent_orchestrator.py`. Log: `logs/agent_orchestrator.log`.
     The router. Speaks HTTP; assumes every backend is on localhost.
+  - **hook_analytics** — `uvicorn hook_analytics:app :8046`
+    (PID 3106758, 2 workers). Analytics event router.
 
-### Live services (7, all started 2026-06-13 ~06:13)
-  - **hub** — `python3 hub.py :8000` (PID 3512073). Main FastAPI app.
-    Restarted 2026-06-13 06:46. Talk to this for /api/v1/* routes.
-  - **synthetic_brain** — `uvicorn synthetic_brain:app :8005` (PID 2603245).
-    The LLM brain. Uses Ollama (PID 2955959, :11434) and llama-server
-    (PID 3450892, :46841) for inference. Reached by hub + matrix.
-  - **sovereign_agi_matrix** — `matrix/sovereign_agi_matrix.py :8010`
-    (PID 3451695). One of the 5 matrix modules.
-  - **universal_matrix** — `universal/universal_matrix.py :8040`
-    (PID 3451691).
-  - **matrix_main** — `matrix/main.py :8045` (PID 3451718). Probably the
-    matrix orchestrator-side; check `matrix/main.py` header.
-  - **roi_marketing_matrix** — `strategy/roi_marketing_matrix.py :8020`
-    (PID 3451711).
-  - **landing_matrix** — `landing/landing_matrix.py :8030` (PID 3451703).
+### PM2 services (10, all online; restart with `pm2 restart <name>`)
+  - **empire-mesh** (PID 3451686) — `main.py`. The fleet orchestrator script
+    (signal handler, lib import, env bootstrap). Logs to `/var/log/empire.log`.
+  - **empire-hub** (PID 3663717) — `hub.py` on `:8000` via uvicorn. The main
+    Empire-AI FastAPI app. `/api/v1/*` routes, contractor signup, voice,
+    SMS, attribution dashboard. Restart after code changes (12s downtime).
+  - **empire-chrome** (PID 3451900) — `scripts/chrome_headless.sh` + xvfb.
+    Headless Chrome on `:9222` for screenshots / scraping. See
+    AGENTS.md / `scripts/screenshot_dashboards.py`.
+  - **empire-pulse-cron** (PID 3451726) — `scripts/pulse_refresh_cron.py
+    --interval 300`. Backup for the hub's pulse refresh loop. Keeps
+    `pulse_rollup_hourly` materialised view fresh if the hub is down.
+  - **empire-matrix-agi** (PID 3451695) — `matrix/sovereign_agi_matrix.py`
+    on `:8010`.
+  - **empire-matrix-strategy** (PID 3451711) — `strategy/roi_marketing_matrix.py`
+    on `:8020`.
+  - **empire-matrix-landing** (PID 3451703) — `landing/landing_matrix.py`
+    on `:8030`.
+  - **empire-matrix-universal** (PID 3451691) — `universal/universal_matrix.py`
+    on `:8040`.
+  - **empire-ppc-inbound** (PID 3451718) — `matrix/main.py` on `:8045`.
+    Pay-per-call inbound routing (Ventura high-intent filter).
+  - **contractor-sniper** (PID 3451688) — `bots/contractor_sniper.py`.
+    Background worker; what it does, check the file header.
+
+### Non-PM2 long-running
+  - **synthetic_brain** (PID 2603245) — `uvicorn synthetic_brain:app :8005`
+    (1 worker). The LLM brain. Uses Ollama (PID 2955959, `:11434`) and
+    llama-server (PID 3450892, `:46841`) for inference.
+  - **hermes gateway** (PID 2593898) — `hermes gateway run`. Telegram
+    poller on Empire1aibot, chat 808657420. The mainline for Phil's DMs.
+  - **hermes dashboard** (PID 2995516) — `hermes dashboard --port 9119`.
+    Internal-only, not exposed publicly.
 
 ### Profile-aware agents (2)
   - **default** (this profile) — the operator agent. Phil's main point of
@@ -52,12 +72,6 @@ the source of truth; if it drifts, run those commands and update.
     Active in git history (`git log --format='%an' | sort -u`). Owns:
     strike pipeline, predictive revenue modules, AGI calibration. Email:
     empireaipredictiverevenue@proton.me (git audit only; not a chat).
-
-### Gateway / dashboard
-  - **hermes gateway** (PID 2593898) — Telegram poller on Empire1aibot,
-    chat 808657420. The mainline for Phil's DMs.
-  - **hermes dashboard** (PID 2995516) — `:9119`, served by the same
-    gateway binary. Internal-only, not exposed publicly.
 
 ### Cron-driven agents (5 entries, NOT counted as "live services")
   - `empire_brain.py` — every hour at :00, → `logs/bridge.log`.
@@ -69,11 +83,24 @@ the source of truth; if it drifts, run those commands and update.
   - `scripts/run_storm_scraper.sh` — daily 00:00 and 12:00,
     → `logs/storm_scraper.log`.
 
-If you're a new service and don't see yourself above: edit this file and
-add a row. The fleet changes often; this list drifts.
+If you're a new service and don't see yourself above: edit this file
+and add a row. The fleet changes often; this list drifts. Regenerate
+with `python3 scripts/dump_fleet.py`.
 
 If you're a brand-new agent and don't recognize your name anywhere:
 introduce yourself in the kanban before doing work (see Coordination).
+
+### Fee copy is CI-guarded
+The per-claim fee was bumped from 1% to 3% on 2026-06-13 (commits 2a038ef,
+f81f868). `scripts/check_fee_copy.py` scans 426 files for any stale
+1% fee reference and exits non-zero if it finds one. Run it before
+committing marketing changes:
+
+    python3 scripts/check_fee_copy.py
+
+Allow-list lives in the script (CSS widths, the 1% wire-tolerance
+heuristic in empire_payouts.py:413, etc.). To wire it as a pre-commit
+hook, add `.git/hooks/pre-commit` running this script.
 
 ## Coordination Protocol — Read This
 **Use the kanban. Not chat. Not memory. Not the SOUL.** The kanban is the only
