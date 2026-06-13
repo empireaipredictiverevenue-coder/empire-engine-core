@@ -135,16 +135,6 @@ def splash_page(redirect_to: str = "/command") -> str:
       margin-bottom: 20px;
     }
 
-    .splash-sub {
-      font-family: var(--font-ui);
-      font-size: 15px;
-      color: var(--empire-mist);
-      max-width: 420px;
-      margin: 0 auto 36px;
-      line-height: 1.6;
-      letter-spacing: 0.01em;
-      padding: 0 20px;
-    }
 
     .splash-prompt {
       display: inline-flex;
@@ -345,7 +335,6 @@ def splash_page(redirect_to: str = "/command") -> str:
   </div>
   <div class="splash-tag">Autonomous Revenue Engine</div>
 
-  <div class="splash-sub">Multi-niche lead generation, voice &amp; SMS outreach, AI closing, contractor networks, and SEO — one autonomous platform across every vertical.</div>
 
   <button class="splash-prompt" type="button" id="splash-engage" aria-label="Enter the empire">
     <span class="splash-prompt-dot"></span>
@@ -362,7 +351,7 @@ def splash_page(redirect_to: str = "/command") -> str:
 </div>
 
 <div class="splash-foot">
-  <a href="https://empire-ai.co.uk">empire-ai.co.uk</a>
+  <a href="https://empire-ai.co.uk">Autonomous Engine</a>
   &nbsp;·&nbsp;
   <a href="/docs">API</a>
 </div>
