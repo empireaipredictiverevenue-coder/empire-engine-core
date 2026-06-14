@@ -47,8 +47,10 @@ BASE_DIR = Path(__file__).resolve().parent
 DB_PATH = BASE_DIR / "data" / "storm_alerts.sqlite"
 
 VALID_TIERS = {"ROUTER_SaaS", "DATA_ENTERPRISE", "SPY_DATA", "ALL_ACCESS",
-                "SEO_STARTER", "SEO_GROWTH", "SEO_PRO"}
-VALID_PRODUCTS = {"inbound_router", "data_vault", "buyer_spy", "seo_optimizer"}
+                "SEO_STARTER", "SEO_GROWTH", "SEO_PRO",
+                "LEADSCORE_STARTER", "LEADSCORE_GROWTH", "LEADSCORE_ENTERPRISE",
+                "COMPLIANT_STARTER", "COMPLIANT_GROWTH", "COMPLIANT_ENTERPRISE"}
+VALID_PRODUCTS = {"inbound_router", "data_vault", "buyer_spy", "seo_optimizer", "lead_score", "compliant"}
 VALID_STATUSES = {"ACTIVE", "PAST_DUE", "CANCELED", "TRIALING"}
 
 
@@ -458,6 +460,8 @@ class SuiteGuard:
         "inbound_router": "inbound_router_enabled",
         "data_vault":     "data_retention_enabled",
         "buyer_spy":      "buyer_spy_enabled",
+        "lead_score":     "leadscore_enabled",
+        "compliant":      "compliant_enabled",
     }
 
     def __init__(
