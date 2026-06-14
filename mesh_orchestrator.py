@@ -1,7 +1,7 @@
 """
-EMPIRE V49 · 32-LANE MESH ORCHESTRATOR (SI-Powered)
+EMPIRE V49 · 36-LANE MESH ORCHESTRATOR (SI-Powered)
 =====================================================
-Defines the 32-lane lead generation grid. Each lane executes via
+Defines the 36-lane lead generation grid (expanded from 32). Each lane executes via
 the agent_interface and scores its outcomes using the SI core's
 Bayesian probabilistic inference engine.
 
@@ -9,78 +9,27 @@ Replaces fake "88% probability" strings with real beta-binomial
 win rate estimates, Thompson sampling for strategy selection, and
 lane health scoring with confidence intervals.
 
-Niche allocation (rebalanced 2026-06-14):
+Niche allocation (expanded to 36 — 2026-06-14):
   Lanes  0- 4 : Roofing Restoration  (5 lanes, AGGRESSIVE_STRIKE, Storm Scout)
   Lanes  5- 6 : HVAC                 (2 lanes, UGLY_BANNER, Web Auditor)
   Lanes  7- 9 : SEO                  (3 lanes, STANDARD, SEO Optimizer)
-                  7: Local SEO
-                  8: E-commerce SEO
-                  9: Technical SEO
+                  7: Local SEO  |  8: E-commerce SEO  |  9: Technical SEO
   Lanes 10-14 : Legal                (5 lanes, RECALL_SNIPER, FDA Live Feed)
-                  10: Pharma Liability
-                  11: Medical Device
-                  12: Consumer Product
-                  13: Class Action
-                  14: Mass Tort
   Lanes 15-17 : Insurance            (3 lanes, INSURANCE_STRIKE, Insurance Lead Gen)
-                  15: Medicare
-                  16: Life Insurance
-                  17: Final Expense
   Lanes 18-19 : Financial Services   (2 lanes, FINANCIAL_STRIKE, Financial Lead Gen)
-                  18: Debt Consolidation
-                  19: Mortgage
   Lanes 20-21 : Consumer CPA         (2 lanes, FINANCIAL_STRIKE, Inbound Leads)
   Lanes 22-23 : Senior Care          (2 lanes, SENIOR_STRIKE, Senior Lead Gen)
-                  22: Assisted Living
-                  23: Home Health
   Lanes 24    : Addiction Treatment  (1 lane,  HEALTH_STRIKE, Healthcare Lead Gen)
   Lanes 25-26 : Education            (2 lanes, STANDARD, Edu Lead Gen)
-                  25: CDL/Trade School
-                  26: Nursing
   Lanes 27-28 : Healthcare           (2 lanes, HEALTH_STRIKE, Healthcare Lead Gen)
-                  27: Medical Alert Systems
-                  28: Mental Health
   Lanes 29-31 : Business Services    (3 lanes, BIZ_STRIKE, B2B Lead Gen)
-                  29: Managed IT
-                  30: Merchant Services
-                  31: HR & Staffing
-  Lanes 10-14 : Legal                (5 lanes, RECALL_SNIPER, FDA Live Feed)
-                  10: Pharma Liability
-                  11: Medical Device
-                  12: Consumer Product
-                  13: Class Action
-                  14: Mass Tort
-  Lanes 15-17 : Insurance            (3 lanes, INSURANCE_STRIKE, Insurance Lead Gen)
-                  15: Medicare
-                  16: Life Insurance
-                  17: Final Expense
-  Lanes 18-19 : Financial Services   (2 lanes, FINANCIAL_STRIKE, Financial Lead Gen)
-                  18: Debt Consolidation
-                  19: Mortgage
-  Lanes 20-21 : Consumer CPA         (2 lanes, FINANCIAL_STRIKE, Inbound Leads)
-  Lanes 22-23 : Senior Care          (2 lanes, SENIOR_STRIKE, Senior Lead Gen)
-                  22: Assisted Living
-                  23: Home Health
-  Lanes 24    : Addiction Treatment  (1 lane,  HEALTH_STRIKE, Healthcare Lead Gen)
-  Lanes 25-26 : Education            (2 lanes, STANDARD, Edu Lead Gen)
-                  25: CDL/Trade School
-                  26: Nursing
-  Lanes 27-28 : Healthcare           (2 lanes, HEALTH_STRIKE, Healthcare Lead Gen)
-                  27: Medical Alert Systems
-                  28: Mental Health
-  Lanes 29-31 : unassigned           (3 lanes, STANDARD, General)
-                  16: Pharma Liability
-                  17: Medical Device
-                  18: Consumer Product
-                  19: Class Action
-                  20: Mass Tort
-  Lanes 21-28 : Consumer CPA         (8 lanes, FINANCIAL_STRIKE, Inbound Leads)
-  Lanes 29   : Solar Installation     (1 lane,  STANDARD, Solar Prospector)
-  Lanes 30   : Restoration             (1 lane,  STANDARD, Restoration Lead Gen)
-  Lanes 31   : Logistics & Cold Storage (1 lane,  STANDARD, Logistics Prospector)
-
-The 5 Legal sub-niches each get a dedicated lane. FDA recall output is
-classified into one of the 5 sub-niches and routed to the matching buyer.
+  Lanes 32    : Financial Services   (1 lane,  FINANCIAL_STRIKE, Financial Lead Gen)  ← NEW — Mortgage Refinance
+  Lanes 33    : Financial Services   (1 lane,  FINANCIAL_STRIKE, Financial Lead Gen)  ← NEW — Debt Settlement
+  Lanes 34    : Home Services        (1 lane,  AGGRESSIVE_STRIKE, Storm Scout)        ← NEW — Solar Installation
+  Lanes 35    : Home Services        (1 lane,  UGLY_BANNER, Web Auditor)             ← NEW — Plumbing
+  Lanes 32-35 added 2026-06-14 based on CPL benchmark analysis: these 4 sub-niches
+  were the highest-value uncovered verticals (Mortgage Refinance $250-600, Debt
+  Settlement $100-300, Solar Installation $100-300, Plumbing $57-183).
 """
 
 import concurrent.futures
@@ -134,6 +83,10 @@ LANES = {
     29: {"niche": "Business Services",   "sub_niche": "Managed IT","strategy": "BIZ_STRIKE","source": "B2B Lead Gen"},
     30: {"niche": "Business Services",   "sub_niche": "Merchant Services","strategy": "BIZ_STRIKE","source": "B2B Lead Gen"},
     31: {"niche": "Business Services",   "sub_niche": "HR & Staffing",  "strategy": "BIZ_STRIKE",      "source": "B2B Lead Gen"},
+    32: {"niche": "Financial Services",  "sub_niche": "Mortgage Refinance","strategy": "FINANCIAL_STRIKE","source": "Financial Lead Gen"},
+    33: {"niche": "Financial Services",  "sub_niche": "Debt Settlement",   "strategy": "FINANCIAL_STRIKE","source": "Financial Lead Gen"},
+    34: {"niche": "Home Services",       "sub_niche": "Solar Installation","strategy": "AGGRESSIVE_STRIKE","source": "Storm Scout"},
+    35: {"niche": "Home Services",       "sub_niche": "Plumbing",          "strategy": "UGLY_BANNER",      "source": "Web Auditor"},
 }
 # ── LANE OUTCOME TRACKER (persistent across cycles) ─────────────────────
 # Accumulates wins, losses, and revenue per (niche, strategy) so the
@@ -207,7 +160,7 @@ def run_lane(lane_id: int) -> Dict:
     Execute one lane with SI-powered probability scoring.
 
     Args:
-        lane_id: Lane identifier (0-31).
+        lane_id: Lane identifier (0-35).
 
     Returns:
         Dict with lane status, SI analysis, and execution result.
@@ -289,7 +242,7 @@ def run_lane(lane_id: int) -> Dict:
 
 def run_all_lanes() -> Dict:
     """
-    Execute all 32 lanes in parallel via ThreadPoolExecutor.
+    Execute all 36 lanes in parallel via ThreadPoolExecutor.
     Returns a dict with per-lane results and aggregate summary.
     """
     summary = lane_summary()
@@ -298,8 +251,8 @@ def run_all_lanes() -> Dict:
     # Reset per-cycle recall cache before any lane runs
     reset_cycle_cache()
 
-    with concurrent.futures.ThreadPoolExecutor(max_workers=32) as executor:
-        results = list(executor.map(run_lane, range(32)))
+    with concurrent.futures.ThreadPoolExecutor(max_workers=36) as executor:
+        results = list(executor.map(run_lane, range(36)))
 
     # Aggregate
     active = [r for r in results if r.get("status") == "active"]
@@ -359,7 +312,7 @@ def lane_health_report() -> Dict:
     si = get_si_core()
     report = {"niches": {}, "lanes": []}
 
-    for lane_id in range(32):
+    for lane_id in range(36):
         lane_data = LANES.get(lane_id)
         if lane_data is None:
             continue
