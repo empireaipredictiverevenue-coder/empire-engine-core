@@ -144,6 +144,33 @@ TEMPLATES = {
             "Otherwise no further messages. Reply STOP to confirm opt-out."
         ),
     ],
+    "contractor_recruit": [
+        # Touch 0 — Initial pitch. Free-trial framing, no-call ask, splash CTA.
+        (
+            "{prefix} We pay contractors a 3% referral fee on every "
+            "settled insurance claim — and your first 2 closed deals "
+            "are 100% complimentary. No fee, no contract, no call needed. "
+            "See the offer, watch the 2-min demo, and self-onboard at "
+            "empire-ai.co.uk/contractors. Reply STOP to opt out."
+        ),
+        # Touch 1 — 96 hours later. Demo CTA, persistence without nagging.
+        (
+            "{prefix} Quick follow-up — we added a live demo on the page "
+            "so you can see the lead flow before deciding. Qualified, "
+            "storm-affected commercial properties delivered to your "
+            "dispatch queue. You only pay when the claim settles. "
+            "First 2 deals on us. empire-ai.co.uk/contractors"
+        ),
+        # Touch 2 — 240 hours later. Soft close, NOTNOW path, opt-out.
+        (
+            "{prefix} Closing note. If the timing's wrong, reply NOTNOW "
+            "and we'll check back next quarter. No chase. To test with "
+            "a free deal first, self-onboard at "
+            "empire-ai.co.uk/contractors — 90 seconds, no call needed. "
+            "First 2 closed deals are 100% complimentary. "
+            "Reply STOP to opt out."
+        ),
+    ],
 }
 
 
