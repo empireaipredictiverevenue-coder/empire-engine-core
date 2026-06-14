@@ -2490,6 +2490,41 @@ async def revenue_mrr():
         return JSONResponse({"actual_mrr": 0, "projected_mrr": 0, "gap": 0, "error": str(e)[:200]})
 
 
+@app.get("/api/revenue/usdc-ledger")
+async def revenue_usdc_ledger(limit: int = 10):
+    """Recent verified USDC payments from the empire_revenue_ledger table.
+
+    Returns the most recent on-chain USDC transfers verified by the Solana
+    Revenue Engine, ordered by block time descending.
+    """
+    limit = max(1, min(limit, 100))
+    try:
+        db = get_db()
+        r = db.table("empire_revenue_ledger") \
+            .select("transaction_signature,sender_address,usdc_amount,tracking_memo,block_time_stamp,logged_at") \
+            .order("block_time_stamp", desc=True) \
+            .limit(limit) \
+            .execute()
+        rows = r.data or []
+        total_usdc = sum(float(row.get("usdc_amount", 0) or 0) for row in rows)
+        try:
+            all_r = db.table("empire_revenue_ledger") \
+                .select("usdc_amount") \
+                .execute()
+            grand_total = sum(float(row.get("usdc_amount", 0) or 0) for row in (all_r.data or []))
+        except Exception:
+            grand_total = total_usdc
+
+        return JSONResponse({
+            "payments": rows,
+            "count": len(rows),
+            "total_usdc_displayed": round(total_usdc, 6),
+            "total_usdc_all_time": round(grand_total, 6),
+        })
+    except Exception as e:
+        return JSONResponse({"payments": [], "count": 0, "total_usdc_displayed": 0, "total_usdc_all_time": 0, "error": str(e)[:200]})
+
+
 @app.get("/api/v1/products/catalog")
 async def products_catalog():
     """Combined product catalog: strike packs + suite SaaS tiers."""
