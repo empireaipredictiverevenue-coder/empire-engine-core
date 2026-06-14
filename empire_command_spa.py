@@ -524,6 +524,11 @@ _SPA_CSS = """
 .chart-panel-h{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:12px;padding-bottom:10px;border-bottom:1px solid var(--empire-divider)}
 .chart-panel-title{font-weight:500;font-size:12px;letter-spacing:.02em;color:var(--empire-white)}
 .chart-panel-tag{font-family:var(--font-mono);font-size:9px;color:var(--empire-mist);letter-spacing:.14em}
+/* ── USDC Revenue Panel ──────────────────────────────────────────── */
+.rv-usdc-panel{background:var(--empire-surface);border:1px solid var(--empire-border);padding:20px;margin-bottom:20px;margin-top:20px}
+.rv-usdc-panel .tbl thead th{background:var(--empire-elevated)}
+.rv-usdc-panel .stat-value{font-size:22px;line-height:1.2}
+
 .chart-bar:hover{opacity:1 !important;filter:brightness(1.2)}
 .chart-donut{display:flex;align-items:center;gap:16px}
 .chart-donut-svg{flex-shrink:0}
@@ -1275,6 +1280,9 @@ function useLiveSocket(onEvent) {
 function Closer() {
   const [stats, setStats] = useState(null);
   const [err, setErr] = useState(null);
+  const [usdcData, setUsdcData] = useState(null);
+  const [usdcErr, setUsdcErr] = useState(null);
+
   useEffect(() => {
     let stop = false;
     const load = () => {
@@ -1533,6 +1541,21 @@ function SwarmGate() {
       setStats(s);
       setJobs(j.jobs || []);
       setErr(null);
+    // Fetch USDC ledger
+    try {
+      const u = await apiFetch('/api/revenue/usdc-ledger?limit=10');
+      if (u.ok) {
+        const j = await u.json();
+        setUsdcData(j);
+        setUsdcErr(null);
+      } else {
+        setUsdcErr('USDC ledger fetch failed: ' + u.status);
+      }
+    } catch (eu) {
+      setUsdcErr(eu.message || 'USDC fetch error');
+      setUsdcData(null);
+    }
+
     } catch (e) {
       if (e.message !== 'Unauthorized') setErr(String(e));
     }
@@ -5010,7 +5033,65 @@ function Revenue({ events, wsConnected }) {
         </div>
       </div>
 
-      ${(execSummary || highlights.length > 0) ? html`
+      
+      <!-- ── USDC Revenue Ledger ── -->
+      <div class="rv-usdc-panel">
+        <div class="chart-panel-h" style="margin-bottom:0;padding-bottom:0;border-bottom:none">
+          <span class="chart-panel-title">On-Chain USDC Revenue</span>
+          <span class="chart-panel-tag">Solana · verified payments</span>
+        </div>
+        ${(() => {
+          if (usdcErr) return html`<div class="stub" style="margin-top:14px;padding:32px 16px"><div class="stub-body">Could not load USDC ledger: ${usdcErr}</div></div>`;
+          if (!usdcData) return html`<div class="chart-empty" style="padding:32px 0">Loading USDC ledger…</div>`;
+          const usdc = usdcData;
+          const pms = usdc.payments || [];
+          return html`
+            <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:16px 0">
+              <div class="stat-card" style="padding:14px">
+                <div class="stat-label">USDC Received</div>
+                <div class="stat-value teal" style="font-size:22px">$${usdc.total_usdc_all_time != null ? Number(usdc.total_usdc_all_time).toLocaleString(undefined, {minimumFractionDigits:2,maximumFractionDigits:6}) : '—'}</div>
+                <div class="stat-meta">all time</div>
+              </div>
+              <div class="stat-card" style="padding:14px">
+                <div class="stat-label">Transactions</div>
+                <div class="stat-value" style="font-size:22px">${usdc.count || 0}</div>
+                <div class="stat-meta">recent ${limit} payments</div>
+              </div>
+              <div class="stat-card" style="padding:14px">
+                <div class="stat-label">This Window</div>
+                <div class="stat-value cyan" style="font-size:22px">$${usdc.total_usdc_displayed != null ? Number(usdc.total_usdc_displayed).toLocaleString(undefined, {minimumFractionDigits:2,maximumFractionDigits:6}) : '—'}</div>
+                <div class="stat-meta">displayed below</div>
+              </div>
+            </div>
+            <table class="tbl">
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Sender</th>
+                  <th class="tbl-num">Amount (USDC)</th>
+                  <th>Campaign</th>
+                  <th class="tbl-mono">Sig (abbr.)</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${pms.length === 0 ? html`<tr><td colspan="5" class="tbl-empty">No verified USDC payments yet.</td></tr>` :
+                  pms.map(p => html`
+                    <tr key=${p.transaction_signature}>
+                      <td class="tbl-mono" style="color:var(--empire-fog)">${p.block_time_stamp ? new Date(p.block_time_stamp).toLocaleString() : new Date(p.logged_at).toLocaleString()}</td>
+                      <td class="tbl-mono" style="max-width:120px;overflow:hidden;text-overflow:ellipsis" title=${p.sender_address}>${p.sender_address.slice(0,4)}…${p.sender_address.slice(-4)}</td>
+                      <td class="tbl-num tbl-mono" style="color:var(--signal-teal);font-weight:600">${Number(p.usdc_amount).toLocaleString(undefined, {minimumFractionDigits:2,maximumFractionDigits:6})}</td>
+                      <td class="tbl-mono" style="color:var(--empire-mist);max-width:100px;overflow:hidden;text-overflow:ellipsis">${p.tracking_memo || '—'}</td>
+                      <td class="tbl-mono" style="color:var(--empire-fog);font-size:9px" title=${p.transaction_signature}>${p.transaction_signature.slice(0,8)}…</td>
+                    </tr>
+                  `)}
+              </tbody>
+            </table>
+            <div style="font-family:var(--font-mono);font-size:9px;color:var(--empire-fog);margin-top:10px;text-align:right;letter-spacing:.04em">Source: Solana (empire_revenue_ledger) · 60s refresh</div>
+          `;
+        })()}
+      </div>
+
+      ${(execSummary || highlights.length > 0) ? html`${(execSummary || highlights.length > 0) ? html`
       <div class="rv-narrative-panel">
         <div class="rv-narrative-head">
           <span class="rv-narrative-title">AGI Revenue Narrative</span>
