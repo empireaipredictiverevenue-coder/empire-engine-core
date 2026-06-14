@@ -14,6 +14,7 @@ Architecture:
 """
 
 import asyncio
+import hashlib
 import logging
 from datetime import datetime, timezone, timedelta
 from typing import Callable, Optional
@@ -28,6 +29,31 @@ CHECK_INTERVAL_SEC = 3600       # check every hour
 CONVERSION_GRACE_HOURS = 24     # wait 24h after trial ends before auto-converting
 EXPIRING_SOON_DAYS = [3, 1]     # send reminders N days before trial ends
 WIN_BACK_FOLLOWUP_DAYS = 7  # send follow-up win-back email N days after first win-back
+
+# ── Win-back A/B variant system ─────────────────────────────────────────
+# Each variant has:
+#   - id: unique identifier
+#   - name: display name for the SPA
+#   - subject: subject line template ({product_name}, {tier}, {price} placeholders)
+#   - tone: 'warm' | 'urgent' — determines which email builder to use
+#   - weight: split ratio weight (e.g., 50 = 50% of traffic)
+
+WIN_BACK_VARIANTS_DEFAULT = [
+    {
+        "id": "A",
+        "name": "Warm Reassurance",
+        "subject": "We Miss You at {product_name} — reactivate your {tier} plan",
+        "tone": "warm",
+        "weight": 50,
+    },
+    {
+        "id": "B",
+        "name": "Urgent Action",
+        "subject": "Your {product_name} {tier} access is at risk — reactivate now",
+        "tone": "urgent",
+        "weight": 50,
+    },
+]
 
 
 class TrialConversionEngine:
@@ -421,39 +447,6 @@ class TrialConversionEngine:
     # ═══════════════════════════════════════════════════════════════════
 
     @staticmethod
-    def _build_win_back_email(product_name: str, tier: str, price: float) -> str:
-        """Build HTML reactivation email for churned trial users."""
-        return f"""<!DOCTYPE html>
-<html>
-<head><meta charset="UTF-8"></head>
-<body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#0a0a0f;color:#e2e8f0;padding:32px">
-  <div style="max-width:560px;margin:0 auto;background:#14141e;border:1px solid #1e293b;border-radius:12px;padding:32px;text-align:center">
-    <div style="font-size:36px;margin-bottom:8px">🔄</div>
-    <h1 style="font-weight:200;font-size:24px;letter-spacing:-0.02em;margin:0 0 4px">We Miss You at <em style="color:#44E5B8;font-style:italic;font-weight:500">{product_name}</em></h1>
-    <p style="font-family:'SF Mono','Fira Code',monospace;font-size:10px;color:#94a3b8;letter-spacing:0.14em;text-transform:uppercase;margin:0 0 20px">Come back · Reactivate your {tier} plan</p>
-    <p style="font-size:14px;color:#cbd5e1;line-height:1.7;margin:0 0 8px">
-      You recently unsubscribed from <strong>{product_name}</strong>. We'd love to have you back.
-    </p>
-    <div style="background:#0f0f17;border:1px solid #1e293b;border-radius:8px;padding:20px;margin:16px 0;text-align:left">
-      <div style="font-family:'SF Mono','Fira Code',monospace;font-size:10px;color:#94a3b8;letter-spacing:0.14em;text-transform:uppercase;margin-bottom:12px">Your Previous Plan</div>
-      <div style="font-size:14px;color:#e2e8f0;margin-bottom:4px">{product_name} · <strong>{tier}</strong></div>
-      <div style="font-family:'SF Mono','Fira Code',monospace;font-size:28px;color:#44E5B8;font-weight:600">${price:.2f}<span style="font-size:12px;color:#94a3b8;font-weight:400">/mo</span></div>
-      <div style="font-size:12px;color:#94a3b8;line-height:1.6;margin-top:8px;padding-top:12px;border-top:1px solid #1e293b">
-        ✓ Full feature access · Priority support · No setup fees
-      </div>
-    </div>
-    <p style="font-size:13px;color:#94a3b8;line-height:1.6;margin:0 0 24px">
-      Reactivate within 30 days and we'll honor your previous rate. No questions asked.
-    </p>
-    <a href="https://empire-ai.co.uk/command#/products" style="display:inline-block;padding:14px 32px;background:#44E5B8;color:#000;text-decoration:none;font-weight:700;font-family:'SF Mono','Fira Code',monospace;font-size:12px;letter-spacing:0.14em;text-transform:uppercase;border-radius:6px">Reactivate Now</a>
-    <p style="font-size:11px;color:#64748b;line-height:1.5;margin:24px 0 0;padding-top:16px;border-top:1px solid #1e293b">
-      Questions or want a different plan? Reply to this email and we'll help.
-    </p>
-  </div>
-</body>
-</html>"""
-
-    @staticmethod
     def _build_win_back_followup_email(product_name: str, tier: str, price: float) -> str:
         """Build HTML second-touch win-back email — more urgent/last-chance tone."""
         return f"""<!DOCTYPE html>
@@ -603,10 +596,345 @@ class TrialConversionEngine:
             log.info(f"[trial] win-back followup scan: {sent_count} followup(s) sent")
         return sent_count
 
+    # ═══════════════════════════════════════════════════════════════════
+    # WIN-BACK A/B VARIANT SYSTEM
+    # ═══════════════════════════════════════════════════════════════════
+
+    def _read_win_back_config(self) -> dict:
+        """Read win-back A/B variant config from agent_config table.
+
+        Returns dict with:
+          - enabled: bool
+          - variants: list of variant dicts
+          - split_override: optional dict of email->variant_id for manual assignments
+        """
+        default = {
+            "enabled": True,
+            "variants": list(WIN_BACK_VARIANTS_DEFAULT),
+            "split_override": {},
+        }
+        try:
+            db = self.get_db()
+            r = db.table("agent_config") \
+                .select("config_json") \
+                .eq("agent_name", "win_back_ab_test") \
+                .limit(1) \
+                .execute()
+            if r.data:
+                cfg = r.data[0].get("config_json") or {}
+                return {
+                    "enabled": cfg.get("enabled", True),
+                    "variants": cfg.get("variants", list(WIN_BACK_VARIANTS_DEFAULT)),
+                    "split_override": cfg.get("split_override", {}),
+                }
+        except Exception as e:
+            log.debug(f"[trial] win-back config read failed: {e}")
+        return default
+
+    def _save_win_back_config(self, config: dict) -> dict:
+        """Save win-back A/B variant config to agent_config table.
+
+        Args:
+            config: Dict with enabled, variants, split_override.
+
+        Returns:
+            {"ok": True/False, "error": "..."}
+        """
+        try:
+            db = self.get_db()
+            db.table("agent_config") \
+                .upsert({
+                    "agent_name": "win_back_ab_test",
+                    "config_json": config,
+                    "updated_at": datetime.now(timezone.utc).isoformat(),
+                }) \
+                .execute()
+            return {"ok": True}
+        except Exception as e:
+            log.warning(f"[trial] win-back config save failed: {e}")
+            return {"ok": False, "error": str(e)}
+
+    def _assign_win_back_variant(self, email: str, product_slug: str) -> dict:
+        """Assign a win-back variant for a given email+product.
+
+        Uses a hash-based consistent assignment so the same user always
+        gets the same variant. Checks split_override first for manual
+        operator assignments.
+
+        Returns the selected variant dict.
+        """
+        config = self._read_win_back_config()
+        variants = config.get("variants", [])
+        if not variants:
+            variants = list(WIN_BACK_VARIANTS_DEFAULT)
+
+        # Check operator override first
+        override_key = f"{email}::{product_slug}"
+        overrides = config.get("split_override", {})
+        if override_key in overrides:
+            override_id = overrides[override_key]
+            for v in variants:
+                if v["id"] == override_id:
+                    return v
+
+        # Hash-based consistent assignment using weights
+        total_weight = sum(v.get("weight", 50) for v in variants)
+        if total_weight <= 0:
+            total_weight = 100
+
+        # Hash the email+product to get a consistent number 0..total_weight-1
+        # Uses hashlib.md5 for deterministic assignment across restarts
+        hash_input = f"{email}::{product_slug}"
+        hash_bytes = hashlib.md5(hash_input.encode()).digest()
+        hash_int = int.from_bytes(hash_bytes[:4], "big")
+        hash_val = hash_int % total_weight
+
+        cumulative = 0
+        for v in variants:
+            cumulative += v.get("weight", 50)
+            if hash_val < cumulative:
+                return v
+
+        # Fallback
+        return variants[0]
+
+    @staticmethod
+    def _build_win_back_email_warm(product_name: str, tier: str, price: float) -> str:
+        """Build warm/reassuring tone win-back email — variant A."""
+        return f"""<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"></head>
+<body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#0a0a0f;color:#e2e8f0;padding:32px">
+  <div style="max-width:560px;margin:0 auto;background:#14141e;border:1px solid #1e293b;border-radius:12px;padding:32px;text-align:center">
+    <div style="font-size:36px;margin-bottom:8px">🔄</div>
+    <h1 style="font-weight:200;font-size:24px;letter-spacing:-0.02em;margin:0 0 4px">We Miss You at <em style="color:#44E5B8;font-style:italic;font-weight:500">{product_name}</em></h1>
+    <p style="font-family:'SF Mono','Fira Code',monospace;font-size:10px;color:#94a3b8;letter-spacing:0.14em;text-transform:uppercase;margin:0 0 20px">Come back · Reactivate your {tier} plan</p>
+    <p style="font-size:14px;color:#cbd5e1;line-height:1.7;margin:0 0 8px">
+      You recently unsubscribed from <strong>{product_name}</strong>. We'd love to have you back.
+    </p>
+    <div style="background:#0f0f17;border:1px solid #1e293b;border-radius:8px;padding:20px;margin:16px 0;text-align:left">
+      <div style="font-family:'SF Mono','Fira Code',monospace;font-size:10px;color:#94a3b8;letter-spacing:0.14em;text-transform:uppercase;margin-bottom:12px">Your Previous Plan</div>
+      <div style="font-size:14px;color:#e2e8f0;margin-bottom:4px">{product_name} · <strong>{tier}</strong></div>
+      <div style="font-family:'SF Mono','Fira Code',monospace;font-size:28px;color:#44E5B8;font-weight:600">${price:.2f}<span style="font-size:12px;color:#94a3b8;font-weight:400">/mo</span></div>
+      <div style="font-size:12px;color:#94a3b8;line-height:1.6;margin-top:8px;padding-top:12px;border-top:1px solid #1e293b">
+        ✓ Full feature access · Priority support · No setup fees
+      </div>
+    </div>
+    <p style="font-size:13px;color:#94a3b8;line-height:1.6;margin:0 0 24px">
+      Reactivate within 30 days and we'll honor your previous rate. No questions asked.
+    </p>
+    <a href="https://empire-ai.co.uk/command#/products" style="display:inline-block;padding:14px 32px;background:#44E5B8;color:#000;text-decoration:none;font-weight:700;font-family:'SF Mono','Fira Code',monospace;font-size:12px;letter-spacing:0.14em;text-transform:uppercase;border-radius:6px">Reactivate Now</a>
+    <p style="font-size:11px;color:#64748b;line-height:1.5;margin:24px 0 0;padding-top:16px;border-top:1px solid #1e293b">
+      Questions or want a different plan? Reply to this email and we'll help.
+    </p>
+  </div>
+</body>
+</html>"""
+
+    @staticmethod
+    def _build_win_back_email_urgent(product_name: str, tier: str, price: float) -> str:
+        """Build urgent/direct tone win-back email — variant B."""
+        return f"""<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"></head>
+<body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#0a0a0f;color:#e2e8f0;padding:32px">
+  <div style="max-width:560px;margin:0 auto;background:#14141e;border:1px solid #1e293b;border-radius:12px;padding:32px;text-align:center">
+    <div style="font-size:36px;margin-bottom:8px">⚠️</div>
+    <h1 style="font-weight:200;font-size:24px;letter-spacing:-0.02em;margin:0 0 4px">Your <em style="color:#FFB800;font-style:italic;font-weight:500">{product_name}</em> Access Is At Risk</h1>
+    <p style="font-family:'SF Mono','Fira Code',monospace;font-size:10px;color:#94a3b8;letter-spacing:0.14em;text-transform:uppercase;margin:0 0 20px">Reactivate within 7 days · {tier} tier reserved</p>
+    <p style="font-size:14px;color:#cbd5e1;line-height:1.7;margin:0 0 8px">
+      Your <strong>{product_name}</strong> subscription has been canceled, but your <strong>{tier}</strong> tier is still reserved for you at <strong style="color:#44E5B8">${price:.2f}/mo</strong>.
+    </p>
+    <div style="background:#0f0f17;border:1px solid #1e293b;border-radius:8px;padding:20px;margin:16px 0;text-align:left;border-left:3px solid #FFB800">
+      <div style="font-family:'SF Mono','Fira Code',monospace;font-size:10px;color:#FFB800;letter-spacing:0.14em;text-transform:uppercase;margin-bottom:12px">⏳ Offer Expires Soon</div>
+      <div style="font-size:14px;color:#e2e8f0;margin-bottom:4px">{product_name} · <strong>{tier}</strong></div>
+      <div style="font-family:'SF Mono','Fira Code',monospace;font-size:28px;color:#44E5B8;font-weight:600">${price:.2f}<span style="font-size:12px;color:#94a3b8;font-weight:400">/mo</span></div>
+      <div style="font-size:12px;color:#cbd5e1;line-height:1.6;margin-top:8px;padding-top:12px;border-top:1px solid #1e293b">
+        ✓ Full feature access · ✓ Priority support · ✓ No setup fees
+      </div>
+    </div>
+    <p style="font-size:13px;color:#FFB800;line-height:1.6;margin:0 0 24px">
+      ⚠️ Your {tier} rate of ${price:.2f}/mo will expire in 7 days. Reactivate now to lock it in.
+    </p>
+    <a href="https://empire-ai.co.uk/command#/products" style="display:inline-block;padding:14px 32px;background:#44E5B8;color:#000;text-decoration:none;font-weight:700;font-family:'SF Mono','Fira Code',monospace;font-size:12px;letter-spacing:0.14em;text-transform:uppercase;border-radius:6px">Reactivate Now →</a>
+    <p style="font-size:11px;color:#64748b;line-height:1.5;margin:24px 0 0;padding-top:16px;border-top:1px solid #1e293b">
+      Questions? Reply to this email. Already reactivated? Ignore this message.
+    </p>
+  </div>
+</body>
+</html>"""
+
+    def _build_win_back_variant(self, variant: dict, product_name: str, tier: str, price: float) -> str:
+        """Build win-back email HTML for a given variant."""
+        tone = variant.get("tone", "warm")
+        if tone == "urgent":
+            return self._build_win_back_email_urgent(product_name, tier, price)
+        return self._build_win_back_email_warm(product_name, tier, price)
+
+    def get_win_back_variant_stats(self) -> list[dict]:
+        """Return per-variant win-back A/B test stats.
+
+        Returns list of dicts with:
+          - variant_id: str
+          - name: str
+          - sent: int
+          - followups_sent: int
+          - reactivations: int
+          - reactivation_rate: float
+        """
+        config = self._read_win_back_config()
+        variants = config.get("variants", [])
+        if not variants:
+            return []
+
+        try:
+            db = self.get_db()
+
+            # Fetch all win_back_sent events with variant info
+            r = db.table("sales_events") \
+                .select("email, product_slug, created_at, notes") \
+                .eq("event_type", "win_back_sent") \
+                .execute()
+            win_backs = r.data or []
+
+            # Fetch all win_back_followup_sent events
+            r2 = db.table("sales_events") \
+                .select("email, product_slug, created_at, notes") \
+                .eq("event_type", "win_back_followup_sent") \
+                .execute()
+            followups = r2.data or []
+            followup_keys = set()
+            for f in followups:
+                followup_keys.add((f.get("email", ""), f.get("product_slug", "")))
+
+            # Fetch recent trial_converted events for reactivation check
+            r3 = db.table("sales_events") \
+                .select("email, product_slug, created_at") \
+                .eq("event_type", "trial_converted") \
+                .order("created_at", desc=True) \
+                .execute()
+            recent_converted = r3.data or []
+            latest_conv: dict[tuple[str, str], str] = {}
+            for ce in recent_converted:
+                ck = (ce.get("email", ""), ce.get("product_slug", ""))
+                if ck not in latest_conv:
+                    latest_conv[ck] = str(ce.get("created_at", ""))
+
+            # Determine variant for each win_back_sent from notes or by re-assignment
+            # Notes format: "variant=A|"
+            variant_wins: dict[str, int] = {}
+            variant_sent: dict[str, int] = {}
+            variant_followup: dict[str, int] = {}
+
+            for wb in win_backs:
+                notes = wb.get("notes", "") or ""
+                # Extract variant from notes using prefix check (no split to avoid delimiter issues)
+                variant_id = None
+                if notes.startswith("variant="):
+                    # variant=A|Warm Reassurance  → extract "A"
+                    after_prefix = notes[len("variant="):]
+                    pipe_idx = after_prefix.find("|")
+                    if pipe_idx >= 0:
+                        variant_id = after_prefix[:pipe_idx].strip()
+                    else:
+                        variant_id = after_prefix.strip()
+
+                if not variant_id:
+                    # Legacy win-backs without variant — assign one retroactively
+                    variant_id = self._assign_win_back_variant(
+                        wb.get("email", ""), wb.get("product_slug", "")
+                    ).get("id", "A")
+
+                variant_sent[variant_id] = variant_sent.get(variant_id, 0) + 1
+
+                # Check for followup
+                key = (wb.get("email", ""), wb.get("product_slug", ""))
+                if key in followup_keys:
+                    variant_followup[variant_id] = variant_followup.get(variant_id, 0) + 1
+
+                # Check for reactivation
+                wb_created = str(wb.get("created_at", ""))
+                conv_created = latest_conv.get(key, "")
+                if conv_created and conv_created > wb_created:
+                    variant_wins[variant_id] = variant_wins.get(variant_id, 0) + 1
+
+            # Build results for each variant
+            results = []
+            for v in variants:
+                vid = v["id"]
+                sent = variant_sent.get(vid, 0)
+                wins = variant_wins.get(vid, 0)
+                results.append({
+                    "variant_id": vid,
+                    "name": v.get("name", vid),
+                    "tone": v.get("tone", "warm"),
+                    "weight": v.get("weight", 50),
+                    "subject": v.get("subject", ""),
+                    "sent": sent,
+                    "followups_sent": variant_followup.get(vid, 0),
+                    "reactivations": wins,
+                    "reactivation_rate": round(wins / max(sent, 1), 3),
+                })
+
+            return results
+
+        except Exception as e:
+            log.warning(f"[trial] win-back variant stats failed: {e}")
+            return []
+
+    def set_win_back_variants_config(self, config: dict) -> dict:
+        """Update win-back A/B variant configuration.
+
+        Accepts a dict with optional keys:
+          - enabled: bool
+          - variants: list of variant dicts
+          - split_override: dict of email::product_slug -> variant_id
+
+        Merges with existing config — only provided keys are updated.
+        """
+        existing = self._read_win_back_config()
+
+        # Merge provided fields
+        if "enabled" in config:
+            existing["enabled"] = bool(config["enabled"])
+        if "variants" in config:
+            existing["variants"] = config["variants"]
+        if "split_override" in config:
+            existing["split_override"] = config["split_override"]
+
+        return self._save_win_back_config(existing)
+
+    def assign_win_back_variant_override(self, email: str, product_slug: str, variant_id: str) -> dict:
+        """Manually assign a win-back variant for a specific user.
+
+        This creates an override in the config so the user will always
+        get this variant, bypassing the hash-based assignment.
+        """
+        if not email or not product_slug or not variant_id:
+            return {"ok": False, "error": "email, product_slug, and variant_id are required"}
+
+        config = self._read_win_back_config()
+
+        # Validate variant_id exists
+        valid_ids = {v["id"] for v in config.get("variants", WIN_BACK_VARIANTS_DEFAULT)}
+        if variant_id not in valid_ids:
+            return {"ok": False, "error": f"Invalid variant_id '{variant_id}'. Valid: {sorted(valid_ids)}"}
+
+        overrides = config.get("split_override", {})
+        key = f"{email}::{product_slug}"
+        overrides[key] = variant_id
+        config["split_override"] = overrides
+
+        result = self._save_win_back_config(config)
+        if result.get("ok"):
+            return {"ok": True, "email": email, "product_slug": product_slug, "variant_id": variant_id}
+        return result
+
     async def _send_win_back(self, email: str, product_slug: str, tier: str) -> bool:
         """Send a win-back reactivation email for a churned trial.
 
-        Checks for existing win_back_sent event to avoid repeat sends.
+        Uses the win-back A/B variant system to select the subject line
+        and tone. Checks for existing win_back_sent event to avoid repeat sends.
         Returns True if email was sent.
         """
         if not self.send_email or not email:
@@ -626,29 +954,38 @@ class TrialConversionEngine:
             log.debug(f"[trial] win-back already sent to {email} for {product_slug}")
             return False
 
+        # Select variant using hash-based consistent assignment
+        variant = self._assign_win_back_variant(email, product_slug)
+        variant_id = variant.get("id", "A")
+        variant_name = variant.get("name", "A")
+
         product_name = PRODUCT_CATALOG.get(product_slug, {}).get("name", product_slug)
         price = self._get_tier_price(product_slug, tier) or 0
 
-        subject = f"🔄 Come back to {product_name} — reactivate your {tier} plan"
-        body = self._build_win_back_email(product_name, tier, price)
+        # Build subject from variant template
+        subject_tmpl = variant.get("subject", "We Miss You at {product_name} — reactivate your {tier} plan")
+        subject = subject_tmpl.format(product_name=product_name, tier=tier, price=price)
+        body = self._build_win_back_variant(variant, product_name, tier, price)
 
         ok = await self._send_email_async(email, subject, body)
         if ok:
             self.stats["win_backs_sent"] += 1
 
-            # Log the event to prevent repeat sends
+            # Log the event to prevent repeat sends — include variant in notes
+            notes = f"variant={variant_id}|{variant_name}"
             try:
                 db.table("sales_events").insert({
                     "email": email,
                     "product_slug": product_slug,
                     "event_type": "win_back_sent",
                     "tier": tier,
+                    "notes": notes,
                     "created_at": datetime.now(timezone.utc).isoformat(),
                 }).execute()
             except Exception as e:
                 log.debug(f"[trial] failed to log win_back_sent event: {e}")
 
-            log.info(f"[trial] win-back email sent to {email} for {product_slug}/{tier}")
+            log.info(f"[trial] win-back email sent to {email} for {product_slug}/{tier} [variant {variant_id}]")
 
         return ok
 
@@ -1119,6 +1456,7 @@ class TrialConversionEngine:
                 "followups_sent": win_back_followups_sent,
                 "reactivations": reactivations,
                 "reactivation_rate": reactivation_rate,
+                "variants": self.get_win_back_variant_stats(),
             },
             "by_product": sorted(by_product.values(), key=lambda x: x["trials"], reverse=True),
             "daily_starts": [{"date": k, "count": v} for k, v in sorted(daily_starts.items(), reverse=True)],
