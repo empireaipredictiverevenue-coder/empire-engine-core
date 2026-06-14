@@ -1081,6 +1081,21 @@ _SPA_CSS = """
 .tp-bdg-dot{width:5px;height:5px;border-radius:50%;background:currentColor;box-shadow:0 0 5px currentColor}
 .tp-recent-days{font-family:var(--font-mono);font-size:9px;color:var(--empire-fog)}
 @media(max-width:768px){.tp-summary-grid{grid-template-columns:repeat(3,1fr)}.tp-product-grid{grid-template-columns:1fr}}
+.tp-churn-strip{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:4px}
+.tp-churn-stat{background:var(--empire-elevated);border:1px solid var(--empire-divider);padding:14px 16px;text-align:center}
+.tp-stat-val{font-family:var(--font-display);font-weight:200;font-size:26px;color:var(--empire-white);line-height:1}
+.tp-stat-val.teal{color:var(--signal-teal)}
+.tp-stat-val.red{color:var(--status-red)}
+.tp-stat-val.dim{color:var(--empire-mist)}
+.tp-stat-lbl{font-family:var(--font-mono);font-size:8px;color:var(--empire-fog);letter-spacing:.14em;text-transform:uppercase;margin-top:6px}
+.tp-reason-row{display:grid;grid-template-columns:20px 1fr auto 36px;gap:10px;align-items:center;padding:6px 0;font-family:var(--font-mono);font-size:10px;border-bottom:1px solid var(--empire-divider)}
+.tp-reason-row:last-child{border-bottom:none}
+.tp-reason-rank{color:var(--empire-fog);text-align:center;font-weight:500}
+.tp-reason-bar-track{height:8px;background:var(--empire-elevated);border-radius:4px;overflow:hidden}
+.tp-reason-bar-fill{height:100%;border-radius:4px;background:var(--status-red);transition:width .6s var(--ease-out-empire);min-width:2px}
+.tp-reason-label{color:var(--empire-silver);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tp-reason-count{color:var(--empire-white);font-weight:500;text-align:right}
+
 """
 
 _SPA_JS = r"""
@@ -5867,6 +5882,45 @@ function SEOPanel() {
         </div>
       </div>
 
+      
+      ${data.churn_stats && data.churn_stats.total_churned > 0 ? html`
+        <div class="panel" style="margin-bottom:20px">
+          <div class="panel-head">Churn Breakdown</div>
+          <div class="tp-churn-strip">
+            <div class="tp-churn-stat">
+              <div class="tp-stat-val red">${data.churn_stats.total_churned}</div>
+              <div class="tp-stat-lbl">Churned</div>
+            </div>
+            <div class="tp-churn-stat">
+              <div class="tp-stat-val teal">$${Number(data.churn_stats.total_mrr_lost).toLocaleString()}</div>
+              <div class="tp-stat-lbl">MRR Lost</div>
+            </div>
+            <div class="tp-churn-stat">
+              <div class="tp-stat-val ${(data.churn_stats.churn_rate || 0) > 0.5 ? 'red' : 'dim'}">${Math.round((data.churn_stats.churn_rate || 0) * 100)}%</div>
+              <div class="tp-stat-lbl">Churn Rate</div>
+            </div>
+            <div class="tp-churn-stat">
+              <div class="tp-stat-val dim">$${Number(data.churn_stats.mrr_per_churn || 0).toFixed(0)}</div>
+              <div class="tp-stat-lbl">Avg / Churn</div>
+            </div>
+          </div>
+          ${data.churn_stats.top_reasons.length > 0 ? html`
+            <div style="margin-top:16px;border-top:1px solid var(--empire-divider);padding-top:14px">
+              <div class="panel-head" style="margin-bottom:10px">Top Churn Reasons</div>
+              ${data.churn_stats.top_reasons.map((r, i) => html`
+                <div class="tp-reason-row">
+                  <span class="tp-reason-rank">${i + 1}</span>
+                  <div class="tp-reason-bar-track">
+                    <div class="tp-reason-bar-fill" style="width:${Math.round(r.count / data.churn_stats.top_reasons[0].count * 100)}%"></div>
+                  </div>
+                  <span class="tp-reason-label">${r.reason}</span>
+                  <span class="tp-reason-count">${r.count}</span>
+                </div>
+              `)}
+            </div>
+          ` : ''}
+        </div>
+      ` : ''}
       <div class="split">
         <div class="panel">
           <div class="panel-head">SEO Genome (Gen ${data.evolution_runs || 0})</div>

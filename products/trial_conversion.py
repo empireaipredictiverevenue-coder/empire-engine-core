@@ -774,6 +774,35 @@ class TrialConversionEngine:
         for s in all_subs:
             sub_by_account[s.get("customer_account_id", "")] = s
 
+        # Fetch all trial_churned events for churn stats
+        r_churn = db.table("sales_events") \
+            .select("email, product_slug, amount_usd, notes") \
+            .eq("event_type", "trial_churned") \
+            .execute()
+        churned_events = r_churn.data or []
+        churned_by_key: dict[str, dict] = {}
+        total_mrr_lost = 0.0
+        reason_groups: dict[str, int] = {}
+        for ev in churned_events:
+            key = (ev.get("email", ""), ev.get("product_slug", ""))
+            churned_by_key[key] = ev
+            mrr = float(ev.get("amount_usd", 0) or 0)
+            total_mrr_lost += mrr
+            # Extract reason from notes for grouping
+            notes = (ev.get("notes") or "")
+            if "reported by operator" in notes:
+                reason_groups["operator_reported"] = reason_groups.get("operator_reported", 0) + 1
+            elif "pricing" in notes.lower() or "price" in notes.lower() or "cost" in notes.lower():
+                reason_groups["pricing"] = reason_groups.get("pricing", 0) + 1
+            elif "feature" in notes.lower() or "capability" in notes.lower():
+                reason_groups["missing_features"] = reason_groups.get("missing_features", 0) + 1
+            elif "support" in notes.lower():
+                reason_groups["support"] = reason_groups.get("support", 0) + 1
+            elif "competitor" in notes.lower() or "switching" in notes.lower():
+                reason_groups["competitor"] = reason_groups.get("competitor", 0) + 1
+            else:
+                reason_groups["other"] = reason_groups.get("other", 0) + 1
+
         # Categorize each trial
         active = 0
         expiring_soon = 0
@@ -811,11 +840,8 @@ class TrialConversionEngine:
 
             if is_converted:
                 converted_count += 1
-                ev = converted_by_key[key]
                 # Check if the converted subscription later churned
-                account = email
-                sub = sub_by_account.get(account)
-                if sub and sub.get("subscription_status") in ("CANCELED", "PAST_DUE"):
+                if key in churned_by_key:
                     churned += 1
             elif now < end_dt:
                 active += 1
@@ -871,6 +897,10 @@ class TrialConversionEngine:
         total_expired_or_converted = converted_count + expired_unconverted
         win_rate = round(converted_count / total_expired_or_converted, 3) if total_expired_or_converted > 0 else 0
 
+        # Sort reason groups for display
+        top_reasons = [{"reason": k.replace("_", " ").title(), "count": v}
+                       for k, v in sorted(reason_groups.items(), key=lambda x: -x[1])]
+
         return {
             "summary": {
                 "total_trial_starts": len(trials),
@@ -882,6 +912,13 @@ class TrialConversionEngine:
                 "win_rate": win_rate,
                 "potential_monthly_mrr": round(potential_mrr, 2),
                 "grace_hours": CONVERSION_GRACE_HOURS,
+            },
+            "churn_stats": {
+                "total_mrr_lost": round(total_mrr_lost, 2),
+                "total_churned": len(churned_events),
+                "churn_rate": round(churned / max(converted_count, 1), 3),
+                "mrr_per_churn": round(total_mrr_lost / max(len(churned_events), 1), 2),
+                "top_reasons": top_reasons,
             },
             "by_product": sorted(by_product.values(), key=lambda x: x["trials"], reverse=True),
             "daily_starts": [{"date": k, "count": v} for k, v in sorted(daily_starts.items(), reverse=True)],
