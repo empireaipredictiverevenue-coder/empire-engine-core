@@ -55,6 +55,7 @@ from empire_brain_learning import BrainLearning
 from empire_dream import DreamLoop, set_dream_loop, get_latest_wisdom
 from empire_hourly_digest import HourlyDigestLoop
 from bots.seo_agent import run_loop as seo_run_loop
+from bots.backlinks_agent import run_loop as backlinks_run_loop
 from empire_console import SovereignConsole, register_console_routes
 from empire_orchestrator import StormOrchestrator, register_storm_routes
 from empire_ai_router import AIRouter
@@ -370,7 +371,20 @@ async def root():
 
 @app.get("/pricing", response_class=HTMLResponse)
 async def pricing():
-    return HTMLResponse(pricing_page())
+    """Dynamic pricing page — suite products from product_metadata table."""
+    products = []
+    try:
+        db = get_db()
+        r = db.table("product_metadata") \
+            .select("tier,product_name,display_name,description,monthly_price_usd,price_per_unit,features,sort_order") \
+            .eq("is_active", True) \
+            .eq("is_public", True) \
+            .order("sort_order") \
+            .execute()
+        products = r.data or []
+    except Exception as e:
+        log.warning(f"[pricing] product_metadata query failed: {e}")
+    return HTMLResponse(pricing_page(products=products))
 
 
 @app.get("/command", response_class=HTMLResponse)
@@ -1378,6 +1392,7 @@ async def startup():
     asyncio.create_task(dream_loop.run())
     asyncio.create_task(hourly_digest.run())
     asyncio.create_task(seo_run_loop())
+    asyncio.create_task(backlinks_run_loop())
     asyncio.create_task(_si_evolution_loop())
     # Swarm Gate auto-pilot — scan storm forecasts + fire parallel video ads every 30 min
     asyncio.create_task(_swarm_autopilot_loop())
@@ -2041,6 +2056,224 @@ async def revenue_accuracy(days: int = 14):
         return JSONResponse({"error": str(e), "series": [], "summary": {}})
 
 
+@app.get("/api/revenue/mrr")
+async def revenue_mrr():
+    """MRR comparison: actual (from product_subscriptions) vs projected (from predictive engine)."""
+    try:
+        # Actual MRR from Supabase product_subscriptions
+        db = get_db()
+        actual_mrr = 0.0
+        actual_subs = []
+        try:
+            r = db.table("product_subscriptions") \
+                .select("customer_account_id,tier_level,monthly_recurring_revenue,subscription_status") \
+                .in_("subscription_status", ["ACTIVE", "TRIALING"]) \
+                .execute()
+            for sub in (r.data or []):
+                mrr = float(sub.get("monthly_recurring_revenue", 0) or 0)
+                actual_mrr += mrr
+                actual_subs.append({
+                    "account": sub.get("customer_account_id", ""),
+                    "tier": sub.get("tier_level", ""),
+                    "mrr": round(mrr, 2),
+                    "status": sub.get("subscription_status", ""),
+                })
+        except Exception as e:
+            log.warning(f"[mrr] product_subscriptions query: {e}")
+
+        # Also check buyer_subscriptions for per-lead MRR
+        buyer_mrr = 0.0
+        buyer_sub_count = 0
+        try:
+            r2 = db.table("buyer_subscriptions") \
+                .select("plan_tier,monthly_fee") \
+                .eq("active", True) \
+                .execute()
+            for bs in (r2.data or []):
+                fee = float(bs.get("monthly_fee", 0) or 0)
+                buyer_mrr += fee
+                buyer_sub_count += 1
+        except Exception:
+            pass
+
+        total_actual_mrr = round(actual_mrr + buyer_mrr, 2)
+
+        # Projected MRR from predictive revenue engine
+        projected_mrr = 0.0
+        try:
+            from bots import predictive_revenue
+            forecast = predictive_revenue.adaptive_forecast()
+            totals = forecast.get("totals", {}) if isinstance(forecast, dict) else {}
+            projected_mrr = float(totals.get("mrr_projected", 0) or 0)
+        except Exception:
+            pass
+
+        return JSONResponse({
+            "actual_mrr": total_actual_mrr,
+            "projected_mrr": round(projected_mrr, 2),
+            "gap": round(projected_mrr - total_actual_mrr, 2),
+            "gap_pct": round(((projected_mrr - total_actual_mrr) / max(projected_mrr, 0.01)) * 100, 1) if projected_mrr > 0 else 0,
+            "subscriptions": actual_subs,
+            "buyer_subscriptions": buyer_sub_count,
+            "buyer_mrr": round(buyer_mrr, 2),
+        })
+    except Exception as e:
+        return JSONResponse({"actual_mrr": 0, "projected_mrr": 0, "gap": 0, "error": str(e)[:200]})
+
+
+@app.get("/api/v1/products/catalog")
+async def products_catalog():
+    """Combined product catalog: strike packs + suite SaaS tiers."""
+    try:
+        db = get_db()
+        # Strike packs from the catalog
+        packs = strike_pack_catalog.all(public_only=False)
+        catalog_packs = [
+            {
+                "slug": p["slug"],
+                "name": p["name"],
+                "description": p["description"],
+                "tier": p["tier"],
+                "monthly_price_usd": round(p["monthly_price_cents"] / 100, 2),
+                "price_per_lead_usd": round(p["price_per_lead_cents"] / 100, 2),
+                "max_leads_per_day": p["max_leads_per_day"],
+                "max_leads_per_month": p["max_leads_per_month"],
+                "delivery_channels": p.get("delivery_channels", []),
+                "target_buyer": p.get("target_buyer"),
+                "features": p.get("features", []),
+                "lane_count": p["lane_count"],
+                "niches": p.get("niches", []),
+            }
+            for p in packs
+        ]
+
+        # Suite SaaS products from product_metadata table (Supabase)
+        # Falls back to hardcoded values if the table doesn't exist yet.
+        _SUITE_FALLBACK = [
+            {"tier": "SEO_STARTER",      "product_name": "seo_optimizer",  "display_name": "SEO Starter",     "monthly_price_usd": 99,   "price_per_unit": None,    "description": "Entry-level SEO with 5 audits, 50 keywords, 10 content pieces per month", "features": []},
+            {"tier": "SEO_GROWTH",      "product_name": "seo_optimizer",  "display_name": "SEO Growth",     "monthly_price_usd": 199,  "price_per_unit": None,    "description": "Growth-tier SEO: 15 audits, 200 keywords, 20 content pieces, research pipeline & landing pages", "features": []},
+            {"tier": "SEO_PRO",         "product_name": "seo_optimizer",  "display_name": "SEO Pro",        "monthly_price_usd": 499,  "price_per_unit": None,    "description": "Pro SEO with unlimited audits, unlimited keywords, full research & content pipeline", "features": []},
+            {"tier": "ROUTER_SaaS",     "product_name": "inbound_router", "display_name": "Inbound Router",  "monthly_price_usd": 499,  "price_per_unit": "$0.25 per routed call", "description": "Inbound call routing with AI triage, Vonage PSTN integration, and entitlement metering", "features": []},
+            {"tier": "DATA_ENTERPRISE", "product_name": "data_vault",     "display_name": "Data Vault",     "monthly_price_usd": 799,  "price_per_unit": "$0.02 per stored record/mo", "description": "Enterprise data vault with long-term retention, structured storage & secure API access", "features": []},
+            {"tier": "SPY_DATA",        "product_name": "buyer_spy",      "display_name": "Buyer Spy AI",   "monthly_price_usd": 1499, "price_per_unit": "$5 per analysis", "description": "Buyer intelligence: AI-powered transcript analysis, intent scoring & competitive tracking", "features": []},
+            {"tier": "ALL_ACCESS",      "product_name": "all_products",   "display_name": "All Access",     "monthly_price_usd": 2499, "price_per_unit": None,    "description": "Full access to all Empire AI products: inbound routing, data vault, buyer spy & SEO suite", "features": []},
+        ]
+
+        suite_products_raw = []
+        try:
+            r = db.table("product_metadata") \
+                .select("tier,product_name,display_name,description,monthly_price_usd,price_per_unit,features,sort_order") \
+                .eq("is_active", True) \
+                .order("sort_order") \
+                .execute()
+            suite_products_raw = r.data or []
+        except Exception:
+            log.warning(f"[products] product_metadata query failed: {e} — using fallback pricing")
+            suite_products_raw = _SUITE_FALLBACK
+
+        suite_products = [
+            {
+                "name": p.get("display_name", p["tier"].replace("_", " ").title()),
+                "tier": p["tier"],
+                "tier_label": p.get("display_name", p["tier"].replace("_", " ").title()),
+                "monthly_price_usd": float(p.get("monthly_price_usd", 0) or 0),
+                "price_per_unit": p.get("price_per_unit"),
+                "product": p["product_name"],
+                "description": p.get("description", ""),
+                "features": p.get("features", []) if isinstance(p.get("features"), list) else [],
+            }
+            for p in suite_products_raw
+        ]
+
+        # Subscription stats from suite engine
+        all_subs = suite_subscriptions.list_subscriptions()
+        active_subs = [s for s in all_subs if s.get("subscription_status") == "ACTIVE"]
+        total_mrr = sum(s.get("monthly_recurring_revenue", 0) for s in active_subs)
+
+        return JSONResponse({
+            "strike_packs": catalog_packs,
+            "suite_products": suite_products,
+            "subscriptions": {
+                "active_count": len(active_subs),
+                "total_count": len(all_subs),
+                "total_mrr": round(total_mrr, 2),
+            },
+        })
+    except Exception as e:
+        return JSONResponse({"strike_packs": [], "suite_products": []}, status_code=500)
+
+@app.post("/api/v1/products/subscribe")
+async def products_subscribe(req: Request, auth: bool = Depends(require_auth)):
+    """Create a new product subscription.
+    Body: {
+      customer_account_id: str (required),
+      tier_level: str (required — SEO_STARTER, ROUTER_SaaS, etc.),
+      monthly_recurring_revenue: float (optional, defaults to product_metadata price),
+    }
+    """
+    try:
+        body = await req.json() if req.headers.get("content-type", "").startswith("application/json") else {}
+        account_id = (body.get("customer_account_id") or "").strip()
+        tier = (body.get("tier_level") or "").strip().upper()
+
+        if not account_id:
+            return JSONResponse({"ok": False, "error": "customer_account_id is required"}, status_code=400)
+        if not tier:
+            return JSONResponse({"ok": False, "error": "tier_level is required"}, status_code=400)
+
+        # Look up the tier price from product_metadata if not provided
+        mrr = float(body.get("monthly_recurring_revenue", 0) or 0)
+        if mrr <= 0:
+            try:
+                db = get_db()
+                r = db.table("product_metadata") \
+                    .select("monthly_price_usd") \
+                    .eq("tier", tier) \
+                    .eq("is_active", True) \
+                    .limit(1) \
+                    .execute()
+                if r.data:
+                    mrr = float(r.data[0].get("monthly_price_usd", 0) or 0)
+            except Exception:
+                pass
+
+        result = suite_subscriptions.create_subscription(
+            customer_account_id=account_id,
+            tier_level=tier,
+            monthly_recurring_revenue=mrr if mrr > 0 else 0.0,
+            billing_anchor_day=max(1, min(28, body.get("billing_anchor_day", 1))),
+            notes=body.get("notes", ""),
+        )
+
+        if result.get("ok"):
+            log.info(f"[subscribe] created {tier} for {account_id} — MRR ${mrr:.2f}")
+            return JSONResponse(result)
+        else:
+            status = 409 if "already has" in (result.get("error") or "") else 400
+            return JSONResponse(result, status_code=status)
+    except Exception as e:
+        return JSONResponse({"ok": False, "error": str(e)[:200]}, status_code=500)
+
+
+@app.get("/api/v1/products/metadata")
+async def products_metadata(auth: bool = Depends(require_auth)):
+    """List all active products from product_metadata table.
+    Useful for subscribe button pickers in the SPA.
+    """
+    try:
+        db = get_db()
+        r = db.table("product_metadata") \
+            .select("tier,product_name,display_name,description,monthly_price_usd,price_per_unit,features,sort_order") \
+            .eq("is_active", True) \
+            .eq("is_public", True) \
+            .order("sort_order") \
+            .execute()
+        return JSONResponse({"products": r.data or [], "count": len(r.data or [])})
+    except Exception as e:
+        return JSONResponse({"products": [], "count": 0, "error": str(e)[:80]})
+
+
+
 @app.get("/api/si/snapshot")
 async def si_strategy_snapshot(auth: bool = Depends(require_auth)):
     """SI Strategy Evolution snapshot — active strategies, genomes, win rates per niche."""
@@ -2112,6 +2345,43 @@ async def seo_performance():
         return JSONResponse(await agent.performance_snapshot())
     except Exception as e:
         return JSONResponse({"error": str(e), "stats": {}, "keywords": [], "content": []})
+
+
+@app.get("/api/seo/products")
+async def seo_products():
+    """SEO Optimizer product catalog — 3 tiers from strike_packs."""
+    try:
+        packs = strike_pack_catalog.all(public_only=False)
+        seo_packs = [p for p in packs if "SEO" in [n.upper() for n in (p.get("niches") or [])]]
+        products = []
+        for p in seo_packs:
+            products.append({
+                "slug":                p["slug"],
+                "name":                p["name"],
+                "description":         p["description"],
+                "tier":                p["tier"],
+                "monthly_price_usd":   round(p["monthly_price_cents"] / 100, 2),
+                "features":            p.get("features", []),
+                "target_buyer":        p.get("target_buyer"),
+                "delivery_channels":   p.get("delivery_channels", []),
+            })
+
+        # Also include the product_subscriptions data for actual MRR
+        try:
+            db = get_db()
+            r = db.table("product_subscriptions").select("customer_account_id,tier_level,monthly_recurring_revenue,subscription_status") \
+                .like("tier_level", "SEO_%").execute()
+            subs = r.data or []
+        except Exception:
+            subs = []
+
+        return JSONResponse({
+            "products": products,
+            "subscriptions": subs,
+            "total_seo_mrr": round(sum(float(s.get("monthly_recurring_revenue", 0)) for s in subs if s.get("subscription_status") == "ACTIVE"), 2),
+        })
+    except Exception as e:
+        return JSONResponse({"error": str(e), "products": [], "subscriptions": []})
 
 
 @app.get("/api/seo/genome-history")
@@ -2277,6 +2547,87 @@ async def seo_config_post(req: Request):
         return JSONResponse({"interval_hours": get_seo_interval(), "min": 0.1, "max": 24.0})
     except Exception as e:
         return JSONResponse({"error": str(e)[:80]}, status_code=500)
+
+
+# ── Backlinks Monitoring Routes ───────────────────────────────
+# GET  /api/seo/backlinks/snapshot    — full backlinks dashboard
+# GET  /api/seo/backlinks/scan        — scan a domain for backlinks
+# GET  /api/seo/backlinks/broken      — check known backlinks for broken status
+# GET  /api/seo/backlinks/opportunities — link-building opportunities
+# GET  /api/seo/backlinks/authority   — link authority report (feeds SEO genome)
+# POST /api/seo/backlinks/scan/{url}  — trigger a domain scan
+
+@app.get("/api/seo/backlinks/snapshot")
+async def seo_backlinks_snapshot():
+    """Backlinks dashboard snapshot — stats, tracked backlinks, opportunities."""
+    try:
+        from bots.backlinks_agent import get_backlinks_agent
+        agent = get_backlinks_agent()
+        return JSONResponse(await agent.performance_snapshot())
+    except Exception as e:
+        return JSONResponse({"error": str(e)[:200], "stats": {}, "backlinks": [], "opportunities": []})
+
+
+@app.get("/api/seo/backlinks/broken")
+async def seo_backlinks_broken(limit: int = 30):
+    """Check known backlinks for broken (404) status."""
+    try:
+        from bots.backlinks_agent import get_backlinks_agent
+        agent = get_backlinks_agent()
+        return JSONResponse(await agent.check_broken(limit=min(limit, 100)))
+    except Exception as e:
+        return JSONResponse({"checked": 0, "broken": 0, "error": str(e)[:80]})
+
+
+@app.get("/api/seo/backlinks/opportunities")
+async def seo_backlinks_opportunities(niche: str = ""):
+    """Identify link-building opportunities — broken replacements, unlisted directories."""
+    try:
+        from bots.backlinks_agent import get_backlinks_agent
+        agent = get_backlinks_agent()
+        return JSONResponse({"opportunities": await agent.find_opportunities(niche=niche)})
+    except Exception as e:
+        return JSONResponse({"opportunities": [], "error": str(e)[:80]})
+
+
+@app.get("/api/seo/backlinks/authority")
+async def seo_backlinks_authority():
+    """Link authority report — composite score for SEO genome evolution."""
+    try:
+        from bots.backlinks_agent import get_backlinks_agent
+        agent = get_backlinks_agent()
+        return JSONResponse(await agent.link_authority_report())
+    except Exception as e:
+        return JSONResponse({"link_authority_score": 0.3, "error": str(e)[:80]})
+
+
+@app.post("/api/seo/backlinks/scan/{url:path}")
+async def seo_backlinks_scan(url: str):
+    """Trigger a backlink scan for a specific domain/URL."""
+    try:
+        from bots.backlinks_agent import get_backlinks_agent
+        agent = get_backlinks_agent()
+        return JSONResponse(await agent.scan_domain(url))
+    except Exception as e:
+        return JSONResponse({"backlinks": [], "error": str(e)[:200]})
+
+
+@app.get("/api/seo/backlinks/stats")
+async def seo_backlinks_stats():
+    """Backlinks agent stats — scans run, broken found, opportunities."""
+    try:
+        from bots.backlinks_agent import get_backlinks_agent
+        agent = get_backlinks_agent()
+        snap = agent.stats
+        return JSONResponse({
+            "domains_monitored": snap["domains_monitored"],
+            "backlinks_discovered": snap["backlinks_discovered"],
+            "broken_found": snap["broken_found"],
+            "opportunities_found": snap["opportunities_found"],
+            "scans_run": snap["scans_run"],
+        })
+    except Exception as e:
+        return JSONResponse({"error": str(e)[:80]})
 
 
 @app.post("/api/si/parameters")
