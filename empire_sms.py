@@ -125,10 +125,13 @@ TEMPLATES = {
             "Most policies recommend filing within this period for best outcomes. "
             "Reply YES to schedule an inspection."
         ),
-        # Touch 2 — 4 hours later. Social proof.
+        # Touch 2 — 4 hours later. Social proof (non-specific to avoid
+        # fabricated claims; the original "Three other facilities... locked in
+        # coverage today" is false unless we have data).
         (
-            "{prefix} Three other facilities in your area locked in coverage today. "
-            "No upfront cost. We only earn on settled claims. "
+            "{prefix} Other property owners in your area are being "
+            "contacted about storm damage. We only earn on settled claims, "
+            "so the inspection is at no cost to you. "
             "Reply YES for a free roof assessment."
         ),
         # Touch 3 — 24 hours later. Value math.
@@ -163,10 +166,11 @@ TEMPLATES = {
             "If you reply YES in the next 24 hours, a contractor is on-site "
             "within 48 hours. After that we move to the next property."
         ),
-        # Touch 2 — 4 hours later. Soft social proof.
+        # Touch 2 — 4 hours later. Soft social proof (non-specific).
         (
-            "{prefix} Two property owners in {target_short} replied YES today. "
-            "If you want the inspection, the slot is yours — reply YES."
+            "{prefix} Other property owners in your area are being "
+            "contacted about storm damage. If you want the inspection, "
+            "the slot is yours — reply YES."
         ),
         # Touch 3 — 24 hours later. Last-call scarcity.
         (
@@ -447,6 +451,30 @@ class SMSSequenceEngine:
 
             if not result.get("ok"):
                 log.warning(f"[sms] send failed · {phone} step {step} · {result.get('error')}")
+                # Increment consecutive failure count on this sequence.
+                # After 3 failures the phone is almost certainly invalid
+                # (bad area code, fictional 555, etc). Mark the sequence
+                # as replied so the dispatcher poll skips it and we
+                # stop wasting cycles every minute on 422s.
+                try:
+                    existing_meta = row.get("meta") or {}
+                    new_failed_count = int(existing_meta.get("failed_send_count", 0)) + 1
+                    if new_failed_count >= 3:
+                        db_fail = self.get_db()
+                        db_fail.table("sms_sequences").update({
+                            "status":         "replied",
+                            "current_step":   step,
+                            "last_sent_at":   datetime.now(timezone.utc).isoformat(),
+                            "meta":           {**existing_meta, "failed_send_count": new_failed_count, "blocked_reason": "consecutive_send_failures"},
+                        }).eq("id", row["id"]).execute()
+                        log.warning(f"[sms] sequence {row['id']} marked replied after {new_failed_count} failed sends (phone likely invalid)")
+                    else:
+                        db_fail = self.get_db()
+                        db_fail.table("sms_sequences").update({
+                            "meta": {**existing_meta, "failed_send_count": new_failed_count},
+                        }).eq("id", row["id"]).execute()
+                except Exception as e:
+                    log.debug(f"[sms] failed-count update failed: {e}")
                 continue
 
             sent += 1
