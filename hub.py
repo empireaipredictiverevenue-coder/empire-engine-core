@@ -36,6 +36,7 @@ from empire_command_dispatch import dispatch_view
 from empire_command_inbound import inbound_view
 from empire_command_console import console_view
 from empire_splash import splash_page
+from empire_pricing import pricing_page
 from empire_live import LiveBroadcaster, register_live_routes
 from empire_command_deck import command_deck_page
 from empire_command_spa import command_spa_page
@@ -365,6 +366,11 @@ require_operator = require_role(auth_engine, "operator")
 @app.get("/", response_class=HTMLResponse)
 async def root():
     return HTMLResponse(splash_page())
+
+
+@app.get("/pricing", response_class=HTMLResponse)
+async def pricing():
+    return HTMLResponse(pricing_page())
 
 
 @app.get("/command", response_class=HTMLResponse)

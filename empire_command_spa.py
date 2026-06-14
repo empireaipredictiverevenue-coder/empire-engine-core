@@ -2524,7 +2524,7 @@ function Audit() {
 
 // ── OPERATORS ─────────────────────────────────────────────────────────
 
-function AgiLoop(){
+function AgiDashboard(){
   const [data,setData]=useState(null);
   const [err,setErr]=useState(null);
   const [tick,setTick]=useState(0);
@@ -2569,8 +2569,9 @@ function AgiLoop(){
             <div class="agi-row-weight" style=${{color:'var(--strike-cyan)'}}>Wisdom</div>
             <div class="agi-row-reason" style=${{fontStyle:'italic'}}>${dreamData.wisdom_context}</div>
           </div>
-        ` : `
-      ` : `<div class="agi-decisions-head"><div class="agi-decisions-title">Decision Log</div><div class="agi-decisions-count">${decisions.length} entries</div></div>${decisions.map((d,i)=>html`<div class="agi-row"><div class=${"agi-row-weight "+(parseFloat(d.weight)>=1.5?"agi-w-hi":parseFloat(d.weight)>=1.0?"agi-w-mid":"agi-w-lo")}>${d.weight??"·"}<div class="agi-w-bar"></div></div><div class="agi-row-reason">${d.reason??"·"}<button class=${approved.includes(i)?"agi-approve-btn done":"agi-approve-btn"} onClick=${()=>doApprove(i,d.weight)}>${approved.includes(i)?"✓ APPROVED":"AUTO-APPROVE"}</button></div></div>`)}</div>`;
+        ` : null}
+      ` : null}
+      <div class="agi-decisions-head"><div class="agi-decisions-title">Decision Log</div><div class="agi-decisions-count">${decisions.length} entries</div></div>${decisions.map((d,i)=>html`<div class="agi-row"><div class=${"agi-row-weight "+(parseFloat(d.weight)>=1.5?"agi-w-hi":parseFloat(d.weight)>=1.0?"agi-w-mid":"agi-w-lo")}>${d.weight??"·"}<div class="agi-w-bar"></div></div><div class="agi-row-reason">${d.reason??"·"}<button class=${approved.includes(i)?"agi-approve-btn done":"agi-approve-btn"} onClick=${()=>doApprove(i,d.weight)}>${approved.includes(i)?"✓ APPROVED":"AUTO-APPROVE"}</button></div></div>`)}</div>`;
 }
 
 function Partners() {
@@ -6198,7 +6199,7 @@ function App() {
             active.id === 'panel_court'     ? html`<${PanelCourtPanel} />` :
             active.id === 'seo'          ? html`<${SEOPanel} />` :
             active.id === 'leads'       ? html`<${Leads} />` :
-            active.id === 'neural-core'   ? html`<${AgiLoop} />` :
+            active.id === 'neural-core'   ? html`<${AgiDashboard} />` :
             active.id === 'holo-map'      ? html`<${HoloMap} />` :
             active.id === 'partners'      ? html`<${Partners} />` :
             active.id === 'closer'        ? html`<${Closer} />` :
