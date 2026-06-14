@@ -374,6 +374,15 @@ require_operator = require_role(auth_engine, "operator")
 # ─────────────────────────────────────────────────────────────────────
 # ROUTES
 # ─────────────────────────────────────────────────────────────────────
+# ── Static assets (chat widget, etc.) ─────────────────────────────────
+_STATIC_DIR = "/root/empire-v49/static"
+import os as _os
+if _os.path.isdir(_STATIC_DIR):
+    app.mount("/static", StaticFiles(directory=_STATIC_DIR), name="static")
+
+# ── Public contractor landing page (chat widget stub) ──────────────────
+register_contractor_routes(app)
+
 @app.get("/", response_class=HTMLResponse)
 async def root():
     return HTMLResponse(splash_page())
@@ -649,6 +658,15 @@ async def trial_convert_manual(auth: bool = Depends(require_auth)):
 async def trial_convert_stats(auth: bool = Depends(require_auth)):
     """Trial conversion engine stats snapshot."""
     return suite_trial_conversion.stats_snapshot()
+
+@app.get("/api/v6/suite/sales/trial-pipeline")
+async def trial_pipeline(auth: bool = Depends(require_auth)):
+    """Trial pipeline stats: active trials, expiring soon, converted, churned, daily breakdown."""
+    try:
+        return suite_trial_conversion.trial_pipeline_stats()
+    except Exception as e:
+        log.warning(f"[trial-pipeline] error: {e}")
+        return {"summary": {}, "by_product": [], "daily_starts": [], "recent": [], "error": str(e)[:200]}
 
 
 # Product 15: Command Center Pro — aggregated product health dashboard
@@ -1631,6 +1649,7 @@ async def reply_qualify_route(payload: dict = Body(...), auth: bool = Depends(re
 # ─── /api/telemetry: reads empire_session_log.md ──────────────
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 
 # Add CORS for the dashboard (idempotent — won't double-add)
 try:
