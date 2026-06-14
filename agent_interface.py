@@ -7,8 +7,8 @@ from mesh_orchestrator.py.
 For lanes 16-20 (Legal sub-niches), the per-lane device is determined
 by the recall_classifier: each sub_niche gets the recall that matches
 its product_type. Lanes 0-15, 21-28 use the standard bot_manager
-campaign (the legacy path). Lanes 29-31 are unassigned and produce
-no outreach.
+campaign (the legacy path). Lanes 29-31 are assigned to Solar Installation, Restoration, and Logistics &
+Cold Storage respectively.
 
 Patched 2026-06-12 (step 3 + 4 of mass-tort lane-sort plan):
   - Use recall_classifier (drugs/devices/food) instead of single

@@ -19,7 +19,9 @@ Niche allocation (rebalanced 2026-06-12):
                   19: Class Action
                   20: Mass Tort
   Lanes 21-28 : Consumer CPA         (8 lanes, FINANCIAL_STRIKE, Inbound Leads)
-  Lanes 29-31 : unassigned           (3 lanes, STANDARD, General)
+  Lanes 29   : Solar Installation     (1 lane,  STANDARD, Solar Prospector)
+  Lanes 30   : Restoration             (1 lane,  STANDARD, Restoration Lead Gen)
+  Lanes 31   : Logistics & Cold Storage (1 lane,  STANDARD, Logistics Prospector)
 
 The 5 Legal sub-niches each get a dedicated lane. FDA recall output is
 classified into one of the 5 sub-niches and routed to the matching buyer.
@@ -73,9 +75,9 @@ LANES = {
     26: {"niche": "Consumer CPA", "sub_niche": None, "strategy": "FINANCIAL_STRIKE", "source": "Inbound Leads"},
     27: {"niche": "Consumer CPA", "sub_niche": None, "strategy": "FINANCIAL_STRIKE", "source": "Inbound Leads"},
     28: {"niche": "Consumer CPA", "sub_niche": None, "strategy": "FINANCIAL_STRIKE", "source": "Inbound Leads"},
-    29: {"niche": "unassigned", "sub_niche": None, "strategy": "STANDARD", "source": "General"},
-    30: {"niche": "unassigned", "sub_niche": None, "strategy": "STANDARD", "source": "General"},
-    31: {"niche": "unassigned", "sub_niche": None, "strategy": "STANDARD", "source": "General"},
+    29: {"niche": "Solar Installation", "sub_niche": None, "strategy": "STANDARD", "source": "Solar Prospector"},
+    30: {"niche": "Restoration", "sub_niche": None, "strategy": "STANDARD", "source": "Restoration Lead Gen"},
+    31: {"niche": "Logistics & Cold Storage", "sub_niche": None, "strategy": "STANDARD", "source": "Logistics Prospector"},
 }
 
 
