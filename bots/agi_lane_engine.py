@@ -111,9 +111,9 @@ except ImportError:
         (26, "Education", "STANDARD", "Edu Lead Gen", "inbound"),
         (27, "Healthcare", "HEALTH_STRIKE", "Healthcare Lead Gen", "inbound"),
         (28, "Healthcare", "HEALTH_STRIKE", "Healthcare Lead Gen", "inbound"),
-        (29, "unassigned", "STANDARD", "General", "general"),
-        (30, "unassigned", "STANDARD", "General", "general"),
-        (31, "unassigned", "STANDARD", "General", "general"),
+        (29, "Business Services", "BIZ_STRIKE", "B2B Lead Gen", "inbound"),
+        (30, "Business Services", "BIZ_STRIKE", "B2B Lead Gen", "inbound"),
+        (31, "Business Services", "BIZ_STRIKE", "B2B Lead Gen", "inbound"),
     ]
     for lid, niche, strategy, source, trigger in _LANE_CFG:
         LANES[lid] = {"niche": niche, "strategy": strategy,
