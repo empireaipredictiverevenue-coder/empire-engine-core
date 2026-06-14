@@ -734,6 +734,70 @@ async def trial_pipeline(auth: bool = Depends(require_auth)):
         return {"summary": {}, "by_product": [], "daily_starts": [], "recent": [], "error": str(e)[:200]}
 
 
+# ── Win-back A/B Variant System ─────────────────────────────────────
+
+@app.get("/api/v6/suite/sales/win-back-variants")
+async def win_back_variants_list(auth: bool = Depends(require_auth)):
+    """List win-back A/B variants with per-variant stats.
+
+    Returns:
+      - config: current variant config (enabled, variants, split_override)
+      - stats: per-variant performance stats (sent, followups_sent, reactivations, reactivation_rate)
+    """
+    try:
+        config = suite_trial_conversion._read_win_back_config()
+        stats = suite_trial_conversion.get_win_back_variant_stats()
+        return {"config": config, "stats": stats}
+    except Exception as e:
+        log.warning(f"[win-back-variants] error: {e}")
+        return {"config": {}, "stats": [], "error": str(e)[:200]}
+
+
+@app.post("/api/v6/suite/sales/win-back-variants")
+async def win_back_variants_update(request: Request, auth: bool = Depends(require_auth)):
+    """Update win-back A/B variant configuration.
+
+    Body accepts partial config:
+      - enabled: bool (optional)
+      - variants: list of variant dicts (optional)
+      - split_override: dict of email::product_slug -> variant_id (optional)
+
+    Merges with existing config — only provided keys are updated.
+    """
+    try:
+        body = await request.json()
+        result = suite_trial_conversion.set_win_back_variants_config(body)
+        status = 200 if result.get("ok") else 400
+        return JSONResponse(result, status_code=status)
+    except Exception as e:
+        return JSONResponse({"ok": False, "error": str(e)[:200]}, status_code=500)
+
+
+@app.post("/api/v6/suite/sales/win-back-variants/assign")
+async def win_back_variants_assign(request: Request, auth: bool = Depends(require_auth)):
+    """Manually assign a win-back variant for a specific user.
+
+    Body: {email, product_slug, variant_id}
+    Creates a split_override so the user always gets this variant.
+    """
+    try:
+        body = await request.json()
+        email = (body.get("email") or "").strip()
+        product_slug = (body.get("product_slug") or "").strip()
+        variant_id = (body.get("variant_id") or "").strip()
+
+        if not email or not product_slug or not variant_id:
+            return JSONResponse({"ok": False, "error": "email, product_slug, and variant_id are required"}, status_code=400)
+
+        result = suite_trial_conversion.assign_win_back_variant_override(
+            email=email, product_slug=product_slug, variant_id=variant_id,
+        )
+        status = 200 if result.get("ok") else 400
+        return JSONResponse(result, status_code=status)
+    except Exception as e:
+        return JSONResponse({"ok": False, "error": str(e)[:200]}, status_code=500)
+
+
 # Product 15: Command Center Pro — aggregated product health dashboard
 @app.get("/api/v6/suite/ccp/health")
 async def ccp_health(auth: bool = Depends(require_auth)):

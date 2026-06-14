@@ -5943,6 +5943,48 @@ function SEOPanel() {
             </div>
           </div>
         </div>
+            ` : ''}
+      ${data.win_back_stats && data.win_back_stats.variants && data.win_back_stats.variants.length > 0 ? html`
+        <div class="panel" style="margin-bottom:20px">
+          <div class="panel-head">A/B Test Results</div>
+          <div style="overflow-x:auto">
+            <table class="tbl" style="margin-top:4px">
+              <thead>
+                <tr>
+                  <th>Variant</th>
+                  <th>Tone</th>
+                  <th>Split</th>
+                  <th>Sent</th>
+                  <th>Followups</th>
+                  <th>Reactivated</th>
+                  <th>Rate</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${data.win_back_stats.variants.map(v => html`
+                  <tr>
+                    <td><strong>${v.name}</strong></td>
+                    <td class="tbl-mono">${v.tone}</td>
+                    <td class="tbl-num">${v.weight}%</td>
+                    <td class="tbl-num">${v.sent}</td>
+                    <td class="tbl-num">${v.followups_sent}</td>
+                    <td class="tbl-num">${v.reactivations}</td>
+                    <td class="tbl-num" style="color:var(--signal-teal);font-weight:600">${(v.reactivation_rate * 100).toFixed(1)}%</td>
+                  </tr>
+                `)}
+                <tr style="border-top:2px solid var(--empire-divider);font-weight:600">
+                  <td><em style="color:var(--empire-fog)">Total</em></td>
+                  <td></td>
+                  <td></td>
+                  <td class="tbl-num" style="color:var(--empire-white)">${data.win_back_stats.variants.reduce((s,v) => s + v.sent, 0)}</td>
+                  <td class="tbl-num" style="color:var(--empire-white)">${data.win_back_stats.variants.reduce((s,v) => s + v.followups_sent, 0)}</td>
+                  <td class="tbl-num" style="color:var(--empire-white)">${data.win_back_stats.variants.reduce((s,v) => s + v.reactivations, 0)}</td>
+                  <td class="tbl-num" style="color:var(--signal-teal)">${(data.win_back_stats.reactivation_rate * 100).toFixed(1)}%</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
       ` : ''}
 <div class="split">
         <div class="panel">
