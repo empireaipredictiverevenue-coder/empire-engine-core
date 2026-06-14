@@ -17,3 +17,6 @@
 
 # 5. Contractor outreach — every 4 hours, on the hour
 0 */4 * * * /bin/bash /root/empire-v49/agents/contractor_outreach/cron.sh >> /root/empire-v49/logs/agent_contractor_outreach.log 2>&1
+
+# 6. Backlinks monitoring — every 12 hours, on the hour
+0 */12 * * * /bin/bash /root/empire-v49/agents/backlinks/cron.sh >> /root/empire-v49/logs/agent_backlinks.log 2>&1

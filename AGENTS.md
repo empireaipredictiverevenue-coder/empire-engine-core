@@ -74,7 +74,7 @@ The fleet is bigger than the two agents. Last enumerated 2026-06-13
     strike pipeline, predictive revenue modules, AGI calibration. Email:
     empireaipredictiverevenue@proton.me (git audit only; not a chat).
 
-### Cron-driven agents (5 entries, NOT counted as "live services")
+### Cron-driven agents (6 entries, NOT counted as "live services")
   - `empire_brain.py` — every hour at :00, → `logs/bridge.log`.
   - `automate_empire.sh` — every hour at :30, → `logs/agents.log`. The
     predictive-revenue coder's main cron tick.
@@ -83,6 +83,9 @@ The fleet is bigger than the two agents. Last enumerated 2026-06-13
     The storm lead pipeline. The actual revenue path.
   - `scripts/run_storm_scraper.sh` — daily 00:00 and 12:00,
     → `logs/storm_scraper.log`.
+  - `bots/backlinks_agent.py` — every 12h at :30, → `logs/backlinks.log`.
+    Backlinks monitoring (scan, broken detection, opportunities).
+    Standalone: `python3 -m bots.backlinks_agent`.
 
 If you're a new service and don't see yourself above: edit this file
 and add a row. The fleet changes often; this list drifts. Regenerate
