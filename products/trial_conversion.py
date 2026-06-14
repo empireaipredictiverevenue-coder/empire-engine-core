@@ -55,6 +55,7 @@ class TrialConversionEngine:
             "auto_created": 0,
             "churn_detected": 0,
             "churn_reported": 0,
+            "win_backs_sent": 0,
         }
 
     # ── Core: find and convert expired trials ───────────────────────────
@@ -414,6 +415,92 @@ class TrialConversionEngine:
         return sent_count
 
     # ═══════════════════════════════════════════════════════════════════
+    # WIN-BACK EMAILS
+    # ═══════════════════════════════════════════════════════════════════
+
+    @staticmethod
+    def _build_win_back_email(product_name: str, tier: str, price: float) -> str:
+        """Build HTML reactivation email for churned trial users."""
+        return f"""<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"></head>
+<body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#0a0a0f;color:#e2e8f0;padding:32px">
+  <div style="max-width:560px;margin:0 auto;background:#14141e;border:1px solid #1e293b;border-radius:12px;padding:32px;text-align:center">
+    <div style="font-size:36px;margin-bottom:8px">🔄</div>
+    <h1 style="font-weight:200;font-size:24px;letter-spacing:-0.02em;margin:0 0 4px">We Miss You at <em style="color:#44E5B8;font-style:italic;font-weight:500">{product_name}</em></h1>
+    <p style="font-family:'SF Mono','Fira Code',monospace;font-size:10px;color:#94a3b8;letter-spacing:0.14em;text-transform:uppercase;margin:0 0 20px">Come back · Reactivate your {tier} plan</p>
+    <p style="font-size:14px;color:#cbd5e1;line-height:1.7;margin:0 0 8px">
+      You recently unsubscribed from <strong>{product_name}</strong>. We'd love to have you back.
+    </p>
+    <div style="background:#0f0f17;border:1px solid #1e293b;border-radius:8px;padding:20px;margin:16px 0;text-align:left">
+      <div style="font-family:'SF Mono','Fira Code',monospace;font-size:10px;color:#94a3b8;letter-spacing:0.14em;text-transform:uppercase;margin-bottom:12px">Your Previous Plan</div>
+      <div style="font-size:14px;color:#e2e8f0;margin-bottom:4px">{product_name} · <strong>{tier}</strong></div>
+      <div style="font-family:'SF Mono','Fira Code',monospace;font-size:28px;color:#44E5B8;font-weight:600">${price:.2f}<span style="font-size:12px;color:#94a3b8;font-weight:400">/mo</span></div>
+      <div style="font-size:12px;color:#94a3b8;line-height:1.6;margin-top:8px;padding-top:12px;border-top:1px solid #1e293b">
+        ✓ Full feature access · Priority support · No setup fees
+      </div>
+    </div>
+    <p style="font-size:13px;color:#94a3b8;line-height:1.6;margin:0 0 24px">
+      Reactivate within 30 days and we'll honor your previous rate. No questions asked.
+    </p>
+    <a href="https://empire-ai.co.uk/command#/products" style="display:inline-block;padding:14px 32px;background:#44E5B8;color:#000;text-decoration:none;font-weight:700;font-family:'SF Mono','Fira Code',monospace;font-size:12px;letter-spacing:0.14em;text-transform:uppercase;border-radius:6px">Reactivate Now</a>
+    <p style="font-size:11px;color:#64748b;line-height:1.5;margin:24px 0 0;padding-top:16px;border-top:1px solid #1e293b">
+      Questions or want a different plan? Reply to this email and we'll help.
+    </p>
+  </div>
+</body>
+</html>"""
+
+    async def _send_win_back(self, email: str, product_slug: str, tier: str) -> bool:
+        """Send a win-back reactivation email for a churned trial.
+
+        Checks for existing win_back_sent event to avoid repeat sends.
+        Returns True if email was sent.
+        """
+        if not self.send_email or not email:
+            return False
+
+        db = self.get_db()
+
+        # Check if win-back already sent for this churn
+        r = db.table("sales_events") \
+            .select("id") \
+            .eq("email", email) \
+            .eq("product_slug", product_slug) \
+            .eq("event_type", "win_back_sent") \
+            .limit(1) \
+            .execute()
+        if r.data:
+            log.debug(f"[trial] win-back already sent to {email} for {product_slug}")
+            return False
+
+        product_name = PRODUCT_CATALOG.get(product_slug, {}).get("name", product_slug)
+        price = self._get_tier_price(product_slug, tier) or 0
+
+        subject = f"🔄 Come back to {product_name} — reactivate your {tier} plan"
+        body = self._build_win_back_email(product_name, tier, price)
+
+        ok = await self._send_email_async(email, subject, body)
+        if ok:
+            self.stats["win_backs_sent"] += 1
+
+            # Log the event to prevent repeat sends
+            try:
+                db.table("sales_events").insert({
+                    "email": email,
+                    "product_slug": product_slug,
+                    "event_type": "win_back_sent",
+                    "tier": tier,
+                    "created_at": datetime.now(timezone.utc).isoformat(),
+                }).execute()
+            except Exception as e:
+                log.debug(f"[trial] failed to log win_back_sent event: {e}")
+
+            log.info(f"[trial] win-back email sent to {email} for {product_slug}/{tier}")
+
+        return ok
+
+    # ═══════════════════════════════════════════════════════════════════
     # TRIAL CHURN TRACKING
     # ═══════════════════════════════════════════════════════════════════
 
@@ -504,8 +591,12 @@ class TrialConversionEngine:
             })
             log.info(f"[trial] churn detected: {email} → {product_slug} ({status}) lost ${old_mrr:.2f}/mo")
 
+            # Send win-back reactivation email
+            tier = conv.get("tier", "")
+            asyncio.create_task(self._send_win_back(email, product_slug, tier))
+
         if logged:
-            log.info(f"[trial] churn scan: {len(logged)} new churn event(s) logged")
+            log.info(f"[trial] churn scan: {len(logged)} new churn event(s) logged, win-backs dispatched")
         return logged
 
     def report_churn(self, email: str, product_slug: str, reason: str) -> dict:
@@ -581,6 +672,9 @@ class TrialConversionEngine:
         self.stats["churn_reported"] += 1
         log.info(f"[trial] churn reported by operator: {email} → {product_slug} — {reason[:80]}")
 
+        # Send win-back reactivation email
+        asyncio.create_task(self._send_win_back(email, product_slug, conv.get("tier", "")))
+
         return {
             "ok": True,
             "email": email,
@@ -589,6 +683,7 @@ class TrialConversionEngine:
             "prior_mrr": old_mrr,
             "status": status,
             "reason": reason[:500],
+            "win_back_dispatched": True,
         }
 
     # ═══════════════════════════════════════════════════════════════════
