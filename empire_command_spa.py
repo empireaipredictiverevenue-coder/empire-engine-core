@@ -1494,6 +1494,7 @@ const NAV_GROUPS = [
       { id: 'affiliates',   label: 'Affiliates',    sub: 'Manage · referral links · stats' },
       { id: 'cpl-pricing',  label: 'CPL Pricing',   sub: 'Per-lane margins . sell prices . benchmarks' },
       { id: 'profit-margin', label: 'Profit Margin',  sub: 'P&L · bottlenecks · maximiser' },
+      { id: 'traffic-ads',  label: 'Traffic & Ads', sub: 'Campaigns · trends · budget' },
     ]
   },
   {
@@ -1520,7 +1521,10 @@ const NAV_GROUPS = [
       { id: 'sniper-fleet',  label: 'Sniper Fleet',   sub: 'Active agents · lane status · targeting' },
       { id: 'health-monitor',label: 'Health Monitor', sub: 'Agent mesh · system health · overseer' },
       { id: 'bridge',         label: 'Bridge',         sub: 'Voice-first interface · full-screen' },
+      { id: 'network', label: 'Network',  sub: 'Members · referrals · growth' },
+      { id: 'loop', label: 'Loop', sub: 'Lanes · pacing · strategies' },
       { id: 'support',       label: 'Support',        sub: 'FAQ · contact · live chat' },
+      { id: 'stack', label: 'Stack', sub: 'Infra · services · incidents' },
     ]
   },
 ];
@@ -7375,6 +7379,495 @@ const CplPricing = () => {
     </div>
   `;
 };
+
+// ── TRAFFIC & ADS ──────────────────────────────────────────────────
+function TrafficAds() {
+  const [platforms, setPlatforms] = useState(null);
+  const [campaigns, setCampaigns] = useState(null);
+  const [trends, setTrends] = useState(null);
+  const [summary, setSummary] = useState(null);
+  const [narrative, setNarrative] = useState(null);
+  const [tab, setTab] = useState('platforms');
+  const [err, setErr] = useState(null);
+
+  const reload = useCallback(async () => {
+    try {
+      const [pl, ca, tr, su, na] = await Promise.all([
+        apiFetch('/api/traffic-ads/platforms').then(r => r.json()),
+        apiFetch('/api/traffic-ads/campaigns').then(r => r.json()),
+        apiFetch('/api/traffic-ads/trends').then(r => r.json()),
+        apiFetch('/api/traffic-ads/summary').then(r => r.json()),
+        apiFetch('/api/traffic-ads/narrative').then(r => r.json()),
+      ]);
+      setPlatforms(pl);
+      setCampaigns(ca);
+      setTrends(tr);
+      setSummary(su);
+      setNarrative(na);
+      setErr(null);
+    } catch (e) {
+      if (e.message !== 'Unauthorized') setErr(e.message);
+    }
+  }, []);
+  useEffect(() => { reload(); const iv = setInterval(reload, 30000); return () => clearInterval(iv); }, [reload]);
+  if (err) return html`<div class="stub"><div class="stub-title">Traffic & Ads Error</div><div class="stub-body">${err}</div></div>`;
+  if (!platforms) return html`<div class="stub"><div class="stub-body">Loading traffic & ads...</div></div>`;
+  const total = summary?.consolidated || {};
+  const totalConversions = total.total_conversions || 0;
+  const totalImpressions = total.total_impressions || 0;
+  const totalClicks = total.total_clicks || 0;
+  const totalSpend = total.total_spend || 0;
+  return html`
+    <div class="section-header"><div><div class="section-title"><em>Traffic & Ads</em></div><div class="section-sub">Cross-platform campaigns · trends · budget optimization</div></div></div>
+    <div class="pulse-tabs" style={{marginTop:"8px"}}>
+      <button class=${'pulse-tab' + (tab==='platforms' ? ' active' : '')} onClick=${()=>setTab('platforms')}>Platforms</button>
+      <button class=${'pulse-tab' + (tab==='campaigns' ? ' active' : '')} onClick=${()=>setTab('campaigns')}>Campaigns</button>
+      <button class=${'pulse-tab' + (tab==='trends' ? ' active' : '')} onClick=${()=>setTab('trends')}>Trends</button>
+      <button class=${'pulse-tab' + (tab==='narrative' ? ' active' : '')} onClick=${()=>setTab('narrative')}>Narrative</button>
+    </div>
+    ${tab === 'platforms' ? html`
+    <div class="pulse-grid" style={{marginTop:"12px"}}>
+      <div class="stat-card"><div class="stat-label">TOTAL CONVERSIONS</div><div class="stat-value teal">${totalConversions.toLocaleString()}</div><div class="stat-meta">${totalClicks.toLocaleString()} clicks · ${(totalImpressions/1000).toFixed(0)}K impressions</div></div>
+      <div class="stat-card"><div class="stat-label">TOTAL SPEND</div><div class="stat-value">$${totalSpend.toLocaleString()}</div><div class="stat-meta">CPA: $${totalSpend > 0 && totalConversions > 0 ? (totalSpend/totalConversions).toFixed(2) : '\u2014'}</div></div>
+      <div class="stat-card"><div class="stat-label">PLATFORMS ACTIVE</div><div class="stat-value teal">${(platforms.platforms||[]).length}</div><div class="stat-meta">${(platforms.total?.total_conversions||0)} total conversions</div></div>
+      <div class="stat-card"><div class="stat-label">TRENDING NICHES</div><div class="stat-value">${(trends?.trends||[]).length}</div><div class="stat-meta">${(trends?.seasonal_spikes||[]).length} seasonal spikes</div></div>
+    </div>
+    <div class="pipeline-breakdown">
+      <div class="pipeline-h"><div class="pipeline-title">Platform <strong>Performance</strong></div></div>
+      ${(platforms.platforms||[]).length > 0 ? html`<table class="tbl">
+        <thead><tr><th>Platform</th><th>Impressions</th><th>Clicks</th><th>Conversions</th><th>Spend</th><th>CTR</th><th>CPA</th></tr></thead>
+        <tbody>${(platforms.platforms||[]).map((p, i) => html`
+          <tr key=${i}>
+            <td style="font-weight:500;color:var(--empire-white);text-transform:capitalize">${p.name || 'unknown'}</td>
+            <td class="tbl-num">${(p.impressions||0).toLocaleString()}</td>
+            <td class="tbl-num">${(p.clicks||0).toLocaleString()}</td>
+            <td class="tbl-num">${(p.conversions||0).toLocaleString()}</td>
+            <td class="tbl-num">$${(p.spend||0).toLocaleString()}</td>
+            <td class="tbl-num">${p.impressions > 0 ? ((p.clicks||0)/p.impressions*100).toFixed(1) + '%' : '\u2014'}</td>
+            <td class="tbl-num">$${p.conversions > 0 ? ((p.spend||0)/p.conversions).toFixed(2) : '\u2014'}</td>
+          </tr>
+        `)}</tbody>
+      </table>` : html`<div class="stub-body">No platform data available.</div>`}
+    </div>
+    ` : null}
+    ${tab === 'campaigns' ? html`
+    <div class="pipeline-breakdown" style={{marginTop:"12px"}}>
+      <div class="pipeline-h"><div class="pipeline-title">Active <strong>Campaigns</strong></div><div class="pipeline-total">${(campaigns?.campaigns||[]).length} campaigns</div></div>
+      ${(campaigns?.campaigns||[]).length > 0 ? html`<table class="tbl">
+        <thead><tr><th>Campaign</th><th>Platform</th><th>Budget</th><th>Spend</th><th>Impressions</th><th>Clicks</th><th>Conversions</th><th>ROAS</th></tr></thead>
+        <tbody>${(campaigns.campaigns||[]).map((c, i) => html`
+          <tr key=${i}>
+            <td style="font-weight:500;color:var(--empire-white)">${c.name||'unknown'}</td>
+            <td style="text-transform:capitalize">${c.platform||'\u2014'}</td>
+            <td class="tbl-num">$${(c.budget||0).toLocaleString()}</td>
+            <td class="tbl-num">$${(c.spend||0).toLocaleString()}</td>
+            <td class="tbl-num">${(c.impressions||0).toLocaleString()}</td>
+            <td class="tbl-num">${(c.clicks||0).toLocaleString()}</td>
+            <td class="tbl-num">${(c.conversions||0).toLocaleString()}</td>
+            <td class="tbl-num" style="color:var(--signal-teal)">${c.spend > 0 && c.revenue ? (c.revenue/c.spend).toFixed(2)+'x' : '\u2014'}</td>
+          </tr>
+        `)}</tbody>
+      </table>` : html`<div class="stub-body">No active campaigns.</div>`}
+    </div>
+    ` : null}
+    ${tab === 'trends' ? html`
+    <div style={{marginTop:"12px"}}>
+      ${(trends?.trends||[]).length > 0 ? html`<div class="pipeline-breakdown">
+        <div class="pipeline-h"><div class="pipeline-title">Trending <strong>Niches</strong></div></div>
+        ${(trends.trends||[]).map((t, i) => html`
+          <div key=${i} class="rv-bar-row">
+            <div class="rv-bar-label"><span class="rv-bar-lane">${t.niche||t.name||'unknown'}</span><span class="rv-bar-niche">${t.volume||'\u2014'} searches</span></div>
+            <div class="rv-bar-track"><div class="rv-bar-fill" style=${{width:Math.min(100,((t.growth||0)*100).toFixed(0))+"%", backgroundColor:"var(--strike-cyan)"}}></div></div>
+            <div class="rv-bar-val">${t.growth != null ? (t.growth*100).toFixed(1)+"%" : '\u2014'}</div>
+            <div class="rv-bar-meta">${t.momentum||''}</div>
+          </div>
+        `)}
+      </div>` : null}
+      ${(trends?.seasonal_spikes||[]).length > 0 ? html`<div class="pipeline-breakdown" style={{marginTop:"12px"}}>
+        <div class="pipeline-h"><div class="pipeline-title">Seasonal <strong>Spikes</strong></div></div>
+        ${trends.seasonal_spikes.map((s, i) => html`
+          <div key=${i} style={{padding:"10px 14px",borderBottom:"1px solid var(--empire-border)",fontSize:"11px",fontFamily:"var(--font-mono)"}}>
+            <span style="color:var(--empire-white);font-weight:500">${s.niche||s.name||'\u2014'}</span>
+            <span style={{color:"var(--empire-fog)",marginLeft:8}}>${s.month||'\u2014'} · ${s.expected_impact||''}</span>
+          </div>
+        `)}
+      </div>` : null}
+    </div>
+    ` : null}
+    ${tab === 'narrative' ? html`
+    <div style={{marginTop:"12px", padding:"20px 24px", background:"rgba(15,23,42,0.5)", border:"1px solid var(--empire-border)", borderRadius:12, lineHeight:1.8, fontSize:"13px"}}>
+      ${narrative?.narrative ? narrative.narrative.split('\n').map((p,i) => html`<p key=${i} style={{marginBottom:12}}>${p}</p>`) : html`<div class="stub-body">No narrative generated yet.</div>`}
+      ${narrative?.recommendations ? html`<div style={{marginTop:16}}><strong style={{color:"var(--signal-teal)"}}>Recommendations:</strong><ul>${narrative.recommendations.map((r,i) => html`<li key=${i} style={{marginTop:6}}>${r}</li>`)}</ul></div>` : null}
+      ${narrative?.timestamp ? html`<div style={{marginTop:16, fontSize:"9px", color:"var(--empire-fog)", fontFamily:"var(--font-mono)"}}>Generated: ${narrative.timestamp}</div>` : null}
+    </div>
+    ` : null}
+  `;
+}
+
+
+
+// ── STACK ENGINEERING ──────────────────────────────────────────────
+function Stack() {
+  const [status, setStatus] = useState(null);
+  const [services, setServices] = useState(null);
+  const [incidents, setIncidents] = useState(null);
+  const [report, setReport] = useState(null);
+  const [tab, setTab] = useState('overview');
+  const [err, setErr] = useState(null);
+  const reload = useCallback(async () => {
+    try {
+      const [st, sv, ic, rp] = await Promise.all([
+        apiFetch('/api/stack/status').then(r => r.json()),
+        apiFetch('/api/stack/services').then(r => r.json()),
+        apiFetch('/api/stack/incidents').then(r => r.json()),
+        apiFetch('/api/stack/report').then(r => r.json()),
+      ]);
+      setStatus(st); setServices(sv); setIncidents(ic); setReport(rp); setErr(null);
+    } catch (e) { if (e.message !== 'Unauthorized') setErr(e.message); }
+  }, []);
+  useEffect(() => { reload(); const iv = setInterval(reload, 30000); return () => clearInterval(iv); }, [reload]);
+  if (err) return html`<div class="stub"><div class="stub-title">Stack Error</div><div class="stub-body">${err}</div></div>`;
+  if (!status) return html`<div class="stub"><div class="stub-body">Loading stack status...</div></div>`;
+  const resource = status?.resources || {};
+  const health = status?.health || 'unknown';
+  const healthColor = health === 'healthy' ? 'var(--signal-teal)' : health === 'degraded' ? 'var(--status-amber)' : 'var(--status-red)';
+  return html`
+    <div class="section-header"><div><div class="section-title"><em>Stack</em></div><div class="section-sub">Infrastructure · services · incidents · monitoring</div></div></div>
+    <div class="pulse-tabs" style={{marginTop:"8px"}}>
+      <button class=${'pulse-tab' + (tab==='overview' ? ' active' : '')} onClick=${()=>setTab('overview')}>Overview</button>
+      <button class=${'pulse-tab' + (tab==='services' ? ' active' : '')} onClick=${()=>setTab('services')}>Services</button>
+      <button class=${'pulse-tab' + (tab==='incidents' ? ' active' : '')} onClick=${()=>setTab('incidents')}>Incidents</button>
+      <button class=${'pulse-tab' + (tab==='report' ? ' active' : '')} onClick=${()=>setTab('report')}>Report</button>
+    </div>
+    ${tab === 'overview' ? html`
+    <div class="pulse-grid" style={{marginTop:"12px"}}>
+      <div class="stat-card"><div class="stat-label">SYSTEM HEALTH</div><div class="stat-value" style="color:${healthColor}">${health.toUpperCase()}</div><div class="stat-meta">${status?.uptime || '\u2014'} uptime</div></div>
+      <div class="stat-card"><div class="stat-label">SERVICES</div><div class="stat-value teal">${status?.service_count || 0}</div><div class="stat-meta">${status?.online_count||0} online · ${status?.offline_count||0} offline</div></div>
+      <div class="stat-card"><div class="stat-label">CPU</div><div class="stat-value">${resource.cpu_usage != null ? (resource.cpu_usage*100).toFixed(1)+"%" : '\u2014'}</div><div class="stat-meta">${resource.cpu_cores||'\u2014'} cores</div></div>
+      <div class="stat-card"><div class="stat-label">MEMORY</div><div class="stat-value">${resource.memory_used_gb != null ? resource.memory_used_gb.toFixed(1)+"GB" : '\u2014'}</div><div class="stat-meta">${resource.memory_total_gb||'\u2014'} GB total</div></div>
+    </div>
+    <div class="pipeline-breakdown">
+      <div class="pipeline-h"><div class="pipeline-title">Resource <strong>Usage</strong></div></div>
+      <div class="split">
+        <div class="panel">
+          <div class="panel-head">Disk</div>
+          <div style="font-family:var(--font-mono);font-size:28px;color:var(--empire-white)">${resource.disk_used_gb != null ? resource.disk_used_gb.toFixed(1) : '\u2014'}GB</div>
+          <div style="font-family:var(--font-mono);font-size:11px;color:var(--empire-fog);margin-top:4px">of ${resource.disk_total_gb||'\u2014'} GB used</div>
+          ${resource.disk_usage_pct != null ? html`<div style={{marginTop:8,height:6,background:"var(--empire-elevated)",borderRadius:3,overflow:"hidden"}}><div style=${{height:"100%",width:Math.min(100,resource.disk_usage_pct*100)+"%",background:resource.disk_usage_pct > 0.85 ? "var(--status-red)" : "var(--signal-teal)",borderRadius:3,transition:"width 0.6s var(--ease-out-empire)"}}></div></div>` : null}
+        </div>
+        <div class="panel">
+          <div class="panel-head">Network</div>
+          <div style="font-family:var(--font-mono);font-size:28px;color:var(--empire-white)">${resource.network_rx_gb != null ? resource.network_rx_gb.toFixed(1) : '\u2014'}</div>
+          <div style="font-family:var(--font-mono);font-size:11px;color:var(--empire-fog);margin-top:4px">GB received · ${resource.network_tx_gb != null ? resource.network_tx_gb.toFixed(1) : '\u2014'} GB sent</div>
+        </div>
+      </div>
+    </div>
+    ` : null}
+    ${tab === 'services' ? html`
+    <div class="pipeline-breakdown" style={{marginTop:"12px"}}>
+      <div class="pipeline-h"><div class="pipeline-title">Service <strong>Health</strong></div><div class="pipeline-total">${(services?.services||[]).length} services</div></div>
+      ${(services?.services||[]).length > 0 ? html`<table class="tbl">
+        <thead><tr><th>Service</th><th>PID</th><th>Uptime</th><th>Memory</th><th>CPU</th><th>Restarts</th><th>Status</th></tr></thead>
+        <tbody>${(services.services||[]).map((s, i) => html`
+          <tr key=${i}>
+            <td style="font-weight:500;color:var(--empire-white);font-family:var(--font-mono);font-size:10px">${s.name||'unknown'}</td>
+            <td class="tbl-mono">${s.pid||'\u2014'}</td>
+            <td class="tbl-mono">${s.uptime||'\u2014'}</td>
+            <td class="tbl-num">${s.memory_mb != null ? s.memory_mb.toFixed(0)+"MB" : '\u2014'}</td>
+            <td class="tbl-num">${s.cpu_pct != null ? s.cpu_pct.toFixed(1)+"%" : '\u2014'}</td>
+            <td class="tbl-num">${s.restarts||0}</td>
+            <td><span class=${'bdg ' + (s.status === 'online' ? 'active' : s.status === 'degraded' ? 'paused' : s.status === 'offline' ? 'failed' : 'pending')}>${s.status||'unknown'}</span></td>
+          </tr>
+        `)}</tbody>
+      </table>` : html`<div class="stub-body">No service data.</div>`}
+    </div>
+    ` : null}
+    ${tab === 'incidents' ? html`
+    <div class="pipeline-breakdown" style={{marginTop:"12px"}}>
+      <div class="pipeline-h"><div class="pipeline-title">Recent <strong>Incidents</strong></div><div class="pipeline-total">${(incidents?.incidents||[]).length} incidents</div></div>
+      ${(incidents?.incidents||[]).length > 0 ? html`<div class="gov-log">
+        ${incidents.incidents.map((inc, i) => html`
+          <div key=${i} class="gov-log-row">
+            <span class="gov-log-ts">${inc.timestamp||'\u2014'}</span>
+            <span class=${'gov-log-lvl ' + (inc.severity||'info').toLowerCase()}>${inc.severity||'INFO'}</span>
+            <span class="gov-log-svc">${inc.service||'\u2014'}</span>
+            <span class="gov-log-detail">${inc.message||inc.description||''}</span>
+          </div>
+        `)}
+      </div>` : html`<div class="stub-body">No recent incidents.</div>`}
+    </div>
+    ` : null}
+    ${tab === 'report' ? html`
+    <div style={{marginTop:"12px", padding:"20px 24px", background:"rgba(15,23,42,0.5)", border:"1px solid var(--empire-border)", borderRadius:12, lineHeight:1.8, fontSize:"13px"}}>
+      ${report?.report ? report.report.split('\n').map((p,i) => html`<p key=${i} style={{marginBottom:12}}>${p}</p>`) : html`<div class="stub-body">No report generated yet.</div>`}
+      ${report?.recommendations ? html`<div style={{marginTop:16}}><strong style={{color:"var(--signal-teal)"}}>Recommendations:</strong><ul>${report.recommendations.map((r,i) => html`<li key=${i} style={{marginTop:6}}>${r}</li>`)}</ul></div>` : null}
+      ${report?.timestamp ? html`<div style={{marginTop:16, fontSize:"9px", color:"var(--empire-fog)", fontFamily:"var(--font-mono)"}}>Generated: ${report.timestamp}</div>` : null}
+    </div>
+    ` : null}
+  `;
+}
+
+
+
+// ── NETWORK ────────────────────────────────────────────────────────
+function Network() {
+  const [overview, setOverview] = useState(null);
+  const [members, setMembers] = useState(null);
+  const [referrals, setReferrals] = useState(null);
+  const [report, setReport] = useState(null);
+  const [tab, setTab] = useState('overview');
+  const [err, setErr] = useState(null);
+  const reload = useCallback(async () => {
+    try {
+      const [ov, mb, rf, rp] = await Promise.all([
+        apiFetch('/api/network/overview').then(r => r.json()),
+        apiFetch('/api/network/members').then(r => r.json()),
+        apiFetch('/api/network/referrals').then(r => r.json()),
+        apiFetch('/api/network/report').then(r => r.json()),
+      ]);
+      setOverview(ov); setMembers(mb); setReferrals(rf); setReport(rp); setErr(null);
+    } catch (e) { if (e.message !== 'Unauthorized') setErr(e.message); }
+  }, []);
+  useEffect(() => { reload(); const iv = setInterval(reload, 30000); return () => clearInterval(iv); }, [reload]);
+  if (err) return html`<div class="stub"><div class="stub-title">Network Error</div><div class="stub-body">${err}</div></div>`;
+  if (!overview) return html`<div class="stub"><div class="stub-body">Loading network...</div></div>`;
+  const totalMembers = overview?.total_members || 0;
+  const activeMembers = overview?.active_members || 0;
+  const totalAffiliates = overview?.total_affiliates || 0;
+  const totalReferrals = overview?.total_referrals || 0;
+  return html`
+    <div class="section-header"><div><div class="section-title"><em>Network</em></div><div class="section-sub">Contractors · affiliates · referrals · growth</div></div></div>
+    <div class="pulse-tabs" style={{marginTop:"8px"}}>
+      <button class=${'pulse-tab' + (tab==='overview' ? ' active' : '')} onClick=${()=>setTab('overview')}>Overview</button>
+      <button class=${'pulse-tab' + (tab==='members' ? ' active' : '')} onClick=${()=>setTab('members')}>Members</button>
+      <button class=${'pulse-tab' + (tab==='referrals' ? ' active' : '')} onClick=${()=>setTab('referrals')}>Referrals</button>
+      <button class=${'pulse-tab' + (tab==='report' ? ' active' : '')} onClick=${()=>setTab('report')}>Report</button>
+    </div>
+    ${tab === 'overview' ? html`
+    <div class="pulse-grid" style={{marginTop:"12px"}}>
+      <div class="stat-card"><div class="stat-label">TOTAL MEMBERS</div><div class="stat-value teal">${totalMembers}</div><div class="stat-meta">${activeMembers} active</div></div>
+      <div class="stat-card"><div class="stat-label">AFFILIATES</div><div class="stat-value">${totalAffiliates}</div><div class="stat-meta">${overview?.active_affiliates||0} active</div></div>
+      <div class="stat-card"><div class="stat-label">REFERRALS</div><div class="stat-value teal">${totalReferrals}</div><div class="stat-meta">${overview?.pending_referrals||0} pending</div></div>
+      <div class="stat-card"><div class="stat-label">GROWTH</div><div class="stat-value" style="color:var(--strike-cyan)">${overview?.growth_rate != null ? (overview.growth_rate*100).toFixed(1)+"%" : '\u2014'}</div><div class="stat-meta">${overview?.this_month||0} this month</div></div>
+    </div>
+    <div class="pipeline-breakdown">
+      <div class="pipeline-h"><div class="pipeline-title">Network <strong>Composition</strong></div></div>
+      <div class="split">
+        <div class="panel">
+          <div class="panel-head">By Type</div>
+          ${(overview?.by_type||[]).length > 0 ? (overview.by_type||[]).map(t => html`
+            <div class="rv-bar-row" key=${t.type||'unknown'}>
+              <div class="rv-bar-label"><span class="rv-bar-lane" style="text-transform:capitalize">${t.type||'unknown'}</span></div>
+              <div class="rv-bar-track"><div class="rv-bar-fill" style=${{width:Math.min(100,((t.count||0)/Math.max(1,totalMembers)*100).toFixed(0))+"%",backgroundColor:"var(--signal-teal)"}}></div></div>
+              <div class="rv-bar-val">${t.count||0}</div>
+            </div>
+          `) : html`<div class="stub-body">No type data.</div>`}
+        </div>
+        <div class="panel">
+          <div class="panel-head">By Status</div>
+          ${(overview?.by_status||[]).length > 0 ? (overview.by_status||[]).map(s => html`
+            <div class="rv-bar-row" key=${s.status||'unknown'}>
+              <div class="rv-bar-label"><span class="rv-bar-lane" style="text-transform:capitalize">${s.status||'unknown'}</span></div>
+              <div class="rv-bar-track"><div class="rv-bar-fill" style=${{width:Math.min(100,((s.count||0)/Math.max(1,totalMembers)*100).toFixed(0))+"%",backgroundColor:s.status==='active'?"var(--signal-teal)":s.status==='pending'?"var(--status-amber)":"var(--empire-mist)"}}></div></div>
+              <div class="rv-bar-val">${s.count||0}</div>
+            </div>
+          `) : html`<div class="stub-body">No status data.</div>`}
+        </div>
+      </div>
+    </div>
+    ` : null}
+    ${tab === 'members' ? html`
+    <div class="pipeline-breakdown" style={{marginTop:"12px"}}>
+      <div class="pipeline-h"><div class="pipeline-title">Network <strong>Members</strong></div><div class="pipeline-total">${(members?.members||[]).length} members</div></div>
+      ${(members?.members||[]).length > 0 ? html`<table class="tbl">
+        <thead><tr><th>Name</th><th>Type</th><th>Status</th><th>Leads</th><th>Conversion</th><th>Revenue</th><th>Score</th></tr></thead>
+        <tbody>${(members.members||[]).map((m, i) => html`
+          <tr key=${i}>
+            <td style="font-weight:500;color:var(--empire-white)">${m.name||m.email||'unknown'}</td>
+            <td style="text-transform:capitalize">${m.type||'\u2014'}</td>
+            <td><span class=${'bdg ' + (m.status==='active'?'active':m.status==='pending'?'pending':m.status==='approved'?'approved':'rejected')}>${m.status||'unknown'}</span></td>
+            <td class="tbl-num">${m.leads_submitted||0}</td>
+            <td class="tbl-num">${m.conversion_rate != null ? (m.conversion_rate*100).toFixed(1)+"%" : '\u2014'}</td>
+            <td class="tbl-num teal">$${(m.revenue||0).toLocaleString()}</td>
+            <td class="tbl-num" style="color:var(--strike-cyan)">${m.quality_score != null ? (m.quality_score*100).toFixed(0) : '\u2014'}</td>
+          </tr>
+        `)}</tbody>
+      </table>` : html`<div class="stub-body">No member data.</div>`}
+    </div>
+    ` : null}
+    ${tab === 'referrals' ? html`
+    <div class="pipeline-breakdown" style={{marginTop:"12px"}}>
+      <div class="pipeline-h"><div class="pipeline-title">Referral <strong>Tracking</strong></div><div class="pipeline-total">${(referrals?.referrals||[]).length} referrals</div></div>
+      ${(referrals?.referrals||[]).length > 0 ? html`<table class="tbl">
+        <thead><tr><th>Referrer</th><th>Referred</th><th>Status</th><th>Tier</th><th>Commission</th><th>Date</th></tr></thead>
+        <tbody>${(referrals.referrals||[]).map((r, i) => html`
+          <tr key=${i}>
+            <td style="font-weight:500;color:var(--empire-white)">${r.referrer||'\u2014'}</td>
+            <td>${r.referred||'\u2014'}</td>
+            <td><span class=${'bdg ' + (r.status==='converted'?'active':r.status==='pending'?'pending':r.status==='approved'?'approved':'rejected')}>${r.status||'pending'}</span></td>
+            <td class="tbl-mono">${r.tier||'\u2014'}</td>
+            <td class="tbl-num">$${(r.commission||0).toLocaleString()}</td>
+            <td class="tbl-mono">${r.date||'\u2014'}</td>
+          </tr>
+        `)}</tbody>
+      </table>` : html`<div class="stub-body">No referral data.</div>`}
+    </div>
+    ` : null}
+    ${tab === 'report' ? html`
+    <div style={{marginTop:"12px", padding:"20px 24px", background:"rgba(15,23,42,0.5)", border:"1px solid var(--empire-border)", borderRadius:12, lineHeight:1.8, fontSize:"13px"}}>
+      ${report?.report ? report.report.split('\n').map((p,i) => html`<p key=${i} style={{marginBottom:12}}>${p}</p>`) : html`<div class="stub-body">No report generated yet.</div>`}
+      ${report?.opportunities ? html`<div style={{marginTop:16}}><strong style={{color:"var(--signal-teal)"}}>Growth Opportunities:</strong><ul>${report.opportunities.map((o,i) => html`<li key=${i} style={{marginTop:6}}>${o}</li>`)}</ul></div>` : null}
+      ${report?.timestamp ? html`<div style={{marginTop:16, fontSize:"9px", color:"var(--empire-fog)", fontFamily:"var(--font-mono)"}}>Generated: ${report.timestamp}</div>` : null}
+    </div>
+    ` : null}
+  `;
+}
+
+
+
+// ── LOOP ENGINEERING ───────────────────────────────────────────────
+function Loop() {
+  const [overview, setOverview] = useState(null);
+  const [lanes, setLanes] = useState(null);
+  const [pacing, setPacing] = useState(null);
+  const [report, setReport] = useState(null);
+  const [tab, setTab] = useState('overview');
+  const [laneFocus, setLaneFocus] = useState(null);
+  const [laneDetail, setLaneDetail] = useState(null);
+  const [err, setErr] = useState(null);
+  const reload = useCallback(async () => {
+    try {
+      const [ov, ln, pc, rp] = await Promise.all([
+        apiFetch('/api/loop/overview').then(r => r.json()),
+        apiFetch('/api/loop/lanes').then(r => r.json()),
+        apiFetch('/api/loop/pacing').then(r => r.json()),
+        apiFetch('/api/loop/report').then(r => r.json()),
+      ]);
+      setOverview(ov); setLanes(ln); setPacing(pc); setReport(rp); setErr(null);
+    } catch (e) { if (e.message !== 'Unauthorized') setErr(e.message); }
+  }, []);
+  useEffect(() => { reload(); const iv = setInterval(reload, 30000); return () => clearInterval(iv); }, [reload]);
+  useEffect(() => {
+    if (laneFocus) {
+      apiFetch('/api/loop/lane/' + encodeURIComponent(laneFocus)).then(r => r.json()).then(setLaneDetail).catch(() => {});
+    } else { setLaneDetail(null); }
+  }, [laneFocus]);
+  if (err) return html`<div class="stub"><div class="stub-title">Loop Error</div><div class="stub-body">${err}</div></div>`;
+  if (!overview) return html`<div class="stub"><div class="stub-body">Loading loop data...</div></div>`;
+  const laneList = (lanes?.lanes || overview?.lanes || []);
+  const totalLanes = overview?.total_lanes || 0;
+  const activeLanes = overview?.active_lanes || 0;
+  const niches = overview?.niches || {};
+  const nicheCount = Object.keys(niches).length;
+  return html`
+    <div class="section-header"><div><div class="section-title"><em>Loop Engineering</em></div><div class="section-sub">Lane execution · pacing · strategy optimization</div></div></div>
+    <div class="pulse-tabs" style={{marginTop:"8px"}}>
+      <button class=${'pulse-tab' + (tab==='overview' ? ' active' : '')} onClick=${()=>setTab('overview')}>Overview</button>
+      <button class=${'pulse-tab' + (tab==='lanes' ? ' active' : '')} onClick=${()=>setTab('lanes')}>Lanes</button>
+      <button class=${'pulse-tab' + (tab==='pacing' ? ' active' : '')} onClick=${()=>setTab('pacing')}>Pacing</button>
+      <button class=${'pulse-tab' + (tab==='report' ? ' active' : '')} onClick=${()=>setTab('report')}>Report</button>
+    </div>
+    ${tab === 'overview' ? html`
+    <div class="pulse-grid" style={{marginTop:"12px"}}>
+      <div class="stat-card"><div class="stat-label">TOTAL LANES</div><div class="stat-value teal">${totalLanes}</div><div class="stat-meta">${activeLanes} active</div></div>
+      <div class="stat-card"><div class="stat-label">NICHES COVERED</div><div class="stat-value">${nicheCount}</div><div class="stat-meta">${Object.values(niches).reduce((a,b)=>a+(b||0),0)} strategies deployed</div></div>
+      <div class="stat-card"><div class="stat-label">THROUGHPUT</div><div class="stat-value teal">${overview?.throughput != null ? overview.throughput.toLocaleString() : '\u2014'}</div><div class="stat-meta">per cycle</div></div>
+      <div class="stat-card"><div class="stat-label">EFFICIENCY</div><div class="stat-value" style="color:var(--strike-cyan)">${overview?.efficiency != null ? (overview.efficiency*100).toFixed(1)+"%" : '\u2014'}</div><div class="stat-meta">lane utilization</div></div>
+    </div>
+    <div class="pipeline-breakdown">
+      <div class="pipeline-h"><div class="pipeline-title">Niche <strong>Distribution</strong></div></div>
+      ${Object.entries(niches).length > 0 ? Object.entries(niches).map(([niche, count]) => html`
+        <div class="rv-bar-row" key=${niche}>
+          <div class="rv-bar-label"><span class="rv-bar-lane">${niche}</span></div>
+          <div class="rv-bar-track"><div class="rv-bar-fill" style=${{width:Math.min(100,(count/Math.max(1,Object.values(niches).reduce((a,b)=>a+(b||0),0))*100).toFixed(0))+"%",backgroundColor:"var(--signal-teal)"}}></div></div>
+          <div class="rv-bar-val">${count}</div>
+        </div>
+      `) : html`<div class="stub-body">No niche data.</div>`}
+    </div>
+    ` : null}
+    ${tab === 'lanes' ? html`
+    <div class="pipeline-breakdown" style={{marginTop:"12px"}}>
+      <div class="pipeline-h"><div class="pipeline-title">Lane <strong>Execution</strong></div><div class="pipeline-total">${laneList.length} lanes</div></div>
+      ${laneFocus ? html`
+        <div class="rv-bar-row" style={{marginBottom:16,borderBottom:"1px solid var(--empire-divider)"}}>
+          <div class="rv-bar-label"><span class="rv-bar-lane" style="color:var(--strike-cyan)">Selected: ${laneFocus}</span></div>
+          <div class="rv-bar-track" style={{flex:0}}></div>
+          <button style={{fontFamily:"var(--font-mono)",fontSize:"9px",cursor:"pointer",border:"1px solid var(--empire-border)",background:"transparent",color:"var(--empire-mist)",padding:"4px 10px",borderRadius:"3px"}} onClick=${()=>setLaneFocus(null)}>All lanes</button>
+        </div>
+        ${laneDetail ? html`
+          <div class="pulse-grid">
+            <div class="stat-card"><div class="stat-label">WINS</div><div class="stat-value teal">${laneDetail.wins||0}</div></div>
+            <div class="stat-card"><div class="stat-label">LOSSES</div><div class="stat-value">${laneDetail.losses||0}</div></div>
+            <div class="stat-card"><div class="stat-label">WIN RATE</div><div class="stat-value" style="color:var(--strike-cyan)">${(laneDetail.win_rate||0)*100 > 0 ? ((laneDetail.win_rate||0)*100).toFixed(1)+"%" : '\u2014'}</div></div>
+            <div class="stat-card"><div class="stat-label">REVENUE</div><div class="stat-value teal">$${(laneDetail.revenue||0).toLocaleString()}</div></div>
+          </div>
+          ${laneDetail.strategies ? html`
+          <div class="pipeline-h" style={{marginTop:16}}><div class="pipeline-title">Active <strong>Strategies</strong></div></div>
+          <div class="si-strategy-grid">
+            ${(laneDetail.strategies||[]).map((st, j) => html`
+              <div key=${j} class="si-strat-card ${st.best ? 'best' : ''}">
+                <div class="si-strat-top"><div class="si-strat-name">${st.name||'unnamed'}</div></div>
+                <div class="si-strat-stats">
+                  <div class="si-stat"><span class="si-stat-val teal">${st.wins||0}</span><span class="si-stat-lbl">Wins</span></div>
+                  <div class="si-stat"><span class="si-stat-val dim">${st.losses||0}</span><span class="si-stat-lbl">Losses</span></div>
+                  <div class="si-stat"><span class="si-stat-val cyan">${st.win_rate != null ? (st.win_rate*100).toFixed(0) + '%' : '\u2014'}</span><span class="si-stat-lbl">Win Rate</span></div>
+                  <div class="si-stat"><span class="si-stat-val teal">$${(st.revenue||0).toLocaleString()}</span><span class="si-stat-lbl">Revenue</span></div>
+                </div>
+              </div>
+            `)}
+          </div>
+          ` : null}
+        ` : html`<div class="stub-body">Click a lane to see detail.</div>`}
+      ` : null}
+      ${!laneFocus && laneList.length > 0 ? html`<table class="tbl">
+        <thead><tr><th>Lane</th><th>Niche</th><th>Strategy</th><th>Wins</th><th>Losses</th><th>Win Rate</th><th>Revenue</th></tr></thead>
+        <tbody>${laneList.map((l, i) => html`
+          <tr key=${i} style={{cursor:"pointer"}} onClick=${()=>setLaneFocus(l.lane_name||l.name||l.lane||'unknown')}>
+            <td style="font-weight:500;color:var(--empire-white);font-family:var(--font-mono);font-size:10px">${l.lane_name||l.name||l.lane||'\u2014'}</td>
+            <td>${l.niche||'\u2014'}</td>
+            <td class="tbl-mono">${l.strategy||l.strategies||'\u2014'}</td>
+            <td class="tbl-num">${l.wins||0}</td>
+            <td class="tbl-num">${l.losses||0}</td>
+            <td class="tbl-num" style="color:var(--strike-cyan)">${l.win_rate != null ? (l.win_rate*100).toFixed(1)+"%" : (l.wins > 0 || l.losses > 0) ? ((l.wins/Math.max(1,l.wins+l.losses))*100).toFixed(1)+"%" : '\u2014'}</td>
+            <td class="tbl-num" style="color:var(--signal-teal)">$${(l.revenue||0).toLocaleString()}</td>
+          </tr>
+        `)}</tbody>
+      </table>` : null}
+      ${!laneFocus && laneList.length === 0 ? html`<div class="stub-body">No lane data available.</div>` : null}
+    </div>
+    ` : null}
+    ${tab === 'pacing' ? html`
+    <div style={{marginTop:"12px"}}>
+      <div class="pipeline-breakdown">
+        <div class="pipeline-h"><div class="pipeline-title">Throughput <strong>Forecast</strong></div></div>
+        <div class="pulse-grid">
+          <div class="stat-card"><div class="stat-label">CURRENT PACE</div><div class="stat-value teal">${pacing?.current_pace || '\u2014'}</div><div class="stat-meta">per cycle</div></div>
+          <div class="stat-card"><div class="stat-label">TARGET PACE</div><div class="stat-value">${pacing?.target_pace || '\u2014'}</div><div class="stat-meta">${pacing?.pacing_gap != null ? (pacing.pacing_gap > 0 ? 'Behind by '+pacing.pacing_gap : 'On track') : ''}</div></div>
+          <div class="stat-card"><div class="stat-label">BOTTLENECKS</div><div class="stat-value teal">${(pacing?.bottlenecks||[]).length}</div><div class="stat-meta">detected</div></div>
+          <div class="stat-card"><div class="stat-label">FORECAST</div><div class="stat-value" style="color:var(--strike-cyan)">${pacing?.forecast_next_cycle || '\u2014'}</div><div class="stat-meta">next cycle</div></div>
+        </div>
+      </div>
+      ${(pacing?.bottlenecks||[]).length > 0 ? html`<div class="pipeline-breakdown" style={{marginTop:"12px"}}>
+        <div class="pipeline-h"><div class="pipeline-title">Pacing <strong>Bottlenecks</strong></div></div>
+        ${pacing.bottlenecks.map((b, i) => html`
+          <div key=${i} style={{padding:"10px 14px",borderBottom:"1px solid var(--empire-border)",fontSize:"11px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+            <span style="color:var(--empire-white);font-weight:500">${b.lane||b.name||'\u2014'}</span>
+            <span style={{fontFamily:"var(--font-mono)",color:"var(--status-amber)"}}>${b.impact||b.description||''}</span>
+          </div>
+        `)}
+      </div>` : null}
+    </div>
+    ` : null}
+    ${tab === 'report' ? html`
+    <div style={{marginTop:"12px", padding:"20px 24px", background:"rgba(15,23,42,0.5)", border:"1px solid var(--empire-border)", borderRadius:12, lineHeight:1.8, fontSize:"13px"}}>
+      ${report?.report ? report.report.split('\n').map((p,i) => html`<p key=${i} style={{marginBottom:12}}>${p}</p>`) : html`<div class="stub-body">No report generated yet.</div>`}
+      ${report?.optimizations ? html`<div style={{marginTop:16}}><strong style={{color:"var(--signal-teal)"}}>Optimizations:</strong><ul>${report.optimizations.map((o,i) => html`<li key=${i} style={{marginTop:6}}>${o}</li>`)}</ul></div>` : null}
+      ${report?.timestamp ? html`<div style={{marginTop:16, fontSize:"9px", color:"var(--empire-fog)", fontFamily:"var(--font-mono)"}}>Generated: ${report.timestamp}</div>` : null}
+    </div>
+    ` : null}
+  `;
+}
+
 function App() {
 
 
@@ -7527,6 +8020,11 @@ function App() {
             active.id === 'bridge'        ? html`<${Bridge} />` :
             active.id === 'affiliates'    ? html`<${Affiliates} />` :
             active.id === 'cpl-pricing'   ? html`<${CplPricing} />` :
+
+            active.id === 'traffic-ads'  ? html`<${TrafficAds} />` :
+            active.id === 'stack'        ? html`<${Stack} />` :
+            active.id === 'network'      ? html`<${Network} />` :
+            active.id === 'loop'         ? html`<${Loop} />` :
             html`<${Stub} section=${active} />`
           }
         </section>
