@@ -596,6 +596,111 @@ class TrialConversionEngine:
             "engine_stats": dict(self.stats),
         }
 
+    # ── Trial Audit History ────────────────────────────────────────
+
+    def trial_audit_history(self, limit: int = 50, offset: int = 0,
+                             event_type: Optional[str] = None) -> dict:
+        """Return recent trial audit events for operator visibility.
+
+        Queries sales_events for trial-related event types:
+          - trial_start
+          - trial_converted
+          - expiring_soon_reminder_sent
+
+        Args:
+            limit: Max events to return (default 50, max 200).
+            offset: Pagination offset.
+            event_type: Optional filter — one of the event types above, or None for all.
+
+        Returns:
+            {
+                "events": [...],
+                "total": total matching events,
+                "limit": limit,
+                "offset": offset,
+                "event_types": [...unique types present],
+            }
+        """
+        db = self.get_db()
+        limit = max(1, min(limit, 200))
+        offset = max(0, offset)
+
+        # Build the query
+        trial_event_types = ["trial_start", "trial_converted", "expiring_soon_reminder_sent"]
+        query = db.table("sales_events") \
+            .select("*") \
+            .in_("event_type", [event_type] if event_type else trial_event_types) \
+            .order("created_at", desc=True)
+
+        # Count total matching events
+        try:
+            count_res = db.table("sales_events") \
+                .select("id", count="exact") \
+                .in_("event_type", [event_type] if event_type else trial_event_types) \
+                .execute()
+            total = getattr(count_res, "count", 0) or len(count_res.data or [])
+        except Exception:
+            total = 0
+
+        # Fetch paginated results
+        r = query.range(offset, offset + limit - 1).execute()
+        raw = r.data or []
+
+        events = []
+        for ev in raw:
+            et = ev.get("event_type", "")
+            created = str(ev.get("created_at", ""))[:19] if ev.get("created_at") else ""
+
+            entry = {
+                "id": ev.get("id", ""),
+                "event_type": et,
+                "created_at": created,
+                "email": ev.get("email", ""),
+                "product_slug": ev.get("product_slug", ""),
+                "product_name": PRODUCT_NAMES.get(ev.get("product_slug", ""), ev.get("product_slug", "")),
+                "tier": ev.get("tier", ""),
+            }
+
+            # Enrich with event-specific fields
+            if et == "trial_start":
+                entry["trial_end"] = str(ev.get("trial_end", ""))[:19] if ev.get("trial_end") else ""
+                entry["name"] = ev.get("name", "")
+                entry["company"] = ev.get("company", "")
+                entry["max_checks"] = ev.get("max_checks", "")
+                # Determine if still active
+                trial_end = ev.get("trial_end")
+                if trial_end:
+                    try:
+                        end_dt = datetime.fromisoformat(str(trial_end).replace("Z", "+00:00"))
+                        now = datetime.now(timezone.utc)
+                        if now < end_dt:
+                            days = round((end_dt - now).total_seconds() / 86400)
+                            entry["days_remaining"] = max(0, days)
+                            entry["trial_status"] = "active"
+                        elif now < end_dt + timedelta(hours=CONVERSION_GRACE_HOURS):
+                            entry["trial_status"] = "grace"
+                        else:
+                            entry["trial_status"] = "expired"
+                    except (ValueError, TypeError):
+                        entry["trial_status"] = "unknown"
+            elif et == "trial_converted":
+                entry["amount_usd"] = float(ev.get("amount_usd", 0) or 0)
+            elif et == "expiring_soon_reminder_sent":
+                entry["days_until"] = ev.get("days_until", None)
+
+            events.append(entry)
+
+        # Collect unique event types present
+        present_types = sorted(set(e["event_type"] for e in events))
+
+        return {
+            "events": events,
+            "total": total,
+            "limit": limit,
+            "offset": offset,
+            "event_types": present_types,
+        }
+
     # ── Stats snapshot ──────────────────────────────────────────────
 
     def stats_snapshot(self) -> dict:

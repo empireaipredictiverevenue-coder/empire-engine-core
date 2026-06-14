@@ -659,6 +659,23 @@ async def trial_convert_stats(auth: bool = Depends(require_auth)):
     """Trial conversion engine stats snapshot."""
     return suite_trial_conversion.stats_snapshot()
 
+@app.get("/api/v6/suite/sales/trial-audit")
+async def trial_audit(
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+    event_type: Optional[str] = Query(None, pattern="^(trial_start|trial_converted|expiring_soon_reminder_sent)$"),
+    auth: bool = Depends(require_auth),
+):
+    """Trial audit history — recent trial events with pagination and optional type filter."""
+    try:
+        return suite_trial_conversion.trial_audit_history(
+            limit=limit, offset=offset, event_type=event_type
+        )
+    except Exception as e:
+        log.warning(f"[trial-audit] error: {e}")
+        return {"events": [], "total": 0, "limit": limit, "offset": offset, "error": str(e)[:200]}
+
+
 @app.get("/api/v6/suite/sales/trial-pipeline")
 async def trial_pipeline(auth: bool = Depends(require_auth)):
     """Trial pipeline stats: active trials, expiring soon, converted, churned, daily breakdown."""
