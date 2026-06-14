@@ -18,7 +18,7 @@ import json
 import asyncio
 import logging
 from datetime import datetime, timezone
-from typing import Optional, Dict, List
+from typing import Any, Dict, List, Optional
 
 sys.path.insert(0, "/root/empire-v49")
 try:
@@ -34,9 +34,9 @@ log = logging.getLogger("mesh.scout")
 logging.basicConfig(level=logging.INFO, format="%(levelname)s:%(name)s:%(message)s")
 
 # ── Config ───────────────────────────────────────────────────────────
-SUPABASE_URL = os.environ.get("SUPABASE_URL", "")
-SUPABASE_KEY = os.environ.get("SUPABASE_SERVICE_KEY", "")
-OLLAMA_URL = os.environ.get("OLLAMA_URL", "http://127.0.0.1:11434")
+SUPABASE_URL: str = os.environ.get("SUPABASE_URL", "")
+SUPABASE_KEY: str = os.environ.get("SUPABASE_SERVICE_KEY", "")
+OLLAMA_URL: str = os.environ.get("OLLAMA_URL", "http://127.0.0.1:11434")
 
 if not SUPABASE_URL or not SUPABASE_KEY:
     log.error("SUPABASE_URL and SUPABASE_SERVICE_KEY required")
@@ -46,17 +46,21 @@ _sb = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 # Metro centroids for satellite analysis — imported from shared config
 # Convert from {metro: {lat, lon, state}} to the format mesh_scout expects
-METROS = {
+METROS: Dict[str, Dict[str, Any]] = {
     name: {
-        "lat": m["lat"],
-        "lon": m["lon"],
-        "state": m.get("state", ""),
+        "lat": float(m["lat"]),
+        "lon": float(m["lon"]),
+        "state": str(m.get("state", "")),
     }
     for name, m in _SHARED_METROS.items()
 }
 
 
-async def query_ollama(prompt: str, system: str = "", temperature: float = 0.2) -> str:
+async def query_ollama(
+    prompt: str,
+    system: str = "",
+    temperature: float = 0.2,
+) -> str:
     """Query local Ollama for analysis."""
     import httpx
     try:
@@ -72,7 +76,7 @@ async def query_ollama(prompt: str, system: str = "", temperature: float = 0.2) 
                 },
             )
             if r.status_code == 200:
-                return r.json().get("response", "")
+                return str(r.json().get("response", ""))
             else:
                 log.warning(f"[scout] Ollama error: HTTP {r.status_code}")
                 return ""
@@ -81,7 +85,10 @@ async def query_ollama(prompt: str, system: str = "", temperature: float = 0.2) 
         return ""
 
 
-async def analyze_damage_potential(metro: str, niche: str = "roofing") -> Optional[Dict]:
+async def analyze_damage_potential(
+    metro: str,
+    niche: str = "roofing",
+) -> Optional[Dict[str, Any]]:
     """Use Ollama + existing storm data to assess damage potential in a metro."""
     # First check if there are active storm alerts in the area
     active_storms = False
@@ -90,73 +97,82 @@ async def analyze_damage_potential(metro: str, niche: str = "roofing") -> Option
             .gte("issued_at", datetime.now(timezone.utc).isoformat()) \
             .limit(10).execute()
         for row in (r.data or []):
-            area = (row.get("area_desc") or "").lower()
-            metro_lower = metro.lower()
-            if metro_lower in area or any(city.lower() in area for city in [metro_lower]):
+            area: str = (row.get("area_desc") or "").lower()  # type: ignore[union-attr]
+            metro_lower: str = metro.lower()
+            if metro_lower in area or metro_lower in area:
                 active_storms = True
-                log.info(f"[scout] Active storm in {metro}: {row.get('event')} ({row.get('severity')})")
+                log.info(f"[scout] Active storm in {metro}: {row.get('event')} ({row.get('severity')})")  # type: ignore[union-attr]
     except Exception as e:
         log.debug(f"[scout] storm_forecasts query: {e}")
 
     # Check radar_targets for recent activity in this metro
-    recent_targets = 0
+    recent_targets: int = 0
     try:
-        r = _sb.table("radar_targets").select("id", count="exact") \
-            .gte("created_at", f"{(datetime.now(timezone.utc).isoformat())}") \
+        r = (
+            _sb.table("radar_targets")
+            .select("id", count="exact")  # type: ignore[arg-type]
+            .gte("created_at", f"{(datetime.now(timezone.utc).isoformat())}")
             .execute()
-        recent_targets = r.count if hasattr(r, "count") else len(r.data or [])
+        )
+        recent_targets = (r.count or 0) if hasattr(r, "count") else len(r.data or [])
     except Exception:
         pass
 
     # Use Ollama to analyze if there's damage potential
-    system_prompt = (
+    system_prompt: str = (
         "You are a storm damage assessment AI. Analyze whether a metro area has "
         "high roof damage potential based on the data provided. "
         "Return ONLY valid JSON: "
         '{"damage_potential": "high|medium|low", "confidence": 0.0-1.0, '
         '"reasoning": "brief reason", "estimated_leads": number}'
     )
-    prompt = (
+    prompt: str = (
         f"Metro: {metro}\n"
         f"Niche: {niche}\n"
         f"Active storms in area: {active_storms}\n"
         f"Recent radar targets: {recent_targets}\n\n"
         "Assess the roof damage potential. JSON only."
     )
-    result = await query_ollama(prompt, system_prompt, temperature=0.2)
+    result: str = await query_ollama(prompt, system_prompt, temperature=0.2)
     if not result:
         return None
 
     # Parse JSON from Ollama response
     try:
-        clean = result.strip()
+        clean: str = result.strip()
         if "```json" in clean:
             clean = clean.split("```json")[1].split("```")[0].strip()
         elif "```" in clean:
             clean = clean.split("```")[1].split("```")[0].strip()
-        return json.loads(clean)
-    except (json.JSONDecodeError, IndexError) as e:
+        parsed: Any = json.loads(clean)
+        assert isinstance(parsed, dict) or parsed is None
+        return parsed
+    except (json.JSONDecodeError, IndexError, AttributeError) as e:
         log.warning(f"[scout] JSON parse error: {e} | raw: {result[:100]}")
         # Default to low if parsing fails
         return {"damage_potential": "low", "confidence": 0.1, "reasoning": "parse fallback", "estimated_leads": 0}
 
 
-async def scout_metro(metro: str = "Wichita", niche: str = "roofing", dry_run: bool = False) -> Optional[str]:
+async def scout_metro(
+    metro: str = "Wichita",
+    niche: str = "roofing",
+    dry_run: bool = False,
+) -> Optional[str]:
     """
     Scout a metro for roof damage potential. Returns ticket_id if a task was created.
     This is the main entry point called by the mesh loop or run directly.
     """
     log.info(f"[scout] analyzing {metro} for {niche} damage potential...")
 
-    analysis = await analyze_damage_potential(metro, niche)
+    analysis: Optional[Dict[str, Any]] = await analyze_damage_potential(metro, niche)
     if not analysis:
         log.warning(f"[scout] no analysis returned for {metro}")
         return None
 
-    damage = analysis.get("damage_potential", "low")
-    confidence = analysis.get("confidence", 0)
-    estimated_leads = analysis.get("estimated_leads", 0)
-    reasoning = analysis.get("reasoning", "")
+    damage: str = str(analysis.get("damage_potential", "low") or "low")
+    confidence: float = float(analysis.get("confidence", 0) or 0)
+    estimated_leads: int = int(analysis.get("estimated_leads", 0) or 0)
+    reasoning: str = str(analysis.get("reasoning", "") or "")
 
     log.info(f"[scout] {metro}: damage={damage}, confidence={confidence:.2f}, leads={estimated_leads}")
 
@@ -172,28 +188,29 @@ async def scout_metro(metro: str = "Wichita", niche: str = "roofing", dry_run: b
             .eq("status", "To-Do") \
             .execute()
         for t in (existing.data or []):
-            payload = t.get("payload") or {}
-            if isinstance(payload, str):
+            t_payload: Any = t.get("payload") or {}  # type: ignore[union-attr]
+            if isinstance(t_payload, str):
                 try:
-                    payload = json.loads(payload)
+                    t_payload = json.loads(t_payload)
                 except Exception:
                     continue
-            if isinstance(payload, dict) and payload.get("metro") == metro:
+            if isinstance(t_payload, dict) and t_payload.get("metro") == metro:
                 log.info(f"[scout] {metro}: duplicate task exists, skipping")
                 return None
     except Exception:
         pass
 
     # Create the task ticket
-    payload = {
+    metro_meta: Dict[str, Any] = METROS.get(metro, {})
+    payload: Dict[str, Any] = {
         "metro": metro,
         "niche": niche,
         "damage_potential": damage,
         "confidence": confidence,
         "estimated_leads": estimated_leads,
         "reasoning": reasoning,
-        "lat": METROS.get(metro, {}).get("lat"),
-        "lon": METROS.get(metro, {}).get("lon"),
+        "lat": metro_meta.get("lat"),
+        "lon": metro_meta.get("lon"),
     }
 
     if dry_run:
@@ -208,7 +225,8 @@ async def scout_metro(metro: str = "Wichita", niche: str = "roofing", dry_run: b
             "priority": 3 if damage == "high" else 1,
         }).execute()
         if r.data:
-            ticket_id = r.data[0].get("ticket_id")
+            raw_ticket: Any = r.data[0].get("ticket_id")  # type: ignore[union-attr]
+            ticket_id: str = str(raw_ticket) if raw_ticket else ""
             log.info(f"[scout] created task {ticket_id[:8]} for {metro} (damage={damage})")
             return ticket_id
     except Exception as e:
@@ -217,7 +235,10 @@ async def scout_metro(metro: str = "Wichita", niche: str = "roofing", dry_run: b
     return None
 
 
-async def scout_all_metros(niche: str = "roofing", dry_run: bool = False) -> List[str]:
+async def scout_all_metros(
+    niche: str = "roofing",
+    dry_run: bool = False,
+) -> List[str]:
     """Scout all configured metros for damage potential. Returns list of ticket_ids."""
     results = []
     for metro in METROS:
@@ -229,7 +250,10 @@ async def scout_all_metros(niche: str = "roofing", dry_run: bool = False) -> Lis
     return results
 
 
-async def run_once(metro: Optional[str] = None, dry_run: bool = False) -> Dict:
+async def run_once(
+    metro: Optional[str] = None,
+    dry_run: bool = False,
+) -> Dict[str, Any]:
     """Run the scout pipeline once. Returns summary dict."""
     if metro:
         ticket_id = await scout_metro(metro, dry_run=dry_run)

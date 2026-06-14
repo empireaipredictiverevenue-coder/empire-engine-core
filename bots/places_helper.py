@@ -1,23 +1,60 @@
-import os, httpx
+"""
+Empire AI · Places Helper
+==========================
+Google Places API wrapper for the prospector agent.
+Searches for businesses by text query + location bias.
+"""
+import os
+from typing import Any, Dict, List, Optional
 
-GOOGLE_KEY = os.getenv("GOOGLE_MAPS_API_KEY")
-GOOGLE_TEXT_URL = "https://places.googleapis.com/v1/places:searchText"
+import httpx
 
-async def places_search(query, lat, lon, radius_m=40000):
+
+GOOGLE_KEY: Optional[str] = os.getenv("GOOGLE_MAPS_API_KEY")
+GOOGLE_TEXT_URL: str = "https://places.googleapis.com/v1/places:searchText"
+
+
+async def places_search(
+    query: str,
+    lat: float,
+    lon: float,
+    radius_m: int = 40000,
+) -> List[Dict[str, Any]]:
+    """Search Google Places for businesses matching a text query near a location.
+
+    Args:
+        query: Text search query (e.g. "roofing contractors in Wichita").
+        lat: Latitude of the search center.
+        lon: Longitude of the search center.
+        radius_m: Search radius in meters (default 40km).
+
+    Returns:
+        List of normalized place dicts with name, address, phone, website,
+        rating, review_count, business_status.
+    """
     if not GOOGLE_KEY:
         print("[PROSPECT] No GOOGLE_MAPS_API_KEY")
         return []
-    headers = {
+    headers: Dict[str, str] = {
         "Content-Type": "application/json",
         "X-Goog-Api-Key": GOOGLE_KEY,
-        "X-Goog-FieldMask": "places.id,places.displayName,places.formattedAddress,places.nationalPhoneNumber,places.websiteUri,places.rating,places.userRatingCount,places.businessStatus",
+        "X-Goog-FieldMask": (
+            "places.id,places.displayName,places.formattedAddress,"
+            "places.nationalPhoneNumber,places.websiteUri,places.rating,"
+            "places.userRatingCount,places.businessStatus"
+        ),
     }
-    body = {
+    body: Dict[str, Any] = {
         "textQuery": query,
-        "locationBias": {"circle": {"center": {"latitude": lat, "longitude": lon}, "radius": radius_m}},
+        "locationBias": {
+            "circle": {
+                "center": {"latitude": lat, "longitude": lon},
+                "radius": radius_m,
+            }
+        },
         "maxResultCount": 20,
     }
-    out = []
+    out: List[Dict[str, Any]] = []
     async with httpx.AsyncClient(timeout=30) as client:
         try:
             r = await client.post(GOOGLE_TEXT_URL, headers=headers, json=body)
