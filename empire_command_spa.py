@@ -1005,6 +1005,59 @@ _SPA_CSS = """
 .af-modal-metric-v{font-family:var(--font-mono);font-size:11px;color:var(--empire-white);word-break:break-word}
 @media (max-width:640px){.af-modal-grid{grid-template-columns:1fr}.af-modal{max-width:100%}}
 /* ── COMMAND CENTER PRO ───────────────────────────────────────── */
+/* ── QC DASHBOARD ──────────────────────────────────────────────── */
+.qc-summary-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:20px}
+.qc-card{background:var(--empire-surface);border:1px solid var(--empire-border);padding:16px 18px;position:relative;overflow:hidden}
+.qc-card::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,var(--signal-teal-soft),transparent)}
+.qc-card-label{font-family:var(--font-mono);font-size:9px;color:var(--empire-mist);letter-spacing:.18em;text-transform:uppercase;margin-bottom:8px}
+.qc-card-val{font-family:var(--font-display);font-weight:200;font-size:32px;color:var(--empire-white);line-height:1}
+.qc-card-val.teal{color:var(--signal-teal)}
+.qc-card-val.amber{color:#FFB800}
+.qc-card-val.red{color:#FF4444}
+.qc-card-val.dim{color:var(--empire-mist)}
+.qc-card-sub{font-family:var(--font-mono);font-size:10px;color:var(--empire-fog);margin-top:6px}
+.qc-filter-bar{display:flex;gap:12px;align-items:center;margin-bottom:16px;flex-wrap:wrap}
+.qc-filter-group{display:flex;align-items:center;gap:6px}
+.qc-filter-label{font-family:var(--font-mono);font-size:9px;color:var(--empire-fog);letter-spacing:.12em;text-transform:uppercase}
+.qc-filter-select{padding:5px 10px;border:1px solid var(--empire-border);border-radius:4px;background:var(--empire-raised);color:var(--empire-white);font-family:var(--font-mono);font-size:10px;outline:none;cursor:pointer;transition:border-color .12s var(--ease-snap)}
+.qc-filter-select:hover{border-color:var(--empire-border-hi)}
+.qc-filter-select:focus{border-color:var(--signal-teal)}
+.qc-filter-toggle{display:inline-flex;align-items:center;gap:6px;padding:5px 12px;border:1px solid var(--empire-border);border-radius:4px;cursor:pointer;font-family:var(--font-mono);font-size:9px;color:var(--empire-mist);background:transparent;transition:all .12s var(--ease-snap)}
+.qc-filter-toggle:hover{border-color:var(--empire-border-hi);color:var(--empire-white)}
+.qc-filter-toggle.active{border-color:var(--signal-teal-soft);color:var(--signal-teal);background:rgba(68,229,184,0.04)}
+.qc-refresh-btn{padding:6px 14px;border:1px solid var(--signal-teal-soft);border-radius:4px;cursor:pointer;font-family:var(--font-mono);font-size:9px;color:var(--signal-teal);background:transparent;transition:all .12s var(--ease-snap);margin-left:auto}
+.qc-refresh-btn:hover{background:rgba(68,229,184,0.08)}
+.qc-refresh-btn:disabled{opacity:.5;cursor:default}
+.qc-table-wrap{overflow-x:auto;background:var(--empire-surface);border:1px solid var(--empire-border)}
+.qc-table{width:100%;border-collapse:collapse;font-size:11px;min-width:900px}
+.qc-table th{text-align:left;padding:10px 12px;color:var(--empire-fog);font-weight:500;border-bottom:1px solid var(--empire-border);text-transform:uppercase;font-size:9px;letter-spacing:.08em;background:var(--empire-elevated);white-space:nowrap}
+.qc-table td{padding:9px 12px;border-bottom:1px solid var(--empire-divider);color:var(--empire-white);vertical-align:middle}
+.qc-table tr:hover td{background:var(--empire-elevated)}
+.qc-table tr.qc-expanded td{background:var(--empire-elevated)}
+.qc-table tr:last-child td{border-bottom:none}
+.qc-severity{display:inline-block;padding:2px 8px;border-radius:4px;font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:.08em}
+.qc-severity.tier_1{color:var(--signal-teal);background:rgba(68,229,184,0.1)}
+.qc-severity.tier_2{color:#FFB800;background:rgba(255,184,0,0.1)}
+.qc-severity.tier_3{color:#FF4444;background:rgba(255,68,68,0.1)}
+.qc-category{font-size:10px;color:var(--empire-mist);letter-spacing:.04em;font-family:var(--font-mono)}
+.qc-subject-id{font-family:var(--font-mono);font-size:10px;color:var(--strike-cyan);max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-block;vertical-align:middle}
+.qc-summary{font-size:11px;color:var(--empire-silver);max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-block;vertical-align:middle}
+.qc-check{font-family:var(--font-mono);font-size:9px;text-align:center}
+.qc-check.yes{color:var(--signal-teal)}
+.qc-check.no{color:var(--empire-fog)}
+.qc-resolve-btn{padding:4px 12px;border:1px solid var(--signal-teal-soft);border-radius:4px;cursor:pointer;font-family:var(--font-mono);font-size:9px;color:var(--signal-teal);background:transparent;transition:all .12s var(--ease-snap);font-weight:600;white-space:nowrap}
+.qc-resolve-btn:hover{background:rgba(68,229,184,0.1)}
+.qc-resolve-btn:disabled{opacity:.4;cursor:not-allowed;border-color:var(--empire-border);color:var(--empire-fog)}
+.qc-resolve-btn.done{opacity:.5;border-color:var(--empire-border);color:var(--empire-mist);cursor:default}
+.qc-detail-panel{padding:14px 16px;background:var(--empire-elevated);border:1px solid var(--empire-divider);margin:4px 12px 12px;border-radius:6px;animation:empire-fade-up .2s var(--ease-out-empire)}
+.qc-detail-head{font-family:var(--font-mono);font-size:9px;color:var(--empire-fog);letter-spacing:.14em;text-transform:uppercase;margin-bottom:10px;display:flex;align-items:center;gap:8px}
+.qc-detail-json{font-family:var(--font-mono);font-size:10px;color:var(--empire-silver);white-space:pre-wrap;word-break:break-word;line-height:1.5;max-height:300px;overflow-y:auto;background:var(--empire-surface);padding:10px 12px;border-radius:4px;border:1px solid var(--empire-divider)}
+.qc-detail-meta{display:flex;gap:16px;flex-wrap:wrap;font-family:var(--font-mono);font-size:9px;color:var(--empire-fog);margin-bottom:10px;padding-bottom:10px;border-bottom:1px solid var(--empire-divider)}
+.qc-detail-meta span strong{color:var(--empire-white)}
+.qc-empty{text-align:center;padding:48px 0;color:var(--empire-fog);font-family:var(--font-ui);font-size:12px;font-style:italic}
+.qc-loading{text-align:center;padding:48px 0;color:var(--empire-fog);font-family:var(--font-mono);font-size:11px}
+.qc-error{background:rgba(255,68,68,0.08);border:1px solid rgba(255,68,68,0.2);border-radius:6px;padding:14px 18px;color:#FF4444;font-size:12px;margin-bottom:20px}
+
 .ccp-dash{padding:0 4px}
 .ccp-summary-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:14px;margin-bottom:24px}
 .ccp-summary-card{background:var(--empire-surface);border:1px solid var(--empire-border);padding:16px 18px;text-align:center;transition:border-color .15s var(--ease-snap)}
@@ -1101,6 +1154,291 @@ _SPA_CSS = """
 .tp-reason-label{color:var(--empire-silver);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .tp-reason-count{color:var(--empire-white);font-weight:500;text-align:right}
 
+
+/* -- CPL PRICING ------------------------------------------------- */
+.cpl-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:12px}
+.cpl-tabs{display:flex;gap:4px;background:var(--empire-elevated);padding:3px;border-radius:8px}
+.cpl-tab{padding:7px 18px;border:none;border-radius:6px;cursor:pointer;font-family:var(--font-mono);font-size:11px;color:var(--empire-mist);background:transparent;transition:all 0.15s var(--ease-snap)}
+.cpl-tab:hover{color:var(--empire-white);background:var(--empire-raised)}
+.cpl-tab.active{color:var(--empire-black);background:var(--signal-teal);font-weight:600}
+.cpl-summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:20px}
+.cpl-card{background:var(--empire-elevated);border:1px solid var(--empire-border);border-radius:8px;padding:14px 16px}
+.cpl-card-label{font-size:9px;text-transform:uppercase;letter-spacing:0.12em;color:var(--empire-fog);margin-bottom:4px}
+.cpl-card-value{font-size:20px;font-weight:600;color:var(--empire-white);font-family:var(--font-mono)}
+.cpl-card-value.positive{color:var(--signal-teal)}
+.cpl-card-value.warning{color:var(--signal-gold)}
+.cpl-health-card{grid-column:span 2}
+.cpl-health-bar{display:flex;height:20px;border-radius:4px;overflow:hidden;gap:2px;margin:4px 0}
+.cpl-health-seg{display:flex;align-items:center;justify-content:center;font-family:var(--font-mono);font-size:9px;font-weight:600;color:#000;border-radius:3px;transition:flex 0.3s var(--ease-out-empire)}
+.cpl-health-green{background:var(--signal-teal)}
+.cpl-health-amber{background:#FFB800}
+.cpl-health-red{background:#FF4444}
+.cpl-health-meta{font-family:var(--font-mono);font-size:8px;color:var(--empire-fog);letter-spacing:0.08em;text-align:center}
+.cpl-health-active{opacity:1!important;filter:brightness(1.3);box-shadow:0 0 8px currentColor}
+.cpl-health-dim{opacity:0.35;filter:saturate(0.3)}
+
+.cpl-nav{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:14px}
+.cpl-nav-btn{padding:5px 12px;border:1px solid var(--empire-border);border-radius:5px;cursor:pointer;font-family:var(--font-mono);font-size:10px;color:var(--empire-mist);background:transparent;transition:all 0.15s var(--ease-snap)}
+.cpl-nav-btn:hover{border-color:var(--signal-teal);color:var(--signal-teal)}
+.cpl-nav-btn.active{background:var(--signal-teal);color:var(--empire-black);border-color:var(--signal-teal);font-weight:600}
+.cpl-service-summary{display:flex;align-items:center;gap:8px;padding:10px 14px;margin-bottom:14px;background:rgba(68,229,184,0.04);border:1px solid rgba(68,229,184,0.15);border-radius:6px;font-family:var(--font-mono);font-size:11px;animation:empire-fade-up 0.2s var(--ease-out-empire)}
+.cpl-service-count{font-weight:700;font-size:16px;color:var(--signal-teal)}
+.cpl-service-total{font-weight:600;font-size:14px;color:var(--empire-white)}
+.cpl-service-label{color:var(--empire-mist);font-size:10px;letter-spacing:0.04em}
+.cpl-service-badge{padding:3px 9px;border:1px solid var(--signal-teal-soft);border-radius:4px;color:var(--signal-teal);font-size:9px;letter-spacing:0.1em;text-transform:uppercase;margin-left:auto}
+@keyframes cpl-shimmer{0%{background-position:-400px 0}100%{background-position:400px 0}}
+.cpl-skeleton{display:table-row-group}
+.cpl-skeleton td{height:32px;padding:8px 10px}
+.cpl-skel-bar{height:10px;border-radius:4px;background:linear-gradient(90deg,var(--empire-elevated) 25%,var(--empire-surface) 50%,var(--empire-elevated) 75%);background-size:800px 100%;animation:cpl-shimmer 1.5s ease-in-out infinite}
+.cpl-last-refreshed-row{display:flex;align-items:center;justify-content:flex-end;margin-bottom:6px;gap:6px}
+.cpl-last-refreshed{font-family:var(--font-mono);font-size:9px;color:var(--empire-fog);letter-spacing:.06em}
+.cpl-reloading-bar{height:2px;background:var(--empire-divider);overflow:hidden;margin-bottom:8px;border-radius:2px}
+.cpl-reloading-bar-inner{height:100%;width:40%;background:linear-gradient(90deg,transparent,var(--signal-teal),transparent);border-radius:2px;animation:cpl-reload-slide 1.2s ease-in-out infinite}
+@keyframes cpl-reload-slide{0%{transform:translateX(-100%)}100%{transform:translateX(350%)}}
+.cpl-table{width:100%;border-collapse:collapse;font-size:11px}
+.cpl-table th{text-align:left;padding:8px 10px;color:var(--empire-fog);font-weight:500;border-bottom:1px solid var(--empire-border);text-transform:uppercase;font-size:9px;letter-spacing:0.08em}
+.hth-dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin:0 auto;transition:transform 0.15s var(--ease-snap)}
+.hth-dot:hover{transform:scale(1.8)}
+.hth-dot.green{background:var(--signal-teal);box-shadow:0 0 6px rgba(68,229,184,0.6)}
+.hth-dot.amber{background:#FFB800;box-shadow:0 0 6px rgba(255,184,0,0.5)}
+.hth-dot.red{background:var(--status-red);box-shadow:0 0 6px rgba(255,68,68,0.5)}
+.cpl-table td{padding:7px 10px;border-bottom:1px solid var(--empire-border);color:var(--empire-white);vertical-align:middle}
+.cpl-table tr:hover td{background:var(--empire-elevated)}
+.cpl-table tr.seo-row td{opacity:0.5}
+.cpl-badge{display:inline-block;padding:2px 7px;border-radius:4px;font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:0.06em}
+.cpl-badge.ppl{background:rgba(0,200,200,0.15);color:var(--signal-teal)}
+.cpl-badge.ppc{background:rgba(255,183,0,0.15);color:var(--signal-gold)}
+.cpl-badge.service{background:rgba(130,100,255,0.15);color:#8264ff}
+.cpl-badge.ppc-live{background:rgba(68,229,184,0.12);border-color:var(--signal-teal);color:var(--signal-teal);cursor:help}
+.cpl-badge.ppc-live:hover{background:rgba(68,229,184,0.2)}
+.cpl-margin-bar{display:inline-block;height:6px;border-radius:3px;min-width:2px;vertical-align:middle;margin-right:6px}
+.cpl-margin-bar.high{background:var(--signal-teal)}
+.cpl-margin-bar.mid{background:var(--signal-gold)}
+.cpl-margin-bar.low{background:#e74c3c}
+.cpl-pagination{display:flex;align-items:center;justify-content:center;gap:8px;margin-top:16px;font-size:11px;color:var(--empire-mist)}
+.cpl-pagination button{background:var(--empire-elevated);border:1px solid var(--empire-border);border-radius:4px;padding:4px 10px;cursor:pointer;color:var(--empire-white);font-family:var(--font-mono);font-size:10px;transition:all 0.12s var(--ease-snap)}
+.cpl-pagination button:hover{background:var(--signal-teal);color:var(--empire-black);border-color:var(--signal-teal)}
+.cpl-pagination button:disabled{opacity:0.3;cursor:default}
+.cpl-loading{text-align:center;padding:60px 0;color:var(--empire-fog);font-family:var(--font-mono);font-size:12px}
+.cpl-error{background:rgba(231,76,60,0.1);border:1px solid #e74c3c;border-radius:8px;padding:16px 20px;color:#e74c3c;font-size:12px;margin-bottom:20px}
+
+/* -- EXPORT BUTTONS --------------------------------------------- */
+.cpl-export-bar{display:flex;gap:6px;align-items:center}
+.cpl-export-btn{padding:6px 14px;border:1px solid var(--empire-border);border-radius:5px;cursor:pointer;font-family:var(--font-mono);font-size:10px;color:var(--empire-mist);background:transparent;transition:all 0.15s var(--ease-snap);display:flex;align-items:center;gap:5px}
+.cpl-export-btn:hover{border-color:var(--signal-teal);color:var(--signal-teal);background:var(--signal-teal-soft)}
+.cpl-export-btn svg{width:14px;height:14px;opacity:0.7}
+.cpl-export-btn:hover svg{opacity:1}
+/* -- COMPARE MODES TABLE ----------------------------------------- */
+.cmp-intro{font-size:11px;color:var(--empire-mist);margin-bottom:16px;line-height:1.5}
+.cmp-table{width:100%;border-collapse:collapse;font-size:11px;margin-bottom:20px}
+.cmp-table th{text-align:left;padding:7px 9px;color:var(--empire-fog);font-weight:500;border-bottom:2px solid var(--empire-border);text-transform:uppercase;font-size:8px;letter-spacing:0.08em;background:var(--empire-elevated)}
+.cmp-table td{padding:6px 9px;border-bottom:1px solid var(--empire-divider);color:var(--empire-white);vertical-align:middle}
+.cmp-table tr:hover td{background:var(--empire-elevated)}
+.cmp-table tr.seo-row td{opacity:0.4}
+.cmp-model-cell{border-left:1px solid var(--empire-divider)}
+.cmp-model-label{font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;text-align:center;padding:3px 6px;border-radius:3px;display:inline-block}
+.cmp-ppl{color:var(--signal-teal);border:1px solid rgba(0,200,200,0.2)}
+.cmp-ppc{color:var(--signal-gold);border:1px solid rgba(255,183,0,0.2)}
+.cmp-winner{background:rgba(68,229,184,0.04)}
+.cmp-winner-tag{display:inline-block;font-size:8px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;padding:2px 6px;border-radius:3px;color:var(--signal-teal);border:1px solid rgba(68,229,184,0.2);background:rgba(68,229,184,0.06);margin-bottom:2px}
+.cmp-value{font-family:var(--font-mono);font-size:10px}
+.cmp-value.pos{color:var(--signal-teal)}
+.cmp-value.neg{color:#e74c3c}
+.cmp-summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:20px}
+.cmp-card{background:var(--empire-elevated);border:1px solid var(--empire-border);border-radius:8px;padding:14px 16px}
+.cmp-card-label{font-size:9px;text-transform:uppercase;letter-spacing:0.12em;color:var(--empire-fog);margin-bottom:4px}
+.cmp-card-value{font-size:18px;font-weight:600;color:var(--empire-white);font-family:var(--font-mono)}
+.cmp-card-value.teal{color:var(--signal-teal)}
+.cmp-card-value.gold{color:var(--signal-gold)}
+.cmp-card-value.neutral{color:var(--empire-mist)}
+.cmp-niche-filter{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px}
+.cmp-niche-btn{padding:4px 12px;border:1px solid var(--empire-border);border-radius:5px;cursor:pointer;font-family:var(--font-mono);font-size:9px;color:var(--empire-mist);background:transparent;transition:all 0.12s var(--ease-snap)}
+.cmp-niche-btn:hover{border-color:var(--signal-teal);color:var(--signal-teal)}
+.cmp-niche-search{padding:5px 10px;border:1px solid var(--empire-border);border-radius:5px;background:var(--empire-raised);color:var(--empire-white);font-family:var(--font-mono);font-size:10px;outline:none;min-width:140px;transition:border-color 0.12s var(--ease-snap)}
+.cmp-niche-search:focus{border-color:var(--signal-teal)}
+.cmp-niche-search::placeholder{color:var(--empire-fog);opacity:0.5}
+.cmp-niche-btn.active{background:var(--signal-teal);color:var(--empire-black);border-color:var(--signal-teal);font-weight:600}
+/* -- AUTO-REFRESH TOGGLE ----------------------------------------- */
+@keyframes cpl-refresh-pulse{0%,100%{opacity:1}50%{opacity:0.3}}
+.cpl-refresh-btn{padding:6px 14px;border:1px solid var(--empire-border);border-radius:5px;cursor:pointer;font-family:var(--font-mono);font-size:10px;color:var(--empire-mist);background:transparent;transition:all 0.15s var(--ease-snap);display:flex;align-items:center;gap:6px}
+.cpl-refresh-btn:hover{border-color:var(--signal-teal);color:var(--signal-teal);background:var(--signal-teal-soft)}
+.cpl-refresh-btn.active{border-color:var(--signal-teal);color:var(--signal-teal);background:rgba(68,229,184,0.08)}
+.cpl-refresh-dot{width:8px;height:8px;border-radius:50%;background:var(--empire-fog);flex-shrink:0;transition:all 0.3s var(--ease-snap)}
+.cpl-refresh-btn.active .cpl-refresh-dot{background:var(--signal-teal);box-shadow:0 0 8px rgba(68,229,184,0.6);animation:cpl-refresh-pulse 2s ease-in-out infinite}
+.cpl-refresh-label{font-size:9px;letter-spacing:0.06em}
+/* -- PRINT STYLES ------------------------------------------------- */
+@media print{
+@page{size:landscape;margin:10mm 12mm}
+body{background:#fff!important;color:#111!important;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif!important}
+.app{grid-template-columns:1fr!important}
+.nav,.nav *{display:none!important}
+
+.cpl-header{margin-bottom:6px!important;padding:0!important}
+.cpl-header h2{font-size:16px!important;color:#000!important;margin:0 0 2px!important}
+.cpl-header .cpl-export-bar,.cpl-header .cpl-refresh-label{display:none!important}
+
+.cpl-tabs,.cpl-nav,.cpl-pagination,.cpl-export-bar,.sidebar,.nav-panel,
+.topbar,.cpl-reloading-bar,.cpl-loading,.cpl-error,
+.roi-form,.roi-form-row,.roi-form-group,.roi-form-apply,
+.chart-panel,.chart-empty,.chart-donut,.chart-bar{display:none!important}
+
+.cpl-summary{display:grid!important;grid-template-columns:repeat(5,1fr)!important;
+gap:6px!important;margin-bottom:8px!important;padding:0!important}
+.cpl-card{background:#f8f8f8!important;border:1px solid #ccc!important;
+padding:5px 8px!important;border-radius:3px!important;page-break-inside:avoid!important}
+.cpl-card-label{font-size:7px!important;color:#666!important;
+letter-spacing:.1em!important;text-transform:uppercase!important;margin-bottom:2px!important}
+.cpl-card-value{font-size:13px!important;color:#000!important;font-weight:600!important}
+.cpl-card-value.positive{color:#007700!important}
+.cpl-card-value.warning{color:#cc8800!important}
+
+.cpl-health-card{grid-column:1/-1!important;margin-top:2px!important}
+.cpl-health-bar{display:flex!important;height:16px!important;border-radius:3px!important;
+overflow:hidden!important;gap:2px!important;margin:3px 0!important}
+.cpl-health-seg{display:flex!important;align-items:center!important;
+justify-content:center!important;font-family:monospace!important;
+font-size:8px!important;font-weight:700!important;color:#000!important;border-radius:2px!important}
+.cpl-health-green{background:#4CAF50!important}
+.cpl-health-amber{background:#FFC107!important}
+.cpl-health-red{background:#F44336!important}
+.cpl-health-meta{font-family:monospace!important;font-size:7px!important;
+color:#666!important;text-align:center!important}
+
+.cpl-table{width:100%!important;border-collapse:collapse!important;
+font-size:7.5px!important;page-break-inside:auto!important}
+.cpl-table thead{display:table-header-group!important}
+.cpl-table th{background:#e8e8e8!important;color:#222!important;
+padding:3px 4px!important;border:1px solid #bbb!important;
+text-transform:uppercase!important;font-size:6.5px!important;
+letter-spacing:.06em!important;font-weight:700!important}
+.cpl-table td{padding:2px 4px!important;border:1px solid #ccc!important;
+color:#333!important;font-size:7px!important;page-break-inside:avoid!important}
+.cpl-table tbody tr{page-break-inside:avoid!important}
+.cpl-table tbody tr:nth-child(even){background:#fafafa!important}
+.cpl-table tbody tr:hover{background:#f0f0f0!important}
+.cpl-table tr.seo-row td{opacity:0.35!important}
+
+.cpl-badge{display:inline-block!important;border:1px solid #999!important;
+padding:1px 4px!important;font-size:6.5px!important;border-radius:2px!important;
+font-weight:600!important;line-height:1.3!important}
+.cpl-badge.ppl{border-color:#009999!important;color:#009999!important}
+.cpl-badge.ppc{border-color:#cc8800!important;color:#cc8800!important}
+.cpl-badge.service{border-color:#6a4fcc!important;color:#6a4fcc!important}
+.cpl-badge.model-ppc{background:#fff3e0!important;color:#e65100!important;
+border-color:#e65100!important}
+
+.cpl-margin-bar{border:1px solid #999!important;height:6px!important;
+border-radius:2px!important;background:#eee!important}
+.cpl-margin-fill{height:100%!important;border-radius:2px!important}
+
+.cpl-health-dot{display:inline-block!important;width:8px!important;
+height:8px!important;border-radius:50%!important;margin-right:2px!important}
+.cpl-health-dot.green{background:#4CAF50!important}
+.cpl-health-dot.amber{background:#FFC107!important}
+.cpl-health-dot.red{background:#F44336!important}
+
+.cpl-table td.tbl-num,.cpl-table th.tbl-num{text-align:right!important;font-family:monospace!important}
+.cpl-table td.tbl-mono,.cpl-table th.tbl-mono{font-family:monospace!important;font-size:6.5px!important}
+
+.cpl-service-summary{display:block!important;margin-bottom:8px!important;
+padding:6px 8px!important;background:#f8f8f8!important;border:1px solid #ccc!important;
+border-radius:3px!important;font-size:8px!important;color:#333!important}
+.cpl-service-summary strong{color:#000!important}
+
+.roi-results{display:block!important;padding:0!important;background:none!important;border:none!important}
+.roi-card{background:#f8f8f8!important;border:1px solid #ccc!important;
+padding:4px 8px!important;border-radius:3px!important;page-break-inside:avoid!important}
+.roi-card-label{font-size:7px!important;color:#666!important;letter-spacing:.1em!important}
+.roi-card-value{font-size:12px!important;color:#000!important}
+.roi-card-value.profit{color:#007700!important}
+.roi-card-value.loss{color:#cc0000!important}
+.roi-table-wrap{display:block!important;margin-top:6px!important}
+.roi-table{border-collapse:collapse!important;width:100%!important;font-size:7px!important}
+.roi-table th{background:#e8e8e8!important;color:#222!important;padding:2px 4px!important;border:1px solid #ccc!important}
+.roi-table td{padding:2px 4px!important;border:1px solid #ddd!important;color:#333!important}
+
+.no-print,.cpl-skeleton{display:none!important}
+
+tr{page-break-inside:avoid!important}
+h2,h3,h4{page-break-after:avoid!important}
+
+.cpl-header .print-date{display:block!important;font-family:monospace!important;
+font-size:7px!important;color:#999!important;margin-top:2px!important
+/* -- PULSE DASHBOARD PRINT STYLES --------------------------------- */
+.pulse-grid{display:grid!important;grid-template-columns:repeat(4,1fr)!important;gap:8px!important;margin-bottom:12px!important}
+.stat-card{background:#f8f8f8!important;border:1px solid #ccc!important;padding:10px 12px!important;page-break-inside:avoid!important}
+.stat-label{font-size:8px!important;color:#666!important;letter-spacing:0.12em!important}
+.stat-value{font-size:22px!important;color:#000!important}
+.stat-value.teal{color:#008080!important}
+.stat-value.cyan{color:#0088aa!important}
+.stat-value.dim{color:#888!important}
+.stat-meta{color:#666!important;font-size:8px!important}
+.pulse-tabs{display:none!important}
+.pulse-tab{display:none!important}
+.section-sub{font-size:8px!important;color:#666!important}
+
+/* -- REVENUE DASHBOARD PRINT STYLES ------------------------------- */
+.pipeline-breakdown{background:#fff!important;border:1px solid #ccc!important;padding:12px!important;margin-bottom:12px!important;page-break-inside:avoid!important}
+.pipeline-h{border-bottom:1px solid #ddd!important;margin-bottom:10px!important}
+.pipeline-title{font-size:12px!important;color:#000!important}
+.pipeline-total{color:#008080!important;font-size:10px!important}
+.pipeline-grid{display:grid!important;grid-template-columns:repeat(auto-fill,minmax(200px,1fr))!important;gap:8px!important}
+.rv-bar-row{display:grid!important;grid-template-columns:100px 1fr 60px 40px!important;gap:8px!important;padding:5px 0!important;border-bottom:1px solid #eee!important;font-size:9px!important}
+.rv-bar-lane{color:#000!important;font-weight:600!important;font-size:9px!important}
+.rv-bar-niche{color:#666!important;font-size:7px!important}
+.rv-bar-track{height:8px!important;background:#eee!important;border-radius:3px!important}
+.rv-bar-fill{background:#008080!important;border-radius:3px!important;min-width:2px!important}
+.rv-bar-val{color:#008080!important;font-size:10px!important}
+.rv-bar-meta{color:#888!important;font-size:7px!important}
+.rv-accuracy-panel{background:#fff!important;border:1px solid #ccc!important;padding:12px!important;margin-top:12px!important;page-break-inside:avoid!important}
+.rv-accuracy-head{border-bottom:1px solid #ddd!important;margin-bottom:12px!important;padding-bottom:8px!important}
+.rv-accuracy-title{font-size:12px!important;color:#000!important}
+.rv-accuracy-summary{font-size:9px!important;color:#666!important}
+.rv-accuracy-chart{display:block!important;max-height:none!important}
+.rv-acc-row{display:grid!important;grid-template-columns:50px 1fr 44px!important;gap:8px!important;padding:4px 0!important;border-bottom:1px solid #eee!important}
+.rv-acc-date{color:#666!important;font-size:8px!important}
+.rv-acc-bar-wrap{height:12px!important;background:#eee!important;border-radius:2px!important}
+.rv-acc-bar.forecast{background:#0088aa!important;opacity:0.7!important}
+.rv-acc-bar.actual{background:#008080!important;opacity:0.9!important}
+.rv-acc-bar-label{font-size:7px!important;color:#fff!important}
+.rv-acc-pct{font-size:10px!important;color:#000!important}
+.rv-accuracy-legend{display:flex!important;gap:14px!important;margin-top:8px!important;padding-top:8px!important;border-top:1px solid #eee!important;font-size:8px!important}
+.rv-acc-legend-swatch{width:8px!important;height:8px!important}
+/* -- Section title / container support ------------------------------ */
+.section-title{font-size:20px!important;color:#000!important}
+.section-title em{color:#008080!important}
+.rv-bar-label{display:flex!important;flex-direction:column!important;gap:2px!important}
+.rv-acc-bars{display:flex!important;flex-direction:column!important;gap:4px!important}
+
+/* -- Hide non-essential elements ---------------------------------- */
+.topbar-actions,.rv-alerts,.rv-niche-card,.rv-narrative-panel,
+.rv-accuracy-actions,.rv-export-btn,.rv-usdc-panel{display:none!important}
+}
+/* -- ROI CALCULATOR ---------------------------------------------- */
+.roi-form{background:var(--empire-elevated);border:1px solid var(--empire-border);border-radius:8px;padding:20px;margin-bottom:20px}
+.roi-form-row{display:flex;gap:16px;flex-wrap:wrap;align-items:end}
+.roi-form-group{display:flex;flex-direction:column;gap:4px;min-width:160px}
+.roi-form-group label{font-size:9px;text-transform:uppercase;letter-spacing:0.1em;color:var(--empire-fog)}
+.roi-form-group input,.roi-form-group select{background:var(--empire-raised);border:1px solid var(--empire-border);border-radius:5px;padding:8px 12px;color:var(--empire-white);font-family:var(--font-mono);font-size:12px;outline:none;transition:border-color 0.15s var(--ease-snap)}
+.roi-form-group input:focus,.roi-form-group select:focus{border-color:var(--signal-teal)}
+.roi-form-group input::placeholder{color:var(--empire-fog);opacity:0.5}
+.roi-form-apply{padding:8px 24px;background:var(--signal-teal);border:none;border-radius:5px;color:var(--empire-black);font-family:var(--font-mono);font-size:11px;font-weight:600;cursor:pointer;transition:all 0.15s var(--ease-snap)}
+.roi-form-apply:hover{box-shadow:var(--glow-signal);transform:translateY(-1px)}
+.roi-form-apply:disabled{opacity:0.4;cursor:default;transform:none;box-shadow:none}
+.roi-results{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px}
+.roi-card{background:var(--empire-elevated);border:1px solid var(--empire-border);border-radius:8px;padding:14px 16px}
+.roi-card-label{font-size:9px;text-transform:uppercase;letter-spacing:0.12em;color:var(--empire-fog);margin-bottom:4px}
+.roi-card-value{font-size:18px;font-weight:600;color:var(--empire-white);font-family:var(--font-mono)}
+.roi-card-value.profit{color:var(--signal-teal)}
+.roi-card-value.loss{color:#e74c3c}
+.roi-card-value.neutral{color:var(--signal-gold)}
+.roi-table-wrap{overflow-x:auto;margin-top:8px}
+.roi-table{width:100%;border-collapse:collapse;font-size:11px}
+.roi-table th{text-align:left;padding:7px 10px;color:var(--empire-fog);font-weight:500;border-bottom:1px solid var(--empire-border);text-transform:uppercase;font-size:9px;letter-spacing:0.08em}
+.roi-table td{padding:6px 10px;border-bottom:1px solid var(--empire-border);color:var(--empire-white);vertical-align:middle}
+.roi-table tr:hover td{background:var(--empire-raised)}
+.roi-table .pos{color:var(--signal-teal)}
+.roi-table .neg{color:#e74c3c}
 """
 
 _SPA_JS = r"""
@@ -1154,6 +1492,7 @@ const NAV_GROUPS = [
       { id: 'swarm-gate',   label: 'Swarm Gate',     sub: 'Parallel video ads · scan → fire' },
       { id: 'trial-pipeline', label: 'Trial Pipeline', sub: 'Active · converting · churned' },
       { id: 'affiliates',   label: 'Affiliates',    sub: 'Manage · referral links · stats' },
+      { id: 'cpl-pricing',  label: 'CPL Pricing',   sub: 'Per-lane margins . sell prices . benchmarks' },
     ]
   },
   {
@@ -1294,7 +1633,9 @@ function Closer() {
     const iv = setInterval(load, 15000);
     return () => { stop = true; clearInterval(iv); };
   }, []);
-  if (err) return html`<div class="stub"><div class="stub-title">Could not load Closer</div><div class="stub-body">${err}</div></div>`;
+  if (err) return html`<div class="stub"><div class="stub-title">Could not load Closer</div>
+
+        <div class="cmp-summary"><div class="stub-body">${err}</div></div>`;
   if (!stats) return html`<div class="stub"><div class="stub-title">Loading <em>Closer</em></div><div class="stub-body">Fetching pipeline stats...</div></div>`;
   const total = (stats.leads_processed || 0);
   const goRate = total > 0 ? ((stats.brain_go || 0) / total * 100).toFixed(1) : '0.0';
@@ -1713,6 +2054,7 @@ function Pulse({ events, wsConnected }) {
   const [pulseDim, setPulseDim] = useState('niche');
   const [pulseWindow, setPulseWindow] = useState('24h');
   const [pulseBreakdown, setPulseBreakdown] = useState(null);
+  const prevHealthRef = useRef(null);
 
   const reload = useCallback(async () => {
     try {
@@ -1975,10 +2317,40 @@ function Pulse({ events, wsConnected }) {
           <div class="stat-value teal">$${((stats.rv||{}).totals||{}).revenue_24h != null ? Number(((stats.rv||{}).totals||{}).revenue_24h).toLocaleString() : '--'}</div>
           <div class="stat-meta">${((stats.rv||{}).totals||{}).active_buyers || 0} buyers · ${((stats.rv||{}).totals||{}).calls_24h || 0} calls</div>
         </div>
-        <div class="stat-card">
-          <div class="stat-label">Revenue Health</div>
-          <div class="stat-value ${((stats.rv||{}).health||{}).status === 'healthy' || ((stats.rv||{}).health||{}).status === 'surging' ? 'teal' : ((stats.rv||{}).health||{}).status === 'warning' ? 'dim' : 'bad'}">${((stats.rv||{}).health||{}).status || '--'}</div>
-          <div class="stat-meta">${((stats.rv||{}).health||{}).alerts ? ((stats.rv||{}).health||{}).alerts.length : 0} alerts</div>
+        <div class="stat-card" style="grid-column:span 2">
+          <div class="stat-label">Revenue Health · Fleet Overview</div>
+          <div style="display:flex;gap:24px;align-items:center">
+            <div style="text-align:center;flex-shrink:0;min-width:70px">
+              <div class="stat-value ${((stats.rv||{}).health||{}).status === 'healthy' || ((stats.rv||{}).health||{}).status === 'surging' ? 'teal' : ((stats.rv||{}).health||{}).status === 'warning' ? 'dim' : 'bad'}" style="font-size:24px;line-height:1.1">${((stats.rv||{}).health||{}).status || '--'}</div>
+              <div class="stat-meta" style="font-size:9px;margin-top:2px">${((stats.rv||{}).health||{}).alerts ? ((stats.rv||{}).health||{}).alerts.length : 0} alerts</div>
+            </div>
+            <div style="flex:1;min-width:0">
+              ${(() => {
+                const h = (stats.rv||{}).health || {};
+                const g = h.green || 0, a = h.amber || 0, r = h.red || 0;
+                const t = g+a+r;
+                var deltaStr = '';
+                const prev = prevHealthRef.current;
+                if (prev && t > 0) {
+                  const dg = g - prev.green, da = a - prev.amber, dr = r - prev.red;
+                  if (dg || da || dr) deltaStr = (dg>0?"+":"") + dg + "g " + (da>0?"+":"") + da + "a " + (dr>0?"+":"") + dr + "r";
+                }
+                if (t > 0) prevHealthRef.current = {green: g, amber: a, red: r};
+
+                if (t > 0) return html`
+                  <div class="cpl-health-bar" style="margin-bottom:5px">
+                    ${g>0?html`<span class="cpl-health-seg cpl-health-green${healthFilter==='green'?' cpl-health-active':healthFilter?' cpl-health-dim':''}" style="flex:${g};cursor:pointer" title="${g} healthy - click to filter" onclick=${()=>setHealthFilter(healthFilter==='green'?null:'green')}>${g}</span>`:''}
+                    ${a>0?html`<span class="cpl-health-seg cpl-health-amber${healthFilter==='amber'?' cpl-health-active':healthFilter?' cpl-health-dim':''}" style="flex:${a};cursor:pointer" title="${a} at-risk - click to filter" onclick=${()=>setHealthFilter(healthFilter==='amber'?null:'amber')}>${a}</span>`:''}
+                    ${r>0?html`<span class="cpl-health-seg cpl-health-red${healthFilter==='red'?' cpl-health-active':healthFilter?' cpl-health-dim':''}" style="flex:${r};cursor:pointer" title="${r} critical - click to filter" onclick=${()=>setHealthFilter(healthFilter==='red'?null:'red')}>${r}</span>`:''}
+                  </div>
+                  <div style="display:flex;justify-content:space-between;font-family:var(--font-mono);font-size:9px;color:var(--empire-mist)">
+                    <span>${g}g · ${a}a · ${r}r</span>
+                    <span>${deltaStr?html`<span style="color:var(--empire-mist);margin-right:8px">${deltaStr}</span>`:''}${t} lanes</span>
+                  </div>`;
+                return html`<div style="font-family:var(--font-mono);font-size:10px;color:var(--empire-fog);padding:4px 0">${h.pct_change != null ? h.pct_change + '% vs 7d avg' : ''} ${t} lanes tracked</div>`;
+              })()}
+            </div>
+          </div>
         </div>
         <div class="stat-card">
           <div class="stat-label">Lanes Active</div>
@@ -6534,6 +6906,473 @@ function Affiliates() {
   `;
 }
 
+
+
+// -- CPL PRICING + ROI CALCULATOR --------------------------------------------
+const CplPricing = () => {
+  const [lanes, setLanes] = React.useState(null);
+  const [loading, setLoading] = React.useState(true);
+  const [reloading, setReloading] = React.useState(false);
+  const [error, setError] = React.useState(null);
+  const [modelFilter, setModelFilter] = React.useState('all');
+  const [serviceOnly, setServiceOnly] = React.useState(false);
+  const [laneSearch, setLaneSearch] = React.useState('');
+  const [page, setPage] = React.useState(1);
+  const [tab, setTab] = React.useState('lanes');
+  const perPage = 12;
+  // ROI calculator state
+  const [roiNiche, setRoiNiche] = React.useState('Roofing Restoration');
+  const [roiVolume, setRoiVolume] = React.useState(100);
+  const [roiSellPrice, setRoiSellPrice] = React.useState('');
+  const [roiResult, setRoiResult] = React.useState(null);
+  const [roiLoading, setRoiLoading] = React.useState(false);
+  const [autoRefresh, setAutoRefresh] = React.useState(false);
+  const [lastRefreshed, setLastRefreshed] = React.useState(null);
+  const [cmpNicheFilter, setCmpNicheFilter] = React.useState(null);
+  const [nicheSearch, setNicheSearch] = React.useState('');
+
+  // Initial data fetch
+  const prepareLaneData = (lanes) => lanes.map(l => {
+    if (!l.cpl_available) {
+      const ppc_ready = l.ppc_ready === true;
+  return { ...l, ppc_ready, cpl_low: null, cpl_high: null, cpl_ppc_low: null, cpl_ppc_high: null,
+        sell_price_low: null, sell_price_high: null, margin_pct: null, annual_revenue: null,
+        roi_pct: null, monthly_revenue: null, monthly_acq_cost: null, breakeven: null };
+    }
+    const cpl = l.cpl || {};
+    const ppl = cpl.ppl || {}; const ppc = cpl.ppc || {};
+    const roi = l.roi || {};
+    const suggested = l.suggested_pricing || {};
+    const sellPrice = roi.sell_price_per_lead || suggested.suggested_sell_price || null;
+    const monthRev = roi.monthly_revenue ? Math.round(roi.monthly_revenue) : null;
+    const monthAcq = roi.monthly_acquisition_cost ? Math.round(roi.monthly_acquisition_cost) : null;
+    const annualRev = roi.monthly_revenue ? Math.round(roi.monthly_revenue * 12) : null;
+    const marginPct = suggested.actual_margin_pct != null ? suggested.actual_margin_pct :
+      (roi.gross_margin != null && monthRev ? Math.round((roi.gross_margin / monthRev) * 100 * 10) / 10 : null);
+    return { ...l,
+      cpl_low: ppl.low, cpl_high: ppl.high,
+      cpl_ppc_low: ppc.low, cpl_ppc_high: ppc.high,
+      sell_price_low: sellPrice, sell_price_high: sellPrice ? Math.round(sellPrice * 1.3) : null,
+      annual_revenue: annualRev, roi_pct: roi.roi_percentage,
+      monthly_revenue: monthRev, monthly_acq_cost: monthAcq,
+      breakeven: roi.breakeven_volume, margin_pct: marginPct
+    };
+  });
+
+  const modelToParam = (mf) => mf === 'all' || mf === 'service' ? 'both' : mf;
+
+  const fetchLanes = (model) => {
+    const m = model || modelToParam(modelFilter);
+    setReloading(true);
+    apiFetch('/api/v1/cpl/lanes?model=' + m + '&monthly_volume=100')
+      .then(data => { setLanes(prepareLaneData(data.lanes || data)); setLoading(false); setReloading(false); setLastRefreshed(new Date()); })
+      .catch(e => { setError(e.message || 'Failed to load CPL data'); setLoading(false); setReloading(false); });
+  };
+
+  React.useEffect(() => {
+    fetchLanes(modelToParam(modelFilter));
+    setPage(1);
+  }, [modelFilter]);
+
+
+  // Auto-refresh: poll every 30 seconds when toggled on
+  React.useEffect(() => {
+    if (!autoRefresh) return;
+    const interval = setInterval(() => {
+      setReloading(true);
+      apiFetch('/api/v1/cpl/lanes?model=' + modelToParam(modelFilter) + '&monthly_volume=100')
+        .then(data => { setLanes(prepareLaneData(data.lanes || data)); setReloading(false); setLastRefreshed(new Date()); })
+        .catch(e => { setReloading(false); /* silent refresh failure */ });
+    }, 30000);
+    return () => clearInterval(interval);
+  }, [autoRefresh, modelFilter]);
+    setReloading(true);
+    apiFetch('/api/v1/cpl/lanes?model=both&monthly_volume=100')
+      .then(data => { setLanes(prepareLaneData(data.lanes || data)); setLoading(false); setReloading(false); setLastRefreshed(new Date()); })
+      .catch(e => { setError(e.message || 'Failed to load CPL data'); setLoading(false); setReloading(false); });
+  }, []);
+
+  if (loading) return html`<div class="cpl-loading">Loading CPL pricing...</div>`;
+  const reloadingIndicator = reloading ? html`<div class="cpl-reloading-bar"><div class="cpl-reloading-bar-inner"></div></div>` : html``;
+  if (error) return html`<div class="cpl-error">${error}</div>`;
+  if (!lanes) return html`<div class="cpl-loading">No data</div>`;
+
+  const filtered = lanes.filter(l => {
+    const matchesModel = serviceOnly ? !l.cpl_available : modelFilter === 'all' ? true : modelFilter === 'service' ? !l.cpl_available : l.best_model === modelFilter;
+    const matchesSearch = !laneSearch || l.niche.toLowerCase().includes(laneSearch.toLowerCase());
+    return matchesModel && matchesSearch;
+  });
+  const totalPages = Math.ceil(filtered.length / perPage);
+  const pg = Math.min(page, Math.max(1, totalPages));
+  const pageLanes = filtered.slice((pg - 1) * perPage, pg * perPage);
+
+  const summary = (() => {
+    const priced = lanes.filter(l => l.cpl_available);
+    if (!priced.length) return { total: lanes.length, priced: 0, avgLow: 0, avgHigh: 0, avgMargin: 0 };
+    return {
+      total: lanes.length,
+      priced: priced.length,
+      avgLow: Math.round(priced.reduce((s, l) => s + l.cpl_low, 0) / priced.length),
+      avgHigh: Math.round(priced.reduce((s, l) => s + l.cpl_high, 0) / priced.length),
+      avgMargin: Math.round(priced.reduce((s, l) => s + (l.margin_pct || 0), 0) / priced.length * 10) / 10,
+      totalMRR: priced.reduce((s, l) => s + (l.monthly_revenue || 0), 0),
+      avgROI: Math.round(priced.reduce((s, l) => s + (l.roi_pct || 0), 0) / priced.length * 10) / 10,
+      totalAcqCost: priced.reduce((s, l) => s + (l.monthly_acq_cost || 0), 0),
+      healthGreen: priced.filter(l => l.roi_pct != null && l.roi_pct > 0 && (l.margin_pct != null && l.margin_pct > 50) && (l.breakeven != null && l.breakeven <= 200)).length,
+      healthAmber: priced.filter(l => l.roi_pct != null && l.roi_pct > 0 && !((l.margin_pct != null && l.margin_pct > 50) && (l.breakeven != null && l.breakeven <= 200))).length,
+      healthRed: priced.filter(l => l.roi_pct != null && l.roi_pct <= 0).length,
+      healthNone: priced.filter(l => l.roi_pct == null).length,
+      ppcReady: lanes.filter(l => l.ppc_ready === true).length,
+    };
+  })();
+
+  const marginClass = (pct) => pct >= 50 ? 'high' : pct >= 25 ? 'mid' : 'low';
+  const modelClass = (m) => m === 'ppl' ? 'ppl' : m === 'ppc' ? 'ppc' : 'service';
+
+  const runRoi = () => {
+    setRoiLoading(true);
+    setRoiResult(null);
+    const sp = roiSellPrice ? parseFloat(roiSellPrice) : null;
+    const params = new URLSearchParams({ niche: roiNiche, monthly_volume: String(roiVolume) });
+    if (sp) params.set('sell_price', String(sp));
+    apiFetch('/api/v1/cpl/roi/' + encodeURIComponent(roiNiche) + '?' + params.toString())
+      .then(data => { setRoiResult(data); setRoiLoading(false); })
+      .catch(e => { setError(e.message); setRoiLoading(false); });
+  };
+
+  const roiClass = (v) => v > 0 ? 'profit' : v < 0 ? 'loss' : 'neutral';
+
+  // -- CSV export ---------------------------------------------------------
+    // Compute health label for a lane (matches Health indicator logic)
+  const healthLabel = (l) => {
+    if (!l.cpl_available || l.roi_pct == null) return 'N/A';
+    if (l.roi_pct > 0 && (l.margin_pct != null && l.margin_pct > 50) && (l.breakeven != null && l.breakeven <= 200)) return 'Healthy';
+    if (l.roi_pct > 0) return 'At Risk';
+    return 'Unprofitable';
+  };
+
+    const exportCSV = () => {
+    // Formula reference for predictive revenue columns:
+    //   ROI %  = ((Monthly Revenue - Monthly Acq Cost) / Monthly Acq Cost) x 100
+    //   Mo. Rev = projected monthly revenue at estimated conversion rate & sell price
+    //   Acq Cost = CPL x monthly volume (what it costs to acquire leads per month)
+    //   BE Vol   = Breakeven volume = Monthly Acq Cost / (Sell Price - CPL)
+    //   Health  = Green (ROI>0% & margin>50% & BE<=200) | Amber (ROI>0%, thin) | Red (ROI<=0%)
+    //
+    const rows = [
+      ['# Formula Reference:'],
+      ['# ROI %  = ((Monthly Revenue - Monthly Acq Cost) / Monthly Acq Cost) * 100'],
+      ['# Mo. Rev = Monthly revenue at estimated conversion rate & sell price'],
+      ['# Acq Cost = CPL * monthly volume — cost to acquire leads per month'],
+      ['# BE Vol   = Breakeven volume = Acq Cost / (Sell Price - CPL)'],
+      ['# Health  = Green (ROI > 0% & margin > 50% & BE <= 200) | Amber (ROI > 0%, thin margins or high BE) | Red (ROI <= 0%)'],
+      ['','','','','','','','','','','','','','','',''],
+      ['Lane','Niche','Sub-Niche','CPL Low','CPL High','Model','Sell Price Low','Sell Price High','Margin %','Annual Revenue','ROI %','Mo. Rev','Acq Cost','BE Vol','Health','CPL Available','PPC Ready']];
+    lanes.forEach(l => {
+      rows.push([
+        'L'+String(l.lane_id).padStart(2,'0'),
+        l.niche,
+        l.sub_niche,
+        l.cpl_available ? (modelFilter === 'ppc' && l.cpl_ppc_low != null ? String(l.cpl_ppc_low) : String(l.cpl_low)) : 'N/A',
+        l.cpl_available ? (modelFilter === 'ppc' && l.cpl_ppc_high != null ? String(l.cpl_ppc_high) : String(l.cpl_high)) : 'N/A',
+        l.best_model || 'n/a',
+        l.cpl_available ? String(l.sell_price_low) : 'N/A',
+        l.cpl_available ? String(l.sell_price_high) : 'N/A',
+        l.cpl_available ? String(l.margin_pct) : 'N/A',
+        l.cpl_available ? String(l.annual_revenue || 0) : 'N/A',
+        l.cpl_available ? (l.roi_pct != null ? l.roi_pct + '%' : 'N/A') : 'N/A',
+        l.cpl_available ? String(l.monthly_revenue || 0) : 'N/A',
+        l.cpl_available ? String(l.monthly_acq_cost || 0) : 'N/A',
+        l.cpl_available ? (l.breakeven != null ? String(l.breakeven) : 'N/A') : 'N/A',
+        l.cpl_available ? healthLabel(l) : 'N/A',
+        l.cpl_available ? 'Yes' : 'No',
+        l.ppc_ready ? 'Yes' : 'No'
+      ]);
+    });
+    // Aggregate summary row
+    const pricedLanes = lanes.filter(l => l.cpl_available);
+    const n = pricedLanes.length;
+    const totalMRR = pricedLanes.reduce(function(s, l) { return s + (l.monthly_revenue || 0); }, 0);
+    const avgAcq = n > 0 ? Math.round(pricedLanes.reduce(function(s, l) { return s + (l.monthly_acq_cost || 0); }, 0) / n) : 0;
+    var g = 0, a = 0, r = 0;
+    pricedLanes.forEach(function(l) {
+      if (l.roi_pct == null) return;
+      if (l.roi_pct > 0 && l.margin_pct > 50 && l.breakeven <= 200) g++;
+      else if (l.roi_pct > 0) a++;
+      else r++;
+    });
+    rows.push(['','','','','','','','','','','','','','','','','']);
+    rows.push(['TOTALS','','','','','','','','','','','$'+totalMRR,'$'+avgAcq,'','G:'+g+' A:'+a+' R:'+r,'','']);
+
+    const csv = rows.map(r => r.map(c => '"' + String(c).replace(/"/g,'""') + '"').join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'empire_cpl_pricing_' + new Date().toISOString().split('T')[0] + '.csv';
+    document.body.appendChild(a); a.click();
+    document.body.removeChild(a); URL.revokeObjectURL(url);
+  };
+
+  // -- PDF / Print --------------------------------------------------------
+  const exportPDF = () => { window.print(); };
+
+  return html`
+    <div class="section-h">
+      <div class="cpl-header">
+        <h2 style="margin:0;font-size:16px;font-weight:600">CPL Pricing</h2>
+        <div class="cpl-export-bar">
+          <button class="cpl-export-btn" onClick=${exportCSV} title="Download CSV">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            CSV
+          </button>
+          <button class="cpl-export-btn" onClick=${exportPDF} title="Print / Save as PDF">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+            PDF
+          </button>
+          <button class="cpl-refresh-btn ${autoRefresh ? 'active' : ''}" onClick=${() => setAutoRefresh(!autoRefresh)} title="Toggle auto-refresh (30s)">
+            <span class="cpl-refresh-dot"></span>
+            <span class="cpl-refresh-label">${autoRefresh ? 'LIVE' : 'AUTO'}</span>
+          </button>
+        </div>
+        <div class="cpl-tabs">
+          <button class="cpl-tab ${tab === 'lanes' ? 'active' : ''}" onClick=${() => setTab('lanes')}>Lane Pricing</button>
+          <button class="cpl-tab ${tab === 'roi' ? 'active' : ''}" onClick=${() => setTab('roi')}>ROI Calculator</button>
+          <button class="cpl-tab ${tab === 'compare' ? 'active' : ''}" onClick=${() => setTab('compare')}>PPL vs PPC</button>
+        </div>
+      </div>
+
+      ${tab === 'lanes' ? html`
+        <div class="cpl-summary">
+          <div class="cpl-card"><div class="cpl-card-label">Total Lanes</div><div class="cpl-card-value">${summary.total}</div></div>
+          <div class="cpl-card"><div class="cpl-card-label">PPC Ready</div><div class="cpl-card-value positive" style="font-size:14px">${summary.ppcReady} lane${summary.ppcReady !== 1 ? 's' : ''} <span style="font-size:9px;color:var(--signal-teal);font-weight:400">live</span></div></div>
+          <div class="cpl-card"><div class="cpl-card-label">Priced Lanes</div><div class="cpl-card-value">${summary.priced} / ${summary.total}</div></div>
+          <div class="cpl-card"><div class="cpl-card-label">Avg CPL Range</div><div class="cpl-card-value">$${summary.avgLow} - $${summary.avgHigh}</div></div>
+          <div class="cpl-card"><div class="cpl-card-label">Avg Margin</div><div class="cpl-card-value ${summary.avgMargin >= 50 ? 'positive' : 'warning'}">${summary.avgMargin}%</div></div>
+          <div class="cpl-card"><div class="cpl-card-label">Proj. MRR</div><div class="cpl-card-value positive">$${summary.totalMRR.toLocaleString()}</div></div>
+          <div class="cpl-card"><div class="cpl-card-label">Avg ROI</div><div class="cpl-card-value ${summary.avgROI >= 0 ? 'positive' : 'warning'}">${summary.avgROI}%</div></div>
+          <div class="cpl-card"><div class="cpl-card-label">Acq Cost</div><div class="cpl-card-value warning">$${summary.totalAcqCost.toLocaleString()}</div></div>
+          <div class="cpl-card cpl-health-card"><div class="cpl-card-label">Revenue Health</div><div class="cpl-health-bar">${summary.healthGreen > 0 ? html`<span class="cpl-health-seg cpl-health-green" style="flex:${summary.healthGreen}" title="${summary.healthGreen} healthy lanes">${summary.healthGreen}</span>` : ''}${summary.healthAmber > 0 ? html`<span class="cpl-health-seg cpl-health-amber" style="flex:${summary.healthAmber}" title="${summary.healthAmber} at-risk lanes">${summary.healthAmber}</span>` : ''}${summary.healthRed > 0 ? html`<span class="cpl-health-seg cpl-health-red" style="flex:${summary.healthRed}" title="${summary.healthRed} unprofitable lanes">${summary.healthRed}</span>` : ''}</div><div class="cpl-health-meta">${summary.healthGreen + summary.healthAmber + summary.healthRed > 0 ? html`<span>${summary.healthGreen}g ${summary.healthAmber}a ${summary.healthRed}r · ${summary.healthGreen + summary.healthAmber + summary.healthRed} total</span>` : html`<span style="color:var(--empire-fog)">No health data</span>`}${summary.healthNone > 0 ? html`<span style="color:var(--empire-fog);margin-left:6px">${summary.healthNone} unpriced</span>` : ''}</div></div>
+        </div>
+
+        ${reloadingIndicator}
+        ${!reloading && lastRefreshed ? html`<div class="cpl-last-refreshed-row"><span class="cpl-last-refreshed">Last refreshed: ${(() => { const d = lastRefreshed; const pad = n => String(n).padStart(2,'0'); return pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds()); })()}</span></div>` : ''}
+        <div class="cpl-nav">
+          <button class="cpl-nav-btn ${modelFilter === 'all' ? 'active' : ''}" onClick=${() => { setModelFilter('all'); setPage(1); }}>All</button>
+          <button class="cpl-nav-btn ${modelFilter === 'ppl' ? 'active' : ''}" onClick=${() => { setModelFilter('ppl'); setPage(1); }}>PPL</button>
+          <button class="cpl-nav-btn ${modelFilter === 'ppc' ? 'active' : ''}" onClick=${() => { setModelFilter('ppc'); setPage(1); }}>PPC</button>
+          <button class="cpl-nav-btn ${modelFilter === 'service' ? 'active' : ''}" onClick=${() => { setModelFilter('service'); setPage(1); }}>Service</button>
+          <button class="cpl-nav-btn ${serviceOnly ? 'active' : ''}" onClick=${() => { setServiceOnly(!serviceOnly); setPage(1); window.scrollTo({ top: 0, behavior: 'smooth' }); }}>Service Only</button>
+          <input class="cmp-niche-search" type="search" placeholder="Filter by niche..." value=${laneSearch} onChange=${e => { setLaneSearch(e.target.value); setPage(1); }} style="flex:0 1 160px;margin:0 4px" />
+          <span style="flex:1;text-align:right;font-size:10px;color:var(--empire-fog);padding:5px 0">${filtered.length} lanes</span>
+        </div>
+        ${serviceOnly ? html\ : }
+
+        <table class="cpl-table">
+          <thead><tr>
+            <th>Lane</th><th>Niche</th><th>Sub-Niche</th><th>CPL Lo</th><th>CPL Hi</th>
+            <th>Model</th><th>Sell Price</th><th>Margin</th><th>Annual Rev</th><th title="ROI = (Monthly Revenue − Monthly Acq Cost) ÷ Monthly Acq Cost × 100. Measures return on lead acquisition spend.">ROI</th><th title="Mo. Rev = Projected monthly revenue from this lane at the estimated conversion rate and sell price.">Mo. Rev</th><th title="Acq Cost = CPL × monthly volume. What it costs per month to acquire leads for this lane.">Acq Cost</th><th title="BE Vol = Breakeven volume = Monthly Acq Cost ÷ (Sell Price − CPL). Leads per month needed to break even.">BE Vol</th><th title="Health = composite: Green (ROI > 0% & margin > 50% & BE ≤ 200), Amber (ROI > 0% but margin ≤ 50% or BE > 200), Red (ROI ≤ 0%)">Health</th>
+          </tr></thead>
+          ${reloading ? html`<tbody class="cpl-skeleton">${[1,2,3,4,5,6,7,8].map(i => html`<tr><td colspan="15"><div class="cpl-skel-bar"></div></td></tr>`)}</tbody>` : html`<tbody>
+            ${pageLanes.map(l => html`
+              <tr class="${l.cpl_available ? '' : 'seo-row'}">
+                <td style="color:var(--empire-fog);font-family:var(--font-mono);font-size:10px">L${String(l.lane_id).padStart(2,'0')}</td>
+                <td>${l.niche}</td>
+                <td>${l.sub_niche}</td>
+                <td style="font-family:var(--font-mono);font-size:10px">${l.cpl_available ? (modelFilter === 'ppc' && l.cpl_ppc_low != null ? '$' + l.cpl_ppc_low : '$' + l.cpl_low) : '-'}</td>
+                <td style="font-family:var(--font-mono);font-size:10px">${l.cpl_available ? (modelFilter === 'ppc' && l.cpl_ppc_high != null ? '$' + l.cpl_ppc_high : '$' + l.cpl_high) : '-'}</td>
+                <td><span class="cpl-badge ${modelClass(l.best_model)}">${l.best_model || 'n/a'}</span>${l.ppc_ready ? html`<span class="cpl-badge ppc-live" title="Live Pay-Per-Call enabled · Storm-triggered voice dispatch active">☎ LIVE</span>` : ''}</td>
+                <td style="font-family:var(--font-mono);font-size:10px">${l.cpl_available ? '$' + l.sell_price_low + ' - $' + l.sell_price_high : '-'}</td>
+                <td>
+                  ${l.cpl_available ? html`
+                    <span class="cpl-margin-bar ${marginClass(l.margin_pct)}" style="width:${Math.min(l.margin_pct, 100)}%"></span>
+                    ${l.margin_pct}%
+                  ` : '-'}
+                </td>
+                <td style="font-family:var(--font-mono);font-size:10px">${l.cpl_available ? '$' + (l.annual_revenue || 0).toLocaleString() : '-'}</td>
+                <td style="font-family:var(--font-mono);font-size:10px">${l.cpl_available ? (l.roi_pct != null ? l.roi_pct + '%' : '-') : '-'}</td>
+                <td style="font-family:var(--font-mono);font-size:10px">${l.cpl_available && l.monthly_revenue ? '$' + l.monthly_revenue.toLocaleString() : '-'}</td>
+                <td style="font-family:var(--font-mono);font-size:10px;color:var(--status-amber)">${l.cpl_available && l.monthly_acq_cost ? '$' + l.monthly_acq_cost.toLocaleString() : '-'}</td>
+                <td style="font-family:var(--font-mono);font-size:10px">${l.cpl_available && l.breakeven ? l.breakeven : '-'}</td>
+                <td style="text-align:center">${l.cpl_available ? 
+                  (l.roi_pct != null && l.roi_pct > 0 && (l.margin_pct != null && l.margin_pct > 50) && (l.breakeven != null && l.breakeven <= 200) ? html`<span class="hth-dot green" title="ROI ${l.roi_pct}% · Margin ${l.margin_pct}% · BE ${l.breakeven}"></span>` : 
+                  (l.roi_pct != null && l.roi_pct > 0 ? html`<span class="hth-dot amber" title="ROI ${l.roi_pct}% · Margin ${l.margin_pct != null ? l.margin_pct + '%' : 'N/A'} · BE ${l.breakeven != null ? l.breakeven : 'N/A'}"></span>` : 
+                  html`<span class="hth-dot red" title="ROI ${l.roi_pct != null ? l.roi_pct + '%' : 'N/A'} · Margin ${l.margin_pct != null ? l.margin_pct + '%' : 'N/A'} · BE ${l.breakeven != null ? l.breakeven : 'N/A'}"></span>`)) : '—'}</td>
+              </tr>
+            `)}
+          </tbody>`}
+        </table>
+
+        ${totalPages > 1 ? html`
+          <div class="cpl-pagination">
+            <button disabled=${pg <= 1} onClick=${() => setPage(pg - 1)}>Prev</button>
+            <span>Page ${pg} of ${totalPages}</span>
+            <button disabled=${pg >= totalPages} onClick=${() => setPage(pg + 1)}>Next</button>
+          </div>
+        ` : ''}
+      ` : html`
+        <div class="roi-form">
+          <div class="roi-form-row">
+            <div class="roi-form-group">
+              <label>Niche</label>
+              <select value=${roiNiche} onChange=${e => setRoiNiche(e.target.value)}>
+                ${[...new Set(lanes.map(l => l.niche))].sort().map(n => html`<option value="${n}">${n}</option>`)}
+              </select>
+            </div>
+            <div class="roi-form-group">
+              <label>Monthly Volume (leads)</label>
+              <input type="number" min="1" max="10000" value=${roiVolume} onChange=${e => setRoiVolume(parseInt(e.target.value) || 100)} />
+            </div>
+            <div class="roi-form-group">
+              <label>Sell Price / Lead (optional - blank uses default 2.5x CPL)</label>
+              <input type="number" min="1" step="10" placeholder="Auto (2.5x CPL)" value=${roiSellPrice} onChange=${e => setRoiSellPrice(e.target.value)} />
+            </div>
+            <button class="roi-form-apply" disabled=${roiLoading} onClick=${runRoi}>
+              ${roiLoading ? 'Calculating...' : 'Calculate ROI'}
+            </button>
+          </div>
+        </div>
+
+        ${roiResult ? html`
+          <div class="roi-results">
+            <div class="roi-card">
+              <div class="roi-card-label">Monthly Revenue</div>
+              <div class="roi-card-value ${roiClass(roiResult.monthly_revenue - roiResult.monthly_acquisition_cost)}">
+                $${(roiResult.monthly_revenue || 0).toLocaleString()}
+              </div>
+            </div>
+            <div class="roi-card">
+              <div class="roi-card-label">Acquisition Cost</div>
+              <div class="roi-card-value">$${(roiResult.monthly_acquisition_cost || 0).toLocaleString()}</div>
+            </div>
+            <div class="roi-card">
+              <div class="roi-card-label">Gross Profit</div>
+              <div class="roi-card-value ${roiClass(roiResult.monthly_revenue - roiResult.monthly_acquisition_cost)}">
+                $${((roiResult.monthly_revenue || 0) - (roiResult.monthly_acquisition_cost || 0)).toLocaleString()}
+              </div>
+            </div>
+            <div class="roi-card">
+              <div class="roi-card-label">Margin</div>
+              <div class="roi-card-value ${roiClass(roiResult.margin_pct)}">${roiResult.margin_pct}%</div>
+            </div>
+            <div class="roi-card">
+              <div class="roi-card-label">ROI</div>
+              <div class="roi-card-value ${roiClass(roiResult.roi_percentage)}">${roiResult.roi_percentage}%</div>
+            </div>
+            <div class="roi-card">
+              <div class="roi-card-label">Breakeven Volume</div>
+              <div class="roi-card-value">${roiResult.breakeven_volume || 'N/A'}</div>
+            </div>
+          </div>
+        ` : ''}
+
+        ${roiResult ? html`
+          <h3 style="font-size:12px;font-weight:600;margin:20px 0 12px;color:var(--empire-white)">Per-Lane Projection (at ${roiVolume} leads/mo)</h3>
+          <div class="roi-table-wrap">
+            <table class="roi-table">
+              <thead><tr>
+                <th>Lane</th><th>Niche</th><th>Model</th><th>CPL</th><th>Acquisition</th><th>Revenue</th><th>Profit</th><th>Margin</th>
+              </tr></thead>
+              <tbody>
+                ${lanes.filter(l => l.cpl_available && l.niche === roiNiche).map(l => {
+                  const midCpl = (l.cpl_low + l.cpl_high) / 2;
+                  const acq = Math.round(midCpl * roiVolume);
+                  const nicheLanes = lanes.filter(x => x.cpl_available && x.niche === roiNiche);
+                  const rev = nicheLanes.length ? Math.round((roiResult.monthly_revenue || 0) / nicheLanes.length) : 0;
+                  const profit = rev - acq;
+                  const margin = rev > 0 ? Math.round((profit / rev) * 100) : 0;
+                  return html`
+                    <tr>
+                      <td style="font-family:var(--font-mono);font-size:10px;color:var(--empire-fog)">L${String(l.lane_id).padStart(2,'0')}</td>
+                      <td>${l.sub_niche}</td>
+                      <td><span class="cpl-badge ${modelClass(l.best_model)}">${l.best_model || 'n/a'}</span>${l.ppc_ready ? html`<span class="cpl-badge ppc-live" title="Live Pay-Per-Call enabled">☎ LIVE</span>` : ''}</td>
+                      <td style="font-family:var(--font-mono)">$${l.cpl_low}-$${l.cpl_high}</td>
+                      <td style="font-family:var(--font-mono)">$${acq.toLocaleString()}</td>
+                      <td style="font-family:var(--font-mono)" class="pos">$${rev.toLocaleString()}</td>
+                      <td style="font-family:var(--font-mono)" class="${profit >= 0 ? 'pos' : 'neg'}">$${profit.toLocaleString()}</td>
+                      <td class="${margin >= 30 ? 'pos' : 'neg'}">${margin}%</td>
+                    </tr>
+                  `;
+                })}
+              </tbody>
+            </table>
+          </div>
+
+      ${tab === 'compare' ? html`
+        <div class="cmp-intro">Comparing <strong>PPL</strong> (Pay Per Lead) vs <strong>PPC</strong> (Pay Per Click) pricing models side-by-side per lane.</div>
+
+        <div class="cmp-niche-filter">
+          <input class="cmp-niche-search" type="text" placeholder="Search niche..." value=${nicheSearch} onChange=${e => setNicheSearch(e.target.value)} />
+          <button class="cmp-niche-btn ${cmpNicheFilter === null && nicheSearch === '' ? 'active' : ''}" onClick=${() => { setCmpNicheFilter(null); setNicheSearch(''); }}>All</button>
+          ${[...new Set(lanes.filter(l => l.cpl_available).map(l => l.niche))].sort().filter(n => n.toLowerCase().includes(nicheSearch.toLowerCase())).map(n => html`
+            <button class="cmp-niche-btn ${cmpNicheFilter === n ? 'active' : ''}" onClick=${() => setCmpNicheFilter(n)}>${n}</button>
+          `)}
+        </div>
+
+        <div class="cmp-summary">
+          <div class="cmp-card"><div class="cmp-card-label">Total Lanes</div><div class="cmp-card-value">${cmpNicheFilter ? lanes.filter(l => l.niche === cmpNicheFilter).length : lanes.length}</div></div>
+          <div class="cmp-card"><div class="cmp-card-label">Best PPL</div><div class="cmp-card-value teal">${(() => { const pplLanes = cmpNicheFilter ? lanes.filter(l => l.niche === cmpNicheFilter) : lanes; const pplLowest = pplLanes.filter(l => l.cpl_available && l.cpl && l.cpl.ppl && l.cpl.ppl.low != null).map(l => l.cpl.ppl.low); return pplLowest.length ? '$' + Math.min(...pplLowest) : '-' })()}</div></div>
+          <div class="cmp-card"><div class="cmp-card-label">Best PPC</div><div class="cmp-card-value gold">${(() => { const ppcLanes = cmpNicheFilter ? lanes.filter(l => l.niche === cmpNicheFilter) : lanes; const ppcLowest = ppcLanes.filter(l => l.cpl_available && l.cpl && l.cpl.ppc && l.cpl.ppc.low != null).map(l => l.cpl.ppc.low); return ppcLowest.length ? '$' + Math.min(...ppcLowest) : '-' })()}</div></div>
+          <div class="cmp-card"><div class="cmp-card-label">Lanes with Both</div><div class="cmp-card-value neutral">${(cmpNicheFilter ? lanes.filter(l => l.niche === cmpNicheFilter) : lanes).filter(l => l.cpl_available && l.cpl && l.cpl.ppl && l.cpl.ppc).length}</div></div>
+        </div>
+
+        <table class="cmp-table">
+          <thead><tr>
+            <th rowspan="2">Lane</th>
+            <th rowspan="2">Niche</th>
+            <th colspan="3" style="text-align:center;border-bottom:1px solid var(--signal-teal);color:var(--signal-teal)">PPL</th>
+            <th colspan="3" style="text-align:center;border-bottom:1px solid var(--signal-gold);color:var(--signal-gold)">PPC</th>
+            <th rowspan="2">Best</th>
+          </tr><tr>
+            <th style="color:var(--empire-fog)">CPL Range</th>
+            <th style="color:var(--empire-fog)">Sell Price</th>
+            <th style="color:var(--empire-fog)">Margin</th>
+            <th style="color:var(--empire-fog)">CPL Range</th>
+            <th style="color:var(--empire-fog)">Sell Price</th>
+            <th style="color:var(--empire-fog)">Margin</th>
+          </tr></thead>
+          <tbody>
+            ${(cmpNicheFilter ? lanes.filter(l => l.niche === cmpNicheFilter) : lanes).map(l => {
+              if (!l.cpl_available || !l.cpl) return html\`
+                <tr class="seo-row">
+                  <td style="font-family:var(--font-mono);font-size:10px;color:var(--empire-fog)">L\${String(l.lane_id).padStart(2,'0')}</td>
+                  <td>\${l.niche}</td>
+                  <td class="cmp-model-cell" colspan="3" style="text-align:center;color:var(--empire-fog);font-size:10px">Service lane — no CPL data</td>
+                  <td class="cmp-model-cell" colspan="3" style="text-align:center;color:var(--empire-fog);font-size:10px">Service lane — no CPL data</td>
+                  <td style="text-align:center"><span class="cpl-badge service">service</span></td>
+                </tr>
+              \`;
+              const ppl = l.cpl.ppl; const ppc = l.cpl.ppc;
+              const hasPpl = ppl && ppl.low != null; const hasPpc = ppc && ppc.low != null;
+              const pplMid = hasPpl ? (ppl.low + ppl.high) / 2 : 0;
+              const ppcMid = hasPpc ? (ppc.low + ppc.high) / 2 : 0;
+              const pplPrice = hasPpl ? Math.round(pplMid * 2.5) : 0;
+              const ppcPrice = hasPpc ? Math.round(ppcMid * 2.5) : 0;
+              const pplMargin = hasPpl ? Math.round((pplPrice - pplMid) / pplPrice * 100) : 0;
+              const ppcMargin = hasPpc ? Math.round((ppcPrice - ppcMid) / ppcPrice * 100) : 0;
+              const best = hasPpl && hasPpc ? (pplMargin > ppcMargin ? 'ppl' : 'ppc') : hasPpl ? 'ppl' : hasPpc ? 'ppc' : 'none';
+              return html\`
+                <tr class="\${best === 'ppl' ? 'cmp-winner' : ''}">
+                  <td style="font-family:var(--font-mono);font-size:10px;color:var(--empire-fog)">L\${String(l.lane_id).padStart(2,'0')}</td>
+                  <td>\${l.niche}\${l.sub_niche !== l.niche ? html\` <span style="color:var(--empire-fog);font-size:9px">· \${l.sub_niche}</span>\` : ''}</td>
+                  <td class="cmp-model-cell cmp-value">\${hasPpl ? '$\${ppl.low} — $\${ppl.high}' : '-'}</td>
+                  <td class="cmp-model-cell cmp-value">\${hasPpl ? '$\${pplPrice}' : '-'}</td>
+                  <td class="cmp-model-cell cmp-value \${pplMargin >= 30 ? 'pos' : pplMargin > 0 ? '' : 'neg'}">\${hasPpl ? pplMargin + '%' : '-'}</td>
+                  <td class="cmp-model-cell cmp-value">\${hasPpc ? '$\${ppc.low} — $\${ppc.high}' : '-'}</td>
+                  <td class="cmp-model-cell cmp-value">\${hasPpc ? '$\${ppcPrice}' : '-'}</td>
+                  <td class="cmp-model-cell cmp-value \${ppcMargin >= 30 ? 'pos' : ppcMargin > 0 ? '' : 'neg'}">\${hasPpc ? ppcMargin + '%' : '-'}</td>
+                  <td style="text-align:center">\${best !== 'none' ? html\`<span class="cmp-model-label cmp-\${best}">\${best.toUpperCase()}</span>\` : '-'}</td>
+                </tr>
+              \`;
+            })}
+          </tbody>
+        </table>
+      \` : ''}
+
+        ` : ''}
+      `}
+    </div>
+  `;
+};
 function App() {
 
 
@@ -6685,6 +7524,7 @@ function App() {
             active.id === 'analytics'     ? html`<${Analytics} />` :
             active.id === 'bridge'        ? html`<${Bridge} />` :
             active.id === 'affiliates'    ? html`<${Affiliates} />` :
+            active.id === 'cpl-pricing'   ? html`<${CplPricing} />` :
             html`<${Stub} section=${active} />`
           }
         </section>
@@ -6901,6 +7741,185 @@ function TrialPipeline() {
           </div>
         ` : ''}
       </div>
+    </div>
+  `;
+}
+
+// ── QC DASHBOARD ──────────────────────────────────────────────────────
+function QC() {
+  const [events, setEvents] = useState(null);
+  const [err, setErr] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [expandedId, setExpandedId] = useState(null);
+  const [resolving, setResolving] = useState({});
+  const [severity, setSeverity] = useState('');
+  const [showResolved, setShowResolved] = useState(false);
+  const [timeRange, setTimeRange] = useState('24h');
+
+  const fetchEvents = useCallback(async () => {
+    setLoading(true);
+    setErr(null);
+    try {
+      let url = '/api/v1/qc/events?limit=100';
+      if (severity) url += '&severity=' + encodeURIComponent(severity);
+      if (!showResolved) url += '&resolved=false';
+      const since = timeRange === '7d' ? new Date(Date.now() - 7*86400000).toISOString() : timeRange === '30d' ? new Date(Date.now() - 30*86400000).toISOString() : '';
+      if (since) url += '&since=' + encodeURIComponent(since);
+      const r = await apiFetch(url).then(x => x.json());
+      if (r.ok === false) { setErr(r.error || 'API error'); setEvents([]); }
+      else { setEvents(r.events || []); }
+    } catch (e) {
+      if (e.message !== 'Unauthorized') setErr(e.message);
+      setEvents([]);
+    }
+    setLoading(false);
+  }, [severity, showResolved, timeRange]);
+
+  useEffect(() => { fetchEvents(); }, [fetchEvents]);
+
+  const resolveEvent = async (id) => {
+    setResolving(r => ({ ...r, [id]: true }));
+    try {
+      const r = await apiFetch('/api/v1/qc/events/' + id + '/resolve', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ resolved_by: 'operator' }),
+      }).then(x => x.json());
+      if (r.ok) {
+        setEvents(evts => (evts || []).map(e => e.id === id ? { ...e, resolved: true, resolved_at: r.resolved_at, resolved_by: r.resolved_by } : e));
+      }
+    } catch (e) {}
+    setResolving(r => ({ ...r, [id]: false }));
+  };
+
+  const toggleExpand = (id) => {
+    setExpandedId(prev => prev === id ? null : id);
+  };
+
+  if (err) return html`<div class="qc-error">${err}</div>`;
+
+  const totalEvents = events ? events.length : 0;
+  const unresolvedTier2 = events ? events.filter(e => e.severity === 'tier_2' && !e.resolved).length : 0;
+  const autoRemediated24h = events ? events.filter(e => e.auto_remediated).length : 0;
+  const lastSummary = events ? events.filter(e => e.category === 'daily_summary').sort((a,b) => new Date(b.created_at) - new Date(a.created_at))[0] : null;
+
+  return html`
+    <div>
+      <div class="section-h">
+        <div class="section-title">Quality <em>Control</em></div>
+        <div class="section-sub">Events · severity · resolve</div>
+      </div>
+      <div class="qc-summary-grid">
+        <div class="qc-card">
+          <div class="qc-card-label">Total Events (24h)</div>
+          <div class="qc-card-val ${totalEvents > 0 ? 'teal' : 'dim'}">${totalEvents}</div>
+          <div class="qc-card-sub">In current view</div>
+        </div>
+        <div class="qc-card">
+          <div class="qc-card-label">Unresolved Tier-2</div>
+          <div class="qc-card-val ${unresolvedTier2 > 0 ? 'amber' : 'teal'}">${unresolvedTier2}</div>
+          <div class="qc-card-sub">${unresolvedTier2 > 0 ? 'Needs your attention' : 'All clear'}</div>
+        </div>
+        <div class="qc-card">
+          <div class="qc-card-label">Auto-Remediations</div>
+          <div class="qc-card-val teal">${autoRemediated24h}</div>
+          <div class="qc-card-sub">Tier-1 auto-fixes in view</div>
+        </div>
+        <div class="qc-card">
+          <div class="qc-card-label">Last Daily Summary</div>
+          <div class="qc-card-val ${lastSummary ? 'teal' : 'dim'}">${lastSummary ? new Date(lastSummary.created_at).toLocaleDateString() : '—'}</div>
+          <div class="qc-card-sub">${lastSummary ? new Date(lastSummary.created_at).toLocaleTimeString() : 'No summary yet'}</div>
+        </div>
+      </div>
+      <div class="qc-filter-bar">
+        <div class="qc-filter-group">
+          <span class="qc-filter-label">Severity</span>
+          <select class="qc-filter-select" value=${severity} onChange=${e => setSeverity(e.target.value)}>
+            <option value="">All</option>
+            <option value="tier_1">Tier 1</option>
+            <option value="tier_2">Tier 2</option>
+            <option value="tier_3">Tier 3</option>
+          </select>
+        </div>
+        <div class="qc-filter-group">
+          <span class="qc-filter-label">Time</span>
+          <select class="qc-filter-select" value=${timeRange} onChange=${e => setTimeRange(e.target.value)}>
+            <option value="24h">Last 24h</option>
+            <option value="7d">Last 7 days</option>
+            <option value="30d">Last 30 days</option>
+          </select>
+        </div>
+        <button class=${'qc-filter-toggle ' + (showResolved ? 'active' : '')} onClick=${() => setShowResolved(r => !r)}>
+          ${showResolved ? '✓' : '○'} Show Resolved
+        </button>
+        <button class="qc-refresh-btn" onClick=${fetchEvents} disabled=${loading}>
+          ${loading ? '⟳' : '↻'} Refresh
+        </button>
+      </div>
+      ${loading ? html`<div class="qc-loading">Loading QC events…</div>` : !events || events.length === 0 ? html`<div class="qc-empty">No QC events found</div>` : html`
+        <div class="qc-table-wrap">
+          <table class="qc-table">
+            <thead>
+              <tr>
+                <th>Created</th>
+                <th>Severity</th>
+                <th>Category</th>
+                <th>Subject</th>
+                <th>Summary</th>
+                <th class="qc-check">Auto</th>
+                <th class="qc-check">TG</th>
+                <th>Resolved</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              ${events.map(e => {
+                const isExpanded = expandedId === e.id;
+                return html`
+                  <tr key=${e.id} class=${isExpanded ? 'qc-expanded' : ''} onClick=${() => toggleExpand(e.id)} style=${{cursor:'pointer'}}>
+                    <td style=${{whiteSpace:'nowrap',fontFamily:'var(--font-mono)',fontSize:'10px',color:'var(--empire-fog)'}}>${new Date(e.created_at).toLocaleString()}</td>
+                    <td><span class=${'qc-severity ' + e.severity}>${e.severity.replace('_', ' ')}</span></td>
+                    <td><span class="qc-category">${e.category || '—'}</span></td>
+                    <td><span class="qc-subject-id" title=${e.subject_id || ''}>${(e.subject_id || '—').slice(0,24)}</span></td>
+                    <td><span class="qc-summary" title=${e.summary || ''}>${e.summary || '—'}</span></td>
+                    <td class=${'qc-check ' + (e.auto_remediated ? 'yes' : 'no')}>${e.auto_remediated ? '✓' : '—'}</td>
+                    <td class=${'qc-check ' + (e.telegram_pinged ? 'yes' : 'no')}>${e.telegram_pinged ? '✓' : '—'}</td>
+                    <td>${e.resolved ? html`<span style=${{color:'var(--empire-mist)',fontSize:'10px',fontFamily:'var(--font-mono)'}}>✓ ${(e.resolved_at || '').slice(0,10)}</span>` : html`<span style=${{color:'var(--status-amber)',fontSize:'10px',fontFamily:'var(--font-mono)'}}>Pending</span>`}</td>
+                    <td>
+                      ${!e.resolved ? html`
+                        <button class="qc-resolve-btn"
+                                onClick=${(ev) => { ev.stopPropagation(); resolveEvent(e.id); }}
+                                disabled=${resolving[e.id]}>
+                          ${resolving[e.id] ? '…' : 'Resolve'}
+                        </button>
+                      ` : html`
+                        <button class="qc-resolve-btn done" disabled>Done</button>
+                      `}
+                    </td>
+                  </tr>
+                  ${isExpanded ? html`
+                    <tr key=${e.id + '-detail'}>
+                      <td colspan="9" style=${{padding:'0'}}>
+                        <div class="qc-detail-panel">
+                          <div class="qc-detail-meta">
+                            <span>Source: <strong>${e.source_agent || '—'}</strong></span>
+                            <span>Kind: <strong>${e.subject_kind || '—'}</strong></span>
+                            <span>ID: <strong>${e.subject_id || '—'}</strong></span>
+                            ${e.auto_remediated ? html`<span>Remediation: <strong>${e.remediation || 'auto'}</strong></span>` : ''}
+                            ${e.resolved ? html`<span>Resolved by: <strong>${e.resolved_by || '—'}</strong></span>` : ''}
+                          </div>
+                          <div class="qc-detail-head">Detail Context</div>
+                          <div class="qc-detail-json">${JSON.stringify(e.detail || {}, null, 2)}</div>
+                        </div>
+                      </td>
+                    </tr>
+                  ` : ''}
+                `;
+              })}
+            </tbody>
+          </table>
+        </div>
+      `}
     </div>
   `;
 }
