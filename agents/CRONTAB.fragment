@@ -20,3 +20,8 @@
 
 # 6. Backlinks monitoring — every 12 hours, on the hour
 0 */12 * * * /bin/bash /root/empire-v49/agents/backlinks/cron.sh >> /root/empire-v49/logs/agent_backlinks.log 2>&1
+
+# 7. B2B Lead Scraper — every 6 hours (Managed IT, Merchant Services, HR & Staffing)
+# Discovers B2B companies via Google Places, scrapes websites for contacts,
+# and inserts qualified leads into radar_targets for the pipeline.
+0 */6 * * * cd /root/empire-v49 && python3 -m bots.b2b_lead_scraper >> /root/empire-v49/logs/agent_b2b_lead_scraper.log 2>&1
