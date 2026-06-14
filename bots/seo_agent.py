@@ -40,9 +40,10 @@ import httpx
 
 sys.path.insert(0, "/root/empire-v49")
 
-# Lazy imports for research + content agents (avoid circular imports at module level)
+# Lazy imports for research + content + backlinks agents (avoid circular imports at module level)
 _research_agent = None
 _content_agent = None
+_backlinks_agent = None
 
 
 def _get_research_agent():
@@ -59,6 +60,15 @@ def _get_content_agent():
         from bots.content_agent import get_content_agent
         _content_agent = get_content_agent()
     return _content_agent
+
+
+def _get_backlinks_agent():
+    """Lazy import for BacklinksAgent to avoid circular imports."""
+    global _backlinks_agent
+    if _backlinks_agent is None:
+        from bots.backlinks_agent import get_backlinks_agent
+        _backlinks_agent = get_backlinks_agent()
+    return _backlinks_agent
 
 try:
     from dotenv import load_dotenv
@@ -163,7 +173,8 @@ class SEOAgent:
         self._evolution_runs = 0
         self._last_evolution: Optional[str] = None
         self._research = None  # lazy ResearchAgent
-        self._content = None  # lazy ContentAgent
+        self._content = None   # lazy ContentAgent
+        self._backlinks = None # lazy BacklinksAgent
 
     @property
     def _r(self):
@@ -176,6 +187,13 @@ class SEOAgent:
         if self._content is None:
             self._content = _get_content_agent()
         return self._content
+
+    @property
+    def _b(self):
+        """Lazy-loaded BacklinksAgent for link_authority signals."""
+        if self._backlinks is None:
+            self._backlinks = _get_backlinks_agent()
+        return self._backlinks
 
     # ── AUDIT WEBSITE ────────────────────────────────────────────────
     async def audit_site(self, url: str, niche: str = "Local SEO & HVAC") -> Dict:
@@ -454,10 +472,19 @@ Write a webpage section optimized for the target keyword. Return ONLY JSON:
         self.genome["technical_rigor"] = self._clamp(
             self.genome["technical_rigor"] + (tech_signal - 0.5) * mutation_rate
         )
-        # link_authority: no direct data source in v1; small exploratory drift
-        self.genome["link_authority"] = self._clamp(
-            self.genome["link_authority"] + random.uniform(-0.03, 0.03)
-        )
+        # link_authority: query BacklinksAgent for real backlink health signal
+        try:
+            la_report = await self._b.link_authority_report()
+            la_score = la_report.get("link_authority_score", 0.4)
+            # Blend current genome with backlinks signal (60% real data, 40% current)
+            self.genome["link_authority"] = self._clamp(
+                self.genome["link_authority"] * 0.4 + la_score * 0.6
+            )
+        except Exception:
+            # Fall back to small exploratory drift if backlinks agent unavailable
+            self.genome["link_authority"] = self._clamp(
+                self.genome["link_authority"] + random.uniform(-0.03, 0.03)
+            )
 
         self._evolution_runs += 1
         self._last_evolution = datetime.now(timezone.utc).isoformat()
@@ -716,6 +743,7 @@ Write a webpage section optimized for the target keyword. Return ONLY JSON:
             audits = sb.table("seo_audits").select("*").order("created_at", desc=True).limit(20).execute()
             keywords = sb.table("seo_keywords").select("*").order("conversion_rate", desc=True).limit(50).execute()
             content = sb.table("seo_content").select("*").order("created_at", desc=True).limit(20).execute()
+            backlinks = sb.table("seo_backlinks").select("*").limit(500).execute()
         except Exception as e:
             return {"error": str(e), "audits": [], "keywords": [], "content": []}
 
@@ -728,6 +756,10 @@ Write a webpage section optimized for the target keyword. Return ONLY JSON:
         total_conversions = sum(k.get("conversions", 0) for k in kw_data)
         total_revenue = sum(k.get("total_revenue", 0) for k in kw_data)
 
+        # Include backlinks stats
+        bl_data = backlinks.data or []
+        broken_count = sum(1 for b in bl_data if b.get("is_broken"))
+
         return {
             "stats": {
                 "audits_run": self.stats["audits_run"],
@@ -739,6 +771,8 @@ Write a webpage section optimized for the target keyword. Return ONLY JSON:
                 "total_conversions": total_conversions,
                 "total_revenue": round(total_revenue, 2),
                 "avg_conversion_rate": avg_conv,
+                "total_backlinks": len(bl_data),
+                "broken_backlinks": broken_count,
             },
             "genome": self.genome,
             "evolution_runs": self._evolution_runs,
@@ -837,7 +871,7 @@ async def run_loop(interval_hours: float = None):
                 "status": "ACTIVE",
                 "last_ping": datetime.now(timezone.utc).isoformat(),
                 "enabled": True,
-                "capabilities": ["seo", "content", "keyword_research", "audit", "research", "content_generation", "landing_page"],
+                "capabilities": ["seo", "content", "keyword_research", "audit", "research", "content_generation", "landing_page", "backlinks"],
             }, on_conflict="agent_name").execute()
         except Exception:
             pass
