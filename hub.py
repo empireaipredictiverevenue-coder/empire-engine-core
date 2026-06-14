@@ -125,6 +125,7 @@ from workers.solana_payment_engine import SolanaRevenueEngine, register_solana_r
 
 # Strategist & Analytics Agents
 from empire_strategist import StrategistAgent
+from empire_profit_margin_agent import register_profit_margin_routes
 from empire_analytics_agent import AnalyticsAgent
 
 
@@ -642,6 +643,7 @@ register_email_routes(app, email_engine, require_auth=require_auth)
 register_matching_routes(app, matcher=matcher, require_auth=require_auth, sign_token=_hub_sign_token, verify_token=_hub_verify_token, send_email=_send_email)
 register_playbook_routes(app, require_auth=require_auth, get_db=get_db)
 register_payout_routes(app, engine=payout_engine, require_auth=require_auth, require_owner=require_owner)
+register_profit_margin_routes(app, require_auth=require_auth, get_db=get_db)
 register_auth_routes(app, auth_engine=auth_engine, require_auth=require_auth)
 register_inbound_routes(app, inbound_triage, require_auth=require_auth)
 register_console_routes(app, console=console, require_auth=require_auth, get_db=get_db)
