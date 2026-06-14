@@ -26,7 +26,7 @@ signal.signal(signal.SIGINT, _handle_signal)
 
 sb = create_client(os.getenv("SUPABASE_URL"), os.getenv("SUPABASE_SERVICE_KEY"))
 
-AGENTS = ["storm_predictor", "corridor_agent", "overseer", "contractor_sniper", "hermes_controller", "agi_lane_engine", "agi_revenue", "revenue_brain", "voice_streaming_agent", "synthetic_brain", "backlinks_agent"]  # reddit_pulse parked (needs dev account)
+AGENTS = ["storm_predictor", "corridor_agent", "overseer", "contractor_sniper", "hermes_controller", "agi_lane_engine", "agi_revenue", "revenue_brain", "voice_streaming_agent", "synthetic_brain", "backlinks_agent", "b2b_lead_scraper"]  # reddit_pulse parked (needs dev account); b2b_lead_scraper added 2026-06-14
 
 def log_registry(agent, status, error=None):
     try:
