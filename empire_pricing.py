@@ -189,10 +189,13 @@ _LANE_NICHE_MAP: Dict[int, Dict[str, str]] = {
     25: {"niche": "Education", "sub_niche": "CDL/Truck Driving", "strategy": "STANDARD"},
     26: {"niche": "Education", "sub_niche": "Nursing Certifications", "strategy": "STANDARD"},
     27: {"niche": "Healthcare", "sub_niche": "Mental Health", "strategy": "HEALTH_STRIKE"},
-    28: {"niche": "Healthcare", "sub_niche": "Medical Alert Systems", "strategy": "HEALTH_STRIKE"},
-    29: {"niche": "Business Services", "sub_niche": "Managed IT", "strategy": "BIZ_STRIKE"},
-    30: {"niche": "Business Services", "sub_niche": "Merchant Services", "strategy": "BIZ_STRIKE"},
-    31: {"niche": "Business Services", "sub_niche": "HR & Staffing", "strategy": "BIZ_STRIKE"},
+    28: {"niche": "Healthcare", "sub_niche": "Medical Alert Systems", "strategy": "HEALTH_STRIKE"},    29: {"niche": "Business Services",   "sub_niche": "Managed IT", "strategy": "BIZ_STRIKE"},
+    30: {"niche": "Business Services",   "sub_niche": "Merchant Services", "strategy": "BIZ_STRIKE"},
+    31: {"niche": "Business Services",   "sub_niche": "HR & Staffing", "strategy": "BIZ_STRIKE"},
+    32: {"niche": "Financial Services",  "sub_niche": "Mortgage Refinance", "strategy": "FINANCIAL_STRIKE"},
+    33: {"niche": "Financial Services",  "sub_niche": "Debt Settlement", "strategy": "FINANCIAL_STRIKE"},
+    34: {"niche": "Home Services",       "sub_niche": "Solar Installation", "strategy": "AGGRESSIVE_STRIKE"},
+    35: {"niche": "Home Services",       "sub_niche": "Plumbing", "strategy": "UGLY_BANNER"},
 }
 
 
@@ -431,7 +434,7 @@ class CPLPricingEngine:
         Useful for the pricing page, API, and automated lane pricing strategies.
         """
         lanes = []
-        for lane_id in range(32):
+        for lane_id in range(36):
             lm = _LANE_NICHE_MAP.get(lane_id)
             if not lm:
                 continue

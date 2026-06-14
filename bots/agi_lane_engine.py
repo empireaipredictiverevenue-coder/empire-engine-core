@@ -54,7 +54,7 @@ SUPABASE_URL = os.environ.get("SUPABASE_URL", "")
 SUPABASE_KEY = os.environ.get("SUPABASE_SERVICE_KEY", "")
 OLLAMA_URL   = os.environ.get("OLLAMA_URL", "http://localhost:11434")
 INTERVAL     = int(os.environ.get("AGI_LANE_INTERVAL_SEC", "60"))
-MAX_LANES    = 32
+MAX_LANES    = 36
 
 AGENT_NAME   = "agi.lane.engine"
 AGENT_STATUS = "ACTIVE"
@@ -114,6 +114,10 @@ except ImportError:
         (29, "Business Services", "BIZ_STRIKE", "B2B Lead Gen", "inbound"),
         (30, "Business Services", "BIZ_STRIKE", "B2B Lead Gen", "inbound"),
         (31, "Business Services", "BIZ_STRIKE", "B2B Lead Gen", "inbound"),
+        (32, "Financial Services", "FINANCIAL_STRIKE", "Financial Lead Gen", "inbound"),
+        (33, "Financial Services", "FINANCIAL_STRIKE", "Financial Lead Gen", "inbound"),
+        (34, "Home Services", "AGGRESSIVE_STRIKE", "Storm Scout", "storm"),
+        (35, "Home Services", "UGLY_BANNER", "Web Auditor", "audit"),
     ]
     for lid, niche, strategy, source, trigger in _LANE_CFG:
         LANES[lid] = {"niche": niche, "strategy": strategy,
