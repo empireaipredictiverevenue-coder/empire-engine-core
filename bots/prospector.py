@@ -178,12 +178,14 @@ async def run(
 async def run_multi(
     metros: Optional[List[str]] = None,
     niches: Optional[List[str]] = None,
+    dry_run: bool = False,
 ) -> Dict[str, Any]:
     """Run prospector across multiple metros and niches.
 
     Args:
         metros: List of metro names (default: all from METROS config)
         niches: List of niches (default: all from NICHES)
+        dry_run: If True, score and report but don't write to DB.
 
     Returns:
         Summary dict with totals per metro and per niche.
@@ -200,7 +202,10 @@ async def run_multi(
         metro_found: int = 0
         for niche in niches:
             prospects: List[Dict[str, Any]] = await find_prospects(metro, niche)
-            saved: int = await save_prospects(prospects)
+            if dry_run:
+                saved: int = 0
+            else:
+                saved = await save_prospects(prospects)
             results["total_found"] += len(prospects)
             results["total_saved"] += saved
             metro_found += len(prospects)
