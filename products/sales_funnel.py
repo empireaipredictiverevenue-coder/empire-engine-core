@@ -143,6 +143,7 @@ class TrialSignup(BaseModel):
 
 class OneTimePurchase(BaseModel):
     customer_account_id: str
+    email: str = ""
     product_slug: str
     tier: str
     promo_code: str = ""
@@ -277,8 +278,8 @@ class SalesFunnelEngine:
                     subscription_id = sub_result.get("subscription_id")
 
             # Enroll in onboarding email sequence via dispatcher
-            if self.email_dispatcher and req.customer_account_id:
-                email = req.customer_account_id if "@" in req.customer_account_id else ""
+            if self.email_dispatcher:
+                email = req.email or (req.customer_account_id if "@" in req.customer_account_id else "")
                 if email:
                     try:
                         await self.email_dispatcher.enroll_onboarding(
