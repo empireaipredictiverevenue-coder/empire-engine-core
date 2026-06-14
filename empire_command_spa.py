@@ -999,6 +999,38 @@ _SPA_CSS = """
 .af-modal-metric-k{font-family:var(--font-mono);font-size:8px;color:var(--empire-fog);letter-spacing:.08em;text-transform:uppercase;margin-bottom:4px;word-break:break-word}
 .af-modal-metric-v{font-family:var(--font-mono);font-size:11px;color:var(--empire-white);word-break:break-word}
 @media (max-width:640px){.af-modal-grid{grid-template-columns:1fr}.af-modal{max-width:100%}}
+/* ── COMMAND CENTER PRO ───────────────────────────────────────── */
+.ccp-dash{padding:0 4px}
+.ccp-summary-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:14px;margin-bottom:24px}
+.ccp-summary-card{background:var(--empire-surface);border:1px solid var(--empire-border);padding:16px 18px;text-align:center;transition:border-color .15s var(--ease-snap)}
+.ccp-summary-card:hover{border-color:var(--empire-border-hi)}
+.ccp-summary-val{font-family:var(--font-display);font-weight:200;font-size:28px;color:var(--empire-white);line-height:1}
+.ccp-summary-val.teal{color:var(--signal-teal)}
+.ccp-summary-val.amber{color:var(--status-amber)}
+.ccp-summary-val.red{color:var(--status-red)}
+.ccp-summary-val.dim{color:var(--empire-mist)}
+.ccp-summary-lbl{font-family:var(--font-mono);font-size:8px;color:var(--empire-fog);letter-spacing:.14em;text-transform:uppercase;margin-top:6px}
+.ccp-product-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px}
+.ccp-product-card{background:var(--empire-surface);border:1px solid var(--empire-border);padding:16px 18px;position:relative;overflow:hidden;transition:border-color .15s var(--ease-snap)}
+.ccp-product-card:hover{border-color:var(--empire-border-hi)}
+.ccp-product-card::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,var(--signal-teal-soft),transparent)}
+.ccp-product-card.error::before{background:linear-gradient(90deg,transparent,var(--status-red),transparent)}
+.ccp-product-card.error{border-color:rgba(255,68,68,0.2)}
+.ccp-product-card.warn::before{background:linear-gradient(90deg,transparent,var(--status-amber),transparent)}
+.ccp-product-card.warn{border-color:rgba(255,184,0,0.15)}
+.ccp-product-top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;gap:8px}
+.ccp-product-name{font-weight:500;font-size:14px;color:var(--empire-white);word-break:break-word}
+.ccp-product-tier{font-family:var(--font-mono);font-size:9px;color:var(--empire-mist);letter-spacing:.08em;margin-bottom:6px}
+.ccp-product-desc{font-size:11px;color:var(--empire-silver);line-height:1.5;margin-bottom:8px}
+.ccp-product-meta{display:flex;justify-content:space-between;align-items:center;padding-top:10px;border-top:1px solid var(--empire-divider);font-family:var(--font-mono);font-size:10px}
+.ccp-product-price{color:var(--signal-teal);font-weight:600}
+.ccp-product-msg{color:var(--empire-fog);font-size:9px}
+.ccp-bdg{display:inline-flex;align-items:center;gap:5px;font-family:var(--font-mono);font-size:8px;letter-spacing:.1em;text-transform:uppercase;padding:3px 8px;border-radius:var(--radius-pill);border:1px solid;flex-shrink:0}
+.ccp-bdg.ok{color:var(--signal-teal);border-color:var(--signal-teal-soft)}
+.ccp-bdg.error{color:var(--status-red);border-color:var(--status-red)}
+.ccp-bdg.warn{color:var(--status-amber);border-color:var(--status-amber)}
+.ccp-bdg-dot{width:5px;height:5px;border-radius:50%;background:currentColor;box-shadow:0 0 5px currentColor}
+@media(max-width:768px){.ccp-summary-grid{grid-template-columns:repeat(3,1fr)}.ccp-product-grid{grid-template-columns:1fr}}
 """
 
 _SPA_JS = r"""
@@ -1030,6 +1062,7 @@ const NAV_GROUPS = [
   {
     id: 'ops', label: 'COMMAND', icon: '📡', defaultOpen: true,
     items: [
+      { id: 'command-center', label: 'Command Center', sub: 'All products · system health' },
       { id: 'pulse',         label: 'Pulse',         sub: 'Live overview' },
       { id: 'pipeline',      label: 'Pipeline',       sub: 'Email & SMS · state machine' },
       { id: 'dispatch',      label: 'Dispatch',       sub: 'Contractor matching' },
@@ -6365,6 +6398,7 @@ function App() {
             active.id === 'operators'     ? html`<${Operators} />` :
             active.id === 'governor'      ? html`<${Governor} />` :
             active.id === 'sniper-fleet'  ? html`<${SniperFleet} />` :
+            active.id === 'command-center' ? html`<${CommandCenter} />` :
             active.id === 'health-monitor' ? html`<${HealthMonitor} />` :
             active.id === 'personality'   ? html`<${Personality} />` :
             active.id === 'strategist'    ? html`<${Strategist} />` :
@@ -6375,6 +6409,80 @@ function App() {
           }
         </section>
       </main>
+    </div>
+  `;
+}
+
+function CommandCenter() {
+  const [health, setHealth] = useState(null);
+  const [loading, setLoading] = useState(true);
+  useEffect(() => {
+    apiFetch('/api/v6/suite/ccp/health')
+      .then(r => r.json())
+      .then(d => { setHealth(d); setLoading(false); })
+      .catch(() => setLoading(false));
+  }, []);
+  if (loading) return html`<div style=${{padding:'24px',color:'var(--empire-fog)',fontFamily:'var(--font-mono)',fontSize:'11px'}}>Loading Command Center…</div>`;
+  if (!health) return html`<div style=${{padding:'24px',color:'var(--status-amber)',fontFamily:'var(--font-mono)',fontSize:'11px'}}>No health data available</div>`;
+  const products = health.products || [];
+  const summary = health.summary || {};
+  const totalProducts = products.length;
+  const healthy = products.filter(p => p.status === 'ok').length;
+  const warnCount = products.filter(p => p.status === 'warn').length;
+  const downCount = products.filter(p => p.status === 'error').length;
+  const totalMRR = health.total_mrr || 0;
+  const activeSubs = health.active_subscriptions || 0;
+  return html`
+    <div class="ccp-dash">
+      <div class="section-h">
+        <div class="section-title">Command Center <em>Pro</em></div>
+        <div class="section-sub">All products · unified health</div>
+      </div>
+      <div class="ccp-summary-grid">
+        <div class="ccp-summary-card">
+          <div class="ccp-summary-val teal">${totalProducts}</div>
+          <div class="ccp-summary-lbl">Products</div>
+        </div>
+        <div class="ccp-summary-card">
+          <div class="ccp-summary-val ${healthy === totalProducts ? 'teal' : warnCount > 0 ? 'amber' : 'red'}">${healthy}</div>
+          <div class="ccp-summary-lbl">Healthy</div>
+        </div>
+        <div class="ccp-summary-card">
+          <div class="ccp-summary-val ${warnCount > 0 ? 'amber' : 'dim'}">${warnCount}</div>
+          <div class="ccp-summary-lbl">Warnings</div>
+        </div>
+        <div class="ccp-summary-card">
+          <div class="ccp-summary-val ${downCount > 0 ? 'red' : 'dim'}">${downCount}</div>
+          <div class="ccp-summary-lbl">Errors</div>
+        </div>
+        <div class="ccp-summary-card">
+          <div class="ccp-summary-val teal">$${totalMRR.toLocaleString()}</div>
+          <div class="ccp-summary-lbl">Total MRR</div>
+        </div>
+        <div class="ccp-summary-card">
+          <div class="ccp-summary-val teal">${activeSubs}</div>
+          <div class="ccp-summary-lbl">Active Subs</div>
+        </div>
+      </div>
+      <div class="ccp-product-grid">
+        ${products.map(p => html`
+          <div class="ccp-product-card ${p.status === 'error' ? 'error' : p.status === 'warn' ? 'warn' : ''}">
+            <div class="ccp-product-top">
+              <div class="ccp-product-name">${p.name || p.product || '?'}</div>
+              <span class="ccp-bdg ${p.status}">
+                <span class="ccp-bdg-dot"></span>
+                ${p.status}
+              </span>
+            </div>
+            ${p.tier ? html`<div class="ccp-product-tier">${p.tier}</div>` : ''}
+            ${p.description ? html`<div class="ccp-product-desc">${p.description}</div>` : ''}
+            <div class="ccp-product-meta">
+              ${p.monthly_price_usd ? html`<span class="ccp-product-price">$${Number(p.monthly_price_usd).toLocaleString()}/mo</span>` : ''}
+              ${p.message ? html`<span class="ccp-product-msg">${p.message}</span>` : ''}
+            </div>
+          </div>
+        `)}
+      </div>
     </div>
   `;
 }
