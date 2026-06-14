@@ -84,6 +84,7 @@ class TrialConversionEngine:
             "churn_reported": 0,
             "win_backs_sent": 0,
             "win_back_followups_sent": 0,
+            "win_backs_opted_out": 0,
         }
 
     # ── Core: find and convert expired trials ───────────────────────────
@@ -519,8 +520,15 @@ class TrialConversionEngine:
             .order("created_at", desc=False) \
             .execute()
         converted_events = r3.data or []
-        # Build set of (email, product_slug) that converted after a given timestamp
-        # We'll check per win-back below
+
+        # Build opt-out set once for efficient lookup
+        r4 = db.table("sales_events") \
+            .select("email, product_slug") \
+            .eq("event_type", "win_back_opted_out") \
+            .execute()
+        opted_out_set = set()
+        for ev in (r4.data or []):
+            opted_out_set.add((ev.get("email", ""), ev.get("product_slug", "")))
 
         sent_count = 0
         for wb in win_backs:
@@ -535,6 +543,11 @@ class TrialConversionEngine:
             # Check if followup already sent
             key = (email, product_slug)
             if key in already_followed:
+                continue
+
+            # Check if user opted out (fast set lookup, no extra DB query)
+            if key in opted_out_set:
+                log.debug(f"[trial] win-back followup skipped — {email} opted out of {product_slug}")
                 continue
 
             # Check if win_back_sent is old enough
@@ -930,14 +943,74 @@ class TrialConversionEngine:
             return {"ok": True, "email": email, "product_slug": product_slug, "variant_id": variant_id}
         return result
 
+    def _is_win_back_opted_out(self, email: str, product_slug: str) -> bool:
+        """Check if a user has opted out of win-back emails for a specific product."""
+        try:
+            db = self.get_db()
+            r = db.table("sales_events") \
+                .select("id") \
+                .eq("email", email) \
+                .eq("product_slug", product_slug) \
+                .eq("event_type", "win_back_opted_out") \
+                .limit(1) \
+                .execute()
+            if r.data:
+                return True
+        except Exception as e:
+            log.debug(f"[trial] opt-out check failed: {e}")
+        return False
+
+    def log_win_back_opt_out(self, email: str, product_slug: str, reason: str = "user_requested") -> dict:
+        """Log a win-back opt-out event for a user.
+
+        Once logged, the user will not receive any further win-back emails
+        for the given product.
+
+        Args:
+            email: User's email.
+            product_slug: Product slug.
+            reason: Opt-out reason (e.g. "user_requested", "bounced", "spam_complaint").
+
+        Returns:
+            {"ok": True/False, ...}
+        """
+        if not email or not product_slug:
+            return {"ok": False, "error": "email and product_slug are required"}
+
+        # Check if already opted out
+        if self._is_win_back_opted_out(email, product_slug):
+            return {"ok": True, "already_opted_out": True, "email": email, "product_slug": product_slug}
+
+        try:
+            db = self.get_db()
+            db.table("sales_events").insert({
+                "email": email,
+                "product_slug": product_slug,
+                "event_type": "win_back_opted_out",
+                "notes": reason[:200],
+                "created_at": datetime.now(timezone.utc).isoformat(),
+            }).execute()
+            self.stats["win_backs_opted_out"] += 1
+            log.info(f"[trial] win-back opt-out logged: {email} for {product_slug} ({reason[:80]})")
+            return {"ok": True, "email": email, "product_slug": product_slug, "reason": reason[:200]}
+        except Exception as e:
+            log.warning(f"[trial] failed to log win-back opt-out: {e}")
+            return {"ok": False, "error": str(e)}
+
     async def _send_win_back(self, email: str, product_slug: str, tier: str) -> bool:
         """Send a win-back reactivation email for a churned trial.
 
         Uses the win-back A/B variant system to select the subject line
-        and tone. Checks for existing win_back_sent event to avoid repeat sends.
+        and tone. Respects opt-out: if the user has opted out, no email is sent.
+        Checks for existing win_back_sent event to avoid repeat sends.
         Returns True if email was sent.
         """
         if not self.send_email or not email:
+            return False
+
+        # Check opt-out before sending
+        if self._is_win_back_opted_out(email, product_slug):
+            log.debug(f"[trial] win-back skipped — {email} opted out of {product_slug}")
             return False
 
         db = self.get_db()
@@ -1308,6 +1381,13 @@ class TrialConversionEngine:
             .execute()
         win_back_followups_sent = len(r_wbf.data or [])
 
+        # Fetch opt-out count
+        r_opt = db.table("sales_events") \
+            .select("id", count="exact") \
+            .eq("event_type", "win_back_opted_out") \
+            .execute()
+        win_backs_opted_out = getattr(r_opt, "count", len(r_opt.data or []))
+
         # Compute reactivation rate: churned users who later converted again
         # Build lookup: for each win_back_sent, check if there's a trial_converted
         # event (for same email+product) created AFTER the win_back_sent
@@ -1456,6 +1536,7 @@ class TrialConversionEngine:
                 "followups_sent": win_back_followups_sent,
                 "reactivations": reactivations,
                 "reactivation_rate": reactivation_rate,
+                "opted_out": win_backs_opted_out,
                 "variants": self.get_win_back_variant_stats(),
             },
             "by_product": sorted(by_product.values(), key=lambda x: x["trials"], reverse=True),

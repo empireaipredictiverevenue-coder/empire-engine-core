@@ -5940,7 +5940,11 @@ function SEOPanel() {
             <div class="tp-churn-stat">
               <div class="tp-stat-val teal">${(data.win_back_stats.reactivation_rate * 100).toFixed(1)}%</div>
               <div class="tp-stat-lbl">Reactivation Rate</div>
-            </div>
+            
+            <div class="tp-churn-stat">
+              <div class="tp-stat-val dim">${data.win_back_stats.opted_out || 0}</div>
+              <div class="tp-stat-lbl">Opted Out</div>
+            </div></div>
           </div>
         </div>
             ` : ''}
