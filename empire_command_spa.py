@@ -1493,6 +1493,7 @@ const NAV_GROUPS = [
       { id: 'trial-pipeline', label: 'Trial Pipeline', sub: 'Active · converting · churned' },
       { id: 'affiliates',   label: 'Affiliates',    sub: 'Manage · referral links · stats' },
       { id: 'cpl-pricing',  label: 'CPL Pricing',   sub: 'Per-lane margins . sell prices . benchmarks' },
+      { id: 'profit-margin', label: 'Profit Margin',  sub: 'P&L · bottlenecks · maximiser' },
     ]
   },
   {
