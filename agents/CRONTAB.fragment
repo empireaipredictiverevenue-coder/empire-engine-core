@@ -1,0 +1,19 @@
+# Empire AI · Predictive Revenue — Lead-gen & dispatch agent fleet
+# All agents read their config from agent_config; cron only triggers.
+# Live-mode agents (lead_converter, dispatch, contractor_outreach) write to outreach_log
+# and trigger real SMS / dispatch emails on each run.
+
+# 1. Scanner — every 30 min, on the hour
+*/30 * * * * /bin/bash /root/empire-v49/agents/lead_scanner/cron.sh >> /root/empire-v49/logs/agent_lead_scanner.log 2>&1
+
+# 2. Enricher — every 30 min, offset 5 min from scanner (avoids supabase contention)
+5,35 * * * * /bin/bash /root/empire-v49/agents/lead_enricher/cron.sh >> /root/empire-v49/logs/agent_lead_enricher.log 2>&1
+
+# 3. Converter — every 15 min, offset 10 min (live mode, fresh leads to push to Vonage)
+10,25,40,55 * * * * /bin/bash /root/empire-v49/agents/lead_converter/cron.sh >> /root/empire-v49/logs/agent_lead_converter.log 2>&1
+
+# 4. Dispatch — every 5 min, offset 2 min (YES replies need fast turnaround)
+2,7,12,17,22,27,32,37,42,47,52,57 * * * * /bin/bash /root/empire-v49/agents/dispatch/cron.sh >> /root/empire-v49/logs/agent_dispatch.log 2>&1
+
+# 5. Contractor outreach — every 4 hours, on the hour
+0 */4 * * * /bin/bash /root/empire-v49/agents/contractor_outreach/cron.sh >> /root/empire-v49/logs/agent_contractor_outreach.log 2>&1
