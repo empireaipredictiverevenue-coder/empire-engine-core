@@ -196,7 +196,7 @@
     '    </svg>',
     '  </button>',
     '</div>',
-    '<div id="ecw-footer">Powered by <span>Empire AI</span></div>',
+    '<div id="ecw-footer">Powered by <span>Empire AI</span> <span id="ecw-remaining"></span></div>',
   ].join("");
   document.body.appendChild(panel);
 
@@ -227,6 +227,18 @@
   closeEl.addEventListener("click", closePanel);
 
   // ── Scroll to bottom ──────────────────────────────────────────────
+  var remainingEl = document.getElementById("ecw-remaining");
+
+  function updateRemaining(count) {
+    if (count !== undefined && count <= 10) {
+      remainingEl.textContent = count + " msgs left";
+      remainingEl.style.display = "inline";
+    } else if (count !== undefined) {
+      remainingEl.textContent = "";
+      remainingEl.style.display = "none";
+    }
+  }
+
   function scrollBottom() {
     msgsEl.scrollTop = msgsEl.scrollHeight;
   }
@@ -272,6 +284,9 @@
     })
       .then(function (r) { return r.json(); })
       .then(function (data) {
+        if (data.count_remaining !== undefined) {
+          updateRemaining(data.count_remaining);
+        }
         if (data.ok && data.reply) {
           addMessage(data.reply, "bot");
         } else if (data.error === "rate_limited") {

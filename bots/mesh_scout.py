@@ -28,6 +28,7 @@ except ImportError:
     pass
 
 from supabase import create_client
+from config.metros import METROS as _SHARED_METROS, metro_state
 
 log = logging.getLogger("mesh.scout")
 logging.basicConfig(level=logging.INFO, format="%(levelname)s:%(name)s:%(message)s")
@@ -43,16 +44,15 @@ if not SUPABASE_URL or not SUPABASE_KEY:
 
 _sb = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-# Metro centroids for satellite analysis
+# Metro centroids for satellite analysis — imported from shared config
+# Convert from {metro: {lat, lon, state}} to the format mesh_scout expects
 METROS = {
-    "Wichita": {"lat": 37.6872, "lon": -97.3301, "state": "KS"},
-    "Oklahoma City": {"lat": 35.4676, "lon": -97.5164, "state": "OK"},
-    "Kansas City": {"lat": 39.0997, "lon": -94.5786, "state": "MO"},
-    "Dallas-Fort Worth": {"lat": 32.7767, "lon": -96.7970, "state": "TX"},
-    "Houston": {"lat": 29.7604, "lon": -95.3698, "state": "TX"},
-    "Tulsa": {"lat": 36.1540, "lon": -95.9928, "state": "OK"},
-    "Denver": {"lat": 39.7392, "lon": -104.9903, "state": "CO"},
-    "St. Louis": {"lat": 38.6270, "lon": -90.1994, "state": "MO"},
+    name: {
+        "lat": m["lat"],
+        "lon": m["lon"],
+        "state": m.get("state", ""),
+    }
+    for name, m in _SHARED_METROS.items()
 }
 
 
