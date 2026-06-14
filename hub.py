@@ -19,6 +19,7 @@ import httpx as _httpx
 from fastapi import FastAPI, Request, Depends, HTTPException, Query
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from supabase import create_client, Client
 from empire_switchboard import _sb
@@ -1847,7 +1848,6 @@ async def reply_qualify_route(payload: dict = Body(...), auth: bool = Depends(re
 # ─── /api/telemetry: reads empire_session_log.md ──────────────
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from fastapi.staticfiles import StaticFiles
 
 # Add CORS for the dashboard (idempotent — won't double-add)
 try:
