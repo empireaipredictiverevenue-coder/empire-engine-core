@@ -113,6 +113,7 @@ from products.content_pulse import ContentPulse, ContentPulseRoutes
 from products.contractor_exchange import ContractorExchange, ContractorExchangeRoutes
 from products.sales_funnel import SalesFunnelEngine, SalesFunnelRoutes
 from products.product_email_dispatcher import ProductEmailDispatcher
+from products.trial_conversion import TrialConversionEngine
 from hook_analytics import HookRoutes
 
 # Strategist & Analytics Agents
@@ -630,6 +631,25 @@ suite_sales_funnel = SalesFunnelEngine(
     email_dispatcher=suite_email_dispatcher,
 )
 SalesFunnelRoutes(suite_sales_funnel, require_auth=require_auth).register(app)
+
+# Trial Conversion Webhook — auto-convert expired trials to paid
+suite_trial_conversion = TrialConversionEngine(
+    get_db=get_db,
+    subscriptions=suite_subscriptions,
+    send_email=_send_email,
+)
+
+@app.post("/api/v6/suite/sales/trial-convert")
+async def trial_convert_manual(auth: bool = Depends(require_auth)):
+    """Manually trigger a scan for expired trials and auto-convert them."""
+    result = suite_trial_conversion.run_once()
+    return result
+
+@app.get("/api/v6/suite/sales/trial-convert/stats")
+async def trial_convert_stats(auth: bool = Depends(require_auth)):
+    """Trial conversion engine stats snapshot."""
+    return suite_trial_conversion.stats_snapshot()
+
 
 # Product 15: Command Center Pro — aggregated product health dashboard
 @app.get("/api/v6/suite/ccp/health")
@@ -1534,6 +1554,8 @@ async def startup():
     asyncio.create_task(suite_market_eye.monitoring_loop())
     # Product Email Dispatcher — renewal reminders, reactivation, churn prevention
     asyncio.create_task(suite_email_dispatcher.monitoring_loop())
+    # Trial Conversion — auto-convert expired trials to paid every hour
+    asyncio.create_task(suite_trial_conversion.monitoring_loop())
     log.info("Empire V49 · Operational")
 
 
