@@ -46,8 +46,9 @@ log = logging.getLogger("empire.suite")
 BASE_DIR = Path(__file__).resolve().parent
 DB_PATH = BASE_DIR / "data" / "storm_alerts.sqlite"
 
-VALID_TIERS = {"ROUTER_SaaS", "DATA_ENTERPRISE", "SPY_DATA", "ALL_ACCESS"}
-VALID_PRODUCTS = {"inbound_router", "data_vault", "buyer_spy"}
+VALID_TIERS = {"ROUTER_SaaS", "DATA_ENTERPRISE", "SPY_DATA", "ALL_ACCESS",
+                "SEO_STARTER", "SEO_GROWTH", "SEO_PRO"}
+VALID_PRODUCTS = {"inbound_router", "data_vault", "buyer_spy", "seo_optimizer"}
 VALID_STATUSES = {"ACTIVE", "PAST_DUE", "CANCELED", "TRIALING"}
 
 
@@ -288,6 +289,17 @@ class SuiteSubscriptionEngine:
             "inbound_router_enabled": 0,
             "data_retention_enabled": 0,
             "buyer_spy_enabled": 0,
+            "inbound_router_max_calls": 0,
+            "data_retention_days": 90,
+            "buyer_spy_analyze_per_day": 100,
+            "seo_audits_enabled": 0,
+            "seo_keyword_tracking_enabled": 0,
+            "seo_content_generation_enabled": 0,
+            "seo_research_pipeline_enabled": 0,
+            "seo_landing_pages_enabled": 0,
+            "seo_audits_per_month": 0,
+            "seo_keywords_per_month": 0,
+            "seo_content_pieces_per_month": 0,
         }
         if tier == "ROUTER_SaaS":
             flags["inbound_router_enabled"] = 1
@@ -299,6 +311,39 @@ class SuiteSubscriptionEngine:
             flags["inbound_router_enabled"] = 1
             flags["data_retention_enabled"] = 1
             flags["buyer_spy_enabled"] = 1
+            flags["seo_audits_enabled"] = 1
+            flags["seo_keyword_tracking_enabled"] = 1
+            flags["seo_content_generation_enabled"] = 1
+            flags["seo_research_pipeline_enabled"] = 1
+            flags["seo_landing_pages_enabled"] = 1
+            flags["seo_audits_per_month"] = 0
+            flags["seo_keywords_per_month"] = 0
+            flags["seo_content_pieces_per_month"] = 0
+        elif tier == "SEO_STARTER":
+            flags["seo_audits_enabled"] = 1
+            flags["seo_keyword_tracking_enabled"] = 1
+            flags["seo_content_generation_enabled"] = 1
+            flags["seo_audits_per_month"] = 5
+            flags["seo_keywords_per_month"] = 50
+            flags["seo_content_pieces_per_month"] = 10
+        elif tier == "SEO_GROWTH":
+            flags["seo_audits_enabled"] = 1
+            flags["seo_keyword_tracking_enabled"] = 1
+            flags["seo_content_generation_enabled"] = 1
+            flags["seo_research_pipeline_enabled"] = 1
+            flags["seo_landing_pages_enabled"] = 1
+            flags["seo_audits_per_month"] = 15
+            flags["seo_keywords_per_month"] = 200
+            flags["seo_content_pieces_per_month"] = 20
+        elif tier == "SEO_PRO":
+            flags["seo_audits_enabled"] = 1
+            flags["seo_keyword_tracking_enabled"] = 1
+            flags["seo_content_generation_enabled"] = 1
+            flags["seo_research_pipeline_enabled"] = 1
+            flags["seo_landing_pages_enabled"] = 1
+            flags["seo_audits_per_month"] = 0
+            flags["seo_keywords_per_month"] = 0
+            flags["seo_content_pieces_per_month"] = 0
         return flags
 
     def _upsert_flags(self, account_id: str, flags: dict):
@@ -308,19 +353,46 @@ class SuiteSubscriptionEngine:
             now = datetime.now(timezone.utc).isoformat(timespec="seconds")
             conn.execute(
                 """INSERT INTO product_feature_flags
-                   (customer_account_id, inbound_router_enabled, data_retention_enabled,
-                    buyer_spy_enabled, created_at, updated_at)
-                   VALUES (?, ?, ?, ?, ?, ?)
+                   (customer_account_id,
+                    inbound_router_enabled, data_retention_enabled, buyer_spy_enabled,
+                    inbound_router_max_calls, data_retention_days, buyer_spy_analyze_per_day,
+                    seo_audits_enabled, seo_keyword_tracking_enabled, seo_content_generation_enabled,
+                    seo_research_pipeline_enabled, seo_landing_pages_enabled,
+                    seo_audits_per_month, seo_keywords_per_month, seo_content_pieces_per_month,
+                    created_at, updated_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                    ON CONFLICT(customer_account_id) DO UPDATE SET
-                     inbound_router_enabled = COALESCE(EXCLUDED.inbound_router_enabled, product_feature_flags.inbound_router_enabled),
-                     data_retention_enabled = COALESCE(EXCLUDED.data_retention_enabled, product_feature_flags.data_retention_enabled),
-                     buyer_spy_enabled = COALESCE(EXCLUDED.buyer_spy_enabled, product_feature_flags.buyer_spy_enabled),
+                     inbound_router_enabled        = COALESCE(EXCLUDED.inbound_router_enabled, product_feature_flags.inbound_router_enabled),
+                     data_retention_enabled        = COALESCE(EXCLUDED.data_retention_enabled, product_feature_flags.data_retention_enabled),
+                     buyer_spy_enabled             = COALESCE(EXCLUDED.buyer_spy_enabled, product_feature_flags.buyer_spy_enabled),
+                     inbound_router_max_calls      = COALESCE(EXCLUDED.inbound_router_max_calls, product_feature_flags.inbound_router_max_calls),
+                     data_retention_days           = COALESCE(EXCLUDED.data_retention_days, product_feature_flags.data_retention_days),
+                     buyer_spy_analyze_per_day     = COALESCE(EXCLUDED.buyer_spy_analyze_per_day, product_feature_flags.buyer_spy_analyze_per_day),
+                     seo_audits_enabled            = COALESCE(EXCLUDED.seo_audits_enabled, product_feature_flags.seo_audits_enabled),
+                     seo_keyword_tracking_enabled  = COALESCE(EXCLUDED.seo_keyword_tracking_enabled, product_feature_flags.seo_keyword_tracking_enabled),
+                     seo_content_generation_enabled = COALESCE(EXCLUDED.seo_content_generation_enabled, product_feature_flags.seo_content_generation_enabled),
+                     seo_research_pipeline_enabled  = COALESCE(EXCLUDED.seo_research_pipeline_enabled, product_feature_flags.seo_research_pipeline_enabled),
+                     seo_landing_pages_enabled      = COALESCE(EXCLUDED.seo_landing_pages_enabled, product_feature_flags.seo_landing_pages_enabled),
+                     seo_audits_per_month          = COALESCE(EXCLUDED.seo_audits_per_month, product_feature_flags.seo_audits_per_month),
+                     seo_keywords_per_month        = COALESCE(EXCLUDED.seo_keywords_per_month, product_feature_flags.seo_keywords_per_month),
+                     seo_content_pieces_per_month  = COALESCE(EXCLUDED.seo_content_pieces_per_month, product_feature_flags.seo_content_pieces_per_month),
                      updated_at = ?""",
                 (
                     account_id,
                     flags.get("inbound_router_enabled", 0),
                     flags.get("data_retention_enabled", 0),
                     flags.get("buyer_spy_enabled", 0),
+                    flags.get("inbound_router_max_calls", 0),
+                    flags.get("data_retention_days", 90),
+                    flags.get("buyer_spy_analyze_per_day", 100),
+                    flags.get("seo_audits_enabled", 0),
+                    flags.get("seo_keyword_tracking_enabled", 0),
+                    flags.get("seo_content_generation_enabled", 0),
+                    flags.get("seo_research_pipeline_enabled", 0),
+                    flags.get("seo_landing_pages_enabled", 0),
+                    flags.get("seo_audits_per_month", 0),
+                    flags.get("seo_keywords_per_month", 0),
+                    flags.get("seo_content_pieces_per_month", 0),
                     now, now, now,
                 ),
             )

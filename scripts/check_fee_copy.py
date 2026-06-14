@@ -58,11 +58,11 @@ ALLOW = [
     'bots/agi_revenue.py:159',     # .1% accuracy formatting
     'bots/predictive_revenue.py:383',  # revenue dipped >30% threshold
     'bots/predictive_revenue.py:869',  # >20% threshold
-    'empire_command_spa.py:5358-5360', # tempMax - tempMin || 0.01 (chart scale, not fee)
+    'empire_command_spa.py:5358-5520', # tempMax - tempMin || 0.01 (chart scale, not fee)
     'bots/panel_court.py:83-85',   # scoring weights (40%, 30%, etc.)
     'docs/personality_comparison_report.md',  # historical 0.700 confidence scores
     'empire_brain_personality.py:93',  # "10% hit rate" example
-    'empire_si_core.py:10',        # "88% success probability" example
+    'empire_si_core.py',        # probabilistic inference engine (no fee copy)
     'scripts_archive/',            # legacy dead code
     '_to_delete_20260525-0808/',   # dead previous stack
     'node_modules/',

@@ -1046,6 +1046,7 @@ const NAV_GROUPS = [
       { id: 'partners',      label: 'Partners',       sub: 'Buyers · pending · approvals' },
       { id: 'revenue',       label: 'Revenue',        sub: 'Predictive revenue · per-lane MRR · LLM forecast' },
       { id: 'closer',       label: 'Closer',         sub: 'AI pipeline · funnel · stats' },
+      { id: 'products',     label: 'Products',       sub: 'Strike packs / SaaS tiers / subscriptions' },
       { id: 'pain-points',  label: 'Pain Points',    sub: 'Niche scripts · weights · conversion' },
       { id: 'swarm-gate',   label: 'Swarm Gate',     sub: 'Parallel video ads · scan → fire' },
       { id: 'affiliates',   label: 'Affiliates',    sub: 'Manage · referral links · stats' },
@@ -1603,12 +1604,13 @@ function Pulse({ events, wsConnected }) {
         apiFetch('/api/v1/compliance/stats').then(r => r.json()),
         apiFetch('/api/v1/closer/stats').then(r => r.json()),
         apiFetch('/api/revenue/lanes').then(r => r.json()),
+        apiFetch('/api/revenue/mrr').then(r => r.json()),
         apiFetch('/api/revenue/accuracy?days=14').then(r => r.json()),
         apiFetch('/api/pulse/summary?window=24h').then(r => r.json()),
         apiFetch('/api/pulse/breakdown?dimension=niche&window=7d').then(r => r.json()),
         apiFetch('/api/pulse/lanes').then(r => r.json()),
       ]);
-      setStats(prev => ({ ...prev, pb, em, sm, py, ib, pr, co, cl, rv, ac, ps, pbk, pl }));
+      setStats(prev => ({ ...prev, pb, em, sm, py, ib, pr, co, cl, rv, ac, mr, ps, pbk, pl }));
       setErr(null);
     } catch (e) {
       if (e.message !== 'Unauthorized') setErr(e.message);
@@ -1792,6 +1794,7 @@ function Pulse({ events, wsConnected }) {
         <button class=${"pulse-tab " + (tab === 'revenue' ? 'active' : '')} onClick=${() => setTab('revenue')}>Revenue</button>
         <button class=${"pulse-tab " + (tab === 'pipeline' ? 'active' : '')} onClick=${() => setTab('pipeline')}>Pipeline</button>
         <button class=${"pulse-tab " + (tab === 'pulse' ? 'active' : '')} onClick=${() => setTab('pulse')}>Pulse</button>
+        <button class=${"pulse-tab " + (tab === 'products' ? 'active' : '')} onClick=${() => setTab('products')}>Products</button>
       </div>
       ${tab === 'overview' ? html`
       <div class="pulse-grid">
@@ -1824,6 +1827,11 @@ function Pulse({ events, wsConnected }) {
           <div class="stat-label">Projected MRR</div>
           <div class="stat-value teal">$${projectedMRR}</div>
           <div class="stat-meta">$${totalMonthlyRetainer} retainers · $${projectedPerCallFees} per-call fees</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Actual MRR</div>
+          <div class="stat-value ${(((stats.mr||{}).actual_mrr||0)) > 0 ? "teal" : "dim"}">$${((stats.mr||{}).actual_mrr||0).toLocaleString()}</div>
+          <div class="stat-meta">${((stats.mr||{}).gap||0) > 0 ? ((stats.mr||{}).gap_pct||0)+"% below projected" : "meeting projection"} · ${((stats.mr||{}).buyer_subscriptions||0)} buyer subs</div>
         </div>
         <div class="stat-card">
           <div class="stat-label">Closer Pipeline</div>
@@ -2072,8 +2080,103 @@ ${(() => {
       ${pipelineBreakdownHtml}
       ` : null}
 
+      ${tab === 'products' ? html`<${ProductsPanel} />` : null}
+
       
   `;
+}
+
+
+function ProductsPanel() {
+  const [suite, setSuite] = useState(null);
+  const [packs, setPacks] = useState(null);
+  const [subTier, setSubTier] = useState(null); // {tier, name, price, slug} or null
+  const [subAcct, setSubAcct] = useState('');
+  const [subBusy, setSubBusy] = useState(false);
+  const [subMsg, setSubMsg] = useState(null);
+
+  useEffect(() => {
+    fetch('/api/v1/products/catalog').then(r=>r.json()).then(d => {
+      setSuite(d.suite_products || []);
+      setPacks(d.strike_packs || []);
+    }).catch(() => {});
+  }, []);
+
+  async function doSubscribe(tierObj) {
+    if (!subAcct.trim()) return setSubMsg('Please enter a customer account ID');
+    setSubBusy(true);
+    setSubMsg(null);
+    try {
+      const r = await fetch('/api/v1/products/subscribe', {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({ customer_account_id: subAcct.trim(), tier_level: tierObj.tier })
+      });
+      const j = await r.json();
+      if (r.ok) { setSubMsg('✅ Subscribed!'); setSubTier(null); }
+      else { setSubMsg('❌ ' + (j.detail || j.error || 'Error')); }
+    } catch(e) { setSubMsg('❌ Network error'); }
+    setSubBusy(false);
+  }
+
+  return html\`
+    <div style=\${{padding:'0 24px',color:'var(--foreground)'}}>
+      <h3 style=\${{fontFamily:'var(--font-mono)',fontWeight:300,fontSize:'24px',margin:'12 0 8 0',color:'var(--strike-cyan)'}}>Suite Products</h3>
+      <p style=\${{fontSize:'12px',color:'var(--foreground-muted)',margin:'0 0 16 0'}}>
+        Subscribe to any tier directly from here. Prices are pulled from the product_metadata table.
+      </p>
+      \${suite ? suite.map(p => html\`
+        <div style=\${{display:'flex',alignItems:'center',gap:'12px',padding:'8px 12px',margin:'4px 0',border:'1px solid var(--empire-border)',borderRadius:'6px',background:'var(--empire-surface)'}}>
+          <div style=\${{flex:1}}>
+            <div style=\${{fontWeight:600,fontSize:'13px'}}>\${p.display_name||p.tier}</div>
+            <div style=\${{fontSize:'11px',color:'var(--foreground-muted)'}}>\${p.description || ''}</div>
+          </div>
+          <div style=\${{fontSize:'15px',fontWeight:700,color:'var(--signal-teal)'}}>\$\${p.monthly_price_usd?.toFixed(0)}/mo</div>
+          <button style=\${{padding:'6px 16px',border:'1px solid var(--signal-teal)',background:'transparent',color:'var(--signal-teal)',borderRadius:'4px',cursor:'pointer',fontFamily:'var(--font-mono)',fontSize:'11px',textTransform:'uppercase',letterSpacing:'0.1em'}}
+            onClick=\${() => { setSubTier({tier:p.tier, name:p.display_name, price:p.monthly_price_usd}); setSubAcct(''); setSubMsg(null); }}
+            onmouseover=\${e => {e.target.style.background='var(--signal-teal)';e.target.style.color='var(--empire-black)'}}
+            onmouseout=\${e => {e.target.style.background='transparent';e.target.style.color='var(--signal-teal)'}}>Subscribe</button>
+        </div>
+      \`) : html\`<div style=\${{fontSize:'11px',color:'var(--foreground-muted)',padding:'12px'}}>Loading products…</div>\`}
+      \${!packs ? null : html\`
+        <h3 style=\${{fontFamily:'var(--font-mono)',fontWeight:300,fontSize:'24px',margin:'24 0 8 0',color:'var(--strike-cyan)'}}>Strike Packs</h3>
+        <p style=\${{fontSize:'12px',color:'var(--foreground-muted)',margin:'0 0 16 0'}}>
+          Per-lead products by niche.
+        </p>
+        \${packs.map(s => html\`
+          <div style=\${{display:'flex',alignItems:'center',gap:'12px',padding:'8px 12px',margin:'4px 0',border:'1px solid var(--empire-border)',borderRadius:'6px',background:'var(--empire-surface)'}}>
+            <div style=\${{flex:1,fontWeight:600,fontSize:'13px'}}>\${s.slug}</div>
+            <div style=\${{fontSize:'11px',color:'var(--foreground-muted)'}}>tier \${s.tier}</div>
+            <div style=\${{fontSize:'15px',fontWeight:700,color:'var(--signal-teal)'}}>\$\${s.monthly_price_usd?.toFixed(0)}/mo</div>
+          </div>
+        \`)}
+      \`}
+    </div>
+
+    <!-- Subscribe modal overlay -->
+    \${!subTier ? null : html\`
+      <div style=\${{position:'fixed',inset:0,background:'rgba(0,0,0,0.6)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:9999}} onClick=\${e => {if(e.target===e.currentTarget) setSubTier(null)}}>
+        <div style=\${{background:'var(--empire-surface)',border:'1px solid var(--empire-border)',borderRadius:'12px',padding:'24px',maxWidth:'420px',width:'90%',color:'var(--foreground)'}}>
+          <div style=\${{fontSize:'16px',fontWeight:600,margin:'0 0 4 0'}}>Subscribe to \${subTier.name || subTier.tier}</div>
+          <div style=\${{fontSize:'12px',color:'var(--foreground-muted)',margin:'0 0 16 0'}}>
+            \${subTier.tier} · \$\${subTier.price?.toFixed(2) ?? '—'}/mo
+          </div>
+          <input style=\${{width:'100%',padding:'10px 12px',margin:'0 0 12 0',background:'var(--empire-black)',border:'1px solid var(--empire-border)',borderRadius:'6px',color:'var(--foreground)',fontSize:'13px',fontFamily:'var(--font-mono)',outline:'none',boxSizing:'border-box'}}
+            placeholder="Customer account ID"
+            value=\${subAcct}
+            onInput=\${e => setSubAcct(e.target.value)}
+            disabled=\${subBusy} />
+          \${!subMsg ? null : html\`<div style=\${{fontSize:'11px',margin:'0 0 12 0',color: subMsg.startsWith('✅') ? 'var(--strike-cyan)' : 'var(--signal-orange)'}}>\${subMsg}</div>\`}
+          <div style=\${{display:'flex',gap:'8px',justifyContent:'flex-end'}}>
+            <button style=\${{padding:'8px 20px',background:'transparent',border:'1px solid var(--empire-border)',color:'var(--foreground-muted)',borderRadius:'6px',cursor:'pointer',fontSize:'11px',fontFamily:'var(--font-mono)',textTransform:'uppercase'}}
+              onClick=\${() => setSubTier(null)} disabled=\${subBusy}>Cancel</button>
+            <button style=\${{padding:'8px 20px',background:'var(--signal-teal)',border:'none',color:'var(--empire-black)',borderRadius:'6px',cursor:'pointer',fontSize:'11px',fontFamily:'var(--font-mono)',textTransform:'uppercase',fontWeight:600}}
+              onClick=\${() => doSubscribe(subTier)} disabled=\${subBusy}>\${subBusy ? 'Subscribing…' : 'Confirm'}</button>
+          </div>
+        </div>
+      </div>
+    \`}
+  \`;
 }
 
 function stripMeta(e) {
@@ -2817,7 +2920,48 @@ function Governor() {
       </div>
       ` : ''}
 
-      ${!status
+      
+      ` : ''}
+
+      ${mrrData ? html`<div class="rv-narrative-panel" style="margin-bottom:20px">
+        <div class="rv-narrative-head">
+          <div class="rv-narrative-title">MRR: Actual vs Projected</div>
+          <div class="rv-narrative-badge">${mrrData.subscriptions.length} active subscriptions</div>
+        </div>
+        <div style="display:flex;gap:24px;align-items:center;padding:8px 0">
+          <div style="flex:1;display:flex;flex-direction:column;gap:8px">
+            <div style="display:flex;justify-content:space-between;font-family:var(--font-mono);font-size:10px;color:var(--empire-mist)">
+              <span>Projected MRR</span>
+              <span style="color:var(--strike-cyan);font-weight:500">$${((mrrData.projected_mrr||0)).toLocaleString()}</span>
+            </div>
+            <div style="height:28px;background:var(--empire-elevated);border-radius:6px;overflow:hidden;position:relative">
+              <div style="height:100%;width:${Math.min(100,((mrrData.projected_mrr||0) / Math.max((mrrData.projected_mrr||0), 1) * 100))}%;background:var(--strike-cyan);border-radius:6px;opacity:0.7;transition:width .6s var(--ease-out-empire)"></div>
+            </div>
+            <div style="display:flex;justify-content:space-between;font-family:var(--font-mono);font-size:10px;color:var(--empire-mist)">
+              <span>Actual MRR</span>
+              <span style="color:var(--signal-teal);font-weight:500">$${((mrrData.actual_mrr||0)).toLocaleString()}</span>
+            </div>
+            <div style="height:28px;background:var(--empire-elevated);border-radius:6px;overflow:hidden;position:relative">
+              <div style="height:100%;width:${Math.min(100,((mrrData.actual_mrr||0) / Math.max((mrrData.projected_mrr||0), 1) * 100))}%;background:var(--signal-teal);border-radius:6px;opacity:0.85;transition:width .6s var(--ease-out-empire)"></div>
+            </div>
+          </div>
+          <div style="text-align:center;flex-shrink:0">
+            <div style="font-family:var(--font-display);font-weight:200;font-size:36px;color:${((mrrData.gap||0) > 0) ? 'var(--status-amber)' : 'var(--signal-teal)'};line-height:1">${((mrrData.gap_pct||0))}%</div>
+            <div style="font-family:var(--font-mono);font-size:9px;color:var(--empire-fog);letter-spacing:.14em;text-transform:uppercase;margin-top:4px">${((mrrData.gap||0) > 0) ? 'Below Projection' : 'On Track'}</div>
+            <div style="font-family:var(--font-mono);font-size:9px;color:var(--empire-fog);margin-top:6px">Gap: $${((mrrData.gap||0)).toLocaleString()}</div>
+          </div>
+        </div>
+        ${(mrrData.subscriptions||[]).length > 0 ? html`<div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--empire-divider)">
+          <div style="font-family:var(--font-mono);font-size:9px;color:var(--empire-mist);letter-spacing:.14em;text-transform:uppercase;margin-bottom:8px">Subscription Breakdown</div>
+          ${mrrData.subscriptions.map(s => html`<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;font-family:var(--font-mono);font-size:10px;border-bottom:1px solid var(--empire-divider)">
+            <span style="color:var(--empire-silver)">${s.account}</span>
+            <span style="color:var(--empire-mist);font-size:9px;letter-spacing:.08em">${s.tier}</span>
+            <span style="color:var(--signal-teal);font-weight:500">$${s.mrr.toLocaleString()}</span>
+          </div>`)}
+        </div>` : null}
+      </div>` : null}
+
+${!status
         ? html`<div class="gov-panel"><div class="gov-empty">Loading service status…</div></div>`
         : html`
       <div class="gov-grid">
@@ -4626,6 +4770,7 @@ function Revenue({ events, wsConnected }) {
   const [narrative, setNarrative] = useState(null);
   const [forecast, setForecast] = useState(null);
   const [accuracy, setAccuracy] = useState(null);
+  const [mrrData, setMrrData] = useState(null);
   const [err, setErr] = useState(null);
 
   const reload = useCallback(async () => {
@@ -4639,6 +4784,11 @@ function Revenue({ events, wsConnected }) {
       setForecast(nr);
       const ar = await apiFetch('/api/revenue/accuracy?days=14').then(x => x.json());
       setAccuracy(ar);
+      // Fetch MRR comparison
+      try {
+        const mr = await (await apiFetch("/api/revenue/mrr")).json();
+        setMrrData(mr);
+      } catch(e) { /* MRR timeout okay */ }
       setErr(null);
     } catch (e) {
       if (e.message !== 'Unauthorized') setErr(e.message);
@@ -4694,7 +4844,13 @@ function Revenue({ events, wsConnected }) {
           <div class="stat-label">Revenue Health</div>
           <div class=${'stat-value ' + (health.status === 'critical' ? 'dim' : health.status === 'warning' ? 'dim' : 'teal')} style=${{color: health.status === 'critical' ? 'var(--status-red)' : health.status === 'warning' ? 'var(--status-amber)' : 'var(--signal-teal)'}}>${health.status || '\u2014'}</div>
           <div class="stat-meta">${health.pct_change || 0}% vs 7d avg</div>
+        
         </div>
+        <div class="stat-card">
+          <div class="stat-label">Actual MRR</div>
+          <div class=${'stat-value ' + ((mrrData||{}).actual_mrr > 0 ? "teal" : "dim")}>$${((mrrData||{}).actual_mrr||0).toLocaleString()}</div>
+          <div class="stat-meta">${((mrrData||{}).subscriptions||[]).length} subs · ${((mrrData||{}).gap_pct||0)}% ${((mrrData||{}).gap||0) > 0 ? 'below projected' : 'of target'}</div>
+        </div></div>
         <div class="stat-card">
           <div class="stat-label">Pipeline Value</div>
           <div class="stat-value cyan">$${totals.active_buyers || 0}</div>
@@ -6203,6 +6359,7 @@ function App() {
             active.id === 'holo-map'      ? html`<${HoloMap} />` :
             active.id === 'partners'      ? html`<${Partners} />` :
             active.id === 'closer'        ? html`<${Closer} />` :
+            active.id === "'products'"      ? html`<${ProductsPanel} />` :
             active.id === 'pain-points'   ? html`<${PainPoints} />` :
             active.id === 'swarm-gate'    ? html`<${SwarmGate} />` :
             active.id === 'operators'     ? html`<${Operators} />` :

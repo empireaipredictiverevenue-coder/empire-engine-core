@@ -10,7 +10,128 @@ Pro tip: uses the Empire design system (empire_tokens) for consistent look.
 from empire_tokens import empire_head
 
 
-def pricing_page() -> str:
+
+def _suite_product_cards(products: list) -> str:
+    """Render dynamic HTML product cards from product_metadata data."""
+    if not products:
+        return ''
+    cards = []
+    for p in products:
+        tier = p.get("tier", "")
+        name = p.get("display_name") or p.get("product_name") or tier
+        desc = p.get("description", "")
+        price = p.get("monthly_price_usd", 0) or 0
+        features = p.get("features", [])
+        if not isinstance(features, list):
+            features = []
+        badges = " ".join(f'<span class="pr-bdg pr-bdg-cyan">{f}</span>' for f in features[:3])
+        cards.append(f'''    <div class="pr-card">
+      <div class="pr-card-topline"></div>
+      <div class="pr-card-header">
+        <div class="pr-card-name">{name}</div>
+        <div class="pr-card-desc">{desc[:80]}</div>
+      </div>
+      <div class="pr-card-badges">{badges}</div>
+      <div class="pr-card-features">
+        {chr(10).join(f'        <li>{f}</li>' for f in features[:6])}
+      </div>
+      <div class="pr-card-price">${price:,.0f}<span class="pr-card-price-sub">/mo</span></div>
+      <a href="/command" class="pr-card-cta">Subscribe</a>
+    </div>''')
+    return '<div class="pr-prods">\n' + "\n".join(cards) + '\n    </div>'
+
+
+
+
+
+
+FALLBACK_SUITE_HTML = '''<!-- SECTION 1: SUITE PRODUCTS                                          -->
+  <!-- ──────────────────────────────────────────────────────────────────── -->
+  <div class="pr-section">
+    <div class="pr-section-h">
+      <span class="pr-section-num">01</span>
+      <span class="pr-section-title">Suite Products</span>
+      <span class="pr-section-sub">SaaS subscription · per-feature</span>
+    </div>
+
+    <div class="pr-prods">
+
+      <!-- Product 1: Inbound Router -->
+      <div class="pr-card" style="animation-delay: 0.05s">
+        <div class="pr-card-icon"><i class="ti ti-phone-incoming"></i></div>
+        <div class="pr-card-name">Inbound Router</div>
+        <div class="pr-card-desc">
+          Traffic control &amp; intelligent routing for inbound leads.
+          Parse intent, score urgency, and dispatch to the right channel.
+        </div>
+        <div class="pr-card-badges">
+          <span class="pr-bdg teal">Router SaaS</span>
+          <span class="pr-bdg cyan">API</span>
+        </div>
+        <ul class="pr-card-features">
+          <li>Real-time call triage with AI intent parsing</li>
+          <li>Multi-channel dispatch (voice, SMS, email)</li>
+          <li>Urgency scoring &amp; priority queuing</li>
+          <li>Per-call usage metering</li>
+        </ul>
+        <div class="pr-card-price">$499 <small>/mo</small></div>
+        <div class="pr-card-price-sub">+ $0.25 per routed call</div>
+        <a href="/auth/login" class="pr-card-cta">Get started</a>
+      </div>
+
+      <!-- Product 2: Data Vault -->
+      <div class="pr-card" style="animation-delay: 0.10s">
+        <div class="pr-card-icon"><i class="ti ti-database"></i></div>
+        <div class="pr-card-name">Data Vault</div>
+        <div class="pr-card-desc">
+          Secure data retention &amp; asset storage with configurable
+          retention policies, encryption, and compliance logging.
+        </div>
+        <div class="pr-card-badges">
+          <span class="pr-bdg teal">Data Enterprise</span>
+          <span class="pr-bdg amber">HIPAA-ready</span>
+        </div>
+        <ul class="pr-card-features">
+          <li>Configurable retention policies (30-365 days)</li>
+          <li>AES-256 encryption at rest &amp; in transit</li>
+          <li>Full audit trail with compliance reporting</li>
+          <li>Automated archival &amp; purge workflows</li>
+        </ul>
+        <div class="pr-card-price">$799 <small>/mo</small></div>
+        <div class="pr-card-price-sub">+ $0.02 per stored record/mo</div>
+        <a href="/auth/login" class="pr-card-cta">Get started</a>
+      </div>
+
+      <!-- Product 3: Buyer Spy AI -->
+      <div class="pr-card" style="animation-delay: 0.15s">
+        <div class="pr-card-icon"><i class="ti ti-eye"></i></div>
+        <div class="pr-card-name">Buyer Spy AI</div>
+        <div class="pr-card-desc">
+          Network bypass &amp; buyer intelligence. Analyze transcripts,
+          map buyer networks, and uncover hidden buying signals.
+        </div>
+        <div class="pr-card-badges">
+          <span class="pr-bdg teal">Spy Data</span>
+          <span class="pr-bdg cyan">AI-powered</span>
+        </div>
+        <ul class="pr-card-features">
+          <li>Deep transcript analysis with SI entity extraction</li>
+          <li>Buyer network mapping &amp; relationship scoring</li>
+          <li>Real-time buying signal detection</li>
+          <li>API access for custom integrations</li>
+        </ul>
+        <div class="pr-card-price">$1,499 <small>/mo</small></div>
+        <div class="pr-card-price-sub">+ $5 per analysis</div>
+        <a href="/auth/login" class="pr-card-cta">Get started</a>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ──────────────────────────────────────────────────────────────────── -->
+  '''
+
+def pricing_page(products: list = None) -> str:
     pricing_css = """
     /* ── PAGE SPECIFIC ──────────────────────────────────────────────── */
     .pr-wrap {
@@ -495,91 +616,7 @@ def pricing_page() -> str:
   </div>
 
   <!-- ──────────────────────────────────────────────────────────────────── -->
-  <!-- SECTION 1: SUITE PRODUCTS                                          -->
-  <!-- ──────────────────────────────────────────────────────────────────── -->
-  <div class="pr-section">
-    <div class="pr-section-h">
-      <span class="pr-section-num">01</span>
-      <span class="pr-section-title">Suite Products</span>
-      <span class="pr-section-sub">SaaS subscription · per-feature</span>
-    </div>
-
-    <div class="pr-prods">
-
-      <!-- Product 1: Inbound Router -->
-      <div class="pr-card" style="animation-delay: 0.05s">
-        <div class="pr-card-icon"><i class="ti ti-phone-incoming"></i></div>
-        <div class="pr-card-name">Inbound Router</div>
-        <div class="pr-card-desc">
-          Traffic control &amp; intelligent routing for inbound leads.
-          Parse intent, score urgency, and dispatch to the right channel.
-        </div>
-        <div class="pr-card-badges">
-          <span class="pr-bdg teal">Router SaaS</span>
-          <span class="pr-bdg cyan">API</span>
-        </div>
-        <ul class="pr-card-features">
-          <li>Real-time call triage with AI intent parsing</li>
-          <li>Multi-channel dispatch (voice, SMS, email)</li>
-          <li>Urgency scoring &amp; priority queuing</li>
-          <li>Per-call usage metering</li>
-        </ul>
-        <div class="pr-card-price">$499 <small>/mo</small></div>
-        <div class="pr-card-price-sub">+ $0.25 per routed call</div>
-        <a href="/auth/login" class="pr-card-cta">Get started</a>
-      </div>
-
-      <!-- Product 2: Data Vault -->
-      <div class="pr-card" style="animation-delay: 0.10s">
-        <div class="pr-card-icon"><i class="ti ti-database"></i></div>
-        <div class="pr-card-name">Data Vault</div>
-        <div class="pr-card-desc">
-          Secure data retention &amp; asset storage with configurable
-          retention policies, encryption, and compliance logging.
-        </div>
-        <div class="pr-card-badges">
-          <span class="pr-bdg teal">Data Enterprise</span>
-          <span class="pr-bdg amber">HIPAA-ready</span>
-        </div>
-        <ul class="pr-card-features">
-          <li>Configurable retention policies (30-365 days)</li>
-          <li>AES-256 encryption at rest &amp; in transit</li>
-          <li>Full audit trail with compliance reporting</li>
-          <li>Automated archival &amp; purge workflows</li>
-        </ul>
-        <div class="pr-card-price">$799 <small>/mo</small></div>
-        <div class="pr-card-price-sub">+ $0.02 per stored record/mo</div>
-        <a href="/auth/login" class="pr-card-cta">Get started</a>
-      </div>
-
-      <!-- Product 3: Buyer Spy AI -->
-      <div class="pr-card" style="animation-delay: 0.15s">
-        <div class="pr-card-icon"><i class="ti ti-eye"></i></div>
-        <div class="pr-card-name">Buyer Spy AI</div>
-        <div class="pr-card-desc">
-          Network bypass &amp; buyer intelligence. Analyze transcripts,
-          map buyer networks, and uncover hidden buying signals.
-        </div>
-        <div class="pr-card-badges">
-          <span class="pr-bdg teal">Spy Data</span>
-          <span class="pr-bdg cyan">AI-powered</span>
-        </div>
-        <ul class="pr-card-features">
-          <li>Deep transcript analysis with SI entity extraction</li>
-          <li>Buyer network mapping &amp; relationship scoring</li>
-          <li>Real-time buying signal detection</li>
-          <li>API access for custom integrations</li>
-        </ul>
-        <div class="pr-card-price">$1,499 <small>/mo</small></div>
-        <div class="pr-card-price-sub">+ $5 per analysis</div>
-        <a href="/auth/login" class="pr-card-cta">Get started</a>
-      </div>
-
-    </div>
-  </div>
-
-  <!-- ──────────────────────────────────────────────────────────────────── -->
-  <!-- SECTION 2: SUITE TIERS                                              -->
+  {_suite_product_cards(products) if products else FALLBACK_SUITE_HTML}<!-- SECTION 2: SUITE TIERS                                              -->
   <!-- ──────────────────────────────────────────────────────────────────── -->
   <div class="pr-section">
     <div class="pr-section-h">

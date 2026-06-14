@@ -17,7 +17,8 @@ CREATE TABLE IF NOT EXISTS product_subscriptions (
     subscription_id       TEXT PRIMARY KEY,
     customer_account_id   TEXT NOT NULL UNIQUE,
     tier_level            TEXT NOT NULL CHECK (tier_level IN (
-                              'ROUTER_SaaS', 'DATA_ENTERPRISE', 'SPY_DATA', 'ALL_ACCESS'
+                              'ROUTER_SaaS', 'DATA_ENTERPRISE', 'SPY_DATA', 'ALL_ACCESS',
+                              'SEO_STARTER', 'SEO_GROWTH', 'SEO_PRO'
                           )),
     subscription_status   TEXT DEFAULT 'ACTIVE' CHECK (
                               subscription_status IN ('ACTIVE', 'PAST_DUE', 'CANCELED', 'TRIALING')
@@ -44,6 +45,15 @@ CREATE TABLE IF NOT EXISTS product_feature_flags (
     inbound_router_max_calls   INTEGER DEFAULT 0,  -- 0 = unlimited
     data_retention_days        INTEGER DEFAULT 90,
     buyer_spy_analyze_per_day  INTEGER DEFAULT 100,
+    -- SEO optimizer feature flags
+    seo_audits_enabled             INTEGER DEFAULT 0,
+    seo_keyword_tracking_enabled   INTEGER DEFAULT 0,
+    seo_content_generation_enabled INTEGER DEFAULT 0,
+    seo_research_pipeline_enabled  INTEGER DEFAULT 0,
+    seo_landing_pages_enabled      INTEGER DEFAULT 0,
+    seo_audits_per_month           INTEGER DEFAULT 0,
+    seo_keywords_per_month         INTEGER DEFAULT 0,
+    seo_content_pieces_per_month   INTEGER DEFAULT 0,
     meta                       TEXT DEFAULT '{}',  -- JSONB: additional per-account config
     created_at                 TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at                 TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -56,7 +66,8 @@ CREATE TABLE IF NOT EXISTS product_usage_log (
     log_id                INTEGER PRIMARY KEY AUTOINCREMENT,
     customer_account_id   TEXT NOT NULL,
     product_name          TEXT NOT NULL CHECK (product_name IN (
-                              'inbound_router', 'data_vault', 'buyer_spy'
+                              'inbound_router', 'data_vault', 'buyer_spy',
+                              'seo_optimizer'
                           )),
     usage_event           TEXT NOT NULL,  -- 'inbound_call', 'data_upload', 'spy_analysis', etc.
     quantity              INTEGER DEFAULT 1,
@@ -141,22 +152,68 @@ CREATE TABLE IF NOT EXISTS niche_habit_traits (
 CREATE INDEX IF NOT EXISTS idx_habit_traits_niche
     ON niche_habit_traits (niche, trait_key);
 
--- ── Preseed an enterprise tier account for immediate validation ────────
+-- ── Seed subscriptions matching the Supabase catalog ─────────────────
 INSERT OR IGNORE INTO product_subscriptions (
     subscription_id, customer_account_id, tier_level,
     monthly_recurring_revenue, billing_anchor_day,
     current_period_end, notes
-) VALUES (
-    'sub_test_99', 'client_alpha_operator', 'ALL_ACCESS',
-    1495.00, 1,
-    datetime('now', '+30 days'),
-    'Enterprise test account — all features enabled'
-);
+) VALUES
+    ('sub_test_99', 'client_alpha_operator', 'ALL_ACCESS',
+     1495.00, 1,
+     datetime('now', '+30 days'),
+     'Enterprise test account — all features enabled'),
+    ('sub_demo_contractor', 'demo_contractor', 'ROUTER_SaaS',
+     499.00, 1,
+     datetime('now', '+30 days'),
+     'Demo account — Inbound Router SaaS tier'),
+    ('sub_demo_enterprise', 'demo_enterprise', 'ALL_ACCESS',
+     2499.00, 15,
+     datetime('now', '+30 days'),
+     'Demo account — All Access enterprise tier'),
+    ('sub_demo_seo_starter', 'demo_seo_starter', 'SEO_STARTER',
+     99.00, 1,
+     datetime('now', '+30 days'),
+     'Demo account — SEO Optimizer Starter tier (5 audits/mo)'),
+    ('sub_demo_seo_growth', 'demo_seo_growth', 'SEO_GROWTH',
+     199.00, 10,
+     datetime('now', '+30 days'),
+     'Demo account — SEO Optimizer Growth tier'),
+    ('sub_demo_seo_pro', 'demo_seo_pro', 'SEO_PRO',
+     499.00, 20,
+     datetime('now', '+30 days'),
+     'Demo account — SEO Optimizer Pro tier (unlimited)');
 
+-- ── Seed feature flags for all demo accounts ──────────────────────────
 INSERT OR IGNORE INTO product_feature_flags (
-    customer_account_id, inbound_router_enabled, data_retention_enabled, buyer_spy_enabled,
-    inbound_router_max_calls, data_retention_days, buyer_spy_analyze_per_day
-) VALUES (
-    'client_alpha_operator', 1, 1, 1,
-    10000, 365, 500
-);
+    customer_account_id, inbound_router_enabled, data_retention_enabled,
+    buyer_spy_enabled, inbound_router_max_calls, data_retention_days,
+    buyer_spy_analyze_per_day,
+    seo_audits_enabled, seo_keyword_tracking_enabled,
+    seo_content_generation_enabled, seo_research_pipeline_enabled,
+    seo_landing_pages_enabled,
+    seo_audits_per_month, seo_keywords_per_month, seo_content_pieces_per_month
+) VALUES
+    ('client_alpha_operator', 1, 1, 1,
+     10000, 365, 500,
+     1, 1, 1, 1, 1,
+     0, 0, 0),
+    ('demo_contractor', 1, 0, 0,
+     500, 30, 0,
+     0, 0, 0, 0, 0,
+     0, 0, 0),
+    ('demo_enterprise', 1, 1, 1,
+     10000, 365, 500,
+     1, 1, 1, 1, 1,
+     0, 0, 0),
+    ('demo_seo_starter', 0, 0, 0,
+     0, 0, 0,
+     1, 1, 1, 0, 0,
+     5, 50, 10),
+    ('demo_seo_growth', 0, 0, 0,
+     0, 0, 0,
+     1, 1, 1, 1, 1,
+     15, 200, 20),
+    ('demo_seo_pro', 0, 0, 0,
+     0, 0, 0,
+     1, 1, 1, 1, 1,
+     0, 0, 0);
