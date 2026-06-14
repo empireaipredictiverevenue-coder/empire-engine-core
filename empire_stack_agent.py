@@ -169,6 +169,30 @@ class StackAgent:
     def __init__(self, get_db: Optional[Callable] = None):
         self.get_db = get_db
 
+    def _query_db_metrics(self) -> dict:
+        """Query real DB tables for pipeline metrics (contractors, buyers, leads)."""
+        if not self.get_db:
+            return {}
+        try:
+            db = self.get_db()
+            metrics = {}
+            r = db.table("contractors").select("active", limit=500).execute()
+            ct_rows = r.data or []
+            metrics["total_contractors"] = len(ct_rows)
+            metrics["active_contractors"] = sum(1 for row in ct_rows if row.get("active"))
+            r = db.table("buyers").select("is_active", limit=200).execute()
+            by_rows = r.data or []
+            metrics["total_buyers"] = len(by_rows)
+            metrics["active_buyers"] = sum(1 for row in by_rows if row.get("is_active"))
+            r = db.table("leads").select("status", limit=200).execute()
+            ld_rows = r.data or []
+            metrics["total_leads"] = len(ld_rows)
+            metrics["processed_leads"] = sum(1 for row in ld_rows if row.get("status") == "PROCESSED")
+            return metrics
+        except Exception as e:
+            log.warning(f"[stack] DB metrics query failed: {e}")
+            return {}
+
     def status(self) -> dict:
         """Return overall stack health snapshot."""
         services = _get_pm2_status()
@@ -184,6 +208,7 @@ class StackAgent:
             "resources": resources,
             "git": git,
             "health": "healthy" if stopped == 0 else "degraded" if stopped <= 2 else "critical",
+            "db_metrics": self._query_db_metrics(),
             "timestamp": datetime.now(timezone.utc).isoformat(),
         }
 

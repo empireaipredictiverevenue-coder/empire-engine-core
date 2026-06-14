@@ -95,8 +95,61 @@ class LoopAgent:
             "total_revenue": round(total_revenue, 2),
             "overall_win_rate": round(total_wins / max(total_runs, 1), 4),
             "niches": {n: len(g["lanes"]) for n, g in _LANE_GROUPS.items()},
+            "buyer_lanes": self._query_buyer_lanes(),
+            "contractor_activity": self._query_contractor_activity(),
             "timestamp": datetime.now(timezone.utc).isoformat(),
         }
+
+    def _query_buyer_lanes(self) -> list[dict]:
+        """Query buyers table and map each buyer to a lane-like record."""
+        if not self.get_db:
+            return []
+        try:
+            db = self.get_db()
+            r = db.table("buyers").select("*").limit(200).execute()
+            rows = r.data or []
+        except Exception as e:
+            log.warning(f"[loop] buyers query failed: {e}")
+            return []
+        lanes = []
+        for row in rows:
+            niche = row.get("niche", "") or "General"
+            payout = float(row.get("base_payout", 0) or 0)
+            calls_offered = int(row.get("calls_offered", 0) or 0)
+            calls_accepted = int(row.get("calls_accepted", 0) or 0)
+            is_active = row.get("is_active", False)
+            retainer = float(row.get("monthly_retainer", 0) or 0)
+            lanes.append({
+                "lane_id": abs(hash(row.get("id", ""))) % 1000,
+                "niche": niche,
+                "strategy": "BUYER_MATCH",
+                "source": "Buyers Table",
+                "wins": calls_accepted,
+                "losses": max(0, calls_offered - calls_accepted),
+                "revenue": payout * calls_accepted + retainer,
+                "runs": calls_offered,
+                "pacing_hours": 8,
+                "status": "active" if is_active else "inactive",
+                "buyer_name": row.get("buyer_name", ""),
+            })
+        return lanes
+
+    def _query_contractor_activity(self) -> dict:
+        """Query contractors table for network activity metrics."""
+        if not self.get_db:
+            return {"total": 0, "active": 0, "completed_jobs": 0}
+        try:
+            db = self.get_db()
+            r = db.table("contractors").select("active,completed_jobs", limit=500).execute()
+            rows = r.data or []
+            return {
+                "total": len(rows),
+                "active": sum(1 for row in rows if row.get("active")),
+                "completed_jobs": sum(int(row.get("completed_jobs", 0) or 0) for row in rows),
+            }
+        except Exception as e:
+            log.warning(f"[loop] contractors query failed: {e}")
+            return {"total": 0, "active": 0, "completed_jobs": 0}
 
     def lane_detail(self, lane_id: int) -> dict:
         """Per-lane deep dive."""
@@ -132,7 +185,8 @@ class LoopAgent:
 
     def all_lanes(self) -> list[dict]:
         """Return data for all lanes."""
-        return [self.lane_detail(lid) for lid in range(36) if lid in _LANE_GROUPS]
+        all_lane_ids = {lid for g in _LANE_GROUPS.values() for lid in g["lanes"]}
+        return [self.lane_detail(lid) for lid in sorted(all_lane_ids)]
 
     def pacing_analysis(self) -> dict:
         """Analyze execution timing and pacing."""
@@ -236,11 +290,11 @@ class LoopAgent:
         }
 
 
-def register_loop_routes(app, require_auth=None):
+def register_loop_routes(app, require_auth=None, get_db=None):
     """Register Loop Engineering API routes on a FastAPI app."""
     from fastapi import Depends
 
-    agent = LoopAgent()
+    agent = LoopAgent(get_db=get_db)
 
     @app.get("/api/loop/overview")
     async def loop_overview(auth=Depends(require_auth) if require_auth else None):
