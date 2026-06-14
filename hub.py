@@ -44,6 +44,7 @@ from empire_command_spa import command_spa_page
 from empire_voice import VoiceRouter, register_voice_routes
 from empire_sms import SMSEngine, register_sms_routes
 from empire_contractors import register_contractor_routes
+from empire_qc_api import register_qc_routes
 from empire_attribution import register_attribution_routes
 from empire_email import EmailEngine, register_email_routes
 from empire_matching import ContractorMatcher, register_matching_routes
@@ -386,6 +387,9 @@ if _os.path.isdir(_STATIC_DIR):
 
 # ── Public contractor landing page (chat widget stub) ──────────────────
 register_contractor_routes(app)
+
+# Quality Control daemon endpoints (007aa47 followup)
+register_qc_routes(app)
 
 @app.get("/", response_class=HTMLResponse)
 async def root():
