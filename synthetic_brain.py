@@ -12,6 +12,7 @@ from typing import Dict, Any, List, Literal, Optional
 import numpy as np
 import soundfile as sf
 from fastapi import Depends, FastAPI, HTTPException, Security, WebSocket, WebSocketDisconnect
+from fastapi.responses import JSONResponse
 from fastapi.security.api_key import APIKeyHeader
 from pydantic import BaseModel, Field, ValidationError
 from kokoro_onnx import Kokoro
@@ -353,10 +354,20 @@ class AGICommand(BaseModel):
     objective: str # e.g., "Build a high-impact roofing ad for Atlanta. Use +18885551234."
 
 
+class ChatAskRequest(BaseModel):
+    """Request to the synthetic brain's general-purpose Q&A endpoint.
+    Used by the contractor-recruit chat widget (chat.js)."""
+    system: str = Field(
+        "",
+        description="System prompt to set the LLM context and persona.",
+    )
+    prompt: str = Field(
+        ..., min_length=1, max_length=4000,
+        description="User message to answer.",
+    )
+
+
 class SynthesizeRequest(BaseModel):
-    """Request to synthesize text to a WAV audio file via Kokoro TTS.
-    Used by the Swarm Gate's standalone audio phase for phone calls
-    and audio-only output (no video)."""
     script: str = Field(..., min_length=1, max_length=2000,
                         description="Text to synthesize into speech.")
     voice: STREAM_VOICES = Field("am_michael",
@@ -646,6 +657,38 @@ async def register_stream(
         _STREAM_TTL_SECONDS,
     )
     return StreamRegistrationResponse(**rec)
+
+
+# ── GENERAL-PURPOSE Q&A ─────────────────────────────────────────
+# Used by the contractor-recruit chat widget and any caller needing
+# a simple LLM response without the full AGI execution loop.
+@app.post("/ask", include_in_schema=False)
+async def chat_ask(
+    payload: ChatAskRequest,
+):
+    """
+    General-purpose Q&A endpoint. Accepts {system, prompt} and returns
+    {response}. No API key required — intended for the public
+    contractor-recruit chat widget.
+
+    The system prompt sets the LLM persona (e.g. contractor-recruit
+    assistant). The prompt is the user's message. The response is a
+    plain-text answer.
+    """
+    result = LocalBrainContext.ask_local_llm(
+        payload.system or "You are a helpful assistant.",
+        payload.prompt,
+    )
+    if "error" in result:
+        return JSONResponse({"ok": False, "error": result["error"]}, status_code=503)
+    # The LLM returns JSON by default (format="json" in ask_local_llm).
+    # If the result is a dict with a string response, extract it.
+    # Otherwise, coerce the whole dict to text.
+    if isinstance(result, dict):
+        response = result.get("response") or result.get("answer") or result.get("reply") or json.dumps(result)
+    else:
+        response = str(result)
+    return {"ok": True, "response": response}
 
 
 # ── STANDALONE AUDIO SYNTHESIS (no video) ─────────────────────────

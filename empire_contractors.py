@@ -33,6 +33,46 @@ except ImportError:
 log = logging.getLogger("empire.contractors_page")
 
 
+# ── Contractor Chat Wrapper Prompt ──────────────────────────────────
+# This system prompt is sent to the synthetic brain for every chat
+# message. It grounds the LLM in the contractor-recruit context.
+_CONTRACTOR_CHAT_SYSTEM_PROMPT = (
+    "You are a helpful recruitment assistant for Empire AI, a service that "
+    "delivers pre-qualified storm-affected property owner leads to licensed "
+    "contractors. You answer questions about how Empire AI works, the 3% "
+    "fee on settled claims, the first-2-deals-free policy, how onboarding "
+    "works, what trades are supported, service areas, and how dispatches "
+    "work. Be concise, friendly, and professional. Do not mention competitor "
+    "services. If you don't know something, say you'll have a team member "
+    "follow up. Keep answers under 3 paragraphs."
+)
+
+
+# ── In-memory rate limiter: {session_id: [timestamp, ...]} ───────────
+# 30 messages per hour per session. Entries older than 1 hour are dropped
+# on access (lazy expiry).
+_CHAT_RATE_LIMIT: dict = {}
+_CHAT_RATE_LIMIT_WINDOW = 3600  # 1 hour in seconds
+_CHAT_RATE_LIMIT_MAX = 30
+
+
+def _check_chat_rate_limit(session_id: str) -> tuple[bool, int]:
+    """Check if session_id has exceeded the rate limit.
+    Returns (allowed, current_count). Removes expired entries lazily."""
+    import time
+    now = time.time()
+    cutoff = now - _CHAT_RATE_LIMIT_WINDOW
+    timestamps = _CHAT_RATE_LIMIT.get(session_id, [])
+    # Filter out expired entries
+    timestamps = [ts for ts in timestamps if ts > cutoff]
+    _CHAT_RATE_LIMIT[session_id] = timestamps
+    current = len(timestamps)
+    if current >= _CHAT_RATE_LIMIT_MAX:
+        return False, current
+    timestamps.append(now)
+    return True, current + 1
+
+
 # TCPA-compliant E.164 regex: +[country][number], 8-15 digits total
 _E164_RE = re.compile(r"^\+[1-9]\d{7,14}$")
 _EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
@@ -565,6 +605,82 @@ async def contractors_onboard(request: Request) -> JSONResponse:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Chat endpoint
+# ─────────────────────────────────────────────────────────────────────────────
+
+async def contractors_chat(request: Request) -> JSONResponse:
+    """POST /api/contractors/chat
+
+    Public chat endpoint for the contractor-recruit widget. No auth.
+    Accepts { session_id, message }, rate-limits at 30/hr/session,
+    calls synthetic_brain at 127.0.0.1:8005/ask with a contractor-recruit
+    wrapper prompt, and returns { reply, count_remaining }.
+    """
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse({"ok": False, "error": "invalid_json"}, status_code=400)
+
+    if not isinstance(body, dict):
+        return JSONResponse({"ok": False, "error": "invalid_payload"}, status_code=400)
+
+    session_id = (body.get("session_id") or "").strip()
+    message = (body.get("message") or "").strip()
+
+    if not session_id:
+        return JSONResponse({"ok": False, "error": "missing_session_id"}, status_code=400)
+    if len(session_id) > 128:
+        return JSONResponse({"ok": False, "error": "session_id_too_long"}, status_code=400)
+    if not message:
+        return JSONResponse({"ok": False, "error": "missing_message"}, status_code=400)
+    if len(message) > 2000:
+        return JSONResponse({"ok": False, "error": "message_too_long"}, status_code=400)
+
+    # Rate limit check
+    allowed, count = _check_chat_rate_limit(session_id)
+    if not allowed:
+        return JSONResponse({
+            "ok": False,
+            "error": "rate_limited",
+            "message": "You've reached the message limit. Please try again later.",
+        }, status_code=429)
+
+    remaining = max(0, _CHAT_RATE_LIMIT_MAX - count)
+
+    # Call synthetic brain
+    try:
+        import httpx
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            resp = await client.post(
+                "http://127.0.0.1:8005/ask",
+                json={
+                    "system": _CONTRACTOR_CHAT_SYSTEM_PROMPT,
+                    "prompt": message,
+                },
+            )
+            if resp.status_code != 200:
+                log.warning(f"[contractors_chat] synthetic_brain returned {resp.status_code}")
+                return JSONResponse({
+                    "ok": True,
+                    "reply": "I'm sorry, I'm having trouble connecting right now. Please try again in a moment or email contractors@empire-ai.co.uk.",
+                    "count_remaining": remaining,
+                }, status_code=200)
+            data = resp.json()
+            reply = (data.get("response") or data.get("reply") or data.get("answer") or "").strip()
+            if not reply:
+                reply = "Thanks for your question! A team member will follow up with more details."
+    except Exception as e:
+        log.warning(f"[contractors_chat] synthetic_brain call failed: {e}")
+        reply = "I'm sorry, I'm having trouble connecting right now. Please try again in a moment or email contractors@empire-ai.co.uk."
+
+    return JSONResponse({
+        "ok": True,
+        "reply": reply,
+        "count_remaining": remaining,
+    }, status_code=200)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Route registration helper
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -580,9 +696,9 @@ def register_contractor_routes(
 ):
     """Mount /contractors and /api/contractors/onboard on the FastAPI app.
 
-    The /api/contractors/chat endpoint is owned by buffy (chat widget
-    implementation) and is NOT registered here. This module is
-    deliberately chat-free so the page and the form work standalone.
+    The /api/contractors/chat endpoint is also registered here (chat
+    widget integration). It uses the synthetic_brain for Q&A with
+    in-memory rate limiting.
 
     Compatibility signature: the existing hub.py call at line 449 passes
     require_auth, get_db, sign_token, verify_token, send_email,
@@ -608,7 +724,12 @@ def register_contractor_routes(
         contractors_onboard,
         methods=["POST"],
     )
-    log.info("[contractors] routes registered: GET /contractors, POST /api/contractors/onboard")
+    app.add_api_route(
+        "/api/contractors/chat",
+        contractors_chat,
+        methods=["POST"],
+    )
+    log.info("[contractors] routes registered: GET /contractors, POST /api/contractors/onboard, POST /api/contractors/chat")
 
 
 _get_db_override = None
