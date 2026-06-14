@@ -957,6 +957,46 @@ class TrialConversionEngine:
             else:
                 reason_groups["other"] = reason_groups.get("other", 0) + 1
 
+        # Fetch win-back stats
+        r_wb = db.table("sales_events") \
+            .select("email, product_slug, created_at") \
+            .eq("event_type", "win_back_sent") \
+            .execute()
+        win_back_events = r_wb.data or []
+        win_backs_sent = len(win_back_events)
+
+        r_wbf = db.table("sales_events") \
+            .select("email, product_slug, created_at") \
+            .eq("event_type", "win_back_followup_sent") \
+            .execute()
+        win_back_followups_sent = len(r_wbf.data or [])
+
+        # Compute reactivation rate: churned users who later converted again
+        # Build lookup: for each win_back_sent, check if there's a trial_converted
+        # event (for same email+product) created AFTER the win_back_sent
+        r_recent_conv = db.table("sales_events") \
+            .select("email, product_slug, created_at") \
+            .eq("event_type", "trial_converted") \
+            .order("created_at", desc=True) \
+            .execute()
+        recent_converted = r_recent_conv.data or []
+        # Group by email+product with latest created_at
+        latest_conv_by_key: dict[tuple[str, str], str] = {}
+        for ce in recent_converted:
+            ck = (ce.get("email", ""), ce.get("product_slug", ""))
+            if ck not in latest_conv_by_key:
+                latest_conv_by_key[ck] = str(ce.get("created_at", ""))
+
+        reactivations = 0
+        for wb in win_back_events:
+            wb_key = (wb.get("email", ""), wb.get("product_slug", ""))
+            wb_created = str(wb.get("created_at", ""))
+            conv_created = latest_conv_by_key.get(wb_key, "")
+            if conv_created and conv_created > wb_created:
+                reactivations += 1
+
+        reactivation_rate = round(reactivations / max(win_backs_sent, 1), 3)
+
         # Categorize each trial
         active = 0
         expiring_soon = 0
@@ -1073,6 +1113,12 @@ class TrialConversionEngine:
                 "churn_rate": round(churned / max(converted_count, 1), 3),
                 "mrr_per_churn": round(total_mrr_lost / max(len(churned_events), 1), 2),
                 "top_reasons": top_reasons,
+            },
+            "win_back_stats": {
+                "win_backs_sent": win_backs_sent,
+                "followups_sent": win_back_followups_sent,
+                "reactivations": reactivations,
+                "reactivation_rate": reactivation_rate,
             },
             "by_product": sorted(by_product.values(), key=lambda x: x["trials"], reverse=True),
             "daily_starts": [{"date": k, "count": v} for k, v in sorted(daily_starts.items(), reverse=True)],

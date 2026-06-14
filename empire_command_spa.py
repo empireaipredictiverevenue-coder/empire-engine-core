@@ -5921,7 +5921,30 @@ function SEOPanel() {
           ` : ''}
         </div>
       ` : ''}
-      <div class="split">
+      ${data.win_back_stats && data.win_back_stats.win_backs_sent > 0 ? html`
+        <div class="panel" style="margin-bottom:20px">
+          <div class="panel-head">Win-Back Sequence</div>
+          <div class="tp-churn-strip">
+            <div class="tp-churn-stat">
+              <div class="tp-stat-val teal">${data.win_back_stats.win_backs_sent}</div>
+              <div class="tp-stat-lbl">Win-Backs Sent</div>
+            </div>
+            <div class="tp-churn-stat">
+              <div class="tp-stat-val dim">${data.win_back_stats.followups_sent}</div>
+              <div class="tp-stat-lbl">Followups Sent</div>
+            </div>
+            <div class="tp-churn-stat">
+              <div class="tp-stat-val teal">${data.win_back_stats.reactivations}</div>
+              <div class="tp-stat-lbl">Reactivated</div>
+            </div>
+            <div class="tp-churn-stat">
+              <div class="tp-stat-val teal">${(data.win_back_stats.reactivation_rate * 100).toFixed(1)}%</div>
+              <div class="tp-stat-lbl">Reactivation Rate</div>
+            </div>
+          </div>
+        </div>
+      ` : ''}
+<div class="split">
         <div class="panel">
           <div class="panel-head">SEO Genome (Gen ${data.evolution_runs || 0})</div>
           ${Object.entries(genome).length === 0 ? html`<div class="kb-empty">No genome data yet.</div>` :
