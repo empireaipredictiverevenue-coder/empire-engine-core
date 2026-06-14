@@ -37,6 +37,7 @@ from empire_command_dispatch import dispatch_view
 from empire_command_inbound import inbound_view
 from empire_command_console import console_view
 from empire_splash import splash_page
+from empire_support import support_page
 from empire_demo import demo_page
 from empire_pricing import pricing_page, CPLPricingEngine, cpl_engine
 from empire_live import LiveBroadcaster, register_live_routes
@@ -495,12 +496,121 @@ async def contractors_chat(request: Request):
         "count_remaining": remaining,
     })
 
+# ── Customer service chat ─────────────────────────────────────────────
+# POST /api/customer-service/chat
+# Public endpoint for the /support page chat widget.
+import time as _cs_time
+
+_CS_RATE_LIMIT: dict = {}
+_CS_MAX_PER_WINDOW = 30
+_CS_WINDOW_SEC = 3600
+
+_CS_SYSTEM_PROMPT = (
+    "You are Empire AI's customer service assistant. You help visitors "
+    "understand Empire AI's platform, products, and services. Answer questions about:\n"
+    "- How Empire AI generates leads for contractors through storm detection and SMS qualification\n"
+    "- The 3% referral fee model (only on settled insurance claims)\n"
+    "- The first 2 deals complimentary policy\n"
+    "- Self-onboarding for contractors at empire-ai.co.uk/contractors\n"
+    "- Service areas: DFW, Houston, San Antonio, Austin (expanding)\n"
+    "- Suite products: Inbound Router, Data Vault, Buyer Spy AI, and 12 more\n"
+    "- How property owners can opt out via STOP reply\n"
+    "Be concise, helpful, and professional. Under 100 words per response. "
+    "If you don't know something, say so and offer to connect them with a human "
+    "via support@empire-ai.co.uk. Never invent numbers, pricing, or terms. "
+    "Always end with a next step: visit a page, email support, or ask another question."
+)
+
+
+@app.post("/api/customer-service/chat")
+async def customer_service_chat(request: Request):
+    """Public endpoint for the customer service chat widget on /support.
+
+    Accepts {session_id, message}. Rate-limited to 30 messages/hr
+    per session_id. Calls synthetic_brain's /ask endpoint.
+    """
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse({"ok": False, "error": "invalid_json"}, status_code=400)
+
+    session_id = (body.get("session_id") or "").strip()
+    message = (body.get("message") or "").strip()
+
+    if not session_id:
+        return JSONResponse({"ok": False, "error": "missing_session_id"}, status_code=400)
+    if not message:
+        return JSONResponse({"ok": False, "error": "missing_message"}, status_code=400)
+    if len(message) > 2000:
+        return JSONResponse({"ok": False, "error": "message_too_long"}, status_code=400)
+
+    # ── Rate limiting ───────────────────────────────────────────────────
+    now = _cs_time.time()
+    timestamps = _CS_RATE_LIMIT.get(session_id, [])
+    timestamps = [t for t in timestamps if now - t < _CS_WINDOW_SEC]
+
+    if len(timestamps) >= _CS_MAX_PER_WINDOW:
+        _CS_RATE_LIMIT[session_id] = timestamps
+        return JSONResponse({
+            "ok": False, "error": "rate_limited",
+            "count_remaining": 0,
+            "reply": "You've reached the message limit. Email support@empire-ai.co.uk and we'll get back to you quickly.",
+        }, status_code=429)
+
+    timestamps.append(now)
+    _CS_RATE_LIMIT[session_id] = timestamps
+    remaining = _CS_MAX_PER_WINDOW - len(timestamps)
+
+    # Periodic cleanup
+    if len(_CS_RATE_LIMIT) > 500:
+        cutoff = now - _CS_WINDOW_SEC
+        stale = [sid for sid, ts in _CS_RATE_LIMIT.items() if all(t < cutoff for t in ts)]
+        for sid in stale:
+            del _CS_RATE_LIMIT[sid]
+        log.debug(f"[customer_service_chat] rate-limit cache swept {len(stale)} stale sessions")
+
+    # ── Call synthetic brain ────────────────────────────────────────────
+    try:
+        async with _httpx.AsyncClient(timeout=15.0) as client:
+            r = await client.post(
+                "http://localhost:8005/ask",
+                json={"system": _CS_SYSTEM_PROMPT, "prompt": message},
+            )
+            if r.status_code < 500:
+                data = r.json()
+                reply = data.get("response", "")
+            else:
+                reply = ""
+    except Exception as e:
+        log.warning(f"[customer_service_chat] brain call failed: {e}")
+        reply = ""
+
+    if not reply:
+        return JSONResponse({
+            "ok": False,
+            "error": "brain_unavailable",
+            "count_remaining": remaining,
+            "reply": "Our AI assistant is having a moment. Try again shortly or email support@empire-ai.co.uk.",
+        }, status_code=503)
+
+    return JSONResponse({
+        "ok": True,
+        "reply": reply,
+        "count_remaining": remaining,
+    })
+
 # Quality Control daemon endpoints (007aa47 followup)
 register_qc_routes(app)
 
 @app.get("/", response_class=HTMLResponse)
 async def root():
     return HTMLResponse(splash_page())
+
+
+@app.get("/support", response_class=HTMLResponse)
+async def support():
+    """Public support page — FAQ + contact info + customer-service chat widget."""
+    return HTMLResponse(support_page())
 
 
 @app.get("/pricing", response_class=HTMLResponse)
