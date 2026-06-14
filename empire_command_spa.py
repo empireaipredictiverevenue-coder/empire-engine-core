@@ -1519,6 +1519,7 @@ const NAV_GROUPS = [
       { id: 'sniper-fleet',  label: 'Sniper Fleet',   sub: 'Active agents · lane status · targeting' },
       { id: 'health-monitor',label: 'Health Monitor', sub: 'Agent mesh · system health · overseer' },
       { id: 'bridge',         label: 'Bridge',         sub: 'Voice-first interface · full-screen' },
+      { id: 'support',       label: 'Support',        sub: 'FAQ · contact · live chat' },
     ]
   },
 ];
