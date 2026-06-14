@@ -50,8 +50,12 @@ VALID_TIERS = {"ROUTER_SaaS", "DATA_ENTERPRISE", "SPY_DATA", "ALL_ACCESS",
                 "SEO_STARTER", "SEO_GROWTH", "SEO_PRO",
                 "LEADSCORE_STARTER", "LEADSCORE_GROWTH", "LEADSCORE_ENTERPRISE",
                 "COMPLIANT_STARTER", "COMPLIANT_GROWTH", "COMPLIANT_ENTERPRISE",
-                "STRIKE_STARTER", "STRIKE_GROWTH", "STRIKE_ENTERPRISE"}
-VALID_PRODUCTS = {"inbound_router", "data_vault", "buyer_spy", "seo_optimizer", "lead_score", "compliant", "strike_campaigns"}
+                "STRIKE_STARTER", "STRIKE_GROWTH", "STRIKE_ENTERPRISE",
+                "FORECAST_LITE", "FORECAST_PRO", "FORECAST_ENTERPRISE",
+                "MARKET_EYE_STARTER", "MARKET_EYE_GROWTH", "MARKET_EYE_ENTERPRISE",
+                "CONTENT_PULSE_STARTER", "CONTENT_PULSE_GROWTH", "CONTENT_PULSE_ENTERPRISE",
+                "CONTRACTOR_EXCHANGE_STARTER", "CONTRACTOR_EXCHANGE_GROWTH", "CONTRACTOR_EXCHANGE_ENTERPRISE"}
+VALID_PRODUCTS = {"inbound_router", "data_vault", "buyer_spy", "seo_optimizer", "lead_score", "compliant", "strike_campaigns", "forecast", "market_eye", "content_pulse", "contractor_exchange"}
 VALID_STATUSES = {"ACTIVE", "PAST_DUE", "CANCELED", "TRIALING"}
 
 
@@ -458,12 +462,16 @@ class SuiteGuard:
     """Feature-flag gatekeeper + usage meter for the suite products."""
 
     FEATURE_MAP = {
-        "inbound_router": "inbound_router_enabled",
-        "data_vault":     "data_retention_enabled",
-        "buyer_spy":      "buyer_spy_enabled",
-        "lead_score":     "leadscore_enabled",
-        "compliant":      "compliant_enabled",
-        "strike_campaigns": "strike_campaigns_enabled",
+        "inbound_router":         "inbound_router_enabled",
+        "data_vault":             "data_retention_enabled",
+        "buyer_spy":              "buyer_spy_enabled",
+        "lead_score":             "leadscore_enabled",
+        "compliant":              "compliant_enabled",
+        "strike_campaigns":       "strike_campaigns_enabled",
+        "forecast":               "forecast_enabled",
+        "market_eye":             "market_eye_enabled",
+        "content_pulse":          "content_pulse_enabled",
+        "contractor_exchange":     "contractor_exchange_enabled",
     }
 
     def __init__(
