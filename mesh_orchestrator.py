@@ -9,10 +9,38 @@ Replaces fake "88% probability" strings with real beta-binomial
 win rate estimates, Thompson sampling for strategy selection, and
 lane health scoring with confidence intervals.
 
-Niche allocation (rebalanced 2026-06-12):
-  Lanes  0- 7 : Roofing Restoration  (8 lanes, AGGRESSIVE_STRIKE, Storm Scout)
-  Lanes  8-15 : Local SEO & HVAC     (8 lanes, UGLY_BANNER, Web Auditor)
-  Lanes 16-20 : Legal                (5 lanes, RECALL_SNIPER, FDA Live Feed)
+Niche allocation (rebalanced 2026-06-14):
+  Lanes  0- 4 : Roofing Restoration  (5 lanes, AGGRESSIVE_STRIKE, Storm Scout)
+  Lanes  5- 6 : HVAC                 (2 lanes, UGLY_BANNER, Web Auditor)
+  Lanes  7- 9 : SEO                  (3 lanes, STANDARD, SEO Optimizer)
+                  7: Local SEO
+                  8: E-commerce SEO
+                  9: Technical SEO
+  Lanes 10-14 : Legal                (5 lanes, RECALL_SNIPER, FDA Live Feed)
+                  10: Pharma Liability
+                  11: Medical Device
+                  12: Consumer Product
+                  13: Class Action
+                  14: Mass Tort
+  Lanes 15-17 : Insurance            (3 lanes, INSURANCE_STRIKE, Insurance Lead Gen)
+                  15: Medicare
+                  16: Life Insurance
+                  17: Final Expense
+  Lanes 18-19 : Financial Services   (2 lanes, FINANCIAL_STRIKE, Financial Lead Gen)
+                  18: Debt Consolidation
+                  19: Mortgage
+  Lanes 20-21 : Consumer CPA         (2 lanes, FINANCIAL_STRIKE, Inbound Leads)
+  Lanes 22-23 : Senior Care          (2 lanes, SENIOR_STRIKE, Senior Lead Gen)
+                  22: Assisted Living
+                  23: Home Health
+  Lanes 24    : Addiction Treatment  (1 lane,  HEALTH_STRIKE, Healthcare Lead Gen)
+  Lanes 25-26 : Education            (2 lanes, STANDARD, Edu Lead Gen)
+                  25: CDL/Trade School
+                  26: Nursing
+  Lanes 27-28 : Healthcare           (2 lanes, HEALTH_STRIKE, Healthcare Lead Gen)
+                  27: Medical Alert Systems
+                  28: Mental Health
+  Lanes 29-31 : unassigned           (3 lanes, STANDARD, General)
                   16: Pharma Liability
                   17: Medical Device
                   18: Consumer Product
@@ -46,41 +74,39 @@ log = logging.getLogger("empire.mesh")
 
 # ── LANE DEFINITION ─────────────────────────────────────────────────────
 LANES = {
-    0:  {"niche": "Roofing Restoration", "sub_niche": None, "strategy": "AGGRESSIVE_STRIKE", "source": "Storm Scout"},
-    1:  {"niche": "Roofing Restoration", "sub_niche": None, "strategy": "AGGRESSIVE_STRIKE", "source": "Storm Scout"},
-    2:  {"niche": "Roofing Restoration", "sub_niche": None, "strategy": "AGGRESSIVE_STRIKE", "source": "Storm Scout"},
-    3:  {"niche": "Roofing Restoration", "sub_niche": None, "strategy": "AGGRESSIVE_STRIKE", "source": "Storm Scout"},
-    4:  {"niche": "Roofing Restoration", "sub_niche": None, "strategy": "AGGRESSIVE_STRIKE", "source": "Storm Scout"},
-    5:  {"niche": "Roofing Restoration", "sub_niche": None, "strategy": "AGGRESSIVE_STRIKE", "source": "Storm Scout"},
-    6:  {"niche": "Roofing Restoration", "sub_niche": None, "strategy": "AGGRESSIVE_STRIKE", "source": "Storm Scout"},
-    7:  {"niche": "Roofing Restoration", "sub_niche": None, "strategy": "AGGRESSIVE_STRIKE", "source": "Storm Scout"},
-    8:  {"niche": "Local SEO & HVAC", "sub_niche": None, "strategy": "UGLY_BANNER", "source": "Web Auditor"},
-    9:  {"niche": "Local SEO & HVAC", "sub_niche": None, "strategy": "UGLY_BANNER", "source": "Web Auditor"},
-    10: {"niche": "Local SEO & HVAC", "sub_niche": None, "strategy": "UGLY_BANNER", "source": "Web Auditor"},
-    11: {"niche": "Local SEO & HVAC", "sub_niche": None, "strategy": "UGLY_BANNER", "source": "Web Auditor"},
-    12: {"niche": "Local SEO & HVAC", "sub_niche": None, "strategy": "UGLY_BANNER", "source": "Web Auditor"},
-    13: {"niche": "Local SEO & HVAC", "sub_niche": None, "strategy": "UGLY_BANNER", "source": "Web Auditor"},
-    14: {"niche": "Local SEO & HVAC", "sub_niche": None, "strategy": "UGLY_BANNER", "source": "Web Auditor"},
-    15: {"niche": "Local SEO & HVAC", "sub_niche": None, "strategy": "UGLY_BANNER", "source": "Web Auditor"},
-    16: {"niche": "Legal", "sub_niche": "Pharma Liability", "strategy": "RECALL_SNIPER", "source": "FDA Live Feed"},
-    17: {"niche": "Legal", "sub_niche": "Medical Device",   "strategy": "RECALL_SNIPER", "source": "FDA Live Feed"},
-    18: {"niche": "Legal", "sub_niche": "Consumer Product", "strategy": "RECALL_SNIPER", "source": "FDA Live Feed"},
-    19: {"niche": "Legal", "sub_niche": "Class Action",     "strategy": "RECALL_SNIPER", "source": "FDA Live Feed"},
-    20: {"niche": "Legal", "sub_niche": "Mass Tort",        "strategy": "RECALL_SNIPER", "source": "FDA Live Feed"},
-    21: {"niche": "Consumer CPA", "sub_niche": None, "strategy": "FINANCIAL_STRIKE", "source": "Inbound Leads"},
-    22: {"niche": "Consumer CPA", "sub_niche": None, "strategy": "FINANCIAL_STRIKE", "source": "Inbound Leads"},
-    23: {"niche": "Consumer CPA", "sub_niche": None, "strategy": "FINANCIAL_STRIKE", "source": "Inbound Leads"},
-    24: {"niche": "Consumer CPA", "sub_niche": None, "strategy": "FINANCIAL_STRIKE", "source": "Inbound Leads"},
-    25: {"niche": "Consumer CPA", "sub_niche": None, "strategy": "FINANCIAL_STRIKE", "source": "Inbound Leads"},
-    26: {"niche": "Consumer CPA", "sub_niche": None, "strategy": "FINANCIAL_STRIKE", "source": "Inbound Leads"},
-    27: {"niche": "Consumer CPA", "sub_niche": None, "strategy": "FINANCIAL_STRIKE", "source": "Inbound Leads"},
-    28: {"niche": "Consumer CPA", "sub_niche": None, "strategy": "FINANCIAL_STRIKE", "source": "Inbound Leads"},
-    29: {"niche": "Solar Installation", "sub_niche": None, "strategy": "STANDARD", "source": "Solar Prospector"},
-    30: {"niche": "Restoration", "sub_niche": None, "strategy": "STANDARD", "source": "Restoration Lead Gen"},
-    31: {"niche": "Logistics & Cold Storage", "sub_niche": None, "strategy": "STANDARD", "source": "Logistics Prospector"},
+    0:  {"niche": "Roofing Restoration", "sub_niche": None,              "strategy": "AGGRESSIVE_STRIKE", "source": "Storm Scout"},
+    1:  {"niche": "Roofing Restoration", "sub_niche": None,              "strategy": "AGGRESSIVE_STRIKE", "source": "Storm Scout"},
+    2:  {"niche": "Roofing Restoration", "sub_niche": None,              "strategy": "AGGRESSIVE_STRIKE", "source": "Storm Scout"},
+    3:  {"niche": "Roofing Restoration", "sub_niche": None,              "strategy": "AGGRESSIVE_STRIKE", "source": "Storm Scout"},
+    4:  {"niche": "Roofing Restoration", "sub_niche": None,              "strategy": "AGGRESSIVE_STRIKE", "source": "Storm Scout"},
+    5:  {"niche": "HVAC",                "sub_niche": None,              "strategy": "UGLY_BANNER",      "source": "Web Auditor"},
+    6:  {"niche": "HVAC",                "sub_niche": None,              "strategy": "UGLY_BANNER",      "source": "Web Auditor"},
+    7:  {"niche": "SEO",                 "sub_niche": "Local SEO",       "strategy": "STANDARD",         "source": "SEO Optimizer"},
+    8:  {"niche": "SEO",                 "sub_niche": "E-commerce SEO",  "strategy": "STANDARD",         "source": "SEO Optimizer"},
+    9:  {"niche": "SEO",                 "sub_niche": "Technical SEO",   "strategy": "STANDARD",         "source": "SEO Optimizer"},
+    10: {"niche": "Legal",               "sub_niche": "Pharma Liability","strategy": "RECALL_SNIPER",   "source": "FDA Live Feed"},
+    11: {"niche": "Legal",               "sub_niche": "Medical Device",  "strategy": "RECALL_SNIPER",   "source": "FDA Live Feed"},
+    12: {"niche": "Legal",               "sub_niche": "Consumer Product","strategy": "RECALL_SNIPER",   "source": "FDA Live Feed"},
+    13: {"niche": "Legal",               "sub_niche": "Class Action",    "strategy": "RECALL_SNIPER",   "source": "FDA Live Feed"},
+    14: {"niche": "Legal",               "sub_niche": "Mass Tort",       "strategy": "RECALL_SNIPER",   "source": "FDA Live Feed"},
+    15: {"niche": "Insurance",           "sub_niche": "Medicare",        "strategy": "INSURANCE_STRIKE","source": "Insurance Lead Gen"},
+    16: {"niche": "Insurance",           "sub_niche": "Life Insurance",  "strategy": "INSURANCE_STRIKE","source": "Insurance Lead Gen"},
+    17: {"niche": "Insurance",           "sub_niche": "Final Expense",   "strategy": "INSURANCE_STRIKE","source": "Insurance Lead Gen"},
+    18: {"niche": "Financial Services",  "sub_niche": "Debt Consolidation","strategy": "FINANCIAL_STRIKE","source": "Financial Lead Gen"},
+    19: {"niche": "Financial Services",  "sub_niche": "Mortgage",        "strategy": "FINANCIAL_STRIKE","source": "Financial Lead Gen"},
+    20: {"niche": "Consumer CPA",        "sub_niche": None,              "strategy": "FINANCIAL_STRIKE","source": "Inbound Leads"},
+    21: {"niche": "Consumer CPA",        "sub_niche": None,              "strategy": "FINANCIAL_STRIKE","source": "Inbound Leads"},
+    22: {"niche": "Senior Care",         "sub_niche": "Assisted Living", "strategy": "SENIOR_STRIKE",   "source": "Senior Lead Gen"},
+    23: {"niche": "Senior Care",         "sub_niche": "Home Health",     "strategy": "SENIOR_STRIKE",   "source": "Senior Lead Gen"},
+    24: {"niche": "Addiction Treatment",  "sub_niche": None,              "strategy": "HEALTH_STRIKE",   "source": "Healthcare Lead Gen"},
+    25: {"niche": "Education",           "sub_niche": "CDL/Trade School","strategy": "STANDARD",         "source": "Edu Lead Gen"},
+    26: {"niche": "Education",           "sub_niche": "Nursing",         "strategy": "STANDARD",         "source": "Edu Lead Gen"},
+    27: {"niche": "Healthcare",          "sub_niche": "Medical Alert Systems","strategy": "HEALTH_STRIKE","source": "Healthcare Lead Gen"},
+    28: {"niche": "Healthcare",          "sub_niche": "Mental Health",   "strategy": "HEALTH_STRIKE",   "source": "Healthcare Lead Gen"},
+    29: {"niche": "unassigned",          "sub_niche": None,              "strategy": "STANDARD",        "source": "General"},
+    30: {"niche": "unassigned",          "sub_niche": None,              "strategy": "STANDARD",        "source": "General"},
+    31: {"niche": "unassigned",          "sub_niche": None,              "strategy": "STANDARD",        "source": "General"},
 }
-
-
 # ── LANE OUTCOME TRACKER (persistent across cycles) ─────────────────────
 # Accumulates wins, losses, and revenue per (niche, strategy) so the
 # SI core has data to compute Bayesian posteriors.
