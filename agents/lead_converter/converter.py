@@ -16,7 +16,11 @@ Idempotent: re-running won't re-send to leads already past step 1
 Usage:
     python3 -m agents.lead_converter
     python3 -m agents.lead_converter --status
-    python3 -m agents.lead_converter --live     # override dry_run, actually send
+    # NOTE: there is no --live / --dry-run flag. The agent reads dry_run
+    # exclusively from agent_config.lead_converter.dry_run. To pause live
+    # sending, set dry_run=true in that row. The only way to do a real send
+    # is to enroll through /api/v1/sms/enroll — there is no "send a one-off
+    # SMS" code path.
 """
 import os
 import sys
@@ -354,8 +358,6 @@ def run(dry_run_override: bool = None) -> dict:
 def main():
     p = argparse.ArgumentParser()
     p.add_argument("--status", action="store_true")
-    p.add_argument("--live", action="store_true",
-                   help="Override config dry_run=True. Actually sends. Use with care.")
     args = p.parse_args()
     if args.status:
         sb = _sb()
@@ -366,7 +368,7 @@ def main():
         print(json.dumps({"config": cfg, "last_run": last_act.data[0] if last_act.data else None},
                          indent=2, default=str))
         return
-    result = run(dry_run_override=not args.live)
+    result = run()
     sys.exit(0 if result["status"] in ("ok", "skipped_disabled") else 1)
 
 

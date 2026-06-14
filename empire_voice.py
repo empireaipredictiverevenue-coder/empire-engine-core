@@ -177,8 +177,8 @@ class VonageAdapter:
             event_webhook: URL Vonage POSTs status updates to
         """
         if not self.enabled:
-            log.info(f"[vonage] STUB · would call {to_number}")
-            return {"ok": True, "uuid": "stub-uuid", "status": "stub", "stub": True}
+            log.error(f"[vonage] place_call blocked: adapter not enabled (missing creds: VONAGE_API_KEY/SECRET/APPLICATION_ID/PRIVATE_KEY_PATH in /root/.env). to_number={to_number}")
+            return {"ok": False, "error": "vonage_adapter_disabled_check_env"}
 
         token = self._generate_jwt()
         if not token:
@@ -238,8 +238,8 @@ class VonageAdapter:
         Returns: {ok, uuid, status, error?}
         """
         if not self.enabled:
-            log.info(f"[vonage] STUB · would call {to_number}")
-            return {"ok": True, "uuid": "stub-uuid", "status": "stub", "stub": True}
+            log.error(f"[vonage] place_call_sync blocked: adapter not enabled. to_number={to_number}")
+            return {"ok": False, "error": "vonage_adapter_disabled_check_env"}
 
         token = self._generate_jwt()
         if not token:
@@ -289,8 +289,8 @@ class VonageAdapter:
         Send an SMS via Vonage Messages API. Returns: {ok, message_uuid, error?}
         """
         if not self.enabled:
-            log.info(f"[vonage] STUB · would SMS {to_number}: {message[:60]}")
-            return {"ok": True, "message_uuid": "stub", "stub": True}
+            log.error(f"[vonage] send_sms blocked: adapter not enabled. to_number={to_number} body[:60]={message[:60]}")
+            return {"ok": False, "error": "vonage_adapter_disabled_check_env"}
 
         token = self._generate_jwt()
         if not token:
