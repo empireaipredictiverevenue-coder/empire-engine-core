@@ -37,6 +37,7 @@ from empire_command_dispatch import dispatch_view
 from empire_command_inbound import inbound_view
 from empire_command_console import console_view
 from empire_splash import splash_page
+from empire_demo import demo_page
 from empire_pricing import pricing_page, CPLPricingEngine, cpl_engine
 from empire_live import LiveBroadcaster, register_live_routes
 from empire_command_deck import command_deck_page
@@ -385,8 +386,114 @@ import os as _os
 if _os.path.isdir(_STATIC_DIR):
     app.mount("/static", StaticFiles(directory=_STATIC_DIR), name="static")
 
-# ── Public contractor landing page (chat widget stub) ──────────────────
+# ── Public contractor landing page + chat widget ───────────────────────
 register_contractor_routes(app)
+
+# ── Chat widget endpoint — contractor-recruit Q&A via synthetic brain ─────
+# POST /api/contractors/chat
+# Accepts {session_id, message}, rate-limited to 30/hr per session.
+# Calls synthetic_brain at localhost:8005/ask for LLM responses.
+import time as _chat_time
+
+_CHAT_RATE_LIMIT: dict = {}  # session_id -> [timestamps]
+_CHAT_MAX_PER_WINDOW = 30
+_CHAT_WINDOW_SEC = 3600
+
+_CHAT_SYSTEM_PROMPT = (
+    "You are Empire AI's contractor-recruit assistant. Answer "
+    "questions about Empire AI's offer to commercial contractors:\n"
+    "- 3% referral fee on settled insurance claims\n"
+    "- First 2 closed deals are 100% complimentary (no fee)\n"
+    "- No contract, no exclusivity, no call required\n"
+    "- Self-onboard at this page in 90 seconds\n"
+    "- Dispatch via SMS or email when a storm-affected property owner replies YES\n"
+    "- Service areas currently: DFW, Houston, San Antonio, Austin\n"
+    "Be specific, brief (under 80 words), and always end with a "
+    "call-to-action (self-onboard, watch the demo, or read the FAQ). "
+    "If asked something you don't know, say so and offer to connect "
+    "them with a human via email. Never invent numbers or terms."
+)
+
+
+@app.post("/api/contractors/chat")
+async def contractors_chat(request: Request):
+    """Public endpoint for the contractor-recruit chat widget.
+
+    Accepts {session_id, message}. Rate-limited to 30 messages/hr
+    per session_id. Calls synthetic_brain's /ask endpoint for the
+    LLM response.
+    """
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse({"ok": False, "error": "invalid_json"}, status_code=400)
+
+    session_id = (body.get("session_id") or "").strip()
+    message = (body.get("message") or "").strip()
+
+    if not session_id:
+        return JSONResponse({"ok": False, "error": "missing_session_id"}, status_code=400)
+    if not message:
+        return JSONResponse({"ok": False, "error": "missing_message"}, status_code=400)
+    if len(message) > 2000:
+        return JSONResponse({"ok": False, "error": "message_too_long"}, status_code=400)
+
+    # ── Rate limiting ───────────────────────────────────────────────────
+    now = _chat_time.time()
+    timestamps = _CHAT_RATE_LIMIT.get(session_id, [])
+    timestamps = [t for t in timestamps if now - t < _CHAT_WINDOW_SEC]
+
+    if len(timestamps) >= _CHAT_MAX_PER_WINDOW:
+        _CHAT_RATE_LIMIT[session_id] = timestamps
+        return JSONResponse({
+            "ok": False, "error": "rate_limited",
+            "count_remaining": 0,
+            "reply": "You've asked a lot of questions \u2014 feel free to self-onboard "
+                     "and we'll email you a full breakdown.",
+        }, status_code=429)
+
+    timestamps.append(now)
+    _CHAT_RATE_LIMIT[session_id] = timestamps
+    remaining = _CHAT_MAX_PER_WINDOW - len(timestamps)
+
+    # Periodic cleanup: sweep stale entries every 100 requests
+    if len(_CHAT_RATE_LIMIT) > 500:
+        cutoff = now - _CHAT_WINDOW_SEC
+        stale = [sid for sid, ts in _CHAT_RATE_LIMIT.items() if all(t < cutoff for t in ts)]
+        for sid in stale:
+            del _CHAT_RATE_LIMIT[sid]
+        log.debug(f"[contractors_chat] rate-limit cache swept {len(stale)} stale sessions")
+
+    # ── Call synthetic brain ────────────────────────────────────────────
+    try:
+        async with _httpx.AsyncClient(timeout=15.0) as client:
+            r = await client.post(
+                "http://localhost:8005/ask",
+                json={"system": _CHAT_SYSTEM_PROMPT, "prompt": message},
+            )
+            if r.status_code < 500:
+                data = r.json()
+                reply = data.get("response", "")
+            else:
+                reply = ""
+    except Exception as e:
+        log.warning(f"[contractors_chat] brain call failed: {e}")
+        reply = ""
+
+    if not reply:
+        return JSONResponse({
+            "ok": False,
+            "error": "brain_unavailable",
+            "count_remaining": remaining,
+            "reply": "I'm having a moment \u2014 try again in 30 seconds or self-onboard "
+                     "below and we'll get back to you.",
+        }, status_code=503)
+
+    return JSONResponse({
+        "ok": True,
+        "reply": reply,
+        "count_remaining": remaining,
+    })
 
 # Quality Control daemon endpoints (007aa47 followup)
 register_qc_routes(app)
@@ -412,6 +519,13 @@ async def pricing():
     except Exception as e:
         log.warning(f"[pricing] product_metadata query failed: {e}")
     return HTMLResponse(pricing_page(products=products))
+
+
+@app.get("/demo", response_class=HTMLResponse)
+async def demo():
+    """Public walkthrough of the funnel (the link the /contractors
+    landing page points to). Static HTML, no DB queries."""
+    return HTMLResponse(demo_page())
 
 
 @app.get("/command", response_class=HTMLResponse)
@@ -1117,6 +1231,171 @@ async def cpl_lanes(
 ):
     """Return per-lane pricing data for all 32 lanes with CPL benchmarks and suggested pricing."""
     return JSONResponse(cpl_engine.lane_pricing(model=model, monthly_volume=monthly_volume))
+
+
+@app.get("/api/v1/cpl/lanes/export/csv")
+async def cpl_lanes_export_csv(
+    model: str = Query("ppl", pattern="^(ppl|ppc)$"),
+    monthly_volume: int = Query(100, ge=1, le=10000),
+    auth: bool = Depends(require_auth),
+):
+    """Export per-lane pricing data as a CSV file download.
+
+    Matches the exact format of the SPA's client-side exportCSV() function,
+    including the health label logic and a summary footer row with totals.
+    """
+    data = cpl_engine.lane_pricing(model=model, monthly_volume=monthly_volume)
+    lanes = data.get("lanes", [])
+
+    # ── Health label logic (mirrors the SPA's healthLabel()) ──────────
+    import csv, io
+
+    def _health_label(l: dict) -> str:
+        if not l.get("cpl_available") or l.get("roi_pct") is None:
+            return "N/A"
+        r = l.get("roi_pct", 0) or 0
+        m = l.get("margin_pct", 0) or 0
+        b = l.get("breakeven", 0) or 0
+        if r > 0 and m > 50 and b <= 200:
+            return "Healthy"
+        if r > 0:
+            return "At Risk"
+        return "Unprofitable"
+
+    # ── Transform each lane (mirrors the SPA's prepareLaneData()) ────
+    csv_lanes = []
+    for l in lanes:
+        if l.get("cpl_available"):
+            roi = l.get("roi", {})
+            suggest = l.get("suggested_pricing", {})
+            cpl_data = l.get("cpl", {})
+
+            month_rev = round(float(roi.get("monthly_revenue", 0) or 0))
+            month_acq = round(float(roi.get("monthly_acquisition_cost", 0) or 0))
+            annual_rev = round(month_rev * 12)
+
+            sell_price = float(suggest.get("suggested_sell_price", 0) or roi.get("sell_price_per_lead", 0) or 0)
+            sell_price_high = round(sell_price * 1.3, 2)
+
+            margin_pct = float(suggest.get("actual_margin_pct", 0) or 0)
+            if margin_pct == 0 and month_rev > 0:
+                margin_pct = round((float(roi.get("gross_margin", 0) or 0) / month_rev) * 100, 1)
+
+            roi_pct = roi.get("roi_percentage")
+            breakeven = roi.get("breakeven_volume")
+
+            cpl_low = None
+            cpl_high = None
+            if cpl_data:
+                ppl = cpl_data.get("ppl", {})
+                cpl_low = ppl.get("low")
+                cpl_high = ppl.get("high")
+
+            packed = {
+                "lane_id": l.get("lane_id"),
+                "niche": l.get("niche", ""),
+                "sub_niche": l.get("sub_niche", ""),
+                "cpl_low": cpl_low,
+                "cpl_high": cpl_high,
+                "best_model": l.get("best_model", ""),
+                "sell_price_low": sell_price,
+                "sell_price_high": sell_price_high,
+                "margin_pct": margin_pct,
+                "annual_revenue": annual_rev,
+                "roi_pct": roi_pct,
+                "monthly_revenue": month_rev,
+                "monthly_acq_cost": month_acq,
+                "breakeven": breakeven,
+                "cpl_available": True,
+                "ppc_ready": l.get("ppc_ready", False),
+            }
+        else:
+            packed = {
+                "lane_id": l.get("lane_id"),
+                "niche": l.get("niche", ""),
+                "sub_niche": l.get("sub_niche", ""),
+                "cpl_low": None,
+                "cpl_high": None,
+                "best_model": l.get("strategy", ""),
+                "sell_price_low": None,
+                "sell_price_high": None,
+                "margin_pct": None,
+                "annual_revenue": None,
+                "roi_pct": None,
+                "monthly_revenue": None,
+                "monthly_acq_cost": None,
+                "breakeven": None,
+                "cpl_available": False,
+                "ppc_ready": False,
+            }
+
+        packed["health"] = _health_label(packed)
+        csv_lanes.append(packed)
+
+    # ── Build CSV ────────────────────────────────────────────────────
+    headers = [
+        "Lane", "Niche", "Sub-Niche", "CPL Low", "CPL High",
+        "Model", "Sell Price Low", "Sell Price High", "Margin %",
+        "Annual Revenue", "ROI %", "Mo. Rev", "Acq Cost",
+        "BE Vol", "Health", "CPL Available", "PPC Ready",
+    ]
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(headers)
+
+    for l in csv_lanes:
+        cpl_low = l.get("cpl_low")
+        cpl_high = l.get("cpl_high")
+        writer.writerow([
+            f"L{l['lane_id']:02d}",
+            l["niche"],
+            l["sub_niche"],
+            f"${cpl_low:.0f}" if cpl_low is not None else "",
+            f"${cpl_high:.0f}" if cpl_high is not None else "",
+            l["best_model"],
+            f"${l['sell_price_low']:.2f}" if l["sell_price_low"] is not None else "",
+            f"${l['sell_price_high']:.2f}" if l["sell_price_high"] is not None else "",
+            l["margin_pct"],
+            l["annual_revenue"],
+            f"{l['roi_pct']}%" if l["roi_pct"] is not None else "",
+            l["monthly_revenue"],
+            l["monthly_acq_cost"],
+            l["breakeven"],
+            l["health"],
+            "Yes" if l["cpl_available"] else "No",
+            "Yes" if l.get("ppc_ready") else "No",
+        ])
+
+    # ── Summary footer row ───────────────────────────────────────────
+    priced = [l for l in csv_lanes if l.get("cpl_available")]
+    total_mrr = sum((l.get("monthly_revenue") or 0) for l in priced)
+    avg_acq = round(sum((l.get("monthly_acq_cost") or 0) for l in priced) / len(priced)) if priced else 0
+    g = sum(1 for l in priced if l.get("health") == "Healthy")
+    a = sum(1 for l in priced if l.get("health") == "At Risk")
+    r = sum(1 for l in priced if l.get("health") == "Unprofitable")
+
+    writer.writerow([])  # separator row
+    writer.writerow([
+        "TOTALS", "", "", "", "", "", "", "",
+        "", "", "",
+        f"${total_mrr}",
+        f"${avg_acq}",
+        "",
+        f"G:{g} A:{a} R:{r}",
+        "",
+        "",
+    ])
+
+    csv_content = output.getvalue()
+
+    return Response(
+        content=csv_content,
+        media_type="text/csv",
+        headers={
+            "Content-Disposition": f"attachment; filename=empire_cpl_lanes_{model}_{monthly_volume}.csv"
+        },
+    )
 
 
 @app.get("/api/v1/cpl/margin")
