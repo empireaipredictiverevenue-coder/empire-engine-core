@@ -107,6 +107,10 @@ from products.b2b_pro import B2BPro, B2BProRoutes
 from products.lead_score import LeadScoreAI, LeadScoreRoutes
 from products.compliant import Compliant, CompliantRoutes
 from products.strike_campaigns import StrikeCampaigns, StrikeCampaignsRoutes
+from products.forecast import Forecast, ForecastRoutes
+from products.market_eye import MarketEye, MarketEyeRoutes
+from products.content_pulse import ContentPulse, ContentPulseRoutes
+from products.contractor_exchange import ContractorExchange, ContractorExchangeRoutes
 from hook_analytics import HookRoutes
 
 # Strategist & Analytics Agents
@@ -583,6 +587,31 @@ suite_strike_campaigns = StrikeCampaigns(
     email_engine=email_engine,
 )
 StrikeCampaignsRoutes(suite_strike_campaigns, require_auth=require_auth, get_db=get_db).register(app)
+
+# Product 10: Forecast — predictive revenue projections as a product
+suite_forecast = Forecast(
+    guard=lambda a, f: suite_guard.check_access(a, f),
+)
+ForecastRoutes(suite_forecast, require_auth=require_auth).register(app)
+
+# Product 11: Market Eye — competitive intelligence & market monitoring
+suite_market_eye = MarketEye(
+    guard=lambda a, f: suite_guard.check_access(a, f),
+)
+MarketEyeRoutes(suite_market_eye, require_auth=require_auth).register(app)
+
+# Product 12: Content Pulse — automated SEO content generation
+suite_content_pulse = ContentPulse(
+    guard=lambda a, f: suite_guard.check_access(a, f),
+)
+ContentPulseRoutes(suite_content_pulse, require_auth=require_auth).register(app)
+
+# Product 13: Contractor Exchange — vetted contractor marketplace
+suite_contractor_exchange = ContractorExchange(
+    guard=lambda a, f: suite_guard.check_access(a, f),
+    get_db=get_db,
+)
+ContractorExchangeRoutes(suite_contractor_exchange, require_auth=require_auth).register(app)
 
 # ── Hook & Trend Decider Engine ────────────────────────────────────────
 HookRoutes(require_auth=require_auth).register(app)
