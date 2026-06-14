@@ -25,6 +25,7 @@ log = logging.getLogger("empire.trial_conversion")
 # ── Config ───────────────────────────────────────────────────────────────
 CHECK_INTERVAL_SEC = 3600       # check every hour
 CONVERSION_GRACE_HOURS = 24     # wait 24h after trial ends before auto-converting
+EXPIRING_SOON_DAYS = [3, 1]     # send reminders N days before trial ends
 
 
 class TrialConversionEngine:
@@ -48,6 +49,8 @@ class TrialConversionEngine:
             "skipped_already_paid": 0,
             "errors": 0,
             "emails_sent": 0,
+            "expiring_soon_reminders_sent": 0,
+            "skipped_already_reminded": 0,
         }
 
     # ── Core: find and convert expired trials ───────────────────────────
@@ -244,11 +247,152 @@ class TrialConversionEngine:
         try:
             result = await self.send_email(to=to, subject=subject, html=body)
             if isinstance(result, dict) and result.get("ok"):
-                self.stats["emails_sent"] += 1
+                return True
             else:
-                log.warning(f"[trial] conversion email send returned: {result}")
+                log.warning(f"[trial] email send returned: {result}")
+                return False
         except Exception as e:
-            log.warning(f"[trial] conversion email exception: {e}")
+            log.warning(f"[trial] email exception: {e}")
+            return False
+
+    # ═══════════════════════════════════════════════════════════════════
+    # EXPIRING SOON REMINDERS
+    # ═══════════════════════════════════════════════════════════════════
+
+    def _find_trials_expiring_soon(self) -> list[dict]:
+        """Query sales_events for trial_start rows ending in 3 or 1 days.
+
+        Returns rows that:
+          - Have event_type = 'trial_start'
+          - Have trial_end within 1 or 3 days from now (exact day match)
+          - Have no corresponding trial_converted event
+          - Have no expiring_soon_reminder_sent event (to avoid repeats)
+        """
+        db = self.get_db()
+        now = datetime.now(timezone.utc)
+
+        # Fetch all trial_start events
+        r = db.table("sales_events") \
+            .select("*") \
+            .eq("event_type", "trial_start") \
+            .order("created_at", desc=False) \
+            .execute()
+        trials = r.data or []
+
+        # Fetch all converted events for exclusion
+        r2 = db.table("sales_events") \
+            .select("email, product_slug") \
+            .in_("event_type", ["trial_converted", "expiring_soon_reminder_sent"]) \
+            .execute()
+        excluded = set()
+        for ev in (r2.data or []):
+            excluded.add((ev.get("email", ""), ev.get("product_slug", "")))
+
+        soon = []
+        for t in trials:
+            trial_end = t.get("trial_end")
+            if not trial_end:
+                continue
+
+            try:
+                end_dt = datetime.fromisoformat(str(trial_end).replace("Z", "+00:00"))
+            except (ValueError, TypeError):
+                continue
+
+            # Check if ending in approximately 1 or 3 days (rounded to nearest day)
+            days_until = round((end_dt - now).total_seconds() / 86400)
+            if days_until not in EXPIRING_SOON_DAYS:
+                continue
+
+            email = t.get("email", "")
+            product_slug = t.get("product_slug", "")
+
+            # Skip if already converted or already reminded
+            if (email, product_slug) in excluded:
+                self.stats.setdefault("skipped_already_reminded", 0)
+                self.stats["skipped_already_reminded"] += 1
+                continue
+
+            soon.append({**t, "days_until": days_until})
+
+        return soon
+
+    @staticmethod
+    def _build_expiring_soon_email(product_name: str, tier: str, price: float,
+                                    days_until: int, email: str) -> str:
+        """Build HTML email reminding user their trial is expiring soon."""
+        urgency = "⚠️" if days_until <= 1 else "⏰"
+        urgency_text = "tomorrow" if days_until <= 1 else f"in {days_until} days"
+        return f"""<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"></head>
+<body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#0a0a0f;color:#e2e8f0;padding:32px">
+  <div style="max-width:560px;margin:0 auto;background:#14141e;border:1px solid #1e293b;border-radius:12px;padding:32px">
+    <div style="font-size:28px;margin-bottom:4px">{urgency}</div>
+    <h1 style="font-weight:200;font-size:22px;letter-spacing:-0.02em;margin:0 0 4px">Your Trial Expires <em style="color:#FFB800;font-style:italic;font-weight:500">{urgency_text}</em></h1>
+    <p style="font-family:'SF Mono','Fira Code',monospace;font-size:10px;color:#94a3b8;letter-spacing:0.14em;text-transform:uppercase;margin:0 0 20px">{product_name} · {tier}</p>
+    <p style="font-size:14px;color:#cbd5e1;line-height:1.7;margin:0 0 8px">
+      Your free trial of <strong>{product_name}</strong> is expiring <strong>{urgency_text}</strong>. To keep using it, upgrade to the <strong>{tier}</strong> plan.
+    </p>
+    <div style="background:#0f0f17;border:1px solid #1e293b;border-radius:8px;padding:16px;margin:16px 0">
+      <div style="font-family:'SF Mono','Fira Code',monospace;font-size:10px;color:#94a3b8;letter-spacing:0.14em;text-transform:uppercase;margin-bottom:8px">Plan Details</div>
+      <div style="font-size:14px;color:#e2e8f0;margin-bottom:4px">{product_name} · <strong>{tier}</strong></div>
+      <div style="font-family:'SF Mono','Fira Code',monospace;font-size:24px;color:#44E5B8;font-weight:600">${price:.2f}<span style="font-size:12px;color:#94a3b8;font-weight:400">/mo</span></div>
+    </div>
+    <p style="font-size:13px;color:#94a3b8;line-height:1.6;margin:0 0 24px">
+      If you don't upgrade, your access will be automatically converted to a paid plan. You can also cancel anytime.
+    </p>
+    <a href="https://empire-ai.co.uk/command#/products" style="display:inline-block;padding:12px 24px;background:#44E5B8;color:#000;text-decoration:none;font-weight:700;font-family:'SF Mono','Fira Code',monospace;font-size:11px;letter-spacing:0.14em;text-transform:uppercase;border-radius:6px">Upgrade Now</a>
+    <p style="font-size:12px;color:#64748b;line-height:1.5;margin:24px 0 0;padding-top:16px;border-top:1px solid #1e293b">
+      Questions? Reply to this email or visit the <a href="https://empire-ai.co.uk/command" style="color:#44E5B8">Command Center</a>.
+    </p>
+  </div>
+</body>
+</html>"""
+
+    async def _send_expiring_soon_reminders(self):
+        """Find trials expiring soon and send reminder emails."""
+        soon = self._find_trials_expiring_soon()
+        sent_count = 0
+        for trial in soon:
+            email = trial.get("email", "")
+            product_slug = trial.get("product_slug", "")
+            tier = trial.get("tier", "")
+            days_until = trial.get("days_until", 3)
+
+            if not email or not product_slug:
+                continue
+
+            product_name = PRODUCT_CATALOG.get(product_slug, {}).get("name", product_slug)
+            price = self._get_tier_price(product_slug, tier) or 0
+
+            subject = f"⏰ Your {product_name} trial expires {days_until}d" if days_until > 1 \
+                      else f"⚠️ Your {product_name} trial expires tomorrow"
+            body = self._build_expiring_soon_email(product_name, tier, price, days_until, email)
+
+            ok = await self._send_email_async(email, subject, body)
+            if ok:
+                sent_count += 1
+                self.stats["expiring_soon_reminders_sent"] += 1
+
+                # Log the reminder event in sales_events to prevent repeats
+                try:
+                    db = self.get_db()
+                    db.table("sales_events").insert({
+                        "email": email,
+                        "product_slug": product_slug,
+                        "event_type": "expiring_soon_reminder_sent",
+                        "tier": tier,
+                        "created_at": datetime.now(timezone.utc).isoformat(),
+                    }).execute()
+                except Exception as e:
+                    log.debug(f"[trial] failed to log reminder event: {e}")
+
+                log.info(f"[trial] sent expiring-soon reminder ({days_until}d) to {email} for {product_slug}")
+
+        if sent_count:
+            log.info(f"[trial] sent {sent_count} expiring-soon reminder(s)")
+        return sent_count
 
     # ═══════════════════════════════════════════════════════════════════
     # RUN LOOP
@@ -275,11 +419,14 @@ class TrialConversionEngine:
         return summary
 
     async def monitoring_loop(self):
-        """Background loop: scan for expired trials every hour."""
+        """Background loop: send expiring-soon reminders + convert expired trials."""
         await asyncio.sleep(300)  # let hub finish booting (5 min)
         log.info("[trial] monitoring loop started (interval=%ds)", CHECK_INTERVAL_SEC)
         while not self._stop_loop:
             try:
+                # 1. Send expiring-soon reminders (trials ending in 3 or 1 days)
+                await self._send_expiring_soon_reminders()
+                # 2. Convert expired trials (ended more than 24h ago)
                 self.run_once()
             except Exception as e:
                 log.warning(f"[trial] monitoring error: {e}")
@@ -295,4 +442,5 @@ class TrialConversionEngine:
             "engine": dict(self.stats),
             "check_interval_sec": CHECK_INTERVAL_SEC,
             "conversion_grace_hours": CONVERSION_GRACE_HOURS,
+            "expiring_soon_days": EXPIRING_SOON_DAYS,
         }
