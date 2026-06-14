@@ -144,6 +144,42 @@ TEMPLATES = {
             "Otherwise no further messages. Reply STOP to confirm opt-out."
         ),
     ],
+    "storm_strike_v2": [
+        # A/B variant. Scarcity angle — "we can only get 1 contractor to
+        # your area this week". Tested against storm_strike (the
+        # default). The converter picks one per-lead based on a stable
+        # hash of the lead id, so the cohort split is reproducible.
+        # Touch 0 — Initial contact. Scarcity angle + opt-out.
+        (
+            "{prefix} Severe weather flagged at your facility ({target_short}). "
+            "We can dispatch 1 vetted contractor to your area THIS WEEK — "
+            "after that the slot goes to the next property on the list. "
+            "No cost for the inspection. Reply YES to claim the slot. "
+            "Reply STOP to opt out."
+        ),
+        # Touch 1 — 1 hour later. Reinforce scarcity.
+        (
+            "{prefix} Still 1 slot open in {target_short} this week. "
+            "If you reply YES in the next 24 hours, a contractor is on-site "
+            "within 48 hours. After that we move to the next property."
+        ),
+        # Touch 2 — 4 hours later. Soft social proof.
+        (
+            "{prefix} Two property owners in {target_short} replied YES today. "
+            "If you want the inspection, the slot is yours — reply YES."
+        ),
+        # Touch 3 — 24 hours later. Last-call scarcity.
+        (
+            "{prefix} Last note. The {target_short} dispatch slot goes to the "
+            "next property at end of day. If you want it, reply YES. "
+            "Reply STOP to opt out."
+        ),
+        # Touch 4 — 72 hours later. Slot is gone, soft opt-out.
+        (
+            "{prefix} The {target_short} slot was filled. If another event "
+            "hits your area we'll reach out again. Reply STOP to opt out."
+        ),
+    ],
     "contractor_recruit": [
         # Touch 0 — Initial pitch. Free-trial framing, no-call ask, splash CTA.
         (
@@ -161,13 +197,15 @@ TEMPLATES = {
             "dispatch queue. You only pay when the claim settles. "
             "First 2 deals on us. empire-ai.co.uk/contractors"
         ),
-        # Touch 2 — 240 hours later. Soft close, NOTNOW path, opt-out.
+        # Touch 2 — 240 hours later. Soft close + REFERRAL ask.
+        # (Referrals are a $0 CAC channel — each contractor knows 2-3 others
+        # in adjacent metros. Captured via POST /api/contractors/refer.)
         (
-            "{prefix} Closing note. If the timing's wrong, reply NOTNOW "
-            "and we'll check back next quarter. No chase. To test with "
-            "a free deal first, self-onboard at "
-            "empire-ai.co.uk/contractors — 90 seconds, no call needed. "
-            "First 2 closed deals are 100% complimentary. "
+            "{prefix} Closing note. Three options: "
+            "(1) self-onboard at empire-ai.co.uk/contractors — 90s, first 2 deals on us, "
+            "(2) reply NOTNOW and we'll check back next quarter, "
+            "(3) know another roofer who'd want qualified leads? "
+            "Reply REFER with their name + number and we'll reach out. "
             "Reply STOP to opt out."
         ),
     ],

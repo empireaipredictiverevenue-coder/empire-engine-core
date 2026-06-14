@@ -17,7 +17,6 @@ chat bubble simply doesn't render (graceful degradation).
 import os
 import re
 import json
-import time
 import logging
 import hashlib
 from pathlib import Path
@@ -32,45 +31,6 @@ except ImportError:
 
 
 log = logging.getLogger("empire.contractors_page")
-
-
-# ── Contractor Chat Wrapper Prompt ──────────────────────────────────
-# This system prompt is sent to the synthetic brain for every chat
-# message. It grounds the LLM in the contractor-recruit context.
-_CONTRACTOR_CHAT_SYSTEM_PROMPT = (
-    "You are a helpful recruitment assistant for Empire AI, a service that "
-    "delivers pre-qualified storm-affected property owner leads to licensed "
-    "contractors. You answer questions about how Empire AI works, the 3% "
-    "fee on settled claims, the first-2-deals-free policy, how onboarding "
-    "works, what trades are supported, service areas, and how dispatches "
-    "work. Be concise, friendly, and professional. Do not mention competitor "
-    "services. If you don't know something, say you'll have a team member "
-    "follow up. Keep answers under 3 paragraphs."
-)
-
-
-# ── In-memory rate limiter: {session_id: [timestamp, ...]} ───────────
-# 30 messages per hour per session. Entries older than 1 hour are dropped
-# on access (lazy expiry).
-_CHAT_RATE_LIMIT: dict = {}
-_CHAT_RATE_LIMIT_WINDOW = 3600  # 1 hour in seconds
-_CHAT_RATE_LIMIT_MAX = 30
-
-
-def _check_chat_rate_limit(session_id: str) -> tuple[bool, int]:
-    """Check if session_id has exceeded the rate limit.
-    Returns (allowed, current_count). Removes expired entries lazily."""
-    now = time.time()
-    cutoff = now - _CHAT_RATE_LIMIT_WINDOW
-    timestamps = _CHAT_RATE_LIMIT.get(session_id, [])
-    # Filter out expired entries
-    timestamps = [ts for ts in timestamps if ts > cutoff]
-    _CHAT_RATE_LIMIT[session_id] = timestamps
-    current = len(timestamps)
-    if current >= _CHAT_RATE_LIMIT_MAX:
-        return False, current
-    timestamps.append(now)
-    return True, current + 1
 
 
 # TCPA-compliant E.164 regex: +[country][number], 8-15 digits total
@@ -605,79 +565,230 @@ async def contractors_onboard(request: Request) -> JSONResponse:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Chat endpoint
+# Refer endpoint (capture a contractor's "reply REFER" intros)
 # ─────────────────────────────────────────────────────────────────────────────
 
-async def contractors_chat(request: Request) -> JSONResponse:
-    """POST /api/contractors/chat
+def _normalize_phone(phone: str) -> str:
+    """E.164 normalize. US default: 10 digits -> +1XXXXXXXXXX, 11 leading-1 -> +1..."""
+    if not phone:
+        return ""
+    digits = "".join(c for c in phone if c.isdigit())
+    if not digits:
+        return ""
+    if len(digits) == 10:
+        return "+1" + digits
+    if len(digits) == 11 and digits.startswith("1"):
+        return "+" + digits
+    if phone.strip().startswith("+") and len(digits) >= 10:
+        return "+" + digits
+    return ""
 
-    Public chat endpoint for the contractor-recruit widget. No auth.
-    Accepts { session_id, message }, rate-limits at 30/hr/session,
-    calls synthetic_brain at 127.0.0.1:8005/ask with a contractor-recruit
-    wrapper prompt, and returns { reply, count_remaining }.
+
+_REFER_NAME_RE = re.compile(r"^([A-Z][a-zA-Z'\-]+(?:\s+[A-Z][a-zA-Z'\-]+))")
+_REFER_PHONE_RE = re.compile(r"(\+?1?[\s.-]?\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4})")
+
+
+def _parse_refer_payload(text: str, default_metro: str = "") -> dict:
+    """Parse a free-text REFER reply into name + phone.
+
+    Input examples:
+      "REFER Mike Johnson 817-555-1234"
+      "REFER +18175551234 Sarah's Roofing"
+      "Mike +18175551234 DFW"  (just name + number + optional metro)
+    Returns {"name": "...", "phone": "...", "metro": "...", "company": "..."}
     """
-    try:
-        body = await request.json()
-    except Exception:
-        return JSONResponse({"ok": False, "error": "invalid_json"}, status_code=400)
+    # extract the first phone-looking substring
+    pm = _REFER_PHONE_RE.search(text)
+    phone_raw = pm.group(1) if pm else ""
+    # remove the phone from the text to find the name
+    remainder = text.replace(phone_raw, "", 1) if phone_raw else text
+    # strip leading "REFER" / "REFFER" / punctuation
+    remainder = re.sub(r"(?i)^\s*refer(?:ral)?\s*[:,\-]?\s*", "", remainder)
+    # last word before the phone is often a metro (e.g. "DFW", "Wichita")
+    words = remainder.split()
+    metro = ""
+    company_words = []
+    if words and words[-1] in ("DFW", "Wichita", "Houston", "Austin", "San", "Antonio"):
+        metro = words[-1]
+        if len(words) > 1 and words[-2] in ("San",):
+            metro = "San Antonio"
+            words = words[:-2]
+        else:
+            words = words[:-1]
+    # the rest is "FirstName LastName" + optional company words
+    if len(words) >= 2:
+        name = f"{words[0]} {words[1]}"
+        company = " ".join(words[2:]) if len(words) > 2 else ""
+    elif len(words) == 1:
+        name = words[0]
+        company = ""
+    else:
+        name = ""
+        company = ""
+    return {
+        "name":    name.strip(),
+        "phone":   phone_raw.strip(),
+        "metro":   metro or default_metro,
+        "company": company.strip(),
+    }
+
+
+async def contractors_refer(request: Request) -> JSONResponse:
+    """POST /api/contractors/refer
+
+    Two calling patterns:
+      1. JSON body from a web form / buffy's chat widget:
+         {"referrer_phone": "+1...", "referred_name": "...", "referred_phone": "+1...",
+          "referred_company": "...", "referred_metro": "DFW"}
+      2. Plain text (from an SMS REFER reply):
+         "REFER Mike Johnson 817-555-1234 DFW"
+         In that case content-type is text/plain and the phone is the referrer's.
+
+    Idempotent: same (referrer_phone, referred_phone) is a no-op.
+    """
+    # Accept either JSON or text/plain
+    body = None
+    raw_text = ""
+    ct = (request.headers.get("content-type") or "").lower()
+    if "application/json" in ct:
+        try:
+            body = await request.json()
+        except Exception:
+            return JSONResponse({"ok": False, "error": "invalid_json"}, status_code=400)
+    elif "text/plain" in ct:
+        raw_text = (await request.body()).decode("utf-8", errors="ignore").strip()
+    else:
+        # try JSON first, fall back to text
+        try:
+            body = await request.json()
+        except Exception:
+            raw_text = (await request.body()).decode("utf-8", errors="ignore").strip()
+
+    if raw_text and not body:
+        # SMS-style reply. We don't have the referrer's phone in the body
+        # (Vonage posts the from-number separately). For now, require the
+        # caller to add an X-Referrer-Phone header (set by the inbound
+        # handler in empire_sms.py). If absent, we 400.
+        referrer_phone = (request.headers.get("X-Referrer-Phone") or "").strip()
+        if not referrer_phone:
+            return JSONResponse({
+                "ok": False,
+                "error": "missing_referrer_phone",
+                "hint": "SMS REFER replies need an X-Referrer-Phone header",
+            }, status_code=400)
+        # Normalize the referrer's phone
+        referrer_norm = _normalize_phone(referrer_phone)
+        if not referrer_norm:
+            return JSONResponse({"ok": False, "error": "invalid_referrer_phone"}, status_code=400)
+        parsed = _parse_refer_payload(raw_text)
+        body = {
+            "referrer_phone":    referrer_norm,
+            "referred_name":     parsed["name"],
+            "referred_phone":    _normalize_phone(parsed["phone"]),
+            "referred_company":  parsed["company"],
+            "referred_metro":    parsed["metro"],
+        }
 
     if not isinstance(body, dict):
         return JSONResponse({"ok": False, "error": "invalid_payload"}, status_code=400)
 
-    session_id = (body.get("session_id") or "").strip()
-    message = (body.get("message") or "").strip()
+    referrer_phone   = _normalize_phone((body.get("referrer_phone") or "").strip())
+    referred_name    = (body.get("referred_name") or "").strip()
+    referred_phone   = _normalize_phone((body.get("referred_phone") or "").strip())
+    referred_company = (body.get("referred_company") or "").strip()
+    referred_metro   = (body.get("referred_metro") or "").strip()
 
-    if not session_id:
-        return JSONResponse({"ok": False, "error": "missing_session_id"}, status_code=400)
-    if len(session_id) > 128:
-        return JSONResponse({"ok": False, "error": "session_id_too_long"}, status_code=400)
-    if not message:
-        return JSONResponse({"ok": False, "error": "missing_message"}, status_code=400)
-    if len(message) > 2000:
-        return JSONResponse({"ok": False, "error": "message_too_long"}, status_code=400)
+    if not referrer_phone:
+        return JSONResponse({"ok": False, "error": "missing_referrer_phone"}, status_code=400)
+    if not referred_name:
+        return JSONResponse({"ok": False, "error": "missing_name", "field": "referred_name"}, status_code=400)
+    if not referred_phone:
+        return JSONResponse({"ok": False, "error": "missing_phone", "field": "referred_phone"}, status_code=400)
+    if not _E164_RE.match(referred_phone):
+        return JSONResponse({"ok": False, "error": "invalid_phone", "field": "referred_phone"}, status_code=400)
 
-    # Rate limit check
-    allowed, count = _check_chat_rate_limit(session_id)
-    if not allowed:
-        return JSONResponse({
-            "ok": False,
-            "error": "rate_limited",
-            "message": "You've reached the message limit. Please try again later.",
-        }, status_code=429)
+    # Compliance: don't enroll an opted-out phone. The refer endpoint
+    # takes a different code path than onboard (different function),
+    # so we do a fresh opt-out lookup here. We use a temp db client
+    # just for this check; the real insert uses the override path below.
+    if _is_opted_out_for_refer(_get_db_override() if _get_db_override is not None else None, referred_phone):
+        return JSONResponse({"ok": False, "error": "phone_opted_out", "field": "referred_phone"}, status_code=400)
 
-    remaining = max(0, _CHAT_RATE_LIMIT_MAX - count)
+    # Get DB handle. _get_db_override is set by register_contractor_routes
+    # (a callable) or left as None at module load; if None, fall back to
+    # importing the hub's get_db.
+    db = _get_db_override() if _get_db_override is not None else None
+    if db is None:
+        try:
+            from hub import get_db
+            db = get_db()
+        except Exception:
+            from supabase import create_client
+            db = create_client(os.environ.get("SUPABASE_URL",""), os.environ.get("SUPABASE_SERVICE_KEY",""))
 
-    # Call synthetic brain
+    # Look up the referrer's contractor row (if any)
+    referrer_row = None
     try:
-        import httpx
-        async with httpx.AsyncClient(timeout=15.0) as client:
-            resp = await client.post(
-                "http://127.0.0.1:8005/ask",
-                json={
-                    "system": _CONTRACTOR_CHAT_SYSTEM_PROMPT,
-                    "prompt": message,
-                },
-            )
-            if resp.status_code != 200:
-                log.warning(f"[contractors_chat] synthetic_brain returned {resp.status_code}")
-                return JSONResponse({
-                    "ok": True,
-                    "reply": "I'm sorry, I'm having trouble connecting right now. Please try again in a moment or email contractors@empire-ai.co.uk.",
-                    "count_remaining": remaining,
-                }, status_code=200)
-            data = resp.json()
-            reply = (data.get("response") or data.get("reply") or data.get("answer") or "").strip()
-            if not reply:
-                reply = "Thanks for your question! A team member will follow up with more details."
+        rr = db.table("contractors").select("id,name").eq("phone", referrer_phone).limit(1).execute()
+        if rr.data:
+            referrer_row = rr.data[0]
     except Exception as e:
-        log.warning(f"[contractors_chat] synthetic_brain call failed: {e}")
-        reply = "I'm sorry, I'm having trouble connecting right now. Please try again in a moment or email contractors@empire-ai.co.uk."
+        log.warning(f"[contractors_refer] referrer lookup failed: {e}")
 
+    # Idempotency: if the same referrer already referred this phone, return existing
+    try:
+        existing = (db.table("contractor_referrals")
+                      .select("id,status,created_at")
+                      .eq("referrer_phone", referrer_phone)
+                      .eq("referred_phone", referred_phone)
+                      .limit(1).execute())
+        if existing.data:
+            return JSONResponse({
+                "ok": True,
+                "referral_id": existing.data[0]["id"],
+                "existing":    True,
+                "next_step":   "Already on the list. We'll reach out to them within a week.",
+            }, status_code=200)
+    except Exception as e:
+        log.warning(f"[contractors_refer] existing-check failed: {e}")
+
+    payload = {
+        "referrer_contractor_id": referrer_row["id"] if referrer_row else None,
+        "referrer_phone":         referrer_phone,
+        "referred_name":          referred_name,
+        "referred_phone":         referred_phone,
+        "referred_company":       referred_company or None,
+        "referred_metro":         referred_metro or None,
+        "status":                 "new",
+        "notes":                  None,
+    }
+
+    try:
+        ins = db.table("contractor_referrals").insert(payload).execute()
+    except Exception as e:
+        log.error(f"[contractors_refer] insert failed: {e}")
+        return JSONResponse({"ok": False, "error": "insert_failed"}, status_code=500)
+
+    if not ins.data:
+        return JSONResponse({"ok": False, "error": "insert_returned_no_row"}, status_code=500)
+
+    log.info(f"[contractors_refer] new referral: {ins.data[0]['id']} from {referrer_phone} -> {referred_phone}")
     return JSONResponse({
         "ok": True,
-        "reply": reply,
-        "count_remaining": remaining,
+        "referral_id": ins.data[0]["id"],
+        "next_step":   "Thanks! We'll reach out to them within a week with the same offer.",
     }, status_code=200)
+
+
+def _is_opted_out_for_refer(db, phone: str) -> bool:
+    """Inline compliance check, just for the refer endpoint. db may be None."""
+    if db is None:
+        return False
+    try:
+        r = db.table("sms_opt_outs").select("phone").eq("phone", phone).limit(1).execute()
+        return bool(r.data)
+    except Exception:
+        return False
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -696,9 +807,9 @@ def register_contractor_routes(
 ):
     """Mount /contractors and /api/contractors/onboard on the FastAPI app.
 
-    The /api/contractors/chat endpoint is also registered here (chat
-    widget integration). It uses the synthetic_brain for Q&A with
-    in-memory rate limiting.
+    The /api/contractors/chat endpoint is owned by buffy (chat widget
+    implementation) and is NOT registered here. This module is
+    deliberately chat-free so the page and the form work standalone.
 
     Compatibility signature: the existing hub.py call at line 449 passes
     require_auth, get_db, sign_token, verify_token, send_email,
@@ -725,11 +836,11 @@ def register_contractor_routes(
         methods=["POST"],
     )
     app.add_api_route(
-        "/api/contractors/chat",
-        contractors_chat,
+        "/api/contractors/refer",
+        contractors_refer,
         methods=["POST"],
     )
-    log.info("[contractors] routes registered: GET /contractors, POST /api/contractors/onboard, POST /api/contractors/chat")
+    log.info("[contractors] routes registered: GET /contractors, POST /api/contractors/onboard, POST /api/contractors/refer")
 
 
 _get_db_override = None
