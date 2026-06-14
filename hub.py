@@ -684,11 +684,34 @@ async def trial_grace_extend(request: Request, auth: bool = Depends(require_auth
         return JSONResponse({"ok": False, "error": str(e)[:200]}, status_code=500)
 
 
+@app.post("/api/v6/suite/sales/trial-churn/report")
+async def trial_churn_report(request: Request, auth: bool = Depends(require_auth)):
+    """Manually report a churn reason for a converted trial.
+    Body: {email, product_slug, reason}
+    """
+    try:
+        body = await request.json()
+        email = (body.get("email") or "").strip()
+        product_slug = (body.get("product_slug") or "").strip()
+        reason = (body.get("reason") or "").strip()
+
+        if not email or not product_slug or not reason:
+            return JSONResponse({"ok": False, "error": "email, product_slug, and reason are required"}, status_code=400)
+
+        result = suite_trial_conversion.report_churn(
+            email=email, product_slug=product_slug, reason=reason,
+        )
+        status = 200 if result.get("ok") else 400
+        return JSONResponse(result, status_code=status)
+    except Exception as e:
+        return JSONResponse({"ok": False, "error": str(e)[:200]}, status_code=500)
+
+
 @app.get("/api/v6/suite/sales/trial-audit")
 async def trial_audit(
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
-    event_type: Optional[str] = Query(None, pattern="^(trial_start|trial_converted|expiring_soon_reminder_sent|trial_extended)$"),
+    event_type: Optional[str] = Query(None, pattern="^(trial_start|trial_converted|expiring_soon_reminder_sent|trial_extended|trial_churned)$"),
     auth: bool = Depends(require_auth),
 ):
     """Trial audit history — recent trial events with pagination and optional type filter."""

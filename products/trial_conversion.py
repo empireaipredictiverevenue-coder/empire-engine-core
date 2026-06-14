@@ -53,6 +53,8 @@ class TrialConversionEngine:
             "expiring_soon_reminders_sent": 0,
             "skipped_already_reminded": 0,
             "auto_created": 0,
+            "churn_detected": 0,
+            "churn_reported": 0,
         }
 
     # ── Core: find and convert expired trials ───────────────────────────
@@ -412,6 +414,184 @@ class TrialConversionEngine:
         return sent_count
 
     # ═══════════════════════════════════════════════════════════════════
+    # TRIAL CHURN TRACKING
+    # ═══════════════════════════════════════════════════════════════════
+
+    def track_churn(self, reason: Optional[str] = None) -> list[dict]:
+        """Scan converted trials for subscriptions that have since churned.
+
+        Looks for trial_converted events, checks the subscription status,
+        and logs a trial_churned event if the sub is now CANCELED/PAST_DUE
+        and no trial_churned event has been logged yet.
+
+        Args:
+            reason: Optional default reason string ("auto-detected" if None).
+
+        Returns:
+            List of churn events logged this scan.
+        """
+        db = self.get_db()
+        reason = reason or "auto-detected: subscription status changed"
+
+        # Fetch all trial_converted events
+        r = db.table("sales_events") \
+            .select("email, product_slug, tier, amount_usd, name, company, created_at") \
+            .eq("event_type", "trial_converted") \
+            .order("created_at", desc=True) \
+            .execute()
+        converted = r.data or []
+
+        # Fetch all trial_churned events for dedup
+        r2 = db.table("sales_events") \
+            .select("email, product_slug") \
+            .eq("event_type", "trial_churned") \
+            .execute()
+        already_churned = set()
+        for ev in (r2.data or []):
+            already_churned.add((ev.get("email", ""), ev.get("product_slug", "")))
+
+        logged = []
+        for conv in converted:
+            email = conv.get("email", "")
+            product_slug = conv.get("product_slug", "")
+
+            if not email or not product_slug:
+                continue
+
+            # Skip if already logged
+            key = (email, product_slug)
+            if key in already_churned:
+                continue
+
+            # Check subscription status
+            sub = self.subscriptions.get_subscription(email)
+            if not sub:
+                # Subscription gone entirely — treat as churn
+                status = "CANCELED"
+                old_mrr = float(conv.get("amount_usd", 0) or 0)
+            else:
+                status = sub.get("subscription_status", "ACTIVE")
+                if status not in ("CANCELED", "PAST_DUE"):
+                    continue  # still active — skip
+                old_mrr = float(sub.get("monthly_recurring_revenue", 0) or 0)
+
+            # Log the trial_churned event
+            notes = f"Churn detected: {reason[:200]} | prior: {product_slug}/{conv.get('tier','')} at ${old_mrr:.2f}/mo"
+            try:
+                db.table("sales_events").insert({
+                    "email": email,
+                    "product_slug": product_slug,
+                    "event_type": "trial_churned",
+                    "tier": conv.get("tier", ""),
+                    "amount_usd": old_mrr,
+                    "notes": notes,
+                    "name": conv.get("name", ""),
+                    "company": conv.get("company", ""),
+                    "created_at": datetime.now(timezone.utc).isoformat(),
+                }).execute()
+            except Exception as e:
+                log.warning(f"[trial] failed to log churn event for {email}: {e}")
+                continue
+
+            self.stats["churn_detected"] += 1
+            logged.append({
+                "email": email,
+                "product_slug": product_slug,
+                "tier": conv.get("tier", ""),
+                "prior_mrr": old_mrr,
+                "status": status,
+                "reason": reason[:200],
+            })
+            log.info(f"[trial] churn detected: {email} → {product_slug} ({status}) lost ${old_mrr:.2f}/mo")
+
+        if logged:
+            log.info(f"[trial] churn scan: {len(logged)} new churn event(s) logged")
+        return logged
+
+    def report_churn(self, email: str, product_slug: str, reason: str) -> dict:
+        """Manually report a churn reason for a converted trial.
+
+        Args:
+            email: Trial user's email.
+            product_slug: Product slug.
+            reason: Operator-provided churn reason.
+
+        Returns:
+            {"ok": True/False, ...}
+        """
+        if not email or not product_slug or not reason:
+            return {"ok": False, "error": "email, product_slug, and reason are required"}
+
+        db = self.get_db()
+
+        # Verify a trial_converted event exists
+        r = db.table("sales_events") \
+            .select("*") \
+            .eq("email", email) \
+            .eq("product_slug", product_slug) \
+            .eq("event_type", "trial_converted") \
+            .limit(1) \
+            .execute()
+        if not r.data:
+            return {"ok": False, "error": f"No trial_converted event found for {email}/{product_slug}"}
+
+        conv = r.data[0]
+
+        # Check if already churn-logged
+        r2 = db.table("sales_events") \
+            .select("id") \
+            .eq("email", email) \
+            .eq("product_slug", product_slug) \
+            .eq("event_type", "trial_churned") \
+            .limit(1) \
+            .execute()
+        if r2.data:
+            # Update the existing churn event with new reason
+            try:
+                db.table("sales_events") \
+                    .update({"notes": f"Churn reason updated: {reason[:500]}"}) \
+                    .eq("id", r2.data[0]["id"]) \
+                    .execute()
+                self.stats["churn_reported"] += 1
+                return {"ok": True, "updated": True, "email": email, "product_slug": product_slug, "reason": reason[:500]}
+            except Exception as e:
+                return {"ok": False, "error": f"Failed to update churn reason: {e}"}
+
+        # Check subscription status
+        sub = self.subscriptions.get_subscription(email)
+        status = sub.get("subscription_status", "CANCELED") if sub else "CANCELED"
+        old_mrr = float(conv.get("amount_usd", 0) or 0)
+
+        notes = f"Churn reported by operator: {reason[:400]}"
+        try:
+            db.table("sales_events").insert({
+                "email": email,
+                "product_slug": product_slug,
+                "event_type": "trial_churned",
+                "tier": conv.get("tier", ""),
+                "amount_usd": old_mrr,
+                "notes": notes,
+                "name": conv.get("name", ""),
+                "company": conv.get("company", ""),
+                "created_at": datetime.now(timezone.utc).isoformat(),
+            }).execute()
+        except Exception as e:
+            return {"ok": False, "error": f"Failed to log churn event: {e}"}
+
+        self.stats["churn_reported"] += 1
+        log.info(f"[trial] churn reported by operator: {email} → {product_slug} — {reason[:80]}")
+
+        return {
+            "ok": True,
+            "email": email,
+            "product_slug": product_slug,
+            "tier": conv.get("tier", ""),
+            "prior_mrr": old_mrr,
+            "status": status,
+            "reason": reason[:500],
+        }
+
+    # ═══════════════════════════════════════════════════════════════════
     # RUN LOOP
     # ═══════════════════════════════════════════════════════════════════
 
@@ -436,11 +616,13 @@ class TrialConversionEngine:
         return summary
 
     async def monitoring_loop(self):
-        """Background loop: send expiring-soon reminders + convert expired trials."""
+        """Background loop: send expiring-soon reminders + convert expired trials + track churn."""
         await asyncio.sleep(300)  # let hub finish booting (5 min)
         log.info("[trial] monitoring loop started (interval=%ds)", CHECK_INTERVAL_SEC)
         while not self._stop_loop:
             try:
+                # 0. Track churn on converted trials (runs first to catch churns promptly)
+                self.track_churn()
                 # 1. Send expiring-soon reminders (trials ending in 3 or 1 days)
                 await self._send_expiring_soon_reminders()
                 # 2. Convert expired trials (ended more than 24h ago)
