@@ -100,6 +100,12 @@ class SolanaRevenueEngine:
             "last_verified": None,
         }
 
+        # ── Payment-verified callbacks ────────────────────────────
+        # List of async callables fired when a payment is successfully
+        # verified and logged. Each receives a single dict argument:
+        #   {signature, amount_usdc, sender, campaign, timestamp}
+        self.on_payment_verified: list = []
+
     async def verify_solana_transaction(self, tx_hash: str) -> dict:
         """Query the live Solana blockchain via JSON-RPC for transaction details."""
         rpc_payload = {
@@ -317,6 +323,23 @@ class SolanaRevenueEngine:
             f"sig={signature_hash[:16]}... "
             f"logged={logged}"
         )
+
+        # Fire payment-verified callbacks (non-blocking, each runs
+        # as a separate task so a slow handler never delays the API response)
+        if self.on_payment_verified and logged:
+            payment_event = {
+                "signature": signature_hash,
+                "amount_usdc": extracted_amount,
+                "sender": detected_sender,
+                "campaign": campaign_memo_id,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            }
+            import asyncio as _pay_asyncio
+            for cb in self.on_payment_verified:
+                try:
+                    _pay_asyncio.ensure_future(cb(payment_event))
+                except Exception as _cb_err:
+                    log.warning(f"[solana.revenue] callback error: {_cb_err}")
 
         return {
             "status": "REVENUE_VERIFIED_AND_LOCKED",

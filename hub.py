@@ -1506,6 +1506,71 @@ swarm_gate = GodModeSwarmGate(
     lane_timeout=int(os.environ.get("SWARM_LANE_TIMEOUT_SEC", "120")),
 )
 
+# ── Payment-Triggered Storm Scan ────────────────────────────────
+# When a USDC payment hits the ledger, run a fresh satellite scan
+# and pipe the results through the swarm gate to drop new
+# storm-damage targets into the pipeline lanes.
+async def _payment_triggered_storm_scan(payment_event: dict):
+    """Called when SolanaRevenueEngine verifies a new payment.
+    Runs satellite_strike.scan() then fires swarm_gate to drop
+    targets into the lane pipeline.
+    """
+    amt = payment_event.get('amount_usdc', 0)
+    log.info(f"[payment→storm] payment ${amt:.2f} → triggering satellite scan")
+    try:
+        packages = await satellite_strike.scan()
+        if not packages:
+            log.info("[payment→storm] scan complete — no new targets found")
+            return
+
+        log.info(f"[payment→storm] scan found {len(packages)} targets — "
+                 f"firing swarm gate")
+
+        # Convert StrikePackage dataclass to dicts for swarm_gate.fire()
+        package_dicts = [{
+            "target_id": p.target_id,
+            "warehouse_name": p.warehouse_name,
+            "address": p.address,
+            "city": p.city,
+            "state": p.state,
+            "phone": p.phone,
+            "email": p.email,
+            "asset_value": p.asset_value,
+            "damage_severity": p.damage_severity,
+            "metro": p.metro,
+            "storm_event": p.storm_event,
+            "storm_severity": p.storm_severity,
+            "storm_urgency": p.storm_urgency,
+            "risk_level": p.risk_level,
+            "risk_rank": p.risk_rank,
+            "niche": p.niche,
+            "source": p.source,
+            "meta": p.meta,
+        } for p in packages]
+
+        jobs = await swarm_gate.fire(
+            package_dicts,
+            auto_script=True,
+            auto_audio=True,
+            auto_render=True,
+        )
+        completed = sum(1 for j in jobs if j.status == "complete")
+        log.info(f"[payment→storm] swarm gate fired: {completed}/{len(jobs)} "
+                 f"jobs completed for ${amt:.2f} payment")
+    except Exception as e:
+        log.warning(f"[payment→storm] pipeline error: {e}")
+
+
+# Register the callback on the solana revenue engine
+solana_revenue_engine.on_payment_verified.append(_payment_triggered_storm_scan)
+log.info("[payment→storm] callback wired — verified payments trigger satellite scan + swarm fire")
+
+
+# Register the callback on the solana revenue engine
+solana_revenue_engine.on_payment_verified.append(_payment_triggered_storm_scan)
+log.info("[payment→storm] callback wired — verified payments trigger satellite scan")
+
+
 # Wire AGI Governor + SI Strategy into the SalesFunnel (now that both exist)
 sales_funnel._agi_governor = governor
 sales_funnel._si_strategy = si_strategy
