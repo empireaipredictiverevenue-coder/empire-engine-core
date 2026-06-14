@@ -1,15 +1,589 @@
 """
-EMPIRE V49 · PRICING PAGE
-=========================
+EMPIRE V49 · PRICING PAGE + CPL PRICING ENGINE
+=================================================
 Standalone public pricing page served at /pricing.
-Lists all Empire AI products with tiers, descriptions, and pricing.
-
-Pro tip: uses the Empire design system (empire_tokens) for consistent look.
+Also contains the CPL_BENCHMARKS data structure and CPLPricingEngine
+for per-vertical pricing strategy — CPL lookups, model recommendations,
+ROI estimates, and margin calculations across all 32 lanes.
 """
+
+from typing import Dict, List, Optional, Tuple
 
 from empire_tokens import empire_head
 
 
+# ═════════════════════════════════════════════════════════════════════════
+# CPL BENCHMARKS — Full Spectrum Data (from VERTICALS.md research)
+# ═════════════════════════════════════════════════════════════════════════
+
+CPL_BENCHMARKS: Dict[str, Dict] = {
+    "Home Services": {
+        "icon": "🏠",
+        "best_model": "both",
+        "volume": "highest",
+        "sub_niches": {
+            "Roofing":                  {"ppl": (162, 228), "ppc": (11, 258),  "best": "both",  "trigger": "Storm/hail, emergency",       "notes": "Google LSA delivers 30-50% lower CPL"},
+            "HVAC":                     {"ppl": (51, 149),  "ppc": (10, 150),  "best": "both",  "trigger": "Weather extremes, seasonal",   "notes": "78% hire first responder"},
+            "Plumbing":                 {"ppl": (57, 183),  "ppc": (14, 150),  "best": "ppc",   "trigger": "Emergency, burst pipe",         "notes": "Speed is highest-leverage metric"},
+            "Electrical":               {"ppl": (35, 150),  "ppc": (20, 80),   "best": "both",  "trigger": "Emergency/renovation",           "notes": ""},
+            "Water Damage Restoration": {"ppl": (40, 150),  "ppc": (40, 200),  "best": "ppc",   "trigger": "Flood/burst → immediate",       "notes": "Avg response time: ~47h"},
+            "Mold Remediation":         {"ppl": (20, 80),   "ppc": (30, 120),  "best": "both",  "trigger": "Secondary to water damage",      "notes": ""},
+            "Solar Installation":       {"ppl": (100, 300), "ppc": (50, 300),  "best": "ppl",   "trigger": "Policy-driven, IRA",             "notes": "Long consideration cycle"},
+            "Pest Control":             {"ppl": (20, 60),   "ppc": (20, 108),  "best": "both",  "trigger": "Seasonal, recurring",            "notes": "Recurring revenue model"},
+            "Bath Remodeling":          {"ppl": (50, 120),  "ppc": (19, 120),  "best": "both",  "trigger": "Renovation cycle",               "notes": ""},
+            "Window Repair/Install":    {"ppl": (40, 80),   "ppc": (11, 108),  "best": "both",  "trigger": "Seasonal",                      "notes": ""},
+            "Home Security":            {"ppl": (20, 60),   "ppc": (25, 80),   "best": "ppl",   "trigger": "Subscription, high LTV",         "notes": "Recurring revenue model"},
+        },
+    },
+    "Legal": {
+        "icon": "⚖️",
+        "best_model": "both",
+        "volume": "high_value",
+        "sub_niches": {
+            "Personal Injury":         {"ppl": (250, 600), "ppc": (150, 400), "best": "both", "trigger": "Highest competition",           "notes": "Highest CPL; PI keywords >$200/click"},
+            "Mass Tort":               {"ppl": (150, 350), "ppc": (100, 300), "best": "ppl",  "trigger": "Lower per-lead, high volume",    "notes": "FDA recall-driven"},
+            "Workers Comp":            {"ppl": (150, 400), "ppc": (50, 150),  "best": "both", "trigger": "Highly dependent on local mkt",   "notes": "88% of legal search = phone call"},
+            "Medical Malpractice":     {"ppl": (300, 700), "ppc": (200, 500), "best": "both", "trigger": "Most expensive legal sub-niche",  "notes": ""},
+            "Criminal Defense":        {"ppl": (75, 185),  "ppc": (75, 200),  "best": "ppc",  "trigger": "Localized, urgent",              "notes": ""},
+            "Family Law":              {"ppl": (75, 200),  "ppc": (30, 80),   "best": "both", "trigger": "Higher volume, lower margin",      "notes": "Divorce, custody"},
+            "Class Action":            {"ppl": (100, 300), "ppc": (80, 250),  "best": "ppl",  "trigger": "FDA recall-driven",              "notes": ""},
+            "Bankruptcy/Debt":         {"ppl": (25, 75),   "ppc": (40, 100),  "best": "both", "trigger": "Tied to economic cycles",          "notes": ""},
+            "Business Litigation":     {"ppl": (50, 200),  "ppc": (50, 150),  "best": "ppl",  "trigger": "Contract disputes, IP",           "notes": "B2B"},
+            "Social Security Disab":   {"ppl": (25, 60),   "ppc": (30, 80),   "best": "both", "trigger": "Steady demand",                   "notes": ""},
+        },
+    },
+    "Insurance": {
+        "icon": "🏥",
+        "best_model": "both",
+        "volume": "high",
+        "sub_niches": {
+            "Medicare Advantage":  {"ppl": (35, 85),   "ppc": (55, 110), "best": "both", "trigger": "AEP (Oct-Dec)",             "notes": "Exclusive leads close 10-20%"},
+            "Medicare Supplement": {"ppl": (40, 95),   "ppc": (60, 120), "best": "both", "trigger": "Year-round",                "notes": ""},
+            "Final Expense":       {"ppl": (15, 40),   "ppc": (25, 55),  "best": "ppc",  "trigger": "Year-round, senior demo",    "notes": ""},
+            "Life Insurance":      {"ppl": (30, 80),   "ppc": (50, 120), "best": "both", "trigger": "Year-round",                "notes": ""},
+            "ACA/Health":          {"ppl": (25, 65),   "ppc": (40, 90),  "best": "both", "trigger": "OEP (Nov-Jan)",             "notes": "Costs spike 15-30% during OEP"},
+            "Auto Insurance":      {"ppl": (35, 85),   "ppc": (20, 50),  "best": "ppl",  "trigger": "Rate-shopping, year-round",  "notes": ""},
+            "Commercial Insurance":{"ppl": (15, 40),   "ppc": (20, 60),  "best": "both", "trigger": "Year-round",                "notes": "B2B"},
+        },
+    },
+    "Financial Services": {
+        "icon": "💰",
+        "best_model": "both",
+        "volume": "medium",
+        "sub_niches": {
+            "Debt Consolidation":    {"ppl": (150, 400), "ppc": (50, 150),  "best": "both", "trigger": "Economic distress",           "notes": "Blended CPL often >$450"},
+            "Debt Settlement":       {"ppl": (100, 300), "ppc": (30, 80),   "best": "both", "trigger": "Growing vertical",           "notes": ""},
+            "Mortgage Refinance":    {"ppl": (250, 600), "ppc": (60, 150),  "best": "ppl",  "trigger": "Rate-driven",               "notes": "BANT-qualified 30-50% more"},
+            "Business Loans/MCA":    {"ppl": (300, 800), "ppc": (75, 300),  "best": "both", "trigger": "Small business",             "notes": "Highest CPL in financial"},
+            "Credit Repair":         {"ppl": (100, 300), "ppc": (30, 80),   "best": "both", "trigger": "Growing vertical",           "notes": ""},
+            "Tax Resolution":        {"ppl": (100, 350), "ppc": (40, 100),  "best": "both", "trigger": "Tax season",                 "notes": ""},
+            "Personal Loans":        {"ppl": (15, 50),   "ppc": (20, 40),   "best": "both", "trigger": "Year-round",                "notes": ""},
+        },
+    },
+    "Healthcare": {
+        "icon": "🏥",
+        "best_model": "both",
+        "volume": "medium",
+        "sub_niches": {
+            "Addiction Treatment":   {"ppl": (200, 500), "ppc": (150, 500), "best": "ppc",  "trigger": "Avg patient LTV: $78k+",     "notes": "Justifies extremely high CPLs"},
+            "Mental Health":         {"ppl": (140, 380), "ppc": (100, 300), "best": "both", "trigger": "Growing, destigmatized",      "notes": "88% behavioral health = phone call"},
+            "Assisted Living":       {"ppl": (75, 250),  "ppc": (100, 300), "best": "ppc",  "trigger": "Sales cycle: 3-6 months",     "notes": "Senior demographic"},
+            "Home Health Care":      {"ppl": (50, 150),  "ppc": (60, 200),  "best": "both", "trigger": "Senior demographic",          "notes": ""},
+            "Medical Alert Systems": {"ppl": (25, 100),  "ppc": (40, 150),  "best": "both", "trigger": "Recurring sub, ~$37/mo avg",   "notes": ""},
+            "Dental (Cosmetic)":     {"ppl": (20, 60),   "ppc": (25, 60),   "best": "both", "trigger": "Elective",                    "notes": ""},
+        },
+    },
+    "Senior Care": {
+        "icon": "👴",
+        "best_model": "ppc",
+        "volume": "growing",
+        "sub_niches": {
+            "Assisted Living":  {"ppl": (75, 250),  "ppc": (100, 300), "best": "ppc", "trigger": "Sales cycle: 3-6 months",  "notes": "Senior demographic"},
+            "Home Health":      {"ppl": (50, 150),  "ppc": (60, 200),  "best": "ppc", "trigger": "Senior demographic",       "notes": ""},
+            "Medical Alert Sys":{"ppl": (25, 100),  "ppc": (40, 150),  "best": "both","trigger": "Recurring sub",            "notes": "~$37/mo avg"},
+        },
+    },
+    "Education": {
+        "icon": "📚",
+        "best_model": "both",
+        "volume": "medium",
+        "sub_niches": {
+            "CDL/Truck Driving":     {"ppl": (40, 120),  "ppc": (30, 80),   "best": "both", "trigger": "Labor shortage",           "notes": "Phone leads convert 3-10x higher"},
+            "Nursing Certifications":{"ppl": (80, 200),  "ppc": (50, 120),  "best": "both", "trigger": "Healthcare demand",        "notes": "Optimal LTV:CAC = 3:1"},
+            "HVAC/R Trade School":   {"ppl": (15, 40),   "ppc": (15, 35),   "best": "both", "trigger": "Skilled trades",            "notes": ""},
+            "IT Certifications":     {"ppl": (60, 180),  "ppc": (40, 100),  "best": "ppl",  "trigger": "Cybersecurity, cloud",     "notes": ""},
+            "Online Degree Programs":{"ppl": (100, 250), "ppc": (60, 150),  "best": "ppl",  "trigger": "Long decision cycle",      "notes": ""},
+        },
+    },
+    "Business Services": {
+        "icon": "🏢",
+        "best_model": "ppl",
+        "volume": "medium",
+        "sub_niches": {
+            "Managed IT":           {"ppl": (30, 100),  "ppc": (25, 60),   "best": "ppl", "trigger": "Cybersecurity, cloud",     "notes": "Fastest-growing B2B"},
+            "Merchant Services":    {"ppl": (20, 60),   "ppc": (20, 50),   "best": "both", "trigger": "Small business",           "notes": ""},
+            "HR & Staffing":        {"ppl": (20, 80),   "ppc": (20, 60),   "best": "ppl", "trigger": "Recurring need",           "notes": ""},
+            "Payroll Services":     {"ppl": (15, 40),   "ppc": (15, 40),   "best": "ppl", "trigger": "Year-round",               "notes": ""},
+            "Cybersecurity":        {"ppl": (40, 150),  "ppc": (30, 80),   "best": "ppl", "trigger": "Growing vertical",         "notes": ""},
+            "VoIP/Business Phone":  {"ppl": (15, 40),   "ppc": (15, 40),   "best": "both", "trigger": "Year-round",               "notes": ""},
+            "Incorporation":        {"ppl": (20, 50),   "ppc": (20, 45),   "best": "ppl", "trigger": "Entrepreneur cycle",       "notes": ""},
+        },
+    },
+    "Consumer CPA": {
+        "icon": "📊",
+        "best_model": "ppl",
+        "volume": "medium",
+        "sub_niches": {
+            "Consumer CPA": {"ppl": (15, 50), "ppc": (10, 40), "best": "ppl", "trigger": "Year-round", "notes": ""},
+        },
+    },
+    "SEO": {
+        "icon": "🔍",
+        "best_model": "service",
+        "volume": "enabler",
+        "notes": "SEO is an enabler for all verticals — ROI measured in organic traffic cost avoidance ($0.50-$3/visitor vs $2-$50+/click for paid)",
+        "sub_niches": {
+            "Local SEO":     {"ppl": (None, None), "ppc": (None, None), "best": "service", "trigger": "GMB optimization",         "notes": "Service-based pricing"},
+            "E-commerce SEO":{"ppl": (None, None), "ppc": (None, None), "best": "service", "trigger": "Product feeds, categories", "notes": "Service-based pricing"},
+            "Technical SEO": {"ppl": (None, None), "ppc": (None, None), "best": "service", "trigger": "Core Web Vitals, speed",    "notes": "Service-based pricing"},
+        },
+    },
+    "Roofing Restoration": {
+        "icon": "🏠",
+        "best_model": "both",
+        "volume": "highest",
+        "notes": "Storm-triggered vertical with immediate urgency; speed is the highest-leverage metric",
+        "sub_niches": {
+            "Roofing Restoration":{"ppl": (162, 228), "ppc": (11, 258), "best": "both", "trigger": "Storm/hail, emergency", "notes": "78% hire first responder"},
+        },
+    },
+}
+
+# Lane-to-niche mapping (mirrors mesh_orchestrator.py)
+_LANE_NICHE_MAP: Dict[int, Dict[str, str]] = {
+    0:  {"niche": "Roofing Restoration", "sub_niche": "Roofing Restoration", "strategy": "AGGRESSIVE_STRIKE"},
+    1:  {"niche": "Roofing Restoration", "sub_niche": "Roofing Restoration", "strategy": "AGGRESSIVE_STRIKE"},
+    2:  {"niche": "Roofing Restoration", "sub_niche": "Roofing Restoration", "strategy": "AGGRESSIVE_STRIKE"},
+    3:  {"niche": "Roofing Restoration", "sub_niche": "Roofing Restoration", "strategy": "AGGRESSIVE_STRIKE"},
+    4:  {"niche": "Roofing Restoration", "sub_niche": "Roofing Restoration", "strategy": "AGGRESSIVE_STRIKE"},
+    5:  {"niche": "HVAC", "sub_niche": "HVAC", "strategy": "UGLY_BANNER"},
+    6:  {"niche": "HVAC", "sub_niche": "HVAC", "strategy": "UGLY_BANNER"},
+    7:  {"niche": "SEO", "sub_niche": "Local SEO", "strategy": "STANDARD"},
+    8:  {"niche": "SEO", "sub_niche": "E-commerce SEO", "strategy": "STANDARD"},
+    9:  {"niche": "SEO", "sub_niche": "Technical SEO", "strategy": "STANDARD"},
+    10: {"niche": "Legal", "sub_niche": "Personal Injury", "strategy": "RECALL_SNIPER"},
+    11: {"niche": "Legal", "sub_niche": "Mass Tort", "strategy": "RECALL_SNIPER"},
+    12: {"niche": "Legal", "sub_niche": "Class Action", "strategy": "RECALL_SNIPER"},
+    13: {"niche": "Legal", "sub_niche": "Workers Comp", "strategy": "RECALL_SNIPER"},
+    14: {"niche": "Legal", "sub_niche": "Medical Malpractice", "strategy": "RECALL_SNIPER"},
+    15: {"niche": "Insurance", "sub_niche": "Medicare Advantage", "strategy": "INSURANCE_STRIKE"},
+    16: {"niche": "Insurance", "sub_niche": "Life Insurance", "strategy": "INSURANCE_STRIKE"},
+    17: {"niche": "Insurance", "sub_niche": "Final Expense", "strategy": "INSURANCE_STRIKE"},
+    18: {"niche": "Financial Services", "sub_niche": "Debt Consolidation", "strategy": "FINANCIAL_STRIKE"},
+    19: {"niche": "Financial Services", "sub_niche": "Business Loans/MCA", "strategy": "FINANCIAL_STRIKE"},
+    20: {"niche": "Consumer CPA", "sub_niche": "Consumer CPA", "strategy": "FINANCIAL_STRIKE"},
+    21: {"niche": "Consumer CPA", "sub_niche": "Consumer CPA", "strategy": "FINANCIAL_STRIKE"},
+    22: {"niche": "Senior Care", "sub_niche": "Assisted Living", "strategy": "SENIOR_STRIKE"},
+    23: {"niche": "Senior Care", "sub_niche": "Home Health", "strategy": "SENIOR_STRIKE"},
+    24: {"niche": "Healthcare", "sub_niche": "Addiction Treatment", "strategy": "HEALTH_STRIKE"},
+    25: {"niche": "Education", "sub_niche": "CDL/Truck Driving", "strategy": "STANDARD"},
+    26: {"niche": "Education", "sub_niche": "Nursing Certifications", "strategy": "STANDARD"},
+    27: {"niche": "Healthcare", "sub_niche": "Mental Health", "strategy": "HEALTH_STRIKE"},
+    28: {"niche": "Healthcare", "sub_niche": "Medical Alert Systems", "strategy": "HEALTH_STRIKE"},
+    29: {"niche": "Business Services", "sub_niche": "Managed IT", "strategy": "BIZ_STRIKE"},
+    30: {"niche": "Business Services", "sub_niche": "Merchant Services", "strategy": "BIZ_STRIKE"},
+    31: {"niche": "Business Services", "sub_niche": "HR & Staffing", "strategy": "BIZ_STRIKE"},
+}
+
+
+# ═════════════════════════════════════════════════════════════════════════
+# CPL PRICING ENGINE
+# ═════════════════════════════════════════════════════════════════════════
+
+class CPLPricingEngine:
+    """
+    Per-vertical CPL pricing strategy engine.
+
+    Query CPL benchmarks, recommend optimal pricing models (PPL vs PPC),
+    calculate ROI estimates, and generate per-lane pricing data.
+
+    Can operate standalone (no DB, no external deps) for the pricing page,
+    or be wired with actual lane outcome data for dynamic margin estimates.
+    """
+
+    @staticmethod
+    def list_niches() -> List[str]:
+        """Return all available niche names."""
+        return sorted(CPL_BENCHMARKS.keys())
+
+    @staticmethod
+    def get_niche(niche: str) -> Optional[Dict]:
+        """Return the full CPL benchmark data for a niche."""
+        return CPL_BENCHMARKS.get(niche)
+
+    @staticmethod
+    def get_sub_niche(niche: str, sub_niche: str) -> Optional[Dict]:
+        """Return CPL data for a specific sub-niche within a niche."""
+        n = CPL_BENCHMARKS.get(niche)
+        if not n:
+            return None
+        return n.get("sub_niches", {}).get(sub_niche)
+
+    @staticmethod
+    def find_sub_niche(query: str) -> Optional[Tuple[str, str, Dict]]:
+        """Search all niches for a sub-niche matching `query` (case-insensitive).
+        Returns (niche_name, sub_niche_name, data) or None.
+        """
+        q = query.lower()
+        for niche_name, niche_data in CPL_BENCHMARKS.items():
+            for sn_name, sn_data in niche_data.get("sub_niches", {}).items():
+                if q in sn_name.lower():
+                    return (niche_name, sn_name, sn_data)
+        return None
+
+    @staticmethod
+    def cpl_range(sub_niche_data: Dict, model: str = "ppl") -> Tuple[Optional[float], Optional[float]]:
+        """Get the CPL range (low, high) for a sub-niche by model type."""
+        key = "ppl" if model in ("ppl", "PPL") else "ppc"
+        pair = sub_niche_data.get(key, (None, None))
+        if pair and pair[0] is None and pair[1] is None:
+            return (None, None)
+        return pair if isinstance(pair, (tuple, list)) and len(pair) == 2 else (None, None)
+
+    @staticmethod
+    def recommend_model(niche: str, sub_niche: Optional[str] = None) -> Dict:
+        """
+        Recommend the optimal pricing model (PPL vs PPC) for a niche/sub-niche.
+
+        Returns a dict with the recommendation, reasoning, and CPL ranges for both models.
+        """
+        niche_data = CPL_BENCHMARKS.get(niche)
+        if not niche_data:
+            return {"niche": niche, "error": "niche not found"}
+
+        if sub_niche and sub_niche in niche_data.get("sub_niches", {}):
+            sn = niche_data["sub_niches"][sub_niche]
+            best = sn.get("best", niche_data.get("best_model", "both"))
+            ppl_range = CPLPricingEngine.cpl_range(sn, "ppl")
+            ppc_range = CPLPricingEngine.cpl_range(sn, "ppc")
+            return {
+                "niche": niche,
+                "sub_niche": sub_niche,
+                "recommended": best,
+                "reasoning": {
+                    "ppl": f"PPL: ${ppl_range[0]}-${ppl_range[1]}" if ppl_range[0] else "N/A",
+                    "ppc": f"PPC: ${ppc_range[0]}-${ppc_range[1]}" if ppc_range[0] else "N/A",
+                },
+                "cpl_ranges": {
+                    "ppl": {"low": ppl_range[0], "high": ppl_range[1]},
+                    "ppc": {"low": ppc_range[0], "high": ppc_range[1]},
+                },
+                "trigger": sn.get("trigger", ""),
+                "notes": sn.get("notes", ""),
+            }
+
+        # Niche-level recommendation
+        best = niche_data.get("best_model", "both")
+        return {
+            "niche": niche,
+            "sub_niche": None,
+            "recommended": best,
+            "reasoning": {
+                "ppl": "Form-fill leads for top-of-funnel volume",
+                "ppc": "Live inbound calls for bottom-of-funnel conversion",
+            },
+            "trigger": niche_data.get("notes", ""),
+            "volume": niche_data.get("volume", ""),
+        }
+
+    @staticmethod
+    def roi_estimate(
+        niche: str,
+        sub_niche: Optional[str] = None,
+        monthly_volume: int = 100,
+        sell_price_per_lead: Optional[float] = None,
+        model: str = "ppl",
+    ) -> Dict:
+        """
+        Estimate ROI for a vertical given monthly volume.
+
+        Calculates:
+          - Cost per lead (midpoint of CPL range)
+          - Monthly acquisition cost (CPL × volume)
+          - Monthly revenue (sell_price × volume × close_rate)
+          - Gross margin
+          - ROI percentage
+          - Breakeven volume
+
+        Args:
+            niche: Vertical name
+            sub_niche: Specific sub-niche (optional)
+            monthly_volume: Expected leads per month
+            sell_price_per_lead: What you sell the lead for (defaults to 2.5x CPL)
+            model: "ppl" or "ppc"
+
+        Returns dict with all estimates.
+        """
+        sn_data = None
+        if sub_niche:
+            sn_data = CPLPricingEngine.get_sub_niche(niche, sub_niche)
+        if not sn_data:
+            # Fall back to first sub-niche in the niche
+            niche_data = CPL_BENCHMARKS.get(niche)
+            if niche_data and niche_data.get("sub_niches"):
+                first_sn = list(niche_data["sub_niches"].keys())[0]
+                sn_data = niche_data["sub_niches"][first_sn]
+                sub_niche = first_sn
+
+        if not sn_data:
+            return {"niche": niche, "error": "No pricing data available"}
+
+        ppl = sn_data.get("ppl", (None, None))
+        ppc = sn_data.get("ppc", (None, None))
+
+        if model in ("ppl", "PPL"):
+            cpl_mid = ((ppl[0] or 0) + (ppl[1] or 0)) / 2 if ppl[0] and ppl[1] else None
+        else:
+            cpl_mid = ((ppc[0] or 0) + (ppc[1] or 0)) / 2 if ppc[0] and ppc[1] else None
+
+        if not cpl_mid or cpl_mid <= 0:
+            return {"niche": niche, "sub_niche": sub_niche, "error": "Could not determine CPL"}
+
+        # Default sell price: 2.5x CPL (industry standard markup)
+        if sell_price_per_lead is None:
+            sell_price_per_lead = round(cpl_mid * 2.5, 2)
+
+        # Conservative close rate for this model
+        close_rate = 0.15 if model == "ppl" else 0.30  # PPL 5-15%, PPC 20-40%
+
+        monthly_acquisition_cost = cpl_mid * monthly_volume
+        monthly_revenue = sell_price_per_lead * monthly_volume * close_rate
+        gross_margin = monthly_revenue - monthly_acquisition_cost
+        roi_pct = (gross_margin / monthly_acquisition_cost * 100) if monthly_acquisition_cost > 0 else 0
+        breakeven_volume = int(monthly_acquisition_cost / max(sell_price_per_lead * close_rate, 0.01))
+
+        return {
+            "niche": niche,
+            "sub_niche": sub_niche,
+            "model": model,
+            "cpl_midpoint": round(cpl_mid, 2),
+            "cpl_range": {
+                "low": round(ppl[0], 2) if ppl[0] else None,
+                "high": round(ppl[1], 2) if ppl[1] else None,
+            } if model == "ppl" else {
+                "low": round(ppc[0], 2) if ppc[0] else None,
+                "high": round(ppc[1], 2) if ppc[1] else None,
+            },
+            "sell_price_per_lead": sell_price_per_lead,
+            "close_rate": close_rate,
+            "monthly_volume": monthly_volume,
+            "monthly_acquisition_cost": round(monthly_acquisition_cost, 2),
+            "monthly_revenue": round(monthly_revenue, 2),
+            "gross_margin": round(gross_margin, 2),
+            "roi_percentage": round(roi_pct, 1),
+            "breakeven_volume": breakeven_volume,
+        }
+
+    @staticmethod
+    def suggest_sell_price(niche: str, sub_niche: str, target_margin_pct: float = 60.0,
+                          model: str = "ppl") -> Dict:
+        """
+        Suggest an optimal sell price per lead given a target margin.
+
+        Formula: sell_price = CPL_mid / (1 - target_margin/100)
+
+        Returns the suggested price and the margin at that price.
+        """
+        sn_data = CPLPricingEngine.get_sub_niche(niche, sub_niche)
+        if not sn_data:
+            return {"error": f"No data for {niche}/{sub_niche}"}
+
+        pair = sn_data.get(model, (None, None))
+        cpl_mid = ((pair[0] or 0) + (pair[1] or 0)) / 2 if pair[0] and pair[1] else None
+        if not cpl_mid or cpl_mid <= 0:
+            return {"niche": niche, "sub_niche": sub_niche, "error": f"No {model} data"}
+
+        margin_dec = target_margin_pct / 100.0
+        suggested = round(cpl_mid / (1 - margin_dec), 2) if margin_dec < 1 else 0
+        actual_margin = round((1 - cpl_mid / suggested) * 100, 1) if suggested > 0 else 0
+
+        # Industry benchmark markup
+        markup_multiple = round(suggested / cpl_mid, 2) if cpl_mid > 0 else 0
+
+        return {
+            "niche": niche,
+            "sub_niche": sub_niche,
+            "model": model,
+            "cpl_midpoint": round(cpl_mid, 2),
+            "target_margin_pct": target_margin_pct,
+            "suggested_sell_price": suggested,
+            "actual_margin_pct": actual_margin,
+            "markup_multiple": markup_multiple,
+            "formula": f"${cpl_mid:.2f} / (1 - {margin_dec:.2f}) = ${suggested:.2f}",
+        }
+
+    @staticmethod
+    def lane_pricing(model: str = "ppl", monthly_volume: int = 100) -> Dict:
+        """
+        Generate per-lane pricing data for all 32 lanes.
+
+        Maps each lane to its CPL benchmark and computes pricing estimates.
+        Useful for the pricing page, API, and automated lane pricing strategies.
+        """
+        lanes = []
+        for lane_id in range(32):
+            lm = _LANE_NICHE_MAP.get(lane_id)
+            if not lm:
+                continue
+
+            niche = lm["niche"]
+            sub_niche = lm["sub_niche"]
+
+            # Try exact sub-niche match, then find by search
+            sn_data = CPLPricingEngine.get_sub_niche(niche, sub_niche)
+            if not sn_data:
+                found = CPLPricingEngine.find_sub_niche(sub_niche)
+                if found:
+                    _, _, sn_data = found
+
+            if not sn_data:
+                lanes.append({
+                    "lane_id": lane_id,
+                    "niche": niche,
+                    "sub_niche": sub_niche,
+                    "strategy": lm["strategy"],
+                    "cpl_available": False,
+                })
+                continue
+
+            ppl_range = CPLPricingEngine.cpl_range(sn_data, "ppl")
+            ppc_range = CPLPricingEngine.cpl_range(sn_data, "ppc")
+
+            best_model = sn_data.get("best", CPL_BENCHMARKS.get(niche, {}).get("best_model", "both"))
+
+            # ROI estimate at default volume
+            roi = CPLPricingEngine.roi_estimate(
+                niche, sub_niche, monthly_volume=monthly_volume, model=model
+            ) if best_model != "service" else {}
+
+            suggest = CPLPricingEngine.suggest_sell_price(
+                niche, sub_niche, target_margin_pct=60.0, model=model
+            ) if best_model != "service" else {}
+
+            lanes.append({
+                "lane_id": lane_id,
+                "niche": niche,
+                "sub_niche": sub_niche,
+                "strategy": lm["strategy"],
+                "best_model": best_model,
+                "cpl_available": True,
+                "cpl": {
+                    "ppl": {"low": ppl_range[0], "high": ppl_range[1]},
+                    "ppc": {"low": ppc_range[0], "high": ppc_range[1]},
+                },
+                "roi": roi,
+                "suggested_pricing": suggest,
+                "trigger": sn_data.get("trigger", ""),
+                "notes": sn_data.get("notes", ""),
+            })
+
+        return {
+            "total_lanes": len(lanes),
+            "model": model,
+            "monthly_volume": monthly_volume,
+            "lanes": lanes,
+        }
+
+    @staticmethod
+    def margin_calculator(
+        niche: str,
+        sub_niche: str,
+        sell_price: float,
+        monthly_volume: int = 100,
+        model: str = "ppl",
+    ) -> Dict:
+        """
+        Calculate margin and profit at a given sell price and volume.
+
+        Given a specific sell price (e.g. what a Strike Pack subscriber pays per lead),
+        calculate the margin, profit, and ROI for the Empire platform.
+        """
+        sn_data = CPLPricingEngine.get_sub_niche(niche, sub_niche)
+        if not sn_data:
+            return {"error": f"No data for {niche}/{sub_niche}"}
+
+        pair = sn_data.get(model, (None, None))
+        cpl_mid = ((pair[0] or 0) + (pair[1] or 0)) / 2 if pair[0] and pair[1] else None
+        if not cpl_mid or cpl_mid <= 0:
+            return {"error": f"No {model} data for {niche}/{sub_niche}"}
+
+        # Platform math
+        acquisition_monthly = cpl_mid * monthly_volume
+        revenue_monthly = sell_price * monthly_volume
+        gross_profit = revenue_monthly - acquisition_monthly
+        margin_pct = (gross_profit / revenue_monthly * 100) if revenue_monthly > 0 else 0
+        roi_pct = (gross_profit / acquisition_monthly * 100) if acquisition_monthly > 0 else 0
+        markup = sell_price / cpl_mid if cpl_mid > 0 else 0
+
+        # Annual projections
+        annual_revenue = revenue_monthly * 12
+        annual_profit = gross_profit * 12
+
+        return {
+            "niche": niche,
+            "sub_niche": sub_niche,
+            "model": model,
+            "cpl_midpoint": round(cpl_mid, 2),
+            "sell_price": sell_price,
+            "markup_multiple": round(markup, 2),
+            "monthly_volume": monthly_volume,
+            "monthly_acquisition_cost": round(acquisition_monthly, 2),
+            "monthly_revenue": round(revenue_monthly, 2),
+            "monthly_gross_profit": round(gross_profit, 2),
+            "margin_pct": round(margin_pct, 1),
+            "roi_pct": round(roi_pct, 1),
+            "annual_revenue": round(annual_revenue, 2),
+            "annual_profit": round(annual_profit, 2),
+        }
+
+    @staticmethod
+    def summary() -> Dict:
+        """Return a summary of all niches with key stats."""
+        summary_data = {}
+        for niche_name, niche_data in CPL_BENCHMARKS.items():
+            sub_count = len(niche_data.get("sub_niches", {}))
+            ppl_avg = 0
+            ppc_avg = 0
+            count = 0
+            for sn_name, sn_data in niche_data.get("sub_niches", {}).items():
+                ppl = sn_data.get("ppl", (None, None))
+                ppc = sn_data.get("ppc", (None, None))
+                if ppl[0] and ppl[1]:
+                    ppl_avg += (ppl[0] + ppl[1]) / 2
+                    ppc_avg += (ppc[0] + ppc[1]) / 2 if ppc[0] and ppc[1] else 0
+                    count += 1
+
+            avg_ppl = round(ppl_avg / count, 2) if count > 0 else None
+            avg_ppc = round(ppc_avg / count, 2) if count > 0 else None
+
+            summary_data[niche_name] = {
+                "icon": niche_data.get("icon", ""),
+                "sub_niche_count": sub_count,
+                "best_model": niche_data.get("best_model", "both"),
+                "volume": niche_data.get("volume", ""),
+                "avg_cpl_ppl": avg_ppl,
+                "avg_cpl_ppc": avg_ppc,
+            }
+        return summary_data
+
+
+# ── Convenience alias for imports ────────────────────────────────────────
+cpl_engine = CPLPricingEngine()
+
+
+# ═════════════════════════════════════════════════════════════════════════
+# PRICING PAGE HTML — unchanged from before
+# ═════════════════════════════════════════════════════════════════════════
 
 def _suite_product_cards(products: list) -> str:
     """Render dynamic HTML product cards from product_metadata data."""
