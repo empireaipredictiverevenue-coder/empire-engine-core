@@ -717,6 +717,113 @@ class TrialConversionEngine:
             "event_types": present_types,
         }
 
+    # ── Trial Grace Extension ───────────────────────────────────────
+
+    def extend_trial_grace(self, email: str, product_slug: str,
+                            extra_days: int, reason: str = "") -> dict:
+        """Extend a trial's grace period by adding extra days to trial_end.
+
+        Looks up the trial_start event by email + product_slug, verifies the
+        trial hasn't already been converted, then updates trial_end and logs
+        a trial_extended event.
+
+        Args:
+            email: Trial user's email.
+            product_slug: Product slug for the trial.
+            extra_days: Number of days to add (1-90).
+            reason: Operator-provided reason for the extension.
+
+        Returns:
+            {
+                "ok": True/False,
+                "old_trial_end": "...",
+                "new_trial_end": "...",
+                "extra_days": N,
+                "error": "..." (if not ok),
+            }
+        """
+        extra_days = max(1, min(extra_days, 90))
+
+        if not email or not product_slug:
+            return {"ok": False, "error": "email and product_slug are required"}
+
+        db = self.get_db()
+
+        # Find the trial_start event
+        r = db.table("sales_events") \
+            .select("*") \
+            .eq("email", email) \
+            .eq("product_slug", product_slug) \
+            .eq("event_type", "trial_start") \
+            .limit(1) \
+            .execute()
+        trials = r.data or []
+        if not trials:
+            return {"ok": False, "error": f"No trial_start event found for {email}/{product_slug}"}
+
+        trial = trials[0]
+        trial_id = trial.get("id", "")
+
+        # Check if already converted
+        r2 = db.table("sales_events") \
+            .select("id") \
+            .eq("email", email) \
+            .eq("product_slug", product_slug) \
+            .eq("event_type", "trial_converted") \
+            .limit(1) \
+            .execute()
+        if r2.data:
+            return {"ok": False, "error": f"Trial for {email}/{product_slug} has already been converted"}
+
+        # Compute new trial_end
+        old_trial_end = trial.get("trial_end", "")
+        try:
+            old_end_dt = datetime.fromisoformat(str(old_trial_end).replace("Z", "+00:00"))
+        except (ValueError, TypeError):
+            old_end_dt = datetime.now(timezone.utc)
+
+        new_end_dt = old_end_dt + timedelta(days=extra_days)
+        new_trial_end_iso = new_end_dt.isoformat()
+
+        # Update the trial_start record's trial_end
+        try:
+            db.table("sales_events") \
+                .update({"trial_end": new_trial_end_iso}) \
+                .eq("id", trial_id) \
+                .execute()
+        except Exception as e:
+            self.stats["errors"] += 1
+            return {"ok": False, "error": f"Failed to update trial_end: {e}"}
+
+        # Log the trial_extended event (details go in notes column to match schema)
+        try:
+            notes = f"Extended {extra_days}d — reason: {reason[:200]} | old_end: {str(old_trial_end)[:19]} → new_end: {str(new_trial_end_iso)[:19]}"
+            db.table("sales_events").insert({
+                "email": email,
+                "product_slug": product_slug,
+                "event_type": "trial_extended",
+                "tier": trial.get("tier", ""),
+                "name": trial.get("name", ""),
+                "company": trial.get("company", ""),
+                "notes": notes,
+                "created_at": datetime.now(timezone.utc).isoformat(),
+            }).execute()
+        except Exception as e:
+            log.warning(f"[trial] failed to log trial_extended event: {e}")
+
+        self.stats["extensions"] = self.stats.get("extensions", 0) + 1
+        log.info(f"[trial] extended trial for {email}/{product_slug} by {extra_days}d (reason: {reason[:80]})")
+
+        return {
+            "ok": True,
+            "email": email,
+            "product_slug": product_slug,
+            "extra_days": extra_days,
+            "old_trial_end": str(old_trial_end)[:19],
+            "new_trial_end": str(new_trial_end_iso)[:19],
+            "reason": reason[:500],
+        }
+
     # ── Stats snapshot ──────────────────────────────────────────────
 
     def stats_snapshot(self) -> dict:
