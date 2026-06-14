@@ -17,6 +17,7 @@ chat bubble simply doesn't render (graceful degradation).
 import os
 import re
 import json
+import time
 import logging
 import hashlib
 from pathlib import Path
@@ -59,7 +60,6 @@ _CHAT_RATE_LIMIT_MAX = 30
 def _check_chat_rate_limit(session_id: str) -> tuple[bool, int]:
     """Check if session_id has exceeded the rate limit.
     Returns (allowed, current_count). Removes expired entries lazily."""
-    import time
     now = time.time()
     cutoff = now - _CHAT_RATE_LIMIT_WINDOW
     timestamps = _CHAT_RATE_LIMIT.get(session_id, [])
