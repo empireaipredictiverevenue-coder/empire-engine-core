@@ -117,11 +117,20 @@ def _pick_channel(lead: dict, channels: list) -> str:
 
 
 def _render_message(template: str, lead: dict) -> str:
-    """Fill in {var} placeholders from a lead row. Missing vars become empty."""
+    """Fill in {var} placeholders from a lead row. Missing vars become empty.
+
+    Supports both contracts:
+      storm_strike:       {event}, {city}, {address}, {severity}, {urgency}
+      contractor_recruit: {prefix}, {target_short}
+    Both contracts are kept in sync with empire_sms.TEMPLATES so the
+    body_preview in outreach_log matches the actually-sent text.
+    """
+    address = lead.get("address") or ""
+    target_short = address.split(",")[0].strip()[:30] if address else "DFW"
     replacements = {
         "event": lead.get("meta", {}).get("event", "recent storm"),
         "severity": lead.get("meta", {}).get("severity", "Severe"),
-        "address": lead.get("address") or "",
+        "address": address,
         "city": lead.get("city") or "",
         "state": lead.get("state") or "",
         "business_name": lead.get("warehouse_name") or "",
@@ -129,6 +138,8 @@ def _render_message(template: str, lead: dict) -> str:
         "asset_value": str(lead.get("asset_value") or ""),
         "urgency": str(int(lead.get("score") or 0)),
         "agent_name": os.getenv("EMPIRE_SMS_PREFIX", "Empire AI"),
+        "prefix": os.getenv("EMPIRE_SMS_PREFIX", "Empire AI") + ":",
+        "target_short": target_short,
     }
     for k, v in replacements.items():
         template = template.replace("{" + k + "}", str(v))

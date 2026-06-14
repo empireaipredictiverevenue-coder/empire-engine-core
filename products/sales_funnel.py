@@ -156,10 +156,12 @@ class SalesFunnelEngine:
         get_db: Optional[Callable] = None,
         guard: Optional[Callable] = None,
         subscriptions: Optional[object] = None,
+        email_dispatcher: Optional[object] = None,
     ):
         self.get_db = get_db
         self.guard = guard
         self.subscriptions = subscriptions  # SuiteSubscriptionEngine instance
+        self.email_dispatcher = email_dispatcher  # ProductEmailDispatcher instance
         self.stats = {"trials": 0, "purchases": 0, "upsells": 0, "renewals": 0, "churn": 0}
 
     # ── Trial signup ────────────────────────────────────────────────────────
@@ -209,6 +211,17 @@ class SalesFunnelEngine:
                 "company": req.company,
                 "created_at": datetime.now(timezone.utc).isoformat(),
             }).execute()
+
+            # Enroll in trial email sequence via dispatcher
+            if self.email_dispatcher and req.email:
+                try:
+                    await self.email_dispatcher.enroll_trial(
+                        email=req.email,
+                        product_slug=req.product_slug,
+                        tier=tier,
+                    )
+                except Exception as de:
+                    log.warning(f"[sales] trial email enrollment failed: {de}")
 
             return {
                 "ok": True,
@@ -262,6 +275,20 @@ class SalesFunnelEngine:
                 )
                 if sub_result.get("ok"):
                     subscription_id = sub_result.get("subscription_id")
+
+            # Enroll in onboarding email sequence via dispatcher
+            if self.email_dispatcher and req.customer_account_id:
+                email = req.customer_account_id if "@" in req.customer_account_id else ""
+                if email:
+                    try:
+                        await self.email_dispatcher.enroll_onboarding(
+                            email=email,
+                            product_slug=req.product_slug,
+                            tier=req.tier,
+                            features=tier_data.get("features", []),
+                        )
+                    except Exception as de:
+                        log.warning(f"[sales] purchase email enrollment failed: {de}")
 
             return {
                 "ok": True,

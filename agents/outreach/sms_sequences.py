@@ -88,18 +88,22 @@ CONTRACTOR_RECRUIT = {
     "triggers_on": "contractors table insert with status='prospect' and tcpa_consent=True",
     "step_count": 3,
     "schedule": [
-        (1, 0,    "Hi {{contact_name}}, this is {agent_name} from Empire AI. "
-                  "We run a predictive revenue engine that sends commercial "
-                  "property owners directly to vetted contractors when "
-                  "{event} damage hits. We pay a referral fee on every "
-                  "settled insurance claim. Interested in 5 minutes?"),
-        (2, 96,   "Following up on my note. We've got {urgency}/10 urgency "
-                  "storm events live in {state} right now. If you can take "
-                  "5 minutes, I can show you the lead flow and the fee "
-                  "structure. Reply YES for a call."),
-        (3, 240,  "Last note. We're onboarding 2-3 contractors per region per "
-                  "month and we'd like you in {state}. If timing's bad, no "
-                  "worries — just reply NOTNOW and we'll check back in Q4."),
+        (1, 0,    "{prefix} We pay contractors a 3% referral fee on every "
+                  "settled insurance claim — and your first 2 closed deals "
+                  "are 100% complimentary. No fee, no contract, no call needed. "
+                  "See the offer, watch the 2-min demo, and self-onboard at "
+                  "empire-ai.co.uk/contractors. Reply STOP to opt out."),
+        (2, 96,   "{prefix} Quick follow-up — we added a live demo on the page "
+                  "so you can see the lead flow before deciding. Qualified, "
+                  "storm-affected commercial properties delivered to your "
+                  "dispatch queue. You only pay when the claim settles. "
+                  "First 2 deals on us. empire-ai.co.uk/contractors"),
+        (3, 240,  "{prefix} Closing note. If the timing's wrong, reply NOTNOW "
+                  "and we'll check back next quarter. No chase. To test with "
+                  "a free deal first, self-onboard at "
+                  "empire-ai.co.uk/contractors — 90 seconds, no call needed. "
+                  "First 2 closed deals are 100% complimentary. "
+                  "Reply STOP to opt out."),
     ],
 }
 
