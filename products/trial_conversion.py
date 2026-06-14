@@ -52,6 +52,7 @@ class TrialConversionEngine:
             "emails_sent": 0,
             "expiring_soon_reminders_sent": 0,
             "skipped_already_reminded": 0,
+            "auto_created": 0,
         }
 
     # ── Core: find and convert expired trials ───────────────────────────
@@ -134,19 +135,7 @@ class TrialConversionEngine:
         if not email or not product_slug:
             return {"ok": False, "error": "Missing email or product_slug"}
 
-        # Find the subscription by customer_account_id (which is the email)
-        sub = self.subscriptions.get_subscription(email)
-        if not sub:
-            self.stats["skipped_no_subscription"] += 1
-            return {"ok": False, "error": f"No subscription found for {email}"}
-
-        # Skip if already paid (MRR > 0)
-        current_mrr = float(sub.get("monthly_recurring_revenue", 0) or 0)
-        if current_mrr > 0:
-            self.stats["skipped_already_paid"] += 1
-            return {"ok": False, "error": f"Subscription for {email} already has MRR ${current_mrr:.2f}"}
-
-        # Look up the tier price
+        # Look up the tier price before handling subscription
         price = self._get_tier_price(product_slug, tier)
         if price is None or price <= 0:
             # Fallback: try to compute from tier name prefix
@@ -154,14 +143,41 @@ class TrialConversionEngine:
         if price is None or price <= 0:
             return {"ok": False, "error": f"Could not determine price for tier '{tier}'"}
 
-        # Update the subscription: set MRR to the tier price
-        sub_id = sub.get("subscription_id", "")
-        update_result = self.subscriptions.update_subscription(sub_id, {
-            "monthly_recurring_revenue": price,
-        })
-        if not update_result.get("ok"):
-            self.stats["errors"] += 1
-            return {"ok": False, "error": update_result.get("error", "Update failed")}
+        # Find the subscription by customer_account_id (which is the email)
+        sub = self.subscriptions.get_subscription(email)
+        if not sub:
+            # Fallback: auto-create a subscription via SuiteSubscriptionEngine
+            log.info(f"[trial] no subscription found for {email} — auto-creating")
+            create_result = self.subscriptions.create_subscription(
+                customer_account_id=email,
+                tier_level=tier,
+                monthly_recurring_revenue=price,
+                notes=f"Auto-created from trial conversion — {product_slug}/{tier}",
+            )
+            if not create_result.get("ok"):
+                self.stats["errors"] += 1
+                return {"ok": False, "error": create_result.get("error", "Create failed"),
+                        "auto_create_attempted": True}
+            sub = create_result.get("subscription") or self.subscriptions.get_subscription(email)
+            sub_id = sub.get("subscription_id", "") if isinstance(sub, dict) else ""
+            self.stats["auto_created"] += 1
+            log.info(f"[trial] auto-created subscription for {email} → {tier} at ${price:.2f}/mo")
+        else:
+            # Skip if already paid (MRR > 0)
+            current_mrr = float(sub.get("monthly_recurring_revenue", 0) or 0)
+            if current_mrr > 0:
+                self.stats["skipped_already_paid"] += 1
+                return {"ok": False, "error": f"Subscription for {email} already has MRR ${current_mrr:.2f}"}
+
+            # Update the subscription: set MRR to the tier price
+            sub_id = sub.get("subscription_id", "")
+            update_result = self.subscriptions.update_subscription(sub_id, {
+                "monthly_recurring_revenue": price,
+            })
+            if not update_result.get("ok"):
+                self.stats["errors"] += 1
+                return {"ok": False, "error": update_result.get("error", "Update failed")}
+
 
         # Log the conversion event in sales_events
         try:
