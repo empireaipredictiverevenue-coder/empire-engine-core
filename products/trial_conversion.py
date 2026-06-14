@@ -27,6 +27,7 @@ log = logging.getLogger("empire.trial_conversion")
 # ── Config ───────────────────────────────────────────────────────────────
 CHECK_INTERVAL_SEC = 3600       # check every hour
 CONVERSION_GRACE_HOURS = 24     # wait 24h after trial ends before auto-converting
+SLA_BUFFER_HOURS = 24           # additional buffer before flagging as SLA breach (trial_end + grace + buffer)
 EXPIRING_SOON_DAYS = [3, 1]     # send reminders N days before trial ends
 WIN_BACK_FOLLOWUP_DAYS = 7  # send follow-up win-back email N days after first win-back
 
@@ -1272,8 +1273,129 @@ class TrialConversionEngine:
         )
         return summary
 
+    def trial_pipeline_sla(self) -> dict:
+        """Check SLA compliance for the trial conversion pipeline.
+
+        Evaluates each trial_start event against the SLA:
+        - trial_end + CONVERSION_GRACE_HOURS = SLA deadline
+        - trial_end + grace + SLA_BUFFER_HOURS = hard breach threshold
+
+        Returns dict with:
+          - total_expired: trial_start events past trial_end
+          - total_past_sla: past SLA deadline (trial_end + grace)
+          - on_time: converted before SLA deadline
+          - breached: past SLA deadline and not converted
+          - pending: within grace window (not yet past SLA)
+          - breach_rate: breached / total_past_sla
+          - breaches: list of breached trials with details
+        """
+        db = self.get_db()
+        now = datetime.now(timezone.utc)
+
+        # Fetch all trial_start events
+        r = db.table("sales_events") \
+            .select("*") \
+            .eq("event_type", "trial_start") \
+            .order("created_at", desc=False) \
+            .execute()
+        trials = r.data or []
+
+        # Fetch all trial_converted events
+        r2 = db.table("sales_events") \
+            .select("email, product_slug") \
+            .eq("event_type", "trial_converted") \
+            .execute()
+        converted = set()
+        for ev in (r2.data or []):
+            converted.add((ev.get("email", ""), ev.get("product_slug", "")))
+
+        sla_deadline_hours = CONVERSION_GRACE_HOURS + SLA_BUFFER_HOURS
+
+        total_expired = 0
+        total_past_sla = 0
+        on_time = 0
+        breached = 0
+        pending = 0
+        breaches = []
+
+        for t in trials:
+            trial_end_str = t.get("trial_end")
+            if not trial_end_str:
+                continue
+
+            try:
+                end_dt = datetime.fromisoformat(str(trial_end_str).replace("Z", "+00:00"))
+            except (ValueError, TypeError):
+                continue
+
+            # Skip trials that haven't ended yet
+            if now < end_dt:
+                continue
+
+            total_expired += 1
+            email = t.get("email", "")
+            product_slug = t.get("product_slug", "")
+            key = (email, product_slug)
+            is_converted = key in converted
+
+            grace_end = end_dt + timedelta(hours=CONVERSION_GRACE_HOURS)
+
+            if now < grace_end:
+                # Within grace window — still acceptable
+                pending += 1
+                continue
+
+            total_past_sla += 1
+            sla_end = end_dt + timedelta(hours=sla_deadline_hours)
+            hours_overdue = round((now - grace_end).total_seconds() / 3600, 1)
+
+            if is_converted:
+                # Converted but late — check if within buffer
+                if now < sla_end:
+                    # Converted within buffer — ok but late
+                    on_time += 1
+                else:
+                    # Converted but after SLA buffer — still counts as on-time
+                    on_time += 1
+            else:
+                breached += 1
+                breach_severity = "warning" if now < sla_end else "critical"
+                breaches.append({
+                    "email": email,
+                    "product_slug": product_slug,
+                    "product_name": PRODUCT_NAMES.get(product_slug, product_slug),
+                    "tier": t.get("tier", ""),
+                    "trial_end": str(trial_end_str)[:19],
+                    "grace_end": str(grace_end.isoformat())[:19],
+                    "hours_overdue": hours_overdue,
+                    "severity": breach_severity,
+                    "is_converted": is_converted,
+                })
+
+        breach_rate = round(breached / max(total_past_sla, 1), 3)
+
+        # Log breaches as warnings
+        if breached:
+            log.warning(
+                f"[trial.sla] {breached} SLA breach(es) out of {total_past_sla} past-deadline trials "
+                f"(rate={breach_rate:.1%}, buffer={SLA_BUFFER_HOURS}h)"
+            )
+
+        return {
+            "total_expired": total_expired,
+            "total_past_sla": total_past_sla,
+            "on_time": on_time,
+            "breached": breached,
+            "pending": pending,
+            "breach_rate": breach_rate,
+            "sla_grace_hours": CONVERSION_GRACE_HOURS,
+            "sla_buffer_hours": SLA_BUFFER_HOURS,
+            "sla_deadline_hours": sla_deadline_hours,
+            "breaches": sorted(breaches, key=lambda x: -x["hours_overdue"]),
+        }
+
     async def monitoring_loop(self):
-        """Background loop: send expiring-soon reminders + convert expired trials + track churn + win-back followups."""
+        """Background loop: send expiring-soon reminders + convert expired trials + track churn + win-back followups + SLA check."""
         await asyncio.sleep(300)  # let hub finish booting (5 min)
         log.info("[trial] monitoring loop started (interval=%ds)", CHECK_INTERVAL_SEC)
         while not self._stop_loop:
@@ -1286,6 +1408,14 @@ class TrialConversionEngine:
                 await self._send_expiring_soon_reminders()
                 # 2. Convert expired trials (ended more than 24h ago)
                 self.run_once()
+                # 3. Check SLA compliance
+                sla = self.trial_pipeline_sla()
+                if sla["breached"]:
+                    log.warning(
+                        f"[trial.sla] {sla['breached']} breach(es) — "
+                        f"rate={sla['breach_rate']:.1%}, "
+                        f"worst={sla['breaches'][0]['hours_overdue']:.1f}h overdue"
+                    )
             except Exception as e:
                 log.warning(f"[trial] monitoring error: {e}")
             await asyncio.sleep(CHECK_INTERVAL_SEC)
@@ -1539,6 +1669,7 @@ class TrialConversionEngine:
                 "opted_out": win_backs_opted_out,
                 "variants": self.get_win_back_variant_stats(),
             },
+            "sla_stats": self.trial_pipeline_sla(),
             "by_product": sorted(by_product.values(), key=lambda x: x["trials"], reverse=True),
             "daily_starts": [{"date": k, "count": v} for k, v in sorted(daily_starts.items(), reverse=True)],
             "recent": recent_trials,

@@ -734,6 +734,31 @@ async def trial_pipeline(auth: bool = Depends(require_auth)):
         return {"summary": {}, "by_product": [], "daily_starts": [], "recent": [], "error": str(e)[:200]}
 
 
+# ── Trial Pipeline SLA ────────────────────────────────────────────
+
+@app.get("/api/v6/suite/sales/trial-sla")
+async def trial_sla(auth: bool = Depends(require_auth)):
+    """Trial pipeline SLA compliance check.
+
+    Returns:
+      - total_expired: trials past their end date
+      - total_past_sla: past grace + buffer deadline
+      - on_time: converted before SLA deadline
+      - breached: past deadline and not converted
+      - breach_rate: breached / total_past_sla
+      - breaches: list of breached trials with hours_overdue and severity
+    """
+    try:
+        sla = suite_trial_conversion.trial_pipeline_sla()
+        # Trim breaches list for large responses (top 50 worst)
+        if len(sla["breaches"]) > 50:
+            sla["breaches"] = sla["breaches"][:50]
+        return sla
+    except Exception as e:
+        log.warning(f"[trial-sla] error: {e}")
+        return {"total_expired": 0, "breached": 0, "breaches": [], "error": str(e)[:200]}
+
+
 # ── Win-back A/B Variant System ─────────────────────────────────────
 
 @app.get("/api/v6/suite/sales/win-back-variants")
