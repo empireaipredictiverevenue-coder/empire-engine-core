@@ -80,19 +80,44 @@ try:
 except ImportError:
     # Fallback: define inline (stays synchronized with mesh_orchestrator.py)
     LANES: Dict[int, Dict[str, str]] = {}
-    for i in range(MAX_LANES):
-        if i in [0, 1, 2, 3, 4, 5, 6, 7]:
-            LANES[i] = {"niche": "Roofing Restoration", "strategy": "AGGRESSIVE_STRIKE",
-                         "source": "Storm Scout", "trigger": "storm"}
-        elif i in [8, 9, 10, 11, 12, 13, 14, 15]:
-            LANES[i] = {"niche": "Local SEO & HVAC", "strategy": "UGLY_BANNER",
-                         "source": "Web Auditor", "trigger": "audit"}
-        elif i in [16, 17, 18, 19, 20]:
-            LANES[i] = {"niche": "Mass Tort Legal", "strategy": "RECALL_SNIPER",
-                         "source": "FDA Live Feed", "trigger": "recall"}
-        else:
-            LANES[i] = {"niche": "Consumer CPA", "strategy": "FINANCIAL_STRIKE",
-                         "source": "Inbound Leads", "trigger": "inbound"}
+    # Full 32-lane grid (mirrors mesh_orchestrator.py)
+    _LANE_CFG = [
+        (0, "Roofing Restoration", "AGGRESSIVE_STRIKE", "Storm Scout", "storm"),
+        (1, "Roofing Restoration", "AGGRESSIVE_STRIKE", "Storm Scout", "storm"),
+        (2, "Roofing Restoration", "AGGRESSIVE_STRIKE", "Storm Scout", "storm"),
+        (3, "Roofing Restoration", "AGGRESSIVE_STRIKE", "Storm Scout", "storm"),
+        (4, "Roofing Restoration", "AGGRESSIVE_STRIKE", "Storm Scout", "storm"),
+        (5, "HVAC", "UGLY_BANNER", "Web Auditor", "audit"),
+        (6, "HVAC", "UGLY_BANNER", "Web Auditor", "audit"),
+        (7, "SEO", "STANDARD", "SEO Optimizer", "audit"),
+        (8, "SEO", "STANDARD", "SEO Optimizer", "audit"),
+        (9, "SEO", "STANDARD", "SEO Optimizer", "audit"),
+        (10, "Legal", "RECALL_SNIPER", "FDA Live Feed", "recall"),
+        (11, "Legal", "RECALL_SNIPER", "FDA Live Feed", "recall"),
+        (12, "Legal", "RECALL_SNIPER", "FDA Live Feed", "recall"),
+        (13, "Legal", "RECALL_SNIPER", "FDA Live Feed", "recall"),
+        (14, "Legal", "RECALL_SNIPER", "FDA Live Feed", "recall"),
+        (15, "Insurance", "INSURANCE_STRIKE", "Insurance Lead Gen", "inbound"),
+        (16, "Insurance", "INSURANCE_STRIKE", "Insurance Lead Gen", "inbound"),
+        (17, "Insurance", "INSURANCE_STRIKE", "Insurance Lead Gen", "inbound"),
+        (18, "Financial Services", "FINANCIAL_STRIKE", "Financial Lead Gen", "inbound"),
+        (19, "Financial Services", "FINANCIAL_STRIKE", "Financial Lead Gen", "inbound"),
+        (20, "Consumer CPA", "FINANCIAL_STRIKE", "Inbound Leads", "inbound"),
+        (21, "Consumer CPA", "FINANCIAL_STRIKE", "Inbound Leads", "inbound"),
+        (22, "Senior Care", "SENIOR_STRIKE", "Senior Lead Gen", "inbound"),
+        (23, "Senior Care", "SENIOR_STRIKE", "Senior Lead Gen", "inbound"),
+        (24, "Addiction Treatment", "HEALTH_STRIKE", "Healthcare Lead Gen", "inbound"),
+        (25, "Education", "STANDARD", "Edu Lead Gen", "inbound"),
+        (26, "Education", "STANDARD", "Edu Lead Gen", "inbound"),
+        (27, "Healthcare", "HEALTH_STRIKE", "Healthcare Lead Gen", "inbound"),
+        (28, "Healthcare", "HEALTH_STRIKE", "Healthcare Lead Gen", "inbound"),
+        (29, "unassigned", "STANDARD", "General", "general"),
+        (30, "unassigned", "STANDARD", "General", "general"),
+        (31, "unassigned", "STANDARD", "General", "general"),
+    ]
+    for lid, niche, strategy, source, trigger in _LANE_CFG:
+        LANES[lid] = {"niche": niche, "strategy": strategy,
+                       "source": source, "trigger": trigger}
 
 # ── Pipeline stage mapping: AGI action → Hermes task_type ────────────
 ACTION_TASK_MAP: Dict[str, str] = {
