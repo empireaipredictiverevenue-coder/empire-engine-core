@@ -37,7 +37,7 @@ from empire_command_dispatch import dispatch_view
 from empire_command_inbound import inbound_view
 from empire_command_console import console_view
 from empire_splash import splash_page
-from empire_pricing import pricing_page
+from empire_pricing import pricing_page, CPLPricingEngine, cpl_engine
 from empire_live import LiveBroadcaster, register_live_routes
 from empire_command_deck import command_deck_page
 from empire_command_spa import command_spa_page
@@ -1049,6 +1049,87 @@ async def brain_personality_operator_remove(request: Request, auth: bool = Depen
     )
     status = 200 if result.get("ok") else 400
     return JSONResponse(result, status_code=status)
+
+# ── CPL Pricing Strategy Routes ─────────────────────────────────────
+# GET /api/v1/cpl/summary       — overview of all niches with avg CPL
+# GET /api/v1/cpl/niches         — list all available niches
+# GET /api/v1/cpl/niche/{niche}  — full niche data
+# GET /api/v1/cpl/recommend/{niche} — model recommendation (PPL vs PPC)
+# GET /api/v1/cpl/roi/{niche}    — ROI estimate for a niche
+# GET /api/v1/cpl/lanes          — per-lane pricing for all 32 lanes
+# GET /api/v1/cpl/margin         — margin calculator
+
+@app.get("/api/v1/cpl/summary")
+async def cpl_summary(auth: bool = Depends(require_auth)):
+    """Return summary of all niches with average CPL, model recommendations, and sub-niche counts."""
+    return JSONResponse(cpl_engine.summary())
+
+
+@app.get("/api/v1/cpl/niches")
+async def cpl_niches(auth: bool = Depends(require_auth)):
+    """Return list of all available niches."""
+    return JSONResponse({"niches": cpl_engine.list_niches(), "count": len(cpl_engine.list_niches())})
+
+
+@app.get("/api/v1/cpl/niche/{niche}")
+async def cpl_niche(niche: str, auth: bool = Depends(require_auth)):
+    """Return full CPL benchmark data for a single niche."""
+    data = cpl_engine.get_niche(niche)
+    if not data:
+        raise HTTPException(404, f"Niche '{niche}' not found")
+    return JSONResponse({"niche": niche, **data})
+
+
+@app.get("/api/v1/cpl/recommend/{niche}")
+async def cpl_recommend(niche: str, sub_niche: Optional[str] = Query(None), auth: bool = Depends(require_auth)):
+    """Recommend optimal pricing model (PPL vs PPC) for a niche/sub-niche."""
+    result = cpl_engine.recommend_model(niche, sub_niche)
+    if "error" in result:
+        raise HTTPException(404, result["error"])
+    return JSONResponse(result)
+
+
+@app.get("/api/v1/cpl/roi/{niche}")
+async def cpl_roi(
+    niche: str,
+    sub_niche: Optional[str] = Query(None),
+    monthly_volume: int = Query(100, ge=1, le=10000),
+    sell_price: Optional[float] = Query(None, ge=0),
+    model: str = Query("ppl", pattern="^(ppl|ppc)$"),
+    auth: bool = Depends(require_auth),
+):
+    """Estimate ROI for a vertical given monthly volume and optional sell price."""
+    result = cpl_engine.roi_estimate(niche, sub_niche, monthly_volume, sell_price, model)
+    if "error" in result:
+        raise HTTPException(404, result["error"])
+    return JSONResponse(result)
+
+
+@app.get("/api/v1/cpl/lanes")
+async def cpl_lanes(
+    model: str = Query("ppl", pattern="^(ppl|ppc)$"),
+    monthly_volume: int = Query(100, ge=1, le=10000),
+    auth: bool = Depends(require_auth),
+):
+    """Return per-lane pricing data for all 32 lanes with CPL benchmarks and suggested pricing."""
+    return JSONResponse(cpl_engine.lane_pricing(model=model, monthly_volume=monthly_volume))
+
+
+@app.get("/api/v1/cpl/margin")
+async def cpl_margin(
+    niche: str,
+    sub_niche: str,
+    sell_price: float = Query(..., ge=0.01),
+    monthly_volume: int = Query(100, ge=1, le=10000),
+    model: str = Query("ppl", pattern="^(ppl|ppc)$"),
+    auth: bool = Depends(require_auth),
+):
+    """Calculate margin and profit at a given sell price and volume for any niche/sub-niche."""
+    result = cpl_engine.margin_calculator(niche, sub_niche, sell_price, monthly_volume, model)
+    if "error" in result:
+        raise HTTPException(404, result["error"])
+    return JSONResponse(result)
+
 
 # ── Strategist & Analytics Routes ───────────────────────────────────
 @app.get("/api/strategist/overview")
