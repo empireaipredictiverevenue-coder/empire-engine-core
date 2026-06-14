@@ -390,13 +390,12 @@ if _os.path.isdir(_STATIC_DIR):
 # ── Public contractor landing page + chat widget ───────────────────────
 register_contractor_routes(app)
 
-# ── Chat widget endpoint — contractor-recruit Q&A via synthetic brain ─────
-# POST /api/contractors/chat
-# Accepts {session_id, message}, rate-limited to 30/hr per session.
-# Calls synthetic_brain at localhost:8005/ask for LLM responses.
-import time as _chat_time
+# ── Shared chat handler (contractors + customer-service) ───────────────
+# Both endpoints use the same rate-limit logic and synthetic_brain /ask
+# call. Only the system prompt and error messages differ.
+import time as _t_chat
 
-_CHAT_RATE_LIMIT: dict = {}  # session_id -> [timestamps]
+_CHAT_RATE_LIMITS: dict[str, dict] = {}  # endpoint -> {session_id -> [timestamps]}
 _CHAT_MAX_PER_WINDOW = 30
 _CHAT_WINDOW_SEC = 3600
 
@@ -415,96 +414,6 @@ _CHAT_SYSTEM_PROMPT = (
     "them with a human via email. Never invent numbers or terms."
 )
 
-
-@app.post("/api/contractors/chat")
-async def contractors_chat(request: Request):
-    """Public endpoint for the contractor-recruit chat widget.
-
-    Accepts {session_id, message}. Rate-limited to 30 messages/hr
-    per session_id. Calls synthetic_brain's /ask endpoint for the
-    LLM response.
-    """
-    try:
-        body = await request.json()
-    except Exception:
-        return JSONResponse({"ok": False, "error": "invalid_json"}, status_code=400)
-
-    session_id = (body.get("session_id") or "").strip()
-    message = (body.get("message") or "").strip()
-
-    if not session_id:
-        return JSONResponse({"ok": False, "error": "missing_session_id"}, status_code=400)
-    if not message:
-        return JSONResponse({"ok": False, "error": "missing_message"}, status_code=400)
-    if len(message) > 2000:
-        return JSONResponse({"ok": False, "error": "message_too_long"}, status_code=400)
-
-    # ── Rate limiting ───────────────────────────────────────────────────
-    now = _chat_time.time()
-    timestamps = _CHAT_RATE_LIMIT.get(session_id, [])
-    timestamps = [t for t in timestamps if now - t < _CHAT_WINDOW_SEC]
-
-    if len(timestamps) >= _CHAT_MAX_PER_WINDOW:
-        _CHAT_RATE_LIMIT[session_id] = timestamps
-        return JSONResponse({
-            "ok": False, "error": "rate_limited",
-            "count_remaining": 0,
-            "reply": "You've asked a lot of questions \u2014 feel free to self-onboard "
-                     "and we'll email you a full breakdown.",
-        }, status_code=429)
-
-    timestamps.append(now)
-    _CHAT_RATE_LIMIT[session_id] = timestamps
-    remaining = _CHAT_MAX_PER_WINDOW - len(timestamps)
-
-    # Periodic cleanup: sweep stale entries every 100 requests
-    if len(_CHAT_RATE_LIMIT) > 500:
-        cutoff = now - _CHAT_WINDOW_SEC
-        stale = [sid for sid, ts in _CHAT_RATE_LIMIT.items() if all(t < cutoff for t in ts)]
-        for sid in stale:
-            del _CHAT_RATE_LIMIT[sid]
-        log.debug(f"[contractors_chat] rate-limit cache swept {len(stale)} stale sessions")
-
-    # ── Call synthetic brain ────────────────────────────────────────────
-    try:
-        async with _httpx.AsyncClient(timeout=15.0) as client:
-            r = await client.post(
-                "http://localhost:8005/ask",
-                json={"system": _CHAT_SYSTEM_PROMPT, "prompt": message},
-            )
-            if r.status_code < 500:
-                data = r.json()
-                reply = data.get("response", "")
-            else:
-                reply = ""
-    except Exception as e:
-        log.warning(f"[contractors_chat] brain call failed: {e}")
-        reply = ""
-
-    if not reply:
-        return JSONResponse({
-            "ok": False,
-            "error": "brain_unavailable",
-            "count_remaining": remaining,
-            "reply": "I'm having a moment \u2014 try again in 30 seconds or self-onboard "
-                     "below and we'll get back to you.",
-        }, status_code=503)
-
-    return JSONResponse({
-        "ok": True,
-        "reply": reply,
-        "count_remaining": remaining,
-    })
-
-# ── Customer service chat ─────────────────────────────────────────────
-# POST /api/customer-service/chat
-# Public endpoint for the /support page chat widget.
-import time as _cs_time
-
-_CS_RATE_LIMIT: dict = {}
-_CS_MAX_PER_WINDOW = 30
-_CS_WINDOW_SEC = 3600
-
 _CS_SYSTEM_PROMPT = (
     "You are Empire AI's customer service assistant. You help visitors "
     "understand Empire AI's platform, products, and services. Answer questions about:\n"
@@ -522,12 +431,18 @@ _CS_SYSTEM_PROMPT = (
 )
 
 
-@app.post("/api/customer-service/chat")
-async def customer_service_chat(request: Request):
-    """Public endpoint for the customer service chat widget on /support.
+async def _chat_handler(
+    request: Request,
+    *,
+    endpoint: str,
+    system_prompt: str,
+    rate_limited_reply: str,
+    brain_unavailable_reply: str,
+) -> JSONResponse:
+    """Shared handler for both chat endpoints.
 
-    Accepts {session_id, message}. Rate-limited to 30 messages/hr
-    per session_id. Calls synthetic_brain's /ask endpoint.
+    Validates, rate-limits (30/hr per session_id), calls synthetic_brain
+    /ask, and returns a JSONResponse with {ok, reply, count_remaining}.
     """
     try:
         body = await request.json()
@@ -544,37 +459,50 @@ async def customer_service_chat(request: Request):
     if len(message) > 2000:
         return JSONResponse({"ok": False, "error": "message_too_long"}, status_code=400)
 
-    # ── Rate limiting ───────────────────────────────────────────────────
-    now = _cs_time.time()
-    timestamps = _CS_RATE_LIMIT.get(session_id, [])
-    timestamps = [t for t in timestamps if now - t < _CS_WINDOW_SEC]
+    # ── Rate limiting per endpoint ──────────────────────────────────────
+    bucket = _CHAT_RATE_LIMITS.setdefault(endpoint, {})
+    now = _t_chat.time()
+    timestamps = bucket.get(session_id, [])
+    timestamps = [t for t in timestamps if now - t < _CHAT_WINDOW_SEC]
 
-    if len(timestamps) >= _CS_MAX_PER_WINDOW:
-        _CS_RATE_LIMIT[session_id] = timestamps
+    if len(timestamps) >= _CHAT_MAX_PER_WINDOW:
+        bucket[session_id] = timestamps
         return JSONResponse({
             "ok": False, "error": "rate_limited",
             "count_remaining": 0,
-            "reply": "You've reached the message limit. Email support@empire-ai.co.uk and we'll get back to you quickly.",
+            "reply": rate_limited_reply,
         }, status_code=429)
 
     timestamps.append(now)
-    _CS_RATE_LIMIT[session_id] = timestamps
-    remaining = _CS_MAX_PER_WINDOW - len(timestamps)
+    bucket[session_id] = timestamps
+    remaining = _CHAT_MAX_PER_WINDOW - len(timestamps)
 
-    # Periodic cleanup
-    if len(_CS_RATE_LIMIT) > 500:
-        cutoff = now - _CS_WINDOW_SEC
-        stale = [sid for sid, ts in _CS_RATE_LIMIT.items() if all(t < cutoff for t in ts)]
-        for sid in stale:
-            del _CS_RATE_LIMIT[sid]
-        log.debug(f"[customer_service_chat] rate-limit cache swept {len(stale)} stale sessions")
+    # Periodic cleanup of stale sessions across all endpoints
+    total = sum(len(b) for b in _CHAT_RATE_LIMITS.values())
+    if total > 500:
+        cutoff = now - _CHAT_WINDOW_SEC
+        for ep, bkt in list(_CHAT_RATE_LIMITS.items()):
+            stale = [sid for sid, ts in bkt.items() if all(t < cutoff for t in ts)]
+            for sid in stale:
+                del bkt[sid]
+            if not bkt:
+                del _CHAT_RATE_LIMITS[ep]
+        removed = 0
+        for ep, bkt in list(_CHAT_RATE_LIMITS.items()):
+            stale = [sid for sid, ts in bkt.items() if all(t < cutoff for t in ts)]
+            for sid in stale:
+                del bkt[sid]
+                removed += 1
+            if not bkt:
+                del _CHAT_RATE_LIMITS[ep]
+        log.debug(f"[_chat_handler] rate-limit cache swept {removed} stale sessions")
 
     # ── Call synthetic brain ────────────────────────────────────────────
     try:
         async with _httpx.AsyncClient(timeout=15.0) as client:
             r = await client.post(
                 "http://localhost:8005/ask",
-                json={"system": _CS_SYSTEM_PROMPT, "prompt": message},
+                json={"system": system_prompt, "prompt": message},
             )
             if r.status_code < 500:
                 data = r.json()
@@ -582,7 +510,7 @@ async def customer_service_chat(request: Request):
             else:
                 reply = ""
     except Exception as e:
-        log.warning(f"[customer_service_chat] brain call failed: {e}")
+        log.warning(f"[{endpoint}] brain call failed: {e}")
         reply = ""
 
     if not reply:
@@ -590,7 +518,7 @@ async def customer_service_chat(request: Request):
             "ok": False,
             "error": "brain_unavailable",
             "count_remaining": remaining,
-            "reply": "Our AI assistant is having a moment. Try again shortly or email support@empire-ai.co.uk.",
+            "reply": brain_unavailable_reply,
         }, status_code=503)
 
     return JSONResponse({
@@ -598,6 +526,36 @@ async def customer_service_chat(request: Request):
         "reply": reply,
         "count_remaining": remaining,
     })
+
+
+@app.post("/api/contractors/chat")
+async def contractors_chat(request: Request) -> JSONResponse:
+    """Contractor-recruit chat — rate-limited, backed by synthetic_brain."""
+    return await _chat_handler(
+        request,
+        endpoint="contractors",
+        system_prompt=_CHAT_SYSTEM_PROMPT,
+        rate_limited_reply=(
+            "You've asked a lot of questions \u2014 feel free to self-onboard "
+            "and we'll email you a full breakdown."
+        ),
+        brain_unavailable_reply=(
+            "I'm having a moment \u2014 try again in 30 seconds or self-onboard "
+            "below and we'll get back to you."
+        ),
+    )
+
+
+@app.post("/api/customer-service/chat")
+async def customer_service_chat(request: Request) -> JSONResponse:
+    """Customer service chat on /support — rate-limited, backed by synthetic_brain."""
+    return await _chat_handler(
+        request,
+        endpoint="customer-service",
+        system_prompt=_CS_SYSTEM_PROMPT,
+        rate_limited_reply="You've reached the message limit. Email support@empire-ai.co.uk and we'll get back to you quickly.",
+        brain_unavailable_reply="Our AI assistant is having a moment. Try again shortly or email support@empire-ai.co.uk.",
+    )
 
 # Quality Control daemon endpoints (007aa47 followup)
 register_qc_routes(app)
