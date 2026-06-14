@@ -659,11 +659,36 @@ async def trial_convert_stats(auth: bool = Depends(require_auth)):
     """Trial conversion engine stats snapshot."""
     return suite_trial_conversion.stats_snapshot()
 
+@app.patch("/api/v6/suite/sales/trial-grace/extend")
+async def trial_grace_extend(request: Request, auth: bool = Depends(require_auth)):
+    """Extend a trial's grace period by extra days. Operator-only action.
+    Body: {email, product_slug, extra_days, reason?}
+    """
+    try:
+        body = await request.json()
+        email = (body.get("email") or "").strip()
+        product_slug = (body.get("product_slug") or "").strip()
+        extra_days = int(body.get("extra_days", 7))
+        reason = (body.get("reason") or "Operator extension").strip()
+
+        if not email or not product_slug:
+            return JSONResponse({"ok": False, "error": "email and product_slug are required"}, status_code=400)
+
+        result = suite_trial_conversion.extend_trial_grace(
+            email=email, product_slug=product_slug,
+            extra_days=extra_days, reason=reason,
+        )
+        status = 200 if result.get("ok") else 400
+        return JSONResponse(result, status_code=status)
+    except Exception as e:
+        return JSONResponse({"ok": False, "error": str(e)[:200]}, status_code=500)
+
+
 @app.get("/api/v6/suite/sales/trial-audit")
 async def trial_audit(
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
-    event_type: Optional[str] = Query(None, pattern="^(trial_start|trial_converted|expiring_soon_reminder_sent)$"),
+    event_type: Optional[str] = Query(None, pattern="^(trial_start|trial_converted|expiring_soon_reminder_sent|trial_extended)$"),
     auth: bool = Depends(require_auth),
 ):
     """Trial audit history — recent trial events with pagination and optional type filter."""
