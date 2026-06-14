@@ -7542,23 +7542,23 @@ function Stack() {
     ${tab === 'overview' ? html`
     <div class="pulse-grid" style={{marginTop:"12px"}}>
       <div class="stat-card"><div class="stat-label">SYSTEM HEALTH</div><div class="stat-value" style="color:${healthColor}">${health.toUpperCase()}</div><div class="stat-meta">${status?.uptime || '\u2014'} uptime</div></div>
-      <div class="stat-card"><div class="stat-label">SERVICES</div><div class="stat-value teal">${status?.service_count || 0}</div><div class="stat-meta">${status?.online_count||0} online · ${status?.offline_count||0} offline</div></div>
-      <div class="stat-card"><div class="stat-label">CPU</div><div class="stat-value">${resource.cpu_usage != null ? (resource.cpu_usage*100).toFixed(1)+"%" : '\u2014'}</div><div class="stat-meta">${resource.cpu_cores||'\u2014'} cores</div></div>
-      <div class="stat-card"><div class="stat-label">MEMORY</div><div class="stat-value">${resource.memory_used_gb != null ? resource.memory_used_gb.toFixed(1)+"GB" : '\u2014'}</div><div class="stat-meta">${resource.memory_total_gb||'\u2014'} GB total</div></div>
+      <div class="stat-card"><div class="stat-label">SERVICES</div><div class="stat-value teal">${status?.service_count || 0}</div><div class="stat-meta">${status?.online||0} online · ${status?.stopped||0} offline</div></div>
+      <div class="stat-card"><div class="stat-label">CPU</div><div class="stat-value">${resource.cpu_usage_pct != null ? resource.cpu_usage_pct.toFixed(1)+"%" : '\u2014'}</div><div class="stat-meta">${resource.cpu_cores||'\u2014'} cores</div></div>
+      <div class="stat-card"><div class="stat-label">MEMORY</div><div class="stat-value">${resource.memory_used_mb != null ? (resource.memory_used_mb/1024).toFixed(1)+"GB" : '\u2014'}</div><div class="stat-meta">${resource.memory_total_mb != null ? (resource.memory_total_mb/1024).toFixed(1)+'GB' : '\u2014'} total</div></div>
     </div>
     <div class="pipeline-breakdown">
       <div class="pipeline-h"><div class="pipeline-title">Resource <strong>Usage</strong></div></div>
       <div class="split">
         <div class="panel">
           <div class="panel-head">Disk</div>
-          <div style="font-family:var(--font-mono);font-size:28px;color:var(--empire-white)">${resource.disk_used_gb != null ? resource.disk_used_gb.toFixed(1) : '\u2014'}GB</div>
-          <div style="font-family:var(--font-mono);font-size:11px;color:var(--empire-fog);margin-top:4px">of ${resource.disk_total_gb||'\u2014'} GB used</div>
-          ${resource.disk_usage_pct != null ? html`<div style={{marginTop:8,height:6,background:"var(--empire-elevated)",borderRadius:3,overflow:"hidden"}}><div style=${{height:"100%",width:Math.min(100,resource.disk_usage_pct*100)+"%",background:resource.disk_usage_pct > 0.85 ? "var(--status-red)" : "var(--signal-teal)",borderRadius:3,transition:"width 0.6s var(--ease-out-empire)"}}></div></div>` : null}
+          <div style="font-family:var(--font-mono);font-size:28px;color:var(--empire-white)">${resource.disk_used || "\u2014" : '\u2014'}GB</div>
+          <div style="font-family:var(--font-mono);font-size:11px;color:var(--empire-fog);margin-top:4px">of ${resource.disk_total||'\u2014'}</div>
+          ${resource.disk_usage_pct != null ? html`<div style={{marginTop:8,height:6,background:"var(--empire-elevated)",borderRadius:3,overflow:"hidden"}}><div style=${{height:"100%",width:Math.min(100,parseInt(resource.disk_usage_pct))+"%",background:parseInt(resource.disk_usage_pct) > 85 ? "var(--status-red)" : "var(--signal-teal)",borderRadius:3,transition:"width 0.6s var(--ease-out-empire)"}}></div></div>` : null}
         </div>
         <div class="panel">
           <div class="panel-head">Network</div>
-          <div style="font-family:var(--font-mono);font-size:28px;color:var(--empire-white)">${resource.network_rx_gb != null ? resource.network_rx_gb.toFixed(1) : '\u2014'}</div>
-          <div style="font-family:var(--font-mono);font-size:11px;color:var(--empire-fog);margin-top:4px">GB received · ${resource.network_tx_gb != null ? resource.network_tx_gb.toFixed(1) : '\u2014'} GB sent</div>
+          <div style="font-family:var(--font-mono);font-size:28px;color:var(--empire-white)">${resource.load_avg || "\u2014" : '\u2014'}</div>
+          <div style="font-family:var(--font-mono);font-size:11px;color:var(--empire-fog);margin-top:4px">GB received · ${"\u2014" : '\u2014'} GB sent</div>
         </div>
       </div>
     </div>
@@ -7632,9 +7632,9 @@ function Network() {
   if (err) return html`<div class="stub"><div class="stub-title">Network Error</div><div class="stub-body">${err}</div></div>`;
   if (!overview) return html`<div class="stub"><div class="stub-body">Loading network...</div></div>`;
   const totalMembers = overview?.total_members || 0;
-  const activeMembers = overview?.active_members || 0;
-  const totalAffiliates = overview?.total_affiliates || 0;
-  const totalReferrals = overview?.total_referrals || 0;
+  const activeMembers = overview?.active || 0;
+  const totalAffiliates = (overview?.by_type && overview.by_type.affiliate) || 0;
+  const totalReferrals = (referrals?.referrals||[]).length;
   return html`
     <div class="section-header"><div><div class="section-title"><em>Network</em></div><div class="section-sub">Contractors · affiliates · referrals · growth</div></div></div>
     <div class="pulse-tabs" style={{marginTop:"8px"}}>
@@ -7646,27 +7646,28 @@ function Network() {
     ${tab === 'overview' ? html`
     <div class="pulse-grid" style={{marginTop:"12px"}}>
       <div class="stat-card"><div class="stat-label">TOTAL MEMBERS</div><div class="stat-value teal">${totalMembers}</div><div class="stat-meta">${activeMembers} active</div></div>
-      <div class="stat-card"><div class="stat-label">AFFILIATES</div><div class="stat-value">${totalAffiliates}</div><div class="stat-meta">${overview?.active_affiliates||0} active</div></div>
-      <div class="stat-card"><div class="stat-label">REFERRALS</div><div class="stat-value teal">${totalReferrals}</div><div class="stat-meta">${overview?.pending_referrals||0} pending</div></div>
-      <div class="stat-card"><div class="stat-label">GROWTH</div><div class="stat-value" style="color:var(--strike-cyan)">${overview?.growth_rate != null ? (overview.growth_rate*100).toFixed(1)+"%" : '\u2014'}</div><div class="stat-meta">${overview?.this_month||0} this month</div></div>
+      <div class="stat-card"><div class="stat-label">AFFILIATES</div><div class="stat-value">${totalAffiliates}</div><div class="stat-meta">${"\u2014"} active</div></div>
+      <div class="stat-card"><div class="stat-label">REFERRALS</div><div class="stat-value teal">${totalReferrals}</div><div class="stat-meta">${(referrals?.referrals||[]).filter(r=>r.status==='pending').length} pending</div></div>
+      <div class="stat-card"><div class="stat-label">GROWTH</div><div class="stat-value" style="color:var(--strike-cyan)">${overview?.conversion_rate_pct != null ? overview.conversion_rate_pct.toFixed(1)+"%" : '\u2014'}</div><div class="stat-meta">${overview?.total_leads||0} this month</div></div>
     </div>
     <div class="pipeline-breakdown">
       <div class="pipeline-h"><div class="pipeline-title">Network <strong>Composition</strong></div></div>
       <div class="split">
         <div class="panel">
           <div class="panel-head">By Type</div>
-          ${(overview?.by_type||[]).length > 0 ? (overview.by_type||[]).map(t => html`
-            <div class="rv-bar-row" key=${t.type||'unknown'}>
-              <div class="rv-bar-label"><span class="rv-bar-lane" style="text-transform:capitalize">${t.type||'unknown'}</span></div>
-              <div class="rv-bar-track"><div class="rv-bar-fill" style=${{width:Math.min(100,((t.count||0)/Math.max(1,totalMembers)*100).toFixed(0))+"%",backgroundColor:"var(--signal-teal)"}}></div></div>
-              <div class="rv-bar-val">${t.count||0}</div>
+          ${overview?.by_type && Object.keys(overview.by_type).length > 0 ? Object.entries(overview.by_type).map(([k,v]) => html`
+            <div class="rv-bar-row" key=${k}>
+              <div class="rv-bar-label"><span class="rv-bar-lane" style="text-transform:capitalize">${k}</span></div>
+              <div class="rv-bar-track"><div class="rv-bar-fill" style=${{width:Math.min(100,(v/Math.max(1,totalMembers)*100).toFixed(0))+"%",backgroundColor:"var(--signal-teal)"}}></div></div>
+              <div class="rv-bar-val">${v}</div>
             </div>
           `) : html`<div class="stub-body">No type data.</div>`}
         </div>
         <div class="panel">
-          <div class="panel-head">By Status</div>
-          ${(overview?.by_status||[]).length > 0 ? (overview.by_status||[]).map(s => html`
-            <div class="rv-bar-row" key=${s.status||'unknown'}>
+          <div class="panel-head">Metrics</div>
+          <div style="font-family:var(--font-mono);font-size:24px;color:var(--signal-teal)">$${(overview?.total_revenue||0).toLocaleString()}</div>
+          <div style="font-family:var(--font-mono);font-size:11px;color:var(--empire-fog);margin-top:4px">Revenue · ${overview?.total_leads||0} leads · ${overview?.total_conversions||0} conversions</div>
+          <div style="font-family:var(--font-mono);font-size:10px;color:var(--empire-mist);margin-top:12px">Conversion rate: ${overview?.conversion_rate_pct != null ? overview.conversion_rate_pct+'%' : '—'}</div>
               <div class="rv-bar-label"><span class="rv-bar-lane" style="text-transform:capitalize">${s.status||'unknown'}</span></div>
               <div class="rv-bar-track"><div class="rv-bar-fill" style=${{width:Math.min(100,((s.count||0)/Math.max(1,totalMembers)*100).toFixed(0))+"%",backgroundColor:s.status==='active'?"var(--signal-teal)":s.status==='pending'?"var(--status-amber)":"var(--empire-mist)"}}></div></div>
               <div class="rv-bar-val">${s.count||0}</div>
@@ -7686,8 +7687,8 @@ function Network() {
             <td style="font-weight:500;color:var(--empire-white)">${m.name||m.email||'unknown'}</td>
             <td style="text-transform:capitalize">${m.type||'\u2014'}</td>
             <td><span class=${'bdg ' + (m.status==='active'?'active':m.status==='pending'?'pending':m.status==='approved'?'approved':'rejected')}>${m.status||'unknown'}</span></td>
-            <td class="tbl-num">${m.leads_submitted||0}</td>
-            <td class="tbl-num">${m.conversion_rate != null ? (m.conversion_rate*100).toFixed(1)+"%" : '\u2014'}</td>
+            <td class="tbl-num">${m.leads||0}</td>
+            <td class="tbl-num">${m.conversion_rate_pct != null ? m.conversion_rate_pct.toFixed(1)+"%" : '\u2014'}</td>
             <td class="tbl-num teal">$${(m.revenue||0).toLocaleString()}</td>
             <td class="tbl-num" style="color:var(--strike-cyan)">${m.quality_score != null ? (m.quality_score*100).toFixed(0) : '\u2014'}</td>
           </tr>
@@ -7706,7 +7707,7 @@ function Network() {
             <td>${r.referred||'\u2014'}</td>
             <td><span class=${'bdg ' + (r.status==='converted'?'active':r.status==='pending'?'pending':r.status==='approved'?'approved':'rejected')}>${r.status||'pending'}</span></td>
             <td class="tbl-mono">${r.tier||'\u2014'}</td>
-            <td class="tbl-num">$${(r.commission||0).toLocaleString()}</td>
+            <td class="tbl-num">$${(r.value||0).toLocaleString()}</td>
             <td class="tbl-mono">${r.date||'\u2014'}</td>
           </tr>
         `)}</tbody>
@@ -7716,7 +7717,7 @@ function Network() {
     ${tab === 'report' ? html`
     <div style={{marginTop:"12px", padding:"20px 24px", background:"rgba(15,23,42,0.5)", border:"1px solid var(--empire-border)", borderRadius:12, lineHeight:1.8, fontSize:"13px"}}>
       ${report?.report ? report.report.split('\n').map((p,i) => html`<p key=${i} style={{marginBottom:12}}>${p}</p>`) : html`<div class="stub-body">No report generated yet.</div>`}
-      ${report?.opportunities ? html`<div style={{marginTop:16}}><strong style={{color:"var(--signal-teal)"}}>Growth Opportunities:</strong><ul>${report.opportunities.map((o,i) => html`<li key=${i} style={{marginTop:6}}>${o}</li>`)}</ul></div>` : null}
+      ${report?.growth?.niche_gaps ? html`<div style={{marginTop:16}}><strong style={{color:"var(--signal-teal)"}}>Growth Opportunities:</strong><ul>${report.opportunities.map((o,i) => html`<li key=${i} style={{marginTop:6}}>${o}</li>`)}</ul></div>` : null}
       ${report?.timestamp ? html`<div style={{marginTop:16, fontSize:"9px", color:"var(--empire-fog)", fontFamily:"var(--font-mono)"}}>Generated: ${report.timestamp}</div>` : null}
     </div>
     ` : null}
@@ -7755,9 +7756,9 @@ function Loop() {
   if (err) return html`<div class="stub"><div class="stub-title">Loop Error</div><div class="stub-body">${err}</div></div>`;
   if (!overview) return html`<div class="stub"><div class="stub-body">Loading loop data...</div></div>`;
   const laneList = (lanes?.lanes || overview?.lanes || []);
-  const totalLanes = overview?.total_lanes || 0;
-  const activeLanes = overview?.active_lanes || 0;
-  const niches = overview?.niches || {};
+  const totalLanes = overview?.total || 0;
+  const activeLanes = overview?.active || 0;
+  const niches = overview?.by_niche || {};
   const nicheCount = Object.keys(niches).length;
   return html`
     <div class="section-header"><div><div class="section-title"><em>Loop Engineering</em></div><div class="section-sub">Lane execution · pacing · strategy optimization</div></div></div>
@@ -7771,8 +7772,8 @@ function Loop() {
     <div class="pulse-grid" style={{marginTop:"12px"}}>
       <div class="stat-card"><div class="stat-label">TOTAL LANES</div><div class="stat-value teal">${totalLanes}</div><div class="stat-meta">${activeLanes} active</div></div>
       <div class="stat-card"><div class="stat-label">NICHES COVERED</div><div class="stat-value">${nicheCount}</div><div class="stat-meta">${Object.values(niches).reduce((a,b)=>a+(b||0),0)} strategies deployed</div></div>
-      <div class="stat-card"><div class="stat-label">THROUGHPUT</div><div class="stat-value teal">${overview?.throughput != null ? overview.throughput.toLocaleString() : '\u2014'}</div><div class="stat-meta">per cycle</div></div>
-      <div class="stat-card"><div class="stat-label">EFFICIENCY</div><div class="stat-value" style="color:var(--strike-cyan)">${overview?.efficiency != null ? (overview.efficiency*100).toFixed(1)+"%" : '\u2014'}</div><div class="stat-meta">lane utilization</div></div>
+      <div class="stat-card"><div class="stat-label">THROUGHPUT</div><div class="stat-value teal">${overview?.total != null ? overview.total.toLocaleString() : '\u2014'}</div><div class="stat-meta">per cycle</div></div>
+      <div class="stat-card"><div class="stat-label">EFFICIENCY</div><div class="stat-value" style="color:var(--strike-cyan)">${overview?.active != null ? (overview.active/Math.max(1,overview.total||1)*100).toFixed(1)+"%" : '\u2014'}</div><div class="stat-meta">lane utilization</div></div>
     </div>
     <div class="pipeline-breakdown">
       <div class="pipeline-h"><div class="pipeline-title">Niche <strong>Distribution</strong></div></div>
@@ -7841,10 +7842,10 @@ function Loop() {
       <div class="pipeline-breakdown">
         <div class="pipeline-h"><div class="pipeline-title">Throughput <strong>Forecast</strong></div></div>
         <div class="pulse-grid">
-          <div class="stat-card"><div class="stat-label">CURRENT PACE</div><div class="stat-value teal">${pacing?.current_pace || '\u2014'}</div><div class="stat-meta">per cycle</div></div>
-          <div class="stat-card"><div class="stat-label">TARGET PACE</div><div class="stat-value">${pacing?.target_pace || '\u2014'}</div><div class="stat-meta">${pacing?.pacing_gap != null ? (pacing.pacing_gap > 0 ? 'Behind by '+pacing.pacing_gap : 'On track') : ''}</div></div>
+          <div class="stat-card"><div class="stat-label">CURRENT PACE</div><div class="stat-value teal">${(pacing?.forecasts||[]).length > 0 ? pacing.forecasts[0].current_pct+'%' : '\u2014'}</div><div class="stat-meta">per cycle</div></div>
+          <div class="stat-card"><div class="stat-label">TARGET PACE</div><div class="stat-value">${'N/A'}</div><div class="stat-meta">${(pacing?.bottlenecks||[]).length > 0 ? (pacing.bottlenecks.length+' bottlenecks') : 'On track' : ''}</div></div>
           <div class="stat-card"><div class="stat-label">BOTTLENECKS</div><div class="stat-value teal">${(pacing?.bottlenecks||[]).length}</div><div class="stat-meta">detected</div></div>
-          <div class="stat-card"><div class="stat-label">FORECAST</div><div class="stat-value" style="color:var(--strike-cyan)">${pacing?.forecast_next_cycle || '\u2014'}</div><div class="stat-meta">next cycle</div></div>
+          <div class="stat-card"><div class="stat-label">FORECAST</div><div class="stat-value" style="color:var(--strike-cyan)">${(pacing?.forecasts||[]).length > 0 ? pacing.forecasts.map(f=>f.resource).join(', ') : 'No alerts'}</div><div class="stat-meta">next cycle</div></div>
         </div>
       </div>
       ${(pacing?.bottlenecks||[]).length > 0 ? html`<div class="pipeline-breakdown" style={{marginTop:"12px"}}>
