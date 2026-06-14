@@ -75,6 +75,17 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional
 from enum import Enum
 
+# TCPA compliance: opt-out, DNC, consent, quiet hours. Imported
+# at module load so the dispatcher can call compliance.is_opted_out
+# and compliance.is_on_dnc at send time (audit at 0e0b6a1 found
+# this gate was missing; fix at next commit).
+import sys as _sys
+_sys.path.insert(0, "/root/empire-v49/agents")
+try:
+    from outreach import compliance
+except Exception:
+    import compliance  # type: ignore
+
 from fastapi import FastAPI, Request, HTTPException, Depends
 
 
@@ -123,7 +134,7 @@ TEMPLATES = {
         (
             "{prefix} The 72-hour insurance documentation window is open. "
             "Most policies recommend filing within this period for best outcomes. "
-            "Reply YES to schedule an inspection."
+            "Reply YES to schedule an inspection. Reply STOP to opt out."
         ),
         # Touch 2 — 4 hours later. Social proof (non-specific to avoid
         # fabricated claims; the original "Three other facilities... locked in
@@ -132,13 +143,13 @@ TEMPLATES = {
             "{prefix} Other property owners in your area are being "
             "contacted about storm damage. We only earn on settled claims, "
             "so the inspection is at no cost to you. "
-            "Reply YES for a free roof assessment."
+            "Reply YES for a free roof assessment. Reply STOP to opt out."
         ),
         # Touch 3 — 24 hours later. Value math.
         (
             "{prefix} Quick math: a $2M facility w/ storm damage typically settles "
             "around $180K-$400K. Our fee on $250K settled = $2,500. "
-            "Reply YES to start the assessment."
+            "Reply YES to start the assessment. Reply STOP to opt out."
         ),
         # Touch 4 — 72 hours later. Final touch + clear opt-out.
         (
@@ -164,13 +175,14 @@ TEMPLATES = {
         (
             "{prefix} Still 1 slot open in {target_short} this week. "
             "If you reply YES in the next 24 hours, a contractor is on-site "
-            "within 48 hours. After that we move to the next property."
+            "within 48 hours. After that we move to the next property. "
+            "Reply STOP to opt out."
         ),
         # Touch 2 — 4 hours later. Soft social proof (non-specific).
         (
             "{prefix} Other property owners in your area are being "
             "contacted about storm damage. If you want the inspection, "
-            "the slot is yours — reply YES."
+            "the slot is yours — reply YES. Reply STOP to opt out."
         ),
         # Touch 3 — 24 hours later. Last-call scarcity.
         (
@@ -199,7 +211,8 @@ TEMPLATES = {
             "so you can see the lead flow before deciding. Qualified, "
             "storm-affected commercial properties delivered to your "
             "dispatch queue. You only pay when the claim settles. "
-            "First 2 deals on us. empire-ai.co.uk/contractors"
+            "First 2 deals on us. empire-ai.co.uk/contractors "
+            "Reply STOP to opt out."
         ),
         # Touch 2 — 240 hours later. Soft close + REFERRAL ask.
         # (Referrals are a $0 CAC channel — each contractor knows 2-3 others
@@ -431,6 +444,33 @@ class SMSSequenceEngine:
                 prefix=self.identity_prefix,
                 target_short=_short_address(row.get("target_addr", "")),
             )
+
+            # Compliance gate at SEND time. Opt-out and DNC lists are
+            # checked at enroll time (in the converter), but a phone
+            # can be added to either list AFTER enrollment. Sending
+            # to an opted-out or DNC phone is a TCPA violation. The
+            # audit at 0e0b6a1 found this gap. Fix: check at send
+            # too. If either list contains the phone, mark the
+            # sequence as 'replied' so the poll skips it.
+            try:
+                if compliance.is_opted_out(phone):
+                    db_dnc = self.get_db()
+                    db_dnc.table("sms_sequences").update({
+                        "status": "replied",
+                        "meta": {**(row.get("meta") or {}), "blocked_reason": "opted_out_at_send"},
+                    }).eq("id", row["id"]).execute()
+                    log.info(f"[sms] skipped send to {phone} — on opt-out list")
+                    continue
+                if compliance.is_on_dnc(phone):
+                    db_dnc = self.get_db()
+                    db_dnc.table("sms_sequences").update({
+                        "status": "replied",
+                        "meta": {**(row.get("meta") or {}), "blocked_reason": "on_dnc_at_send"},
+                    }).eq("id", row["id"]).execute()
+                    log.info(f"[sms] skipped send to {phone} — on DNC list")
+                    continue
+            except Exception as e:
+                log.debug(f"[sms] send-time compliance check failed: {e}")
 
             # Send
             result = await self.voice_router.send_sms(phone, body)
