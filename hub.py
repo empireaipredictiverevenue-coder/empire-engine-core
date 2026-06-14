@@ -106,6 +106,7 @@ from products.agent_orchestrator import AgentOrchestrator, AgentOrchestratorRout
 from products.b2b_pro import B2BPro, B2BProRoutes
 from products.lead_score import LeadScoreAI, LeadScoreRoutes
 from products.compliant import Compliant, CompliantRoutes
+from products.strike_campaigns import StrikeCampaigns, StrikeCampaignsRoutes
 from hook_analytics import HookRoutes
 
 # Strategist & Analytics Agents
@@ -573,6 +574,15 @@ suite_compliant = Compliant(
     log_usage=lambda a, p, e, q=1, u="count", m=None: suite_guard.log_usage(a, p, e, q, u, m),
 )
 CompliantRoutes(suite_compliant, require_auth=require_auth, get_db=get_db).register(app)
+
+# Product 9: Strike Campaigns — multi-touch SMS/email campaign builder
+suite_strike_campaigns = StrikeCampaigns(
+    guard=lambda a, f: suite_guard.check_access(a, f),
+    log_usage=lambda a, p, e, q=1, u="count", m=None: suite_guard.log_usage(a, p, e, q, u, m),
+    sms_engine=sms_engine,
+    email_engine=email_engine,
+)
+StrikeCampaignsRoutes(suite_strike_campaigns, require_auth=require_auth, get_db=get_db).register(app)
 
 # ── Hook & Trend Decider Engine ────────────────────────────────────────
 HookRoutes(require_auth=require_auth).register(app)

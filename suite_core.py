@@ -49,8 +49,9 @@ DB_PATH = BASE_DIR / "data" / "storm_alerts.sqlite"
 VALID_TIERS = {"ROUTER_SaaS", "DATA_ENTERPRISE", "SPY_DATA", "ALL_ACCESS",
                 "SEO_STARTER", "SEO_GROWTH", "SEO_PRO",
                 "LEADSCORE_STARTER", "LEADSCORE_GROWTH", "LEADSCORE_ENTERPRISE",
-                "COMPLIANT_STARTER", "COMPLIANT_GROWTH", "COMPLIANT_ENTERPRISE"}
-VALID_PRODUCTS = {"inbound_router", "data_vault", "buyer_spy", "seo_optimizer", "lead_score", "compliant"}
+                "COMPLIANT_STARTER", "COMPLIANT_GROWTH", "COMPLIANT_ENTERPRISE",
+                "STRIKE_STARTER", "STRIKE_GROWTH", "STRIKE_ENTERPRISE"}
+VALID_PRODUCTS = {"inbound_router", "data_vault", "buyer_spy", "seo_optimizer", "lead_score", "compliant", "strike_campaigns"}
 VALID_STATUSES = {"ACTIVE", "PAST_DUE", "CANCELED", "TRIALING"}
 
 
@@ -462,6 +463,7 @@ class SuiteGuard:
         "buyer_spy":      "buyer_spy_enabled",
         "lead_score":     "leadscore_enabled",
         "compliant":      "compliant_enabled",
+        "strike_campaigns": "strike_campaigns_enabled",
     }
 
     def __init__(
