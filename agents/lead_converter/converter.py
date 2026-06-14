@@ -149,23 +149,61 @@ def _compliance_check(lead: dict, channel: str) -> tuple[bool, str]:
     return True, ""
 
 
-def _do_live_send(channel: str, phone: str, body: str) -> tuple[bool, str]:
-    """Call the hub to actually send. Returns (ok, sent_status_or_error)."""
-    # The hub has /api/v1/sms/send (per empire_sms_routes; not yet wired but
-    # this is the contract for when it is). For now, since the hub routes
-    # are not yet registered, we surface a clear error.
+def _normalize_phone(phone: str) -> str:
+    """E.164 normalize: strip non-digits, ensure leading + and country code."""
+    if not phone:
+        return ""
+    digits = "".join(c for c in phone if c.isdigit())
+    if not digits:
+        return ""
+    # US default: 10 digits → +1, 11 digits starting with 1 → +1
+    if len(digits) == 10:
+        return "+1" + digits
+    if len(digits) == 11 and digits.startswith("1"):
+        return "+" + digits
+    # otherwise, assume it's already international, prefix with +
+    return "+" + digits
+
+
+def _do_live_send(channel: str, phone: str, body: str, lead: dict) -> tuple[bool, str]:
+    """Call the hub to enroll the lead in the SMS sequence. Returns (ok, sent_status_or_error)."""
     import urllib.request
     hub_url = os.getenv("HUB_URL", "http://127.0.0.1:8000")
-    url = f"{hub_url}/api/v1/sms/send" if channel == "sms" else f"{hub_url}/api/v1/voice/call"
-    payload = json.dumps({"to": phone, "body": body}).encode()
+    hub_token = os.getenv("HUB_TOKEN", "")
+    if not hub_token:
+        return False, "no_hub_token_in_env"
+
+    normalized = _normalize_phone(phone)
+    if not normalized:
+        return False, "phone_normalize_failed"
+
+    if channel == "sms":
+        url = f"{hub_url}/api/v1/sms/enroll"
+        payload = json.dumps({
+            "phone": normalized,
+            "target_addr": lead.get("address", ""),
+            "sequence_type": lead.get("_sequence", "storm_strike"),
+            "meta": {
+                "enriched_lead_id": lead.get("id"),
+                "warehouse_name": lead.get("warehouse_name"),
+                "source": "lead_converter",
+                "body_preview": body[:200],
+            },
+        }).encode()
+    else:
+        # voice channel: no enroll route yet, mark as not-implemented
+        return False, f"channel_{channel}_not_wired"
+
     req = urllib.request.Request(url, data=payload, method="POST",
                                   headers={"Content-Type": "application/json",
-                                           "X-Empire-Secret": os.getenv("WEBHOOK_SECRET", "")})
+                                           "Authorization": f"Bearer {hub_token}"})
     try:
         with urllib.request.urlopen(req, timeout=10) as resp:
             if resp.status == 200:
-                return True, "queued"
+                return True, "enrolled"
             return False, f"http_{resp.status}"
+    except urllib.error.HTTPError as e:
+        return False, f"http_{e.code}: {e.read().decode()[:200]}"
     except Exception as e:
         return False, f"{type(e).__name__}: {e}"
 
@@ -262,8 +300,11 @@ def run(dry_run_override: bool = None) -> dict:
                     })
                 rows_processed += 1
             else:
-                # LIVE mode: actually send
-                ok, sent_status = _do_live_send(channel, lead.get("phone"), body)
+                # LIVE mode: enroll in the SMS sequence
+                # pass the sequence into the lead dict so _do_live_send can read it
+                lead_for_send = dict(lead)
+                lead_for_send["_sequence"] = sequence
+                ok, sent_status = _do_live_send(channel, lead.get("phone"), body, lead_for_send)
                 sb.table("outreach_log").insert({
                     "enriched_lead_id": lead["id"],
                     "agent_name": "lead_converter",
