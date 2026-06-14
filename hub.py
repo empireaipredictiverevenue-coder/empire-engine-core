@@ -112,6 +112,7 @@ from products.market_eye import MarketEyeEngine, MarketEyeRoutes
 from products.content_pulse import ContentPulse, ContentPulseRoutes
 from products.contractor_exchange import ContractorExchange, ContractorExchangeRoutes
 from products.sales_funnel import SalesFunnelEngine, SalesFunnelRoutes
+from products.product_email_dispatcher import ProductEmailDispatcher
 from hook_analytics import HookRoutes
 
 # Strategist & Analytics Agents
@@ -616,10 +617,17 @@ suite_contractor_exchange = ContractorExchange(
 ContractorExchangeRoutes(suite_contractor_exchange, require_auth=require_auth).register(app)
 
 # Product 14: Sales Funnel — one-time purchases, trials, upsells, renewals
+# Wire email dispatcher for automated product email sequences
+suite_email_dispatcher = ProductEmailDispatcher(
+    send_email=_send_email,
+    get_db=get_db,
+    subscriptions=suite_subscriptions,
+)
 suite_sales_funnel = SalesFunnelEngine(
     get_db=get_db,
     guard=lambda a, f: suite_guard.check_access(a, f),
     subscriptions=suite_subscriptions,
+    email_dispatcher=suite_email_dispatcher,
 )
 SalesFunnelRoutes(suite_sales_funnel, require_auth=require_auth).register(app)
 
@@ -1471,6 +1479,8 @@ async def startup():
     asyncio.create_task(_niche_terrain_scan_loop())
     # Market Eye background monitoring — scrape eligible competitors every hour
     asyncio.create_task(suite_market_eye.monitoring_loop())
+    # Product Email Dispatcher — renewal reminders, reactivation, churn prevention
+    asyncio.create_task(suite_email_dispatcher.monitoring_loop())
     log.info("Empire V49 · Operational")
 
 
