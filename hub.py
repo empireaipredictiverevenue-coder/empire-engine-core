@@ -631,6 +631,59 @@ suite_sales_funnel = SalesFunnelEngine(
 )
 SalesFunnelRoutes(suite_sales_funnel, require_auth=require_auth).register(app)
 
+# Product 15: Command Center Pro — aggregated product health dashboard
+@app.get("/api/v6/suite/ccp/health")
+async def ccp_health(auth: bool = Depends(require_auth)):
+    """Aggregated health snapshot of all 15 Suite products for the Command Center Pro SPA tab."""
+    db = get_db()
+    products = []
+    total_mrr = 0.0
+    active_subs = 0
+    try:
+        r = db.table("product_metadata") \
+            .select("tier,product_name,display_name,description,monthly_price_usd,features,is_public") \
+            .eq("is_active", True) \
+            .order("sort_order") \
+            .execute()
+        for row in (r.data or []):
+            products.append({
+                "product": row.get("product_name", ""),
+                "tier": row.get("tier", ""),
+                "name": row.get("display_name", row["tier"].replace("_", " ").title()),
+                "description": row.get("description", ""),
+                "monthly_price_usd": float(row.get("monthly_price_usd", 0) or 0),
+                "features": row.get("features", []) if isinstance(row.get("features"), list) else [],
+                "status": "ok",
+                "message": "Online",
+            })
+    except Exception as e:
+        log.warning(f"[ccp] product_metadata query: {e}")
+
+    # Get subscription stats
+    try:
+        subs = db.table("product_subscriptions") \
+            .select("subscription_status,monthly_recurring_revenue") \
+            .execute()
+        for s in (subs.data or []):
+            if s.get("subscription_status") == "ACTIVE":
+                active_subs += 1
+                total_mrr += float(s.get("monthly_recurring_revenue", 0) or 0)
+    except Exception:
+        pass
+
+    return {
+        "products": products,
+        "total_mrr": round(total_mrr, 2),
+        "active_subscriptions": active_subs,
+        "summary": {
+            "total": len(products),
+            "healthy": sum(1 for p in products if p["status"] == "ok"),
+            "warnings": sum(1 for p in products if p["status"] == "warn"),
+            "errors": sum(1 for p in products if p["status"] == "error"),
+        },
+    }
+
+
 # ── Hook & Trend Decider Engine ────────────────────────────────────────
 HookRoutes(require_auth=require_auth).register(app)
 
