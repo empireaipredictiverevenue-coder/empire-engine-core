@@ -773,6 +773,32 @@ async def win_back_variants_update(request: Request, auth: bool = Depends(requir
         return JSONResponse({"ok": False, "error": str(e)[:200]}, status_code=500)
 
 
+@app.post("/api/v6/suite/sales/win-back/opt-out")
+async def win_back_opt_out(request: Request, auth: bool = Depends(require_auth)):
+    """Log a win-back opt-out for a user.
+
+    Body: {email, product_slug, reason?}
+    Once logged, the user will not receive any further win-back emails
+    for the given product.
+    """
+    try:
+        body = await request.json()
+        email = (body.get("email") or "").strip()
+        product_slug = (body.get("product_slug") or "").strip()
+        reason = (body.get("reason") or "user_requested").strip()
+
+        if not email or not product_slug:
+            return JSONResponse({"ok": False, "error": "email and product_slug are required"}, status_code=400)
+
+        result = suite_trial_conversion.log_win_back_opt_out(
+            email=email, product_slug=product_slug, reason=reason,
+        )
+        status = 200 if result.get("ok") else 400
+        return JSONResponse(result, status_code=status)
+    except Exception as e:
+        return JSONResponse({"ok": False, "error": str(e)[:200]}, status_code=500)
+
+
 @app.post("/api/v6/suite/sales/win-back-variants/assign")
 async def win_back_variants_assign(request: Request, auth: bool = Depends(require_auth)):
     """Manually assign a win-back variant for a specific user.
