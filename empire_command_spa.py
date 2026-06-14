@@ -5990,6 +5990,30 @@ function SEOPanel() {
           </div>
         </div>
       ` : ''}
+
+      ${data.sla_stats ? html`
+        <div class="panel" style="margin-bottom:20px">
+          <div class="panel-head">SLA Compliance</div>
+          <div class="tp-churn-strip">
+            <div class="tp-churn-stat">
+              <div class="tp-stat-val ${data.sla_stats.breached > 0 ? 'red' : 'teal'}">${data.sla_stats.breached}</div>
+              <div class="tp-stat-lbl">SLA Breaches</div>
+            </div>
+            <div class="tp-churn-stat">
+              <div class="tp-stat-val dim">${data.sla_stats.total_past_sla}</div>
+              <div class="tp-stat-lbl">Past Grace Window</div>
+            </div>
+            <div class="tp-churn-stat">
+              <div class="tp-stat-val teal">${data.sla_stats.completed_on_time}</div>
+              <div class="tp-stat-lbl">On Time</div>
+            </div>
+            <div class="tp-churn-stat">
+              <div class="tp-stat-val teal">${(data.sla_stats.sla_rate * 100).toFixed(1)}%</div>
+              <div class="tp-stat-lbl">SLA Rate</div>
+            </div>
+          </div>
+        </div>
+      ` : ''}
 <div class="split">
         <div class="panel">
           <div class="panel-head">SEO Genome (Gen ${data.evolution_runs || 0})</div>
