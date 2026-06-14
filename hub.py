@@ -111,6 +111,7 @@ from products.forecast import Forecast, ForecastRoutes
 from products.market_eye import MarketEye, MarketEyeRoutes
 from products.content_pulse import ContentPulse, ContentPulseRoutes
 from products.contractor_exchange import ContractorExchange, ContractorExchangeRoutes
+from products.sales_funnel import SalesFunnelEngine, SalesFunnelRoutes
 from hook_analytics import HookRoutes
 
 # Strategist & Analytics Agents
@@ -612,6 +613,14 @@ suite_contractor_exchange = ContractorExchange(
     get_db=get_db,
 )
 ContractorExchangeRoutes(suite_contractor_exchange, require_auth=require_auth).register(app)
+
+# Product 14: Sales Funnel — one-time purchases, trials, upsells, renewals
+suite_sales_funnel = SalesFunnelEngine(
+    get_db=get_db,
+    guard=lambda a, f: suite_guard.check_access(a, f),
+    subscriptions=suite_subscriptions,
+)
+SalesFunnelRoutes(suite_sales_funnel, require_auth=require_auth).register(app)
 
 # ── Hook & Trend Decider Engine ────────────────────────────────────────
 HookRoutes(require_auth=require_auth).register(app)
