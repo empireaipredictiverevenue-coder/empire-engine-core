@@ -108,7 +108,7 @@ from products.lead_score import LeadScoreAI, LeadScoreRoutes
 from products.compliant import Compliant, CompliantRoutes
 from products.strike_campaigns import StrikeCampaigns, StrikeCampaignsRoutes
 from products.forecast import Forecast, ForecastRoutes
-from products.market_eye import MarketEye, MarketEyeRoutes
+from products.market_eye import MarketEyeEngine, MarketEyeRoutes
 from products.content_pulse import ContentPulse, ContentPulseRoutes
 from products.contractor_exchange import ContractorExchange, ContractorExchangeRoutes
 from products.sales_funnel import SalesFunnelEngine, SalesFunnelRoutes
@@ -596,8 +596,9 @@ suite_forecast = Forecast(
 ForecastRoutes(suite_forecast, require_auth=require_auth).register(app)
 
 # Product 11: Market Eye — competitive intelligence & market monitoring
-suite_market_eye = MarketEye(
+suite_market_eye = MarketEyeEngine(
     guard=lambda a, f: suite_guard.check_access(a, f),
+    get_db=get_db,
 )
 MarketEyeRoutes(suite_market_eye, require_auth=require_auth).register(app)
 
@@ -1468,6 +1469,8 @@ async def startup():
     ))
     # Niche Terrain background scan — discovers new communities + learns habits every 30 min
     asyncio.create_task(_niche_terrain_scan_loop())
+    # Market Eye background monitoring — scrape eligible competitors every hour
+    asyncio.create_task(suite_market_eye.monitoring_loop())
     log.info("Empire V49 · Operational")
 
 

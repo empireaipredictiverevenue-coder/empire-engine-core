@@ -89,22 +89,17 @@ CONTRACTOR_RECRUIT = {
     "step_count": 3,
     "schedule": [
         (1, 0,    "Hi {{contact_name}}, this is {agent_name} from Empire AI. "
-                  "We're paying contractors in {state} a 3% referral fee on "
-                  "every settled insurance claim — and your first 2 closed "
-                  "deals are 100% complimentary. No fee, no contract, no "
-                  "call needed. See the offer, watch the 2-min demo, and "
-                  "self-onboard at empire-ai.co.uk/contractors"),
-        (2, 96,   "Quick follow-up — we've added a live demo on the page so "
-                  "you can see exactly what we send you before you decide. "
-                  "Empire AI sends qualified, storm-affected commercial "
-                  "property owners directly to your dispatch queue. You only "
-                  "pay when the insurance claim settles. First 2 deals are "
-                  "on us. empire-ai.co.uk/contractors"),
-        (3, 240,  "Closing note. If the timing's wrong, reply NOTNOW and "
-                  "we'll check back next quarter. No chase. If you want to "
-                  "test with a free deal first, self-onboard at "
-                  "empire-ai.co.uk/contractors — takes 90 seconds, no call "
-                  "needed. First 2 closed deals are 100% complimentary."),
+                  "We run a predictive revenue engine that sends commercial "
+                  "property owners directly to vetted contractors when "
+                  "{event} damage hits. We pay a referral fee on every "
+                  "settled insurance claim. Interested in 5 minutes?"),
+        (2, 96,   "Following up on my note. We've got {urgency}/10 urgency "
+                  "storm events live in {state} right now. If you can take "
+                  "5 minutes, I can show you the lead flow and the fee "
+                  "structure. Reply YES for a call."),
+        (3, 240,  "Last note. We're onboarding 2-3 contractors per region per "
+                  "month and we'd like you in {state}. If timing's bad, no "
+                  "worries — just reply NOTNOW and we'll check back in Q4."),
     ],
 }
 
