@@ -1031,6 +1031,56 @@ _SPA_CSS = """
 .ccp-bdg.warn{color:var(--status-amber);border-color:var(--status-amber)}
 .ccp-bdg-dot{width:5px;height:5px;border-radius:50%;background:currentColor;box-shadow:0 0 5px currentColor}
 @media(max-width:768px){.ccp-summary-grid{grid-template-columns:repeat(3,1fr)}.ccp-product-grid{grid-template-columns:1fr}}
+
+/* ── TRIAL PIPELINE ─────────────────────────────────────────────── */
+.tp-summary-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:14px;margin-bottom:24px}
+.tp-summary-card{background:var(--empire-surface);border:1px solid var(--empire-border);padding:16px 18px;text-align:center;transition:border-color .15s var(--ease-snap)}
+.tp-summary-card:hover{border-color:var(--empire-border-hi)}
+.tp-summary-val{font-family:var(--font-display);font-weight:200;font-size:28px;color:var(--empire-white);line-height:1}
+.tp-summary-val.teal{color:var(--signal-teal)}
+.tp-summary-val.amber{color:var(--status-amber)}
+.tp-summary-val.red{color:var(--status-red)}
+.tp-summary-val.dim{color:var(--empire-mist)}
+.tp-summary-lbl{font-family:var(--font-mono);font-size:9px;color:var(--empire-fog);letter-spacing:.14em;text-transform:uppercase;margin-top:8px}
+.tp-summary-sub{font-family:var(--font-mono);font-size:8px;color:var(--empire-fog);margin-top:4px;letter-spacing:.04em}
+.tp-product-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px;margin-bottom:24px}
+.tp-product-card{background:var(--empire-surface);border:1px solid var(--empire-border);padding:16px 18px;transition:border-color .15s var(--ease-snap)}
+.tp-product-card:hover{border-color:var(--empire-border-hi)}
+.tp-product-name{font-weight:500;font-size:14px;color:var(--empire-white);margin-bottom:4px}
+.tp-product-meta{font-family:var(--font-mono);font-size:10px;color:var(--empire-mist);letter-spacing:.04em;margin-bottom:10px;display:flex;justify-content:space-between}
+.tp-stat-teal{color:var(--signal-teal)}
+.tp-stat-dim{color:var(--empire-fog)}
+.tp-product-bar{margin-bottom:8px}
+.tp-bar-track{height:8px;background:var(--empire-elevated);border-radius:4px;overflow:hidden;display:flex}
+.tp-bar-fill{height:100%;transition:width .6s var(--ease-out-empire);min-width:2px}
+.tp-bar-fill.active{background:var(--signal-teal)}
+.tp-bar-fill.converted{background:var(--strike-cyan)}
+.tp-bar-fill.expired{background:var(--status-amber)}
+.tp-bar-legend{display:flex;gap:12px;font-family:var(--font-mono);font-size:8px;color:var(--empire-fog);letter-spacing:.04em}
+.tp-legend-dot{display:flex;align-items:center;gap:4px}
+.tp-legend-dot::before{content:'';width:6px;height:6px;border-radius:2px;flex-shrink:0}
+.tp-legend-dot.active::before{background:var(--signal-teal)}
+.tp-legend-dot.converted::before{background:var(--strike-cyan)}
+.tp-legend-dot.expired::before{background:var(--status-amber)}
+.tp-bar-row{display:grid;grid-template-columns:40px 1fr 36px;gap:10px;align-items:center;padding:4px 0;font-family:var(--font-mono);font-size:10px}
+.tp-bar-date{color:var(--empire-fog);letter-spacing:.04em}
+.tp-small-bar-track{height:6px;background:var(--empire-elevated);border-radius:3px;overflow:hidden}
+.tp-small-bar-fill{height:100%;border-radius:3px;background:var(--signal-teal);transition:width .6s var(--ease-out-empire);min-width:2px}
+.tp-bar-val{color:var(--empire-white);font-weight:500;text-align:right}
+.tp-recent-row{display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--empire-divider)}
+.tp-recent-row:last-child{border-bottom:none}
+.tp-recent-left{min-width:0;flex:1}
+.tp-recent-email{font-size:12px;color:var(--empire-white);font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tp-recent-prod{font-family:var(--font-mono);font-size:9px;color:var(--empire-mist);margin-top:2px}
+.tp-recent-right{display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0;margin-left:12px}
+.tp-status-bdg{display:inline-flex;align-items:center;gap:4px;font-family:var(--font-mono);font-size:8px;letter-spacing:.1em;text-transform:uppercase;padding:3px 8px;border-radius:var(--radius-pill);border:1px solid}
+.tp-status-bdg.active{color:var(--signal-teal);border-color:var(--signal-teal-soft)}
+.tp-status-bdg.grace{color:var(--status-amber);border-color:var(--status-amber)}
+.tp-status-bdg.expired{color:var(--empire-mist);border-color:var(--empire-border)}
+.tp-status-bdg.converted{color:var(--strike-cyan);border-color:rgba(90,200,250,0.2)}
+.tp-bdg-dot{width:5px;height:5px;border-radius:50%;background:currentColor;box-shadow:0 0 5px currentColor}
+.tp-recent-days{font-family:var(--font-mono);font-size:9px;color:var(--empire-fog)}
+@media(max-width:768px){.tp-summary-grid{grid-template-columns:repeat(3,1fr)}.tp-product-grid{grid-template-columns:1fr}}
 """
 
 _SPA_JS = r"""
@@ -1082,6 +1132,7 @@ const NAV_GROUPS = [
       { id: 'products',     label: 'Products',       sub: 'Strike packs / SaaS tiers / subscriptions' },
       { id: 'pain-points',  label: 'Pain Points',    sub: 'Niche scripts · weights · conversion' },
       { id: 'swarm-gate',   label: 'Swarm Gate',     sub: 'Parallel video ads · scan → fire' },
+      { id: 'trial-pipeline', label: 'Trial Pipeline', sub: 'Active · converting · churned' },
       { id: 'affiliates',   label: 'Affiliates',    sub: 'Manage · referral links · stats' },
     ]
   },
@@ -6399,6 +6450,7 @@ function App() {
             active.id === 'governor'      ? html`<${Governor} />` :
             active.id === 'sniper-fleet'  ? html`<${SniperFleet} />` :
             active.id === 'command-center' ? html`<${CommandCenter} />` :
+            active.id === 'trial-pipeline' ? html`<${TrialPipeline} />` :
             active.id === 'health-monitor' ? html`<${HealthMonitor} />` :
             active.id === 'personality'   ? html`<${Personality} />` :
             active.id === 'strategist'    ? html`<${Strategist} />` :
@@ -6482,6 +6534,144 @@ function CommandCenter() {
             </div>
           </div>
         `)}
+      </div>
+    </div>
+  `;
+}
+
+
+function TrialPipeline() {
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  useEffect(() => {
+    apiFetch('/api/v6/suite/sales/trial-pipeline')
+      .then(r => r.json())
+      .then(d => { setData(d); setLoading(false); })
+      .catch(() => setLoading(false));
+  }, []);
+  if (loading) return html`<div style=${{padding:'24px',color:'var(--empire-fog)',fontFamily:'var(--font-mono)',fontSize:'11px'}}>Loading Trial Pipeline…</div>`;
+  if (!data) return html`<div style=${{padding:'24px',color:'var(--status-amber)',fontFamily:'var(--font-mono)',fontSize:'11px'}}>No trial data available</div>`;
+  const s = data.summary || {};
+  const products = data.by_product || [];
+  const daily = data.daily_starts || [];
+  const recent = data.recent || [];
+  const totalTrials = s.total_trial_starts || 0;
+  const active = s.active || 0;
+  const expiring = s.expiring_soon || 0;
+  const converted = s.converted || 0;
+  const churned = s.churned || 0;
+  const expired = s.expired_unconverted || 0;
+  const winRate = s.win_rate || 0;
+  const potentialMRR = s.potential_monthly_mrr || 0;
+  return html`
+    <div>
+      <div class="section-h">
+        <div class="section-title">Trial <em>Pipeline</em></div>
+        <div class="section-sub">Active · expiring · converted · churned · \${daily.length > 0 ? daily[0].date + ' daily' : ''}</div>
+      </div>
+      <div class="tp-summary-grid">
+        <div class="tp-summary-card">
+          <div class="tp-summary-val teal">\${active}</div>
+          <div class="tp-summary-lbl">Active Trials</div>
+          <div class="tp-summary-sub">\${expiring} expiring soon</div>
+        </div>
+        <div class="tp-summary-card">
+          <div class="tp-summary-val amber">\${expiring}</div>
+          <div class="tp-summary-lbl">Expiring Soon</div>
+          <div class="tp-summary-sub">\${active > 0 ? Math.round(expiring/active*100) + '% of active' : '—'}</div>
+        </div>
+        <div class="tp-summary-card">
+          <div class="tp-summary-val teal">\${converted}</div>
+          <div class="tp-summary-lbl">Converted</div>
+          <div class="tp-summary-sub">\${winRate > 0 ? Math.round(winRate*100) + '% win rate' : ''}</div>
+        </div>
+        <div class="tp-summary-card">
+          <div class="tp-summary-val \${churned > 0 ? 'red' : 'dim'}">\${churned}</div>
+          <div class="tp-summary-lbl">Churned</div>
+          <div class="tp-summary-sub">\${converted > 0 && churned > 0 ? Math.round(churned/converted*100) + '% of converted' : ''}</div>
+        </div>
+        <div class="tp-summary-card">
+          <div class="tp-summary-val \${expired > 5 ? 'amber' : 'dim'}">\${expired}</div>
+          <div class="tp-summary-lbl">Expired (Unconv.)</div>
+          <div class="tp-summary-sub">\${totalTrials > 0 ? Math.round(expired/totalTrials*100) + '% of all' : ''}</div>
+        </div>
+        <div class="tp-summary-card">
+          <div class="tp-summary-val teal">\$${potentialMRR.toLocaleString()}</div>
+          <div class="tp-summary-lbl">Potential MRR</div>
+          <div class="tp-summary-sub">From active trials</div>
+        </div>
+      </div>
+      \${products.length > 0 ? html`
+        <div class="tp-product-grid">
+          \${products.map(p => html`
+            <div class="tp-product-card">
+              <div class="tp-product-name">\${p.name || p.product || '?'}</div>
+              <div class="tp-product-meta">
+                <span>\${p.trials} trials · \${p.active} active</span>
+                <span class="\${p.converted > 0 ? 'tp-stat-teal' : 'tp-stat-dim'}">\${p.converted} conv</span>
+              </div>
+              <div class="tp-product-bar">
+                <div class="tp-bar-track">
+                  \${p.trials > 0 ? html`
+                    <div class="tp-bar-fill active" style=${{width: Math.round(p.active/p.trials*100)+'%'}}></div>
+                    <div class="tp-bar-fill converted" style=${{width: Math.round(p.converted/p.trials*100)+'%'}}></div>
+                    <div class="tp-bar-fill expired" style=${{width: Math.round(p.expired/p.trials*100)+'%'}}></div>
+                  ` : ''}
+                </div>
+              </div>
+              <div class="tp-bar-legend">
+                <span class="tp-legend-dot active">Active \${Math.round(p.active/p.trials*100) + '%'}</span>
+                <span class="tp-legend-dot converted">Conv \${Math.round(p.converted/p.trials*100) + '%'}</span>
+                <span class="tp-legend-dot expired">Exp \${Math.round(p.expired/p.trials*100) + '%'}</span>
+              </div>
+            </div>
+          `)}
+        </div>
+      ` : ''}
+      <div class="split">
+        \${daily.length > 0 ? html`
+          <div class="panel">
+            <div class="panel-head">Daily Trial Starts (last 14d)</div>
+            <div style=${{display:'flex',flexDirection:'column',gap:'4px'}}>
+              \${daily.slice(0,14).reverse().map(d => {
+                const maxCount = Math.max(...daily.slice(0,14).map(x=>x.count), 1);
+                return html`
+                  <div class="tp-bar-row">
+                    <span class="tp-bar-date">\${d.date.slice(5)}</span>
+                    <div class="tp-small-bar-track">
+                      <div class="tp-small-bar-fill" style=${{width: Math.round(d.count/maxCount*80)+'%'}}></div>
+                    </div>
+                    <span class="tp-bar-val">\${d.count}</span>
+                  </div>
+                `;
+              })}
+            </div>
+          </div>
+        ` : ''}
+        \${recent.length > 0 ? html`
+          <div class="panel">
+            <div class="panel-head">Recent Trials</div>
+            <div style=${{maxHeight:'320px',overflowY:'auto'}}>
+              \${recent.map(t => html`
+                <div class="tp-recent-row">
+                  <div class="tp-recent-left">
+                    <div class="tp-recent-email">\${t.email}</div>
+                    <div class="tp-recent-prod">\${t.product} · \${t.tier}</div>
+                  </div>
+                  <div class="tp-recent-right">
+                    <span class="tp-status-bdg \${t.status}">
+                      <span class="tp-bdg-dot"></span>
+                      \${t.status}
+                    </span>
+                    <div class="tp-recent-days">
+                      \${t.status === 'active' ? t.days_left + 'd left' : t.status === 'expired' ? 'ended' : t.status === 'converted' ? 'paid' : ''}
+                    </div>
+                  </div>
+                </div>
+              `)}
+            </div>
+          </div>
+        ` : ''}
       </div>
     </div>
   `;

@@ -19,6 +19,7 @@ from datetime import datetime, timezone, timedelta
 from typing import Callable, Optional
 
 from products.sales_funnel import PRODUCT_CATALOG, TRIAL_CONFIG
+from products.product_email_sequences import PRODUCT_NAMES
 
 log = logging.getLogger("empire.trial_conversion")
 
@@ -434,6 +435,166 @@ class TrialConversionEngine:
 
     def stop(self):
         self._stop_loop = True
+
+    # ── Trial Pipeline Stats ────────────────────────────────────────
+
+    def trial_pipeline_stats(self) -> dict:
+        """Aggregate stats for the trial pipeline SPA view.
+
+        Returns:
+          - active: count of trials still within trial period
+          - expiring_soon: count ending within 7 days
+          - expired_unconverted: past grace period, no trial_converted event
+          - converted: total trial_converted events
+          - churned: converted trials whose subscription is now canceled/past_due
+          - win_rate: converted / (converted + expired_unconverted)
+          - potential_monthly_mrr: sum of tier prices for active trials
+          - daily_starts: trial_start count per day for last 14 days
+          - by_product: breakdown per product_slug
+          - recent: last 20 trial_start events with status
+        """
+        db = self.get_db()
+        now = datetime.now(timezone.utc)
+
+        # Fetch all trial_start events
+        r = db.table("sales_events") \
+            .select("*") \
+            .eq("event_type", "trial_start") \
+            .order("created_at", desc=True) \
+            .execute()
+        trials = r.data or []
+
+        # Fetch all trial_converted events
+        r2 = db.table("sales_events") \
+            .select("email, product_slug, tier, created_at, amount_usd") \
+            .eq("event_type", "trial_converted") \
+            .execute()
+        converted_events = r2.data or []
+        converted_by_key: dict[str, dict] = {}
+        for ev in converted_events:
+            key = (ev.get("email", ""), ev.get("product_slug", ""))
+            converted_by_key[key] = ev
+
+        # Fetch all subscriptions to check churn status
+        all_subs = self.subscriptions.list_subscriptions() if hasattr(self.subscriptions, 'list_subscriptions') else []
+        sub_by_account: dict[str, dict] = {}
+        for s in all_subs:
+            sub_by_account[s.get("customer_account_id", "")] = s
+
+        # Categorize each trial
+        active = 0
+        expiring_soon = 0
+        expired_unconverted = 0
+        converted_count = 0
+        churned = 0
+        potential_mrr = 0.0
+        by_product: dict[str, dict] = {}
+        daily_starts: dict[str, int] = {}
+        recent_trials: list[dict] = []
+
+        for t in trials:
+            email = t.get("email", "")
+            product_slug = t.get("product_slug", "")
+            tier = t.get("tier", "")
+            trial_end_str = t.get("trial_end", "")
+            created_str = t.get("created_at", "")
+
+            # Daily breakdown
+            if created_str:
+                day = str(created_str)[:10]
+                daily_starts[day] = daily_starts.get(day, 0) + 1
+
+            # Determine trial end
+            if not trial_end_str:
+                continue
+            try:
+                end_dt = datetime.fromisoformat(str(trial_end_str).replace("Z", "+00:00"))
+            except (ValueError, TypeError):
+                continue
+
+            grace_end = end_dt + timedelta(hours=CONVERSION_GRACE_HOURS)
+            key = (email, product_slug)
+            is_converted = key in converted_by_key
+
+            if is_converted:
+                converted_count += 1
+                ev = converted_by_key[key]
+                # Check if the converted subscription later churned
+                account = email
+                sub = sub_by_account.get(account)
+                if sub and sub.get("subscription_status") in ("CANCELED", "PAST_DUE"):
+                    churned += 1
+            elif now < end_dt:
+                active += 1
+                # Check if expiring soon (within 7 days)
+                days_left = round((end_dt - now).total_seconds() / 86400)
+                if 1 <= days_left <= 7:
+                    expiring_soon += 1
+                # Estimate potential MRR
+                price = self._get_tier_price(product_slug, tier) or 0
+                potential_mrr += price
+            elif now < grace_end:
+                # In grace period — still counts as active-ish but expiring
+                expiring_soon += 1
+                price = self._get_tier_price(product_slug, tier) or 0
+                potential_mrr += price
+            else:
+                expired_unconverted += 1
+
+            # By-product breakdown
+            if product_slug not in by_product:
+                by_product[product_slug] = {
+                    "product": product_slug,
+                    "name": PRODUCT_NAMES.get(product_slug, product_slug),
+                    "trials": 0,
+                    "active": 0,
+                    "converted": 0,
+                    "expired": 0,
+                }
+            bp = by_product[product_slug]
+            bp["trials"] += 1
+            if is_converted:
+                bp["converted"] += 1
+            elif now < end_dt:
+                bp["active"] += 1
+            else:
+                bp["expired"] += 1
+
+            # Recent trials list (last 20)
+            if len(recent_trials) < 20:
+                status = "converted" if is_converted else ("active" if now < end_dt else ("grace" if now < grace_end else "expired"))
+                product_name = PRODUCT_NAMES.get(product_slug, product_slug)
+                recent_trials.append({
+                    "email": email,
+                    "product": product_name,
+                    "product_slug": product_slug,
+                    "tier": tier,
+                    "trial_end": str(trial_end_str)[:19],
+                    "created": str(created_str)[:19] if created_str else "",
+                    "status": status,
+                    "days_left": round((end_dt - now).total_seconds() / 86400) if now < end_dt else 0,
+                })
+
+        total_expired_or_converted = converted_count + expired_unconverted
+        win_rate = round(converted_count / total_expired_or_converted, 3) if total_expired_or_converted > 0 else 0
+
+        return {
+            "summary": {
+                "total_trial_starts": len(trials),
+                "active": active,
+                "expiring_soon": expiring_soon,
+                "expired_unconverted": expired_unconverted,
+                "converted": converted_count,
+                "churned": churned,
+                "win_rate": win_rate,
+                "potential_monthly_mrr": round(potential_mrr, 2),
+                "grace_hours": CONVERSION_GRACE_HOURS,
+            },
+            "by_product": sorted(by_product.values(), key=lambda x: x["trials"], reverse=True),
+            "daily_starts": [{"date": k, "count": v} for k, v in sorted(daily_starts.items(), reverse=True)],
+            "recent": recent_trials,
+            "engine_stats": dict(self.stats),
+        }
 
     # ── Stats snapshot ──────────────────────────────────────────────
 
