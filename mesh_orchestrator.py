@@ -40,6 +40,34 @@ Niche allocation (rebalanced 2026-06-14):
   Lanes 27-28 : Healthcare           (2 lanes, HEALTH_STRIKE, Healthcare Lead Gen)
                   27: Medical Alert Systems
                   28: Mental Health
+  Lanes 29-31 : Business Services    (3 lanes, BIZ_STRIKE, B2B Lead Gen)
+                  29: Managed IT
+                  30: Merchant Services
+                  31: HR & Staffing
+  Lanes 10-14 : Legal                (5 lanes, RECALL_SNIPER, FDA Live Feed)
+                  10: Pharma Liability
+                  11: Medical Device
+                  12: Consumer Product
+                  13: Class Action
+                  14: Mass Tort
+  Lanes 15-17 : Insurance            (3 lanes, INSURANCE_STRIKE, Insurance Lead Gen)
+                  15: Medicare
+                  16: Life Insurance
+                  17: Final Expense
+  Lanes 18-19 : Financial Services   (2 lanes, FINANCIAL_STRIKE, Financial Lead Gen)
+                  18: Debt Consolidation
+                  19: Mortgage
+  Lanes 20-21 : Consumer CPA         (2 lanes, FINANCIAL_STRIKE, Inbound Leads)
+  Lanes 22-23 : Senior Care          (2 lanes, SENIOR_STRIKE, Senior Lead Gen)
+                  22: Assisted Living
+                  23: Home Health
+  Lanes 24    : Addiction Treatment  (1 lane,  HEALTH_STRIKE, Healthcare Lead Gen)
+  Lanes 25-26 : Education            (2 lanes, STANDARD, Edu Lead Gen)
+                  25: CDL/Trade School
+                  26: Nursing
+  Lanes 27-28 : Healthcare           (2 lanes, HEALTH_STRIKE, Healthcare Lead Gen)
+                  27: Medical Alert Systems
+                  28: Mental Health
   Lanes 29-31 : unassigned           (3 lanes, STANDARD, General)
                   16: Pharma Liability
                   17: Medical Device
@@ -103,9 +131,9 @@ LANES = {
     26: {"niche": "Education",           "sub_niche": "Nursing",         "strategy": "STANDARD",         "source": "Edu Lead Gen"},
     27: {"niche": "Healthcare",          "sub_niche": "Medical Alert Systems","strategy": "HEALTH_STRIKE","source": "Healthcare Lead Gen"},
     28: {"niche": "Healthcare",          "sub_niche": "Mental Health",   "strategy": "HEALTH_STRIKE",   "source": "Healthcare Lead Gen"},
-    29: {"niche": "unassigned",          "sub_niche": None,              "strategy": "STANDARD",        "source": "General"},
-    30: {"niche": "unassigned",          "sub_niche": None,              "strategy": "STANDARD",        "source": "General"},
-    31: {"niche": "unassigned",          "sub_niche": None,              "strategy": "STANDARD",        "source": "General"},
+    29: {"niche": "Business Services",   "sub_niche": "Managed IT","strategy": "BIZ_STRIKE","source": "B2B Lead Gen"},
+    30: {"niche": "Business Services",   "sub_niche": "Merchant Services","strategy": "BIZ_STRIKE","source": "B2B Lead Gen"},
+    31: {"niche": "Business Services",   "sub_niche": "HR & Staffing",  "strategy": "BIZ_STRIKE",      "source": "B2B Lead Gen"},
 }
 # ── LANE OUTCOME TRACKER (persistent across cycles) ─────────────────────
 # Accumulates wins, losses, and revenue per (niche, strategy) so the
