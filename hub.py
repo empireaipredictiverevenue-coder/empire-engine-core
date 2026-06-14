@@ -116,6 +116,9 @@ from products.product_email_dispatcher import ProductEmailDispatcher
 from products.trial_conversion import TrialConversionEngine
 from hook_analytics import HookRoutes
 
+# Solana USDC Revenue Tracker — on-chain payment verification
+from workers.solana_payment_engine import SolanaRevenueEngine, register_solana_routes
+
 # Strategist & Analytics Agents
 from empire_strategist import StrategistAgent
 from empire_analytics_agent import AnalyticsAgent
@@ -472,6 +475,21 @@ register_strike_pack_routes(
     require_auth=require_auth,
     require_owner=require_owner,
 )
+
+# ── Solana USDC Revenue Tracker — verify + log on-chain payments ──
+solana_revenue_engine = SolanaRevenueEngine(
+    get_db=get_db,
+    supabase_url=SUPABASE_URL,
+    supabase_key=SUPABASE_SERVICE_KEY,
+    solana_rpc_url=os.environ.get("SOLANA_RPC_URL", "https://api.mainnet-beta.solana.com"),
+    empire_vault_wallet=os.environ.get("EMPIRE_VAULT_WALLET", ""),
+)
+if solana_revenue_engine.vault_wallet:
+    log.info(f"[solana.revenue] Engine ONLINE · vault {solana_revenue_engine.vault_wallet[:8]}...")
+else:
+    log.warning("[solana.revenue] Engine in DRY-RUN mode (EMPIRE_VAULT_WALLET not configured)")
+register_solana_routes(app, engine=solana_revenue_engine, require_auth=require_auth)
+
 register_affiliate_routes(
     app,
     sign_token=_hub_sign_token,
