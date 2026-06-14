@@ -15,7 +15,8 @@ import os
 import sys
 import asyncio
 import logging
-from datetime import datetime, timezone
+from typing import Any, Dict, List, Optional
+
 from dotenv import load_dotenv
 
 load_dotenv("/root/.env")
@@ -27,14 +28,8 @@ from bots.places_helper import places_search as _places_search
 log = logging.getLogger("empire.prospector")
 
 
-def _sb():
-    """Lazy Supabase client — no module-level IO."""
-    from supabase import create_client
-    return create_client(os.getenv("SUPABASE_URL"), os.getenv("SUPABASE_SERVICE_KEY"))
-
-
 # Supported prospecting niches (mirrors empire_contractors.TRADE_ENUM)
-NICHES = [
+NICHES: List[str] = [
     "roofing",
     "general contractor",
     "restoration",
@@ -48,7 +43,15 @@ NICHES = [
 ]
 
 
-def buy_signal(place: dict) -> int:
+def _sb() -> Any:
+    """Lazy Supabase client — no module-level IO."""
+    from supabase import create_client
+    url: str = os.getenv("SUPABASE_URL", "")
+    key: str = os.getenv("SUPABASE_SERVICE_KEY", "")
+    return create_client(url, key)
+
+
+def buy_signal(place: Dict[str, Any]) -> int:
     """Score a contractor by likelihood they buy leads. 0-100.
 
     Signals:
@@ -58,8 +61,8 @@ def buy_signal(place: dict) -> int:
       - Rating >= 4.0  (reputation-conscious): 15 pts
       - business_status == OPERATIONAL: 5 pts bonus
     """
-    score = 0
-    reviews = place.get("review_count") or place.get("user_ratings_total") or 0
+    score: int = 0
+    reviews: int = int(place.get("review_count") or place.get("user_ratings_total") or 0)
     if reviews >= 100:
         score += 40
     elif reviews >= 50:
@@ -74,19 +77,22 @@ def buy_signal(place: dict) -> int:
     if place.get("phone") or place.get("formatted_phone_number"):
         score += 20
 
-    rating = place.get("rating") or 0
+    rating: float = float(place.get("rating") or 0)
     if rating >= 4.0:
         score += 15
 
     # Bonus for verified operational businesses
-    status = place.get("business_status", "")
-    if status and status.upper() == "OPERATIONAL":
+    status: str = str(place.get("business_status", "") or "")
+    if status.upper() == "OPERATIONAL":
         score += 5
 
     return min(score, 100)
 
 
-async def find_prospects(metro: str = "Wichita", niche: str = "roofing") -> list:
+async def find_prospects(
+    metro: str = "Wichita",
+    niche: str = "roofing",
+) -> List[Dict[str, Any]]:
     """Find contractor prospects in a metro for a given niche.
 
     Uses Google Places text search, scores each result with buy_signal(),
@@ -99,16 +105,18 @@ async def find_prospects(metro: str = "Wichita", niche: str = "roofing") -> list
 
     print(f"[PROSPECT] Searching {niche} contractors in {metro}...")
     # Convert niche like "general contractor" to safe search query
-    query_niche = niche.replace("_", " ")
-    leads = await _places_search(f"{query_niche} contractors in {metro}", lat, lon)
+    query_niche: str = niche.replace("_", " ")
+    leads: List[Dict[str, Any]] = await _places_search(
+        f"{query_niche} contractors in {metro}", lat, lon
+    )
     print(f"[PROSPECT] Places returned {len(leads)} businesses")
 
-    prospects = []
+    prospects: List[Dict[str, Any]] = []
     for p in leads:
-        name = p.get("name") or p.get("warehouse_name")
+        name: Optional[str] = p.get("name") or p.get("warehouse_name")
         if not name:
             continue
-        score = buy_signal(p)
+        score: int = buy_signal(p)
         prospects.append({
             "business_name": name,
             "niche": niche,
@@ -123,17 +131,17 @@ async def find_prospects(metro: str = "Wichita", niche: str = "roofing") -> list
             "status": "new",
         })
 
-    prospects.sort(key=lambda x: x["buy_signal_score"], reverse=True)
+    prospects.sort(key=lambda x: int(x["buy_signal_score"]), reverse=True)
     return prospects
 
 
-async def save_prospects(prospects: list) -> int:
+async def save_prospects(prospects: List[Dict[str, Any]]) -> int:
     """Insert prospects into the DB, dedup by business_name + metro.
 
     Returns the count of new rows inserted.
     """
     sb = _sb()
-    saved = 0
+    saved: int = 0
     for p in prospects:
         try:
             existing = (sb.table("prospects").select("id")
@@ -148,13 +156,16 @@ async def save_prospects(prospects: list) -> int:
     return saved
 
 
-async def run(metro: str = "Wichita", niche: str = "roofing") -> list:
+async def run(
+    metro: str = "Wichita",
+    niche: str = "roofing",
+) -> List[Dict[str, Any]]:
     """Run the full prospector pipeline: find + save + print top 10.
 
     Returns the full list of prospects (found, not just saved).
     """
-    prospects = await find_prospects(metro, niche)
-    saved = await save_prospects(prospects)
+    prospects: List[Dict[str, Any]] = await find_prospects(metro, niche)
+    saved: int = await save_prospects(prospects)
     print(f"[PROSPECT] {len(prospects)} found, {saved} new saved")
     print(f"\n=== TOP 10 PROSPECTS ({metro} {niche}) ===")
     for i, p in enumerate(prospects[:10], 1):
@@ -164,7 +175,10 @@ async def run(metro: str = "Wichita", niche: str = "roofing") -> list:
     return prospects
 
 
-async def run_multi(metros: list = None, niches: list = None) -> dict:
+async def run_multi(
+    metros: Optional[List[str]] = None,
+    niches: Optional[List[str]] = None,
+) -> Dict[str, Any]:
     """Run prospector across multiple metros and niches.
 
     Args:
@@ -179,16 +193,20 @@ async def run_multi(metros: list = None, niches: list = None) -> dict:
     if niches is None:
         niches = NICHES
 
-    results = {"total_found": 0, "total_saved": 0, "by_metro": {}, "by_niche": {}}
+    results: Dict[str, Any] = {
+        "total_found": 0, "total_saved": 0, "by_metro": {}, "by_niche": {}
+    }
     for metro in metros:
-        metro_found = 0
+        metro_found: int = 0
         for niche in niches:
-            prospects = await find_prospects(metro, niche)
-            saved = await save_prospects(prospects)
+            prospects: List[Dict[str, Any]] = await find_prospects(metro, niche)
+            saved: int = await save_prospects(prospects)
             results["total_found"] += len(prospects)
             results["total_saved"] += saved
             metro_found += len(prospects)
-            results["by_niche"][niche] = results["by_niche"].get(niche, 0) + len(prospects)
+            results["by_niche"][niche] = (
+                results["by_niche"].get(niche, 0) + len(prospects)
+            )
             await asyncio.sleep(0.5)  # Rate limit between niche queries
         results["by_metro"][metro] = metro_found
         print(f"[PROSPECT] {metro}: {metro_found} prospects found across {len(niches)} niches")
@@ -198,10 +216,9 @@ async def run_multi(metros: list = None, niches: list = None) -> dict:
 
 
 if __name__ == "__main__":
-    import sys
-    metro = sys.argv[1] if len(sys.argv) > 1 else "Wichita"
-    niche = sys.argv[2] if len(sys.argv) > 2 else "roofing"
-    multi = "--multi" in sys.argv
+    metro: str = sys.argv[1] if len(sys.argv) > 1 else "Wichita"
+    niche: str = sys.argv[2] if len(sys.argv) > 2 else "roofing"
+    multi: bool = "--multi" in sys.argv
     if multi:
         results = asyncio.run(run_multi())
         print(f"\n=== MULTI SCAN COMPLETE ===")

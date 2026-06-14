@@ -11,8 +11,9 @@ Every entry has: lat, lon, state
 
 Add new metros here, not in individual agent files.
 """
+from typing import Dict, List, Optional, Tuple
 
-METROS = {
+METROS: Dict[str, Dict[str, float | str]] = {
     "Wichita":             {"lat": 37.6872, "lon": -97.3301, "state": "KS"},
     "Oklahoma City":       {"lat": 35.4676, "lon": -97.5164, "state": "OK"},
     "Kansas City":         {"lat": 39.0997, "lon": -94.5786, "state": "MO"},
@@ -34,20 +35,20 @@ METROS = {
 }
 
 
-def metro_keys() -> list:
+def metro_keys() -> List[str]:
     """Return sorted list of metro keys for dropdowns / filters."""
     return sorted(METROS.keys())
 
 
-def metro_coords(metro: str) -> tuple:
+def metro_coords(metro: str) -> Tuple[Optional[float], Optional[float]]:
     """Return (lat, lon) for a metro, or (None, None) if unknown."""
     m = METROS.get(metro)
     if m:
-        return (m["lat"], m["lon"])
+        return (float(m["lat"]), float(m["lon"]))
     return (None, None)
 
 
 def metro_state(metro: str) -> str:
     """Return the 2-letter state code for a metro, or '' if unknown."""
     m = METROS.get(metro)
-    return m["state"] if m else ""
+    return str(m["state"]) if m else ""

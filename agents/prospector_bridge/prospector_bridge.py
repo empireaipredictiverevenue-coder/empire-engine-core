@@ -46,6 +46,7 @@ import logging
 import argparse
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple
 
 REPO = Path(__file__).resolve().parents[2]
 if str(REPO) not in sys.path:
@@ -67,18 +68,18 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(name)s] %(message
 # prospector already scored them 0-100 based on review count, website,
 # phone, and rating. 40 = "has a real business with a phone number".
 # Set higher for tighter qualification; lower for more volume.
-MIN_SCORE = 40
+MIN_SCORE: int = 40
 
 # Status values the prospector sets that this bridge is willing to
 # pick up. "contacted" means the other agent ran the prospector and
 # printed the list - it has NOT actually been contacted by us. The
 # bridge is the first real touch.
-INCLUDED_STATUSES = ("new", "contacted")
+INCLUDED_STATUSES: Tuple[str, ...] = ("new", "contacted")
 
 
-def _sb():
-    url = os.getenv("SUPABASE_URL", "")
-    key = os.getenv("SUPABASE_SERVICE_KEY", "")
+def _sb() -> Any:
+    url: str = os.getenv("SUPABASE_URL", "")
+    key: str = os.getenv("SUPABASE_SERVICE_KEY", "")
     if not url or not key:
         raise RuntimeError("SUPABASE_URL and SUPABASE_SERVICE_KEY must be set")
     return create_client(url, key)
@@ -88,7 +89,7 @@ def _normalize_phone(phone: str) -> str:
     """E.164 normalize. US default if 10 digits, +country if 11+."""
     if not phone:
         return ""
-    digits = "".join(c for c in phone if c.isdigit())
+    digits: str = "".join(c for c in phone if c.isdigit())
     if not digits:
         return ""
     if len(digits) == 10:
@@ -100,21 +101,28 @@ def _normalize_phone(phone: str) -> str:
     return ""
 
 
-def _read_config(sb):
+def _read_config(sb: Any) -> Dict[str, Any]:
     r = sb.table("agent_config").select("*").eq("agent_name", "prospector_bridge").limit(1).execute()
     if not r.data:
         return {"enabled": True, "max_per_run": 100, "min_score": MIN_SCORE}
-    row = r.data[0]
-    cfg = row.get("config_json") or {}
+    row: Dict[str, Any] = r.data[0]
+    cfg: Dict[str, Any] = row.get("config_json") or {}
     return {
-        "enabled":    row.get("enabled", True),
-        "max_per_run": cfg.get("max_per_run", 100),
-        "min_score":   cfg.get("min_score", MIN_SCORE),
+        "enabled":    bool(row.get("enabled", True)),
+        "max_per_run": int(cfg.get("max_per_run", 100)),
+        "min_score":   int(cfg.get("min_score", MIN_SCORE)),
     }
 
 
-def _log_activity(sb, agent_name, run_id, started_at, status, **kwargs):
-    finished_at = datetime.now(timezone.utc).isoformat()
+def _log_activity(
+    sb: Any,
+    agent_name: str,
+    run_id: uuid.UUID,
+    started_at: datetime,
+    status: str,
+    **kwargs: Any,
+) -> None:
+    finished_at: str = datetime.now(timezone.utc).isoformat()
     sb.table("agent_activity").insert({
         "agent_name":   agent_name,
         "run_id":       str(run_id),
@@ -125,7 +133,12 @@ def _log_activity(sb, agent_name, run_id, started_at, status, **kwargs):
     }).execute()
 
 
-def _update_config(sb, agent_name, status, finished_at):
+def _update_config(
+    sb: Any,
+    agent_name: str,
+    status: str,
+    finished_at: str,
+) -> None:
     sb.table("agent_config").update({
         "last_run_at":      finished_at,
         "last_run_status":  status,
@@ -133,7 +146,7 @@ def _update_config(sb, agent_name, status, finished_at):
     }).eq("agent_name", agent_name).execute()
 
 
-def _find_existing_contractor_by_phone(sb, phone: str):
+def _find_existing_contractor_by_phone(sb: Any, phone: str) -> Optional[Dict[str, Any]]:
     """Return the existing contractors row for this phone, or None."""
     if not phone:
         return None
@@ -145,17 +158,17 @@ def _find_existing_contractor_by_phone(sb, phone: str):
         return None
 
 
-def _build_contractor_row(prospect: dict, phone_e164: str) -> dict:
+def _build_contractor_row(prospect: Dict[str, Any], phone_e164: str) -> Dict[str, Any]:
     """Map a prospect row to a contractors insert payload."""
-    biz = prospect.get("business_name") or ""
+    biz: str = str(prospect.get("business_name") or "")
     # The contractors.email column is NOT NULL. We don't have a real
     # email from Google Places; use a synthetic one keyed off the
     # business name. contact_discovery will overwrite with the real
     # email on its next run.
-    biz_slug = re.sub(r"[^a-z0-9]+", "", biz.lower())[:40] or "unknown"
-    synthetic_email = f"unknown.{biz_slug}@prospector.placeholder"
+    biz_slug: str = re.sub(r"[^a-z0-9]+", "", biz.lower())[:40] or "unknown"
+    synthetic_email: str = f"unknown.{biz_slug}@prospector.placeholder"
 
-    meta = {
+    meta: Dict[str, Any] = {
         "source":              "prospector_bridge",
         "bridged_at":          datetime.now(timezone.utc).isoformat(),
         "tcpa_consent":        False,   # not yet opted in; the recruit sequence asks via reply
@@ -177,30 +190,30 @@ def _build_contractor_row(prospect: dict, phone_e164: str) -> dict:
     # Map niche to a specialties list. The real contractors.specialties
     # column is a list of strings; we put the niche as a single entry
     # so it shows up in the contractor dashboard filter.
-    specialty = prospect.get("niche") or "roofing"
+    specialty: str = str(prospect.get("niche") or "roofing")
     return {
         "name":         biz,
         "phone":        phone_e164,
         "email":        synthetic_email,
-        "metro":        prospect.get("metro") or "",
+        "metro":        str(prospect.get("metro") or ""),
         "active":       True,
         "specialties":  [specialty],
         "meta":         meta,
     }
 
 
-def run() -> dict:
-    started_at = datetime.now(timezone.utc)
-    run_id = uuid.uuid4()
-    sb = _sb()
-    cfg = _read_config(sb)
+def run() -> Dict[str, Any]:
+    started_at: datetime = datetime.now(timezone.utc)
+    run_id: uuid.UUID = uuid.uuid4()
+    sb: Any = _sb()
+    cfg: Dict[str, Any] = _read_config(sb)
 
     if not cfg["enabled"]:
         _log_activity(sb, "prospector_bridge", run_id, started_at, "skipped_disabled",
                       summary="disabled in agent_config")
         return {"status": "skipped_disabled", "rows_processed": 0}
 
-    min_score = cfg.get("min_score", MIN_SCORE)
+    min_score: int = int(cfg.get("min_score", MIN_SCORE))
 
     # 1) Find prospects that qualify
     r = (sb.table("prospects")
@@ -209,35 +222,36 @@ def run() -> dict:
            .gte("buy_signal_score", min_score)
            .not_.is_("phone", "null")
            .order("buy_signal_score", desc=True)
-           .limit(cfg["max_per_run"])
+           .limit(int(cfg["max_per_run"]))
            .execute())
-    candidates = r.data or []
-    rows_seen = len(candidates)
+    candidates: List[Dict[str, Any]] = r.data or []
+    rows_seen: int = len(candidates)
     log.info(f"prospector_bridge: {rows_seen} prospects qualify (status IN {INCLUDED_STATUSES}, score >= {min_score})")
 
-    rows_processed = 0
-    rows_skipped_dup = 0
-    rows_errored = 0
-    rows_no_phone = 0
-    error_msgs = []
-    sample_bridges = []
+    rows_processed: int = 0
+    rows_skipped_dup: int = 0
+    rows_errored: int = 0
+    rows_no_phone: int = 0
+    error_msgs: List[str] = []
+    sample_bridges: List[Dict[str, Any]] = []
 
     for prospect in candidates:
         try:
             # Normalize phone
-            phone_e164 = _normalize_phone(prospect.get("phone", ""))
+            phone_e164: str = _normalize_phone(str(prospect.get("phone", "") or ""))
             if not phone_e164:
                 rows_no_phone += 1
                 continue
 
             # Idempotency: skip if a contractor already exists for this phone
-            existing = _find_existing_contractor_by_phone(sb, phone_e164)
+            existing: Optional[Dict[str, Any]] = _find_existing_contractor_by_phone(sb, phone_e164)
             if existing:
                 # Mark the prospect as bridged anyway so it doesn't reappear
                 try:
+                    existing_notes: str = str(prospect.get("notes") or "")
                     sb.table("prospects").update({
                         "status":         "bridged",
-                        "notes":          (prospect.get("notes") or "") + f"\nbridge: existing contractor {existing.get('id')}",
+                        "notes":          existing_notes + f"\nbridge: existing contractor {existing.get('id')}",
                     }).eq("id", prospect["id"]).execute()
                 except Exception:
                     pass
@@ -245,22 +259,23 @@ def run() -> dict:
                 continue
 
             # Build + insert
-            payload = _build_contractor_row(prospect, phone_e164)
+            payload: Dict[str, Any] = _build_contractor_row(prospect, phone_e164)
             ins = sb.table("contractors").insert(payload).execute()
             if not ins.data:
                 rows_errored += 1
                 error_msgs.append(f"{prospect.get('business_name', '?')}: insert returned no row")
                 continue
 
-            new_id = ins.data[0]["id"]
+            new_id: str = str(ins.data[0]["id"])
 
             # Mark the prospect row as bridged
             try:
+                prospect_notes: str = str(prospect.get("notes") or "")
                 sb.table("prospects").update({
                     "status":         "bridged",
                     "contacted_at":   datetime.now(timezone.utc).isoformat(),
                     "contacted_status": "bridged_to_contractors",
-                    "notes":          (prospect.get("notes") or "") + f"\nbridged {new_id} at {datetime.now(timezone.utc).isoformat()}",
+                    "notes":          prospect_notes + f"\nbridged {new_id} at {datetime.now(timezone.utc).isoformat()}",
                 }).eq("id", prospect["id"]).execute()
             except Exception as e:
                 log.warning(f"prospector_bridge: could not mark prospect {prospect.get('id')} bridged: {e}")
@@ -278,20 +293,20 @@ def run() -> dict:
 
         except Exception as e:
             rows_errored += 1
-            error_msgs.append(f"{prospect.get('id', '?')[:8]}: {type(e).__name__}: {e}")
+            error_msgs.append(f"{str(prospect.get('id', '?'))[:8]}: {type(e).__name__}: {e}")
             log.warning(f"prospector_bridge: failed for {prospect.get('id')}: {e}")
 
-    finished_at = datetime.now(timezone.utc).isoformat()
-    summary = (f"[LIVE] scanned {rows_seen} prospects, "
-               f"{rows_processed} bridged, "
-               f"{rows_skipped_dup} skipped (duplicate phone), "
-               f"{rows_no_phone} skipped (no phone), "
-               f"{rows_errored} errored")
+    finished_at: str = datetime.now(timezone.utc).isoformat()
+    summary: str = (f"[LIVE] scanned {rows_seen} prospects, "
+                    f"{rows_processed} bridged, "
+                    f"{rows_skipped_dup} skipped (duplicate phone), "
+                    f"{rows_no_phone} skipped (no phone), "
+                    f"{rows_errored} errored")
     if sample_bridges:
         summary += f". Sample: {json.dumps(sample_bridges, default=str)[:500]}"
 
-    status = "ok" if rows_errored == 0 else "ok"
-    err_field = None if rows_errored == 0 else "; ".join(error_msgs[:5])
+    status: str = "ok"  # always ok even with errors; errors are logged
+    err_field: Optional[str] = None if rows_errored == 0 else "; ".join(error_msgs[:5])
 
     _log_activity(sb, "prospector_bridge", run_id, started_at, status,
                   rows_seen=rows_seen, rows_processed=rows_processed,
@@ -311,13 +326,13 @@ def run() -> dict:
     }
 
 
-def main():
-    p = argparse.ArgumentParser()
+def main() -> None:
+    p: argparse.ArgumentParser = argparse.ArgumentParser()
     p.add_argument("--status", action="store_true")
     args = p.parse_args()
     if args.status:
-        sb = _sb()
-        cfg = _read_config(sb)
+        sb: Any = _sb()
+        cfg: Dict[str, Any] = _read_config(sb)
         last_act = (sb.table("agent_activity")
                       .select("*")
                       .eq("agent_name", "prospector_bridge")
@@ -328,7 +343,7 @@ def main():
             "last_run": last_act.data[0] if last_act.data else None,
         }, indent=2, default=str))
         return
-    result = run()
+    result: Dict[str, Any] = run()
     sys.exit(0 if result["status"] in ("ok", "skipped_disabled") else 1)
 
 
