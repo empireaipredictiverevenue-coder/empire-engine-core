@@ -377,7 +377,8 @@ def run(dry_run_override: bool = None) -> dict:
                 # status moves to "converted" (means: step 1 outreach done, awaiting response)
                 # a future follow-up agent will re-engage based on outreach_log.response_received_at
                 sb.table("enriched_leads").update({
-                    "status": "converted",
+                    "status":       "converted",
+                    "converted_at": "2026-06-14T19:20:27.297661+00:00",
                 }).eq("id", lead["id"]).execute()
                 # track a sample for the activity summary
                 if len(sample_would_send) < 5:
@@ -410,7 +411,7 @@ def run(dry_run_override: bool = None) -> dict:
                 }).execute()
                 if ok:
                     compliance.record_send(lead.get("phone"))
-                    sb.table("enriched_leads").update({"status": "converted"}).eq("id", lead["id"]).execute()
+                    sb.table("enriched_leads").update({"status": "converted", "converted_at": "2026-06-14T19:20:27.297661+00:00"}).eq("id", lead["id"]).execute()
                     rows_processed += 1
                 else:
                     rows_errored += 1
