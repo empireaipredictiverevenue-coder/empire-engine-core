@@ -266,7 +266,201 @@ outreach_log → SMS (Vonage) / Voice (Vonage)
 
 ---
 
-## 6. Strategy Descriptions
+## 6. Intelligence Layers
+
+The lane grid is powered by three intelligence layers that work together to
+optimize lead generation, strategy selection, and resource deployment.
+
+### 6A. Synthetic Intelligence (SI) — Core Inference Engine
+
+**Source:** `empire_si_core.py`, `empire_si_strategy.py`, `empire_si_adaptive.py`
+
+The SI core is the probabilistic inference engine that powers all
+lane-level decision-making. It replaces hardcoded heuristics with
+mathematically rigorous Bayesian models.
+
+**Key components:**
+
+| Component | Model | Purpose |
+|-----------|-------|---------|
+| **Beta-Binomial Posterior** | Beta(α, β) with uniform prior | Estimates win rates with credible intervals, avoiding zero-data problems via the rule of succession (1+wins)/(2+trials) |
+| **Thompson Sampling** | Sample from Beta posterior → select highest draw | Naturally balances exploration (high-variance strategies get tried) with exploitation (high-mean strategies chosen more often) |
+| **Expected Value** | E[rev] = P(win) × avg_deal × n_opps | Revenue forecasts with 95% confidence intervals via delta-method variance propagation |
+| **Platt Calibration** | Logistic regression on logit(pred) vs outcome | Corrects systematic bias in predicted probabilities using gradient descent |
+| **Regime Shift Detection** | KL divergence between Gamma revenue distributions | Detects structural changes in revenue patterns (upshift → invest, downshift → conserve) |
+
+**Flow:**
+
+```
+Historical outcomes → Beta posterior (win rate ± CI)
+                         ↓
+              Thompson sample (explore/exploit score)
+                         ↓
+              Expected revenue (with 95% CI)
+                         ↓
+              Platt calibration (correct bias)
+                         ↓
+              Regime shift detection (trend alert)
+```
+
+**Integration with lanes:**
+- `mesh_orchestrator.py` calls `si.simulate_strategy()` per lane to get Bayesian win rates
+- `agents/lead_enricher/enricher.py` uses `si.evolve_logic()` to calibrate scoring predictions
+- `si_core.get_si_core()` provides the shared singleton
+
+**Strategy Evolution (`empire_si_strategy.py`):**
+
+Each strategy has a **genome** of 5 traits: `aggressiveness`, `risk_tolerance`,
+`outreach_intensity`, `price_premium`, `narrow_focus`. As outcomes flow in:
+
+1. **Score** = win_rate × revenue_bonus × confidence (sample-count factor)
+2. **Mutate** low-performers (15% mutation rate, ±0.15 magnitude per trait)
+3. **Evolve** new variants from the best performer each generation
+4. **Cross-pollinate** winning strategies across niches via transfer learning
+5. **Deactivate** strategies below 0.15 win rate after 20+ samples
+
+Archetype genomes:
+
+| Strategy | Aggressiveness | Risk Tolerance | Outreach Intensity | Price Premium | Narrow Focus |
+|----------|---------------|----------------|-------------------|---------------|-------------|
+| AGGRESSIVE_STRIKE | 0.9 | 0.7 | 0.9 | 0.8 | 0.3 |
+| UGLY_BANNER | 0.4 | 0.3 | 0.6 | 0.2 | 0.5 |
+| RECALL_SNIPER | 0.7 | 0.5 | 0.8 | 0.5 | 0.8 |
+| FINANCIAL_STRIKE | 0.8 | 0.6 | 0.7 | 0.7 | 0.4 |
+| STANDARD | 0.5 | 0.5 | 0.5 | 0.5 | 0.5 |
+
+**SI Adaptive Engine (`empire_si_adaptive.py`):**
+
+Bridges SI learning to system-wide parameter tuning. Adjusts thresholds,
+weights, and routing parameters in real-time based on learned insights.
+Propagates SI-optimized parameters to subsystems like the AI Closer,
+AGI Governor, and lane engine.
+
+---
+
+### 6B. AGI (Artificial General Intelligence) — Executive Governor
+
+**Source:** `empire_agi_governor.py`, `empire_agi.py`, `bots/agi_revenue.py`
+
+The AGI layer sits above the SI core and makes **executive decisions**
+about strategy selection, agent health, and resource allocation. It's the
+"brain" that decides what the system should do next.
+
+**AGI Governor (`empire_agi_governor.py`):**
+
+```
+Manual override check → Staleness gate → Niche strategy lookup → Decision
+```
+
+| Function | Description |
+|----------|-------------|
+| `direct_strategy()` | Decides HOLD (manual override or stale agents) vs AGGRESSIVE_STRIKE (autonomous) |
+| `strategy_for_niche(niche)` | Returns best evolved strategy per niche via StrategyEvolution |
+| `record_strategy_outcome()` | Feeds outcomes back to SI for continuous learning |
+| `get_niche_win_rate(niche)` | Returns win rate for threshold adaptation (used by AI Closer) |
+| `check_agent_staleness()` | Queries agent_registry — flags agents that haven't pinged in 3× their expected interval |
+| `get_local_brain(task_type)` | Routes tasks to optimal local model: Qwen for code, Llama 3.1 for negotiation, Llama 3.2 for outreach |
+
+**Staleness gate:**
+- Each agent has an expected ping interval (e.g., seo_agent → 6h, voice_streaming_agent → 30min)
+- If an agent hasn't pinged in 3× its interval → system switches to HOLD mode
+- Prevents the system from operating with a degraded fleet
+
+**AGI Optimizer (`empire_agi.py`):**
+
+LLM-driven weight optimization using Llama 3.2 3b:
+- Reviews current system stats (revenue_pulse, conversion_rate, proxy_health, lead_velocity)
+- Adjusts storm-target scoring weights between 0.5 and 2.0
+- High revenue + high conversion → increase weight
+- Low proxy health → brake hard (weight = 0.5)
+- Low lead velocity → encourage discovery (increase weight)
+
+**AGI Revenue (`bots/agi_revenue.py`, `bots/revenue_brain.py`):**
+
+Specialized AGI agent for revenue optimization:
+- Tunes predictive revenue engine parameters
+- Monitors pipeline health and forecasts
+- Adjusts bid prices and routing based on performance
+
+---
+
+### 6C. Demand Intelligence — Predictive Deployment Engine
+
+**Source:** `bots/demand_intelligence.py`, `corridor.py`
+
+Lane-agnostic predictive demand engine. Predicts **WHERE** and **WHEN**
+demand concentrates per lane, so traffic can be aimed at the right
+geographies at the right time.
+
+**Flow per lane:**
+
+```
+Trigger signal (e.g., storm warning for roofing lane)
+    ↓
+Score geographies (risk rank × property density = demand_score 0–100)
+    ↓
+Timing model (demand peaks 24–72h post-trigger)
+    ↓
+LLM reasoning (Llama 3.2 3b ranks deployment targets)
+    ↓
+Deploy traffic HERE NOW (ranked metro list)
+```
+
+**Lane configuration:**
+
+| Lane | Trigger | Timing Window | Demand Keywords | Min Risk |
+|------|---------|---------------|-----------------|----------|
+| Roofing | Storm | 24–72h post-storm | roof repair, storm damage, hail damage | Slight+ |
+| HVAC | Weather extreme | 12–48h post-event | ac repair, furnace, hvac service | — |
+| Legal | FDA recall | 48–96h post-recall | recall, lawsuit, class action | — |
+| Plumbing | Emergency | 0–24h post-event | burst pipe, water leak, plumber | — |
+
+**Brain ranking:**
+
+The Llama 3.2 3b model reasons over scored geographies with:
+- Current demand scores (higher = deploy harder)
+- Timing window (demand peaks relative to trigger event)
+- Historical conversion data per metro
+- Outputs: ranked deployment list + confidence score
+
+**Integration with lane system:**
+- `corridor.py` calls demand_intelligence before lane execution
+- Demand scores influence which metros receive priority outreach
+- Each lane's trigger determines the data source (storm→NWS, recall→FDA, etc.)
+- Designed to scale across all 36 lanes — each lane adds a config entry
+
+---
+
+### Intelligence Layer Stack
+
+```
+┌─────────────────────────────────────────────┐
+│           AGI (Executive Governor)           │
+│  Decides HOLD vs GO, strategy selection,     │
+│  agent health, resource allocation           │
+├─────────────────────────────────────────────┤
+│     Demand Intelligence (Where/When)         │
+│  Predicts demand concentration per lane,     │
+│  ranks geographies, times deployment         │
+├─────────────────────────────────────────────┤
+│     Synthetic Intelligence (How/What)        │
+│  Bayesian win rates, Thompson sampling,      │
+│  strategy evolution, revenue forecasting     │
+├─────────────────────────────────────────────┤
+│           36-Lane Execution Grid             │
+│  Per-lane outreach, scoring, routing         │
+└─────────────────────────────────────────────┘
+```
+
+The three layers form a closed loop:
+1. **Demand Intelligence** predicts where to deploy
+2. **SI Core** calculates optimal strategy and win probabilities
+3. **AGI Governor** makes the go/no-go decision and monitors fleet health
+4. Results flow back to evolve strategies and calibrate predictions
+
+---
+
+## 7. Strategy Descriptions
 
 | Strategy | Description | Used By |
 |----------|-------------|---------|
@@ -282,7 +476,7 @@ outreach_log → SMS (Vonage) / Voice (Vonage)
 
 ---
 
-## 7. Revenue Projections
+## 8. Revenue Projections
 
 Estimated annual revenue potential per niche at 500 leads/mo with a 2.5× markup on CPL:
 
@@ -306,7 +500,7 @@ Estimated annual revenue potential per niche at 500 leads/mo with a 2.5× markup
 
 ---
 
-## 8. Source Directory
+## 9. Source Directory
 
 | Source | Report | Year |
 |--------|--------|------|
@@ -332,4 +526,4 @@ Estimated annual revenue potential per niche at 500 leads/mo with a 2.5× markup
 
 ---
 
-*Last updated: 2026-06-14 | 36 lanes, 13 active niches, 8 strategies, 11 data sources*
+*Last updated: 2026-06-14 | 36 lanes, 13 active niches, 9 strategies, 3 intelligence layers, 11 data sources*
