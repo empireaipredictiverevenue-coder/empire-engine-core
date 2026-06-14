@@ -99,9 +99,22 @@ def _update_config(sb, agent_name, status, finished_at):
 
 
 def _pick_sequence(lead: dict) -> str:
-    """Pick the sequence based on what we have on the lead."""
+    """Pick the sequence based on what we have on the lead.
+
+    A/B test: when the lead has a phone, 50/50 split between the original
+    storm_strike and the new storm_strike_v2 (scarcity angle) using a
+    stable hash of the lead id. The split is reproducible per lead: the
+    same lead id always picks the same cohort, so we can compare reply
+    rates cleanly over a week.
+    """
+    import hashlib
     if lead.get("phone"):
-        return "storm_strike"
+        lead_id = str(lead.get("id") or "")
+        if lead_id:
+            h = int(hashlib.md5(lead_id.encode("utf-8")).hexdigest(), 16)
+            if h % 2 == 0:
+                return "storm_strike_v2"   # scarcity angle
+        return "storm_strike"             # original (urgency / social / math)
     if lead.get("email"):
         return "lead_nurture"
     return "manual"
