@@ -27,6 +27,7 @@ log = logging.getLogger("empire.trial_conversion")
 CHECK_INTERVAL_SEC = 3600       # check every hour
 CONVERSION_GRACE_HOURS = 24     # wait 24h after trial ends before auto-converting
 EXPIRING_SOON_DAYS = [3, 1]     # send reminders N days before trial ends
+WIN_BACK_FOLLOWUP_DAYS = 7  # send follow-up win-back email N days after first win-back
 
 
 class TrialConversionEngine:
@@ -56,6 +57,7 @@ class TrialConversionEngine:
             "churn_detected": 0,
             "churn_reported": 0,
             "win_backs_sent": 0,
+            "win_back_followups_sent": 0,
         }
 
     # ── Core: find and convert expired trials ───────────────────────────
@@ -451,6 +453,156 @@ class TrialConversionEngine:
 </body>
 </html>"""
 
+    @staticmethod
+    def _build_win_back_followup_email(product_name: str, tier: str, price: float) -> str:
+        """Build HTML second-touch win-back email — more urgent/last-chance tone."""
+        return f"""<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"></head>
+<body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#0a0a0f;color:#e2e8f0;padding:32px">
+  <div style="max-width:560px;margin:0 auto;background:#14141e;border:1px solid #1e293b;border-radius:12px;padding:32px;text-align:center">
+    <div style="font-size:36px;margin-bottom:8px">⏳</div>
+    <h1 style="font-weight:200;font-size:24px;letter-spacing:-0.02em;margin:0 0 4px">Last Chance — <em style="color:#44E5B8;font-style:italic;font-weight:500">{product_name}</em></h1>
+    <p style="font-family:'SF Mono','Fira Code',monospace;font-size:10px;color:#94a3b8;letter-spacing:0.14em;text-transform:uppercase;margin:0 0 20px">Your reactivation offer expires soon</p>
+    <p style="font-size:14px;color:#cbd5e1;line-height:1.7;margin:0 0 8px">
+      A week ago we reached out about reactivating your <strong>{tier}</strong> plan. This is a final reminder — your previous rate of <strong style="color:#44E5B8">${price:.2f}/mo</strong> won't be available forever.
+    </p>
+    <div style="background:#0f0f17;border:1px solid #1e293b;border-radius:8px;padding:20px;margin:16px 0;text-align:left">
+      <div style="font-family:'SF Mono','Fira Code',monospace;font-size:10px;color:#94a3b8;letter-spacing:0.14em;text-transform:uppercase;margin-bottom:12px">Still Available</div>
+      <div style="font-size:14px;color:#e2e8f0;margin-bottom:4px">{product_name} · <strong>{tier}</strong></div>
+      <div style="font-family:'SF Mono','Fira Code',monospace;font-size:28px;color:#44E5B8;font-weight:600">${price:.2f}<span style="font-size:12px;color:#94a3b8;font-weight:400">/mo</span></div>
+      <div style="font-size:12px;color:#94a3b8;line-height:1.6;margin-top:8px;padding-top:12px;border-top:1px solid #1e293b">
+        ✓ Full feature access · Priority support · No setup fees
+      </div>
+    </div>
+    <p style="font-size:13px;color:#FFB800;line-height:1.6;margin:0 0 24px">
+      ⚠️ This offer will expire in 7 days. Reactivate now to lock in your rate.
+    </p>
+    <a href="https://empire-ai.co.uk/command#/products" style="display:inline-block;padding:14px 32px;background:#44E5B8;color:#000;text-decoration:none;font-weight:700;font-family:'SF Mono','Fira Code',monospace;font-size:12px;letter-spacing:0.14em;text-transform:uppercase;border-radius:6px">Reactivate Now</a>
+    <p style="font-size:11px;color:#64748b;line-height:1.5;margin:24px 0 0;padding-top:16px;border-top:1px solid #1e293b">
+      Questions? Reply to this email — we're here to help.
+    </p>
+  </div>
+</body>
+</html>"""
+
+    async def _send_win_back_followups(self) -> int:
+        """Send follow-up win-back emails for churns where 7+ days have passed since first win-back.
+
+        Scans win_back_sent events older than WIN_BACK_FOLLOWUP_DAYS, checks no
+        trial_converted event exists for the same email+product AFTER the first win-back
+        (meaning the user hasn't reactivated), and sends a second-touch email.
+
+        Returns count of followups sent.
+        """
+        if not self.send_email:
+            return 0
+
+        db = self.get_db()
+        now = datetime.now(timezone.utc)
+        cutoff = now - timedelta(days=WIN_BACK_FOLLOWUP_DAYS)
+
+        # Fetch all win_back_sent events older than cutoff
+        r = db.table("sales_events") \
+            .select("email, product_slug, tier, created_at") \
+            .eq("event_type", "win_back_sent") \
+            .order("created_at", desc=False) \
+            .execute()
+        win_backs = r.data or []
+
+        # Fetch all win_back_followup_sent events for dedup
+        r2 = db.table("sales_events") \
+            .select("email, product_slug") \
+            .eq("event_type", "win_back_followup_sent") \
+            .execute()
+        already_followed = set()
+        for ev in (r2.data or []):
+            already_followed.add((ev.get("email", ""), ev.get("product_slug", "")))
+
+        # Fetch all trial_converted events to check for reactivation
+        r3 = db.table("sales_events") \
+            .select("email, product_slug, created_at") \
+            .eq("event_type", "trial_converted") \
+            .order("created_at", desc=False) \
+            .execute()
+        converted_events = r3.data or []
+        # Build set of (email, product_slug) that converted after a given timestamp
+        # We'll check per win-back below
+
+        sent_count = 0
+        for wb in win_backs:
+            email = wb.get("email", "")
+            product_slug = wb.get("product_slug", "")
+            tier = wb.get("tier", "")
+            created_str = wb.get("created_at", "")
+
+            if not email or not product_slug:
+                continue
+
+            # Check if followup already sent
+            key = (email, product_slug)
+            if key in already_followed:
+                continue
+
+            # Check if win_back_sent is old enough
+            if not created_str:
+                continue
+            try:
+                wb_dt = datetime.fromisoformat(str(created_str).replace("Z", "+00:00"))
+            except (ValueError, TypeError):
+                continue
+
+            if wb_dt > cutoff:
+                continue  # not yet 7 days old
+
+            # Check if the user reactivated (new trial_converted event after win_back)
+            reactivated = False
+            for conv in converted_events:
+                if conv.get("email") == email and conv.get("product_slug") == product_slug:
+                    conv_created = conv.get("created_at", "")
+                    if conv_created:
+                        try:
+                            conv_dt = datetime.fromisoformat(str(conv_created).replace("Z", "+00:00"))
+                            if conv_dt > wb_dt:
+                                reactivated = True
+                                break
+                        except (ValueError, TypeError):
+                            pass
+
+            if reactivated:
+                log.debug(f"[trial] win-back followup skipped — {email} already reactivated {product_slug}")
+                continue
+
+            # Send followup email
+            product_name = PRODUCT_CATALOG.get(product_slug, {}).get("name", product_slug)
+            price = self._get_tier_price(product_slug, tier) or 0
+
+            subject = f"⏳ Last chance — {product_name} {tier} at ${price:.0f}/mo"
+            body = self._build_win_back_followup_email(product_name, tier, price)
+
+            ok = await self._send_email_async(email, subject, body)
+            if ok:
+                sent_count += 1
+                self.stats["win_back_followups_sent"] += 1
+
+                # Log to prevent repeats
+                try:
+                    db.table("sales_events").insert({
+                        "email": email,
+                        "product_slug": product_slug,
+                        "event_type": "win_back_followup_sent",
+                        "tier": tier,
+                        "created_at": datetime.now(timezone.utc).isoformat(),
+                    }).execute()
+                except Exception as e:
+                    log.debug(f"[trial] failed to log win_back_followup_sent: {e}")
+
+                log.info(f"[trial] win-back followup sent to {email} for {product_slug}/{tier}")
+
+        if sent_count:
+            log.info(f"[trial] win-back followup scan: {sent_count} followup(s) sent")
+        return sent_count
+
     async def _send_win_back(self, email: str, product_slug: str, tier: str) -> bool:
         """Send a win-back reactivation email for a churned trial.
 
@@ -711,13 +863,15 @@ class TrialConversionEngine:
         return summary
 
     async def monitoring_loop(self):
-        """Background loop: send expiring-soon reminders + convert expired trials + track churn."""
+        """Background loop: send expiring-soon reminders + convert expired trials + track churn + win-back followups."""
         await asyncio.sleep(300)  # let hub finish booting (5 min)
         log.info("[trial] monitoring loop started (interval=%ds)", CHECK_INTERVAL_SEC)
         while not self._stop_loop:
             try:
-                # 0. Track churn on converted trials (runs first to catch churns promptly)
+                # 0. Track churn on converted trials
                 self.track_churn()
+                # 0.5. Send win-back follow-ups (7d after first win-back)
+                await self._send_win_back_followups()
                 # 1. Send expiring-soon reminders (trials ending in 3 or 1 days)
                 await self._send_expiring_soon_reminders()
                 # 2. Convert expired trials (ended more than 24h ago)
