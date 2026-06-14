@@ -104,6 +104,7 @@ from products.buyer_spy import BuyerSpy, BuyerSpyRoutes
 from products.omni_bridge import OmniBridge, OmniBridgeRoutes
 from products.agent_orchestrator import AgentOrchestrator, AgentOrchestratorRoutes
 from products.b2b_pro import B2BPro, B2BProRoutes
+from products.lead_score import LeadScoreAI, LeadScoreRoutes
 from hook_analytics import HookRoutes
 
 # Strategist & Analytics Agents
@@ -557,6 +558,13 @@ suite_b2b_pro = B2BPro(
     log_usage=lambda a, p, e, q=1, u="count", m=None: suite_guard.log_usage(a, p, e, q, u, m),
 )
 B2BProRoutes(suite_b2b_pro, require_auth=require_auth).register(app)
+
+# Product 7: LeadScore AI — SI-powered lead enrichment & scoring engine
+suite_lead_score = LeadScoreAI(
+    guard=lambda a, f: suite_guard.check_access(a, f),
+    log_usage=lambda a, p, e, q=1, u="count", m=None: suite_guard.log_usage(a, p, e, q, u, m),
+)
+LeadScoreRoutes(suite_lead_score, require_auth=require_auth).register(app)
 
 # ── Hook & Trend Decider Engine ────────────────────────────────────────
 HookRoutes(require_auth=require_auth).register(app)
