@@ -232,6 +232,102 @@ TEMPLATES = {
             "reply YES anytime. We'll send a sample lead. STOP to opt out."
         ),
     ],
+    "commercial_roofing": [
+        # Touch 0 — Initial contact. Storm + commercial roof angle.
+        (
+            "{prefix} Storm damage flagged at {target_short}. "
+            "We dispatch vetted commercial roof inspectors — "
+            "no cost unless claim settles. Reply YES. STOP to opt out."
+        ),
+        # Touch 1 — Urgency. Insurance filing window.
+        (
+            "{prefix} Commercial policies have a 72-hr filing window "
+            "after severe weather. Reply YES to dispatch an adjuster. "
+            "STOP to opt out."
+        ),
+        # Touch 2 — Value. No inspection fee.
+        (
+            "{prefix} If the inspector finds no structural damage, "
+            "there's no charge. We only earn on settled claims. "
+            "Reply YES. STOP to opt out."
+        ),
+        # Touch 3 — Value math.
+        (
+            "{prefix} A $200K commercial roof settlement = "
+            "$6,000 to you, $6,000 to us. We earn what you earn. "
+            "Reply YES. STOP to opt out."
+        ),
+        # Touch 4 — Last call.
+        (
+            "{prefix} Final note for {target_short}. Reply YES for a "
+            "no-cost commercial roof assessment. Otherwise we won't "
+            "message again. STOP to opt out."
+        ),
+    ],
+    "commercial_solar": [
+        # Touch 0 — Initial contact. Energy cost + incentive angle.
+        (
+            "{prefix} Commercial solar for {target_short} — "
+            "federal tax credits cover 30% of install. "
+            "We handle the paperwork. Reply YES. STOP to opt out."
+        ),
+        # Touch 1 — Value proposition.
+        (
+            "{prefix} Most commercial properties in your area "
+            "qualify for solar with $0 down. PPA financing available. "
+            "Reply YES for a free savings estimate. STOP to opt out."
+        ),
+        # Touch 2 — Energy cost angle.
+        (
+            "{prefix} {target_short}, commercial electricity rates "
+            "are up 22% YoY. Solar locks in your rate for 25 years. "
+            "Reply YES. STOP to opt out."
+        ),
+        # Touch 3 — Social proof + timeline.
+        (
+            "{prefix} Other commercial properties in your area "
+            "are installing solar ahead of the 2027 tariff step-down. "
+            "Reply YES to see if you qualify. STOP to opt out."
+        ),
+        # Touch 4 — Last call.
+        (
+            "{prefix} Last note for {target_short}. If solar makes "
+            "sense for your property, reply YES for a free quote. "
+            "Otherwise we won't reach out again. STOP to opt out."
+        ),
+    ],
+    "debt_relief": [
+        # Touch 0 — Initial contact. Economic distress angle.
+        (
+            "{prefix} Debt relief options available in your area — "
+            "we negotiate with creditors to reduce balances. "
+            "No upfront fees. Reply YES. STOP to opt out."
+        ),
+        # Touch 1 — Value prop. Settlement leverage.
+        (
+            "{prefix} Most clients see 40-60% reduction on "
+            "unsecured debt through our settlement program. "
+            "Free consultation. Reply YES. STOP to opt out."
+        ),
+        # Touch 2 — Pain point. Interest burden.
+        (
+            "{prefix} {target_short}, credit card interest "
+            "averages 24% APR. Our program stops interest "
+            "and consolidates debt. Reply YES. STOP to opt out."
+        ),
+        # Touch 3 — Timeline.
+        (
+            "{prefix} Typical debt resolution takes 24-48 months. "
+            "First settlement often happens within 90 days. "
+            "No obligation to start. Reply YES. STOP to opt out."
+        ),
+        # Touch 4 — Last call.
+        (
+            "{prefix} Final note. If debt relief could help "
+            "your situation, reply YES for a free consultation. "
+            "Otherwise we won't reach out again. STOP to opt out."
+        ),
+    ],
 }
 
 
