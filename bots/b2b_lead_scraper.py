@@ -123,6 +123,12 @@ TARGET_METROS: List[Dict] = [
     {"name": "Denver",            "lat": 39.7392, "lon": -104.9903, "state": "CO"},
     {"name": "Wichita",           "lat": 37.6872, "lon": -97.3301, "state": "KS"},
     {"name": "St. Louis",         "lat": 38.6270, "lon": -90.1994, "state": "MO"},
+    {"name": "Phoenix",           "lat": 33.4484, "lon": -112.0740, "state": "AZ"},
+    {"name": "Atlanta",           "lat": 33.7490, "lon": -84.3880, "state": "GA"},
+    {"name": "Chicago",           "lat": 41.8781, "lon": -87.6298, "state": "IL"},
+    {"name": "Nashville",         "lat": 36.1627, "lon": -86.7816, "state": "TN"},
+    {"name": "Charlotte",         "lat": 35.2271, "lon": -80.8431, "state": "NC"},
+    {"name": "Tampa",             "lat": 27.9506, "lon": -82.4572, "state": "FL"},
 ]
 
 # Maximum results per query (Google Places limits vary by key tier)
