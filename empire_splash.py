@@ -258,6 +258,64 @@ def splash_page(redirect_to: str = "/command") -> str:
     .splash-foot a:hover {
       color: var(--signal-teal);
     }
+
+    /* Native Ad — subtle card at bottom-right */
+    .splash-ad {
+      position: fixed;
+      bottom: 60px;
+      right: 24px;
+      z-index: 5;
+      max-width: 220px;
+      opacity: 0;
+      animation: splash-fade-in 1.5s 2.5s ease-out forwards;
+    }
+    .splash-ad-card {
+      background: rgba(0,0,0,0.6);
+      border: 1px solid rgba(68,229,184,0.15);
+      border-radius: 8px;
+      padding: 10px 12px;
+      backdrop-filter: blur(12px);
+      transition: all 0.2s ease;
+    }
+    .splash-ad-card:hover {
+      border-color: rgba(68,229,184,0.4);
+      box-shadow: 0 0 20px rgba(68,229,184,0.1);
+    }
+    .splash-ad-headline {
+      font-family: var(--font-display);
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--empire-white);
+      margin-bottom: 2px;
+      letter-spacing: 0.06em;
+    }
+    .splash-ad-body {
+      font-family: var(--font-mono);
+      font-size: 9px;
+      color: var(--empire-mist);
+      margin-bottom: 6px;
+      line-height: 1.4;
+    }
+    .splash-ad-cta {
+      display: inline-block;
+      font-family: var(--font-mono);
+      font-size: 8px;
+      color: var(--signal-teal);
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      text-decoration: none;
+      padding: 3px 8px;
+      border: 1px solid rgba(68,229,184,0.25);
+      border-radius: 4px;
+      transition: all 0.2s;
+    }
+    .splash-ad-cta:hover {
+      background: rgba(68,229,184,0.1);
+      border-color: var(--signal-teal);
+    }
+    @keyframes splash-fade-in {
+      to { opacity: 1; }
+    }
     """
 
     head = empire_head(
@@ -354,6 +412,9 @@ def splash_page(redirect_to: str = "/command") -> str:
   <a href="https://empire-ai.co.uk">Autonomous Engine</a>
 </div>
 
+<!-- Native Ad Container — loaded via /api/v1/ads/serve -->
+<div class="splash-ad" id="empire-ad-splash"></div>
+
 <script>
 (function() {{
   // ── Generate ambient particles ──
@@ -442,6 +503,52 @@ def splash_page(redirect_to: str = "/command") -> str:
       setTimeout(() => {{ location.href = REDIRECT; }}, 800);
     }}, 1800);
   }}
+
+  // ── Native Ad: fetch from ad server and render ──
+  (function loadAd() {{
+    var slot = 'sidebar-recruit';
+    var niche = 'Affiliate Program';
+    var visitor = localStorage.getItem('empire_visitor_id') || 'v_' + Math.random().toString(36).slice(2, 10);
+    localStorage.setItem('empire_visitor_id', visitor);
+
+    fetch('/api/v1/ads/serve?slot=' + encodeURIComponent(slot) + '&niche=' + encodeURIComponent(niche) + '&visitor_id=' + visitor)
+      .then(function(r) {{ return r.json(); }})
+      .then(function(data) {{
+        if (!data.ok || !data.ad) return;
+        var ad = data.ad;
+        var el = document.getElementById('empire-ad-splash');
+        if (!el) return;
+
+        // Build the ad card matching splash theme
+        el.innerHTML =
+          '<div class="splash-ad-card">' +
+          '<div class="splash-ad-headline">' + ad.headline + '</div>' +
+          '<div class="splash-ad-body">' + ad.body + '</div>' +
+          '<a class="splash-ad-cta" href="#" onclick="return false" data-impression="' + ad.impression_id + '" data-creative="' + ad.creative_id + '" data-campaign="' + ad.campaign_id + '" data-visitor="' + visitor + '" id="ad-cta">' + ad.cta_text + '</a>' +
+          '</div>';
+
+        // Wire click handler for the CTA
+        var cta = document.getElementById('ad-cta');
+        if (cta) {{
+          cta.addEventListener('click', function(e) {{
+            e.preventDefault();
+            fetch('/api/v1/ads/click', {{
+              method: 'POST',
+              headers: {{ 'Content-Type': 'application/json' }},
+              body: JSON.stringify({{
+                impression_id: cta.getAttribute('data-impression'),
+                creative_id: cta.getAttribute('data-creative'),
+                campaign_id: cta.getAttribute('data-campaign'),
+                visitor_id: cta.getAttribute('data-visitor')
+              }})
+            }}).then(function(r) {{ return r.json(); }}).then(function(data) {{
+              if (data.destination) {{ window.location.href = data.destination; }}
+            }});
+          }});
+        }}
+      }})
+      .catch(function() {{ /* ad just won't render */ }});
+  }})();
 }})();
 </script>
 
