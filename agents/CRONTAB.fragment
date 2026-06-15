@@ -44,3 +44,7 @@
 # 11. Fee Watcher — every 6h on :55. Polls for settled-claim events.
 # Disabled by default until a claim event source (webhook or polling) is wired.
 55 */6 * * * /bin/bash /root/empire-v49/agents/fee_watcher/cron.sh >> /root/empire-v49/logs/agent_fee_watcher.log 2>&1
+
+# 12. A/B Monitor — every 6h on :52. Polls /api/v1/ab-test/results and logs
+# to agent_activity. Real reply rate builds over 24-72h after sends.
+52 */6 * * * /root/sniper_env/bin/python3 /root/empire-v49/agents_ab_monitor.py >> /root/empire-v49/logs/agent_ab_monitor.log 2>&1
