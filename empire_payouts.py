@@ -107,7 +107,7 @@ WIRE-UP IN hub.py
 
     payout_engine = PayoutEngine(
         get_db=                  get_db,
-        empire_vault_wallet=     os.environ.get("USDC_WALLET", ""),
+        empire_vault_wallet=     os.environ.get("EMPIRE_VAULT_WALLET", ""),
         empire_ops_wallet=       os.environ.get("USDC_OPS_WALLET", ""),
         empire_signing_key=      os.environ.get("SOLANA_SIGNING_KEY") or os.environ.get("EMPIRE_SIGNING_KEY", ""),
         solana_rpc_url=          os.environ.get("SOLANA_RPC_URL",
@@ -133,7 +133,7 @@ WIRE-UP IN hub.py
 
 ENVIRONMENT VARIABLES
 ─────────────────────
-    USDC_WALLET             egJ1t9NZkDs8FvMbfnQTqXzC4KNuhAc9XSfpG9y9AZM
+    EMPIRE_VAULT_WALLET    egJ1t9NZkDs8FvMbfnQTqXzC4KNuhAc9XSfpG9y9AZM
     USDC_OPS_WALLET         <your ops wallet>
     SOLANA_SIGNING_KEY      base58-encoded private key for the vault wallet
                             ⚠ STORE IN DOKKU SECRETS, NEVER IN GIT

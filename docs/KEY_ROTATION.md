@@ -11,7 +11,7 @@ procedure and establishes a recurring 30-day rotation policy.
 | `private.key` | Vonage (outbound dialer, voice streaming) | Requires Vonage app re-auth |
 | `SOLANA_SIGNING_KEY` | empire_payouts.py (USDC transfers) | Requires new wallet generation |
 | `SOLANA_RPC_URL` | empire_payouts.py, Solana watcher | No rotation needed (URL only) |
-| `USDC_WALLET` | empire_payouts.py (vault address) | Must match signing key |
+| `EMPIRE_VAULT_WALLET` | empire_payouts.py (vault address) | Must match signing key |
 | `HUB_TOKEN` | WebSocket authentication | Rotate and restart hub |
 | `SECRET_KEY` | empire_tokens.py (session signing) | Rotate and restart hub |
 | `SUPABASE_SERVICE_KEY` | All DB access | Rotate via Supabase dashboard |
@@ -74,7 +74,7 @@ solana airdrop 1 <NEW_PUBKEY> --url devnet
 # 3. Update environment
 dokku config:set empire-ai-uk \
   SOLANA_SIGNING_KEY="<base58-encoded-secret>" \
-  USDC_WALLET="<new-pubkey>" \
+  EMPIRE_VAULT_WALLET="<new-pubkey>" \
   EMPIRE_SOLANA_NETWORK=devnet
 
 # 4. Test a $0.01 USDC transfer
