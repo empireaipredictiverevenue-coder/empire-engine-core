@@ -290,6 +290,13 @@ _SPA_CSS = """
     .settle-row input{background:var(--empire-canvas);border:1px solid var(--empire-divider);color:var(--empire-silver);padding:8px 10px;border-radius:4px;font-family:var(--font-mono);font-size:13px}
     .settle-actions{display:flex;gap:8px;margin-top:8px}
     .settle-hint{font-size:11px;color:var(--empire-mist);margin-top:8px;line-height:1.5}
+    .settle-hint{font-size:11px;color:var(--empire-mist);margin-top:8px;line-height:1.5}
+    .dispatch-status{font-family:var(--font-mono);font-size:10px;letter-spacing:.06em;padding:2px 7px;border-radius:3px}
+    .dispatch-status.sent{color:var(--empire-mist);background:rgba(100,116,139,0.1);border:1px solid rgba(100,116,139,0.2)}
+    .dispatch-status.accepted{color:var(--strike-cyan);background:rgba(90,200,250,0.08);border:1px solid rgba(90,200,250,0.2)}
+    .dispatch-status.completed{color:var(--signal-teal);background:rgba(68,229,184,0.08);border:1px solid rgba(68,229,184,0.2)}
+    .dispatch-status.ghosted{color:#ff7b72;background:rgba(255,123,114,0.08);border:1px solid rgba(255,123,114,0.2)}
+    .settled-badge{font-family:var(--font-mono);font-size:9px;color:var(--signal-teal);padding:2px 7px;background:rgba(68,229,184,0.06);border:1px solid rgba(68,229,184,0.2);border-radius:3px}
     .sec-actions{display:flex;gap:8px}
 .pipeline-card-monthly{font-family:var(--font-mono);font-size:11px;color:var(--empire-white);font-weight:500}
 /* ── COMPLIANCE PANEL ────────────────────────────────────────────── */
@@ -1562,6 +1569,7 @@ const NAV_GROUPS = [
     id: 'revenue', label: 'REVENUE', icon: '💰', defaultOpen: true,
     items: [
       { id: 'payouts',       label: 'Payouts',        sub: 'Pending · approvals · history' },
+      { id: 'dispatches',    label: 'Dispatches',     sub: 'Lead matches · mark settled' },
       { id: 'fees',          label: 'Fees',           sub: 'Settled claims · 3% per claim' },
       { id: 'contractors',   label: 'Contractors',    sub: 'Applications & approvals' },
       { id: 'partners',      label: 'Partners',       sub: 'Buyers · pending · approvals' },
@@ -2952,6 +2960,104 @@ function Dispatch() {
     </div>
   `;
 }
+
+// ── DISPATCHES (mark-settled) ──────────────────────────────────────────
+function Dispatches() {
+  const [list, setList] = useState(null);
+  const [err, setErr] = useState(null);
+  const [settling, setSettling] = useState(null);
+  const [busy, setBusy] = useState(null);
+
+  // SettleForm state
+  const [showForm, setShowForm] = useState(null);
+  const [amount, setAmount] = useState('');
+  const [notes, setNotes] = useState('');
+
+  const reload = async () => {
+    try {
+      const r = await apiFetch('/api/v1/matching/dispatches?limit=50').then(x => x.json());
+      setList(r.dispatches || []);
+    } catch (e) { setErr(e.message); }
+  };
+  useEffect(() => { reload(); }, []);
+
+  const submitSettle = async (dispatch_id) => {
+    if (!amount || parseFloat(amount) <= 0) {
+      alert('Enter a positive claim amount');
+      return;
+    }
+    setBusy(dispatch_id);
+    try {
+      const r = await apiFetch('/api/v1/fee/operator-mark-settled', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ dispatch_id, claim_amount: parseFloat(amount), meta: { notes } }),
+      });
+      if (!r.ok) {
+        const e = await r.json().catch(() => ({}));
+        alert('Failed: ' + (e.detail || e.error || r.status));
+      } else {
+        setShowForm(null);
+        setAmount('');
+        setNotes('');
+        await reload();
+      }
+    } catch (e) { alert('Network error: ' + e.message); }
+    setBusy(null);
+  };
+
+  if (err) return html`<div class="stub"><div class="stub-body">${err}</div></div>`;
+  if (!list) return html`<div class="stub"><div class="stub-body">Loading dispatches…</div></div>`;
+
+  const fmtUsd = (n) => '$' + Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+  return html`
+    <div>
+      <div class="section-h"><div><div class="section-title">Dispatches</div><div class="section-sub">Lead → contractor match log · mark claims settled</div></div><div class="sec-actions"><button class="tbl-action go" onClick=${reload}>↻ Refresh</button></div></div>
+      <div class="panel">
+        <div class="panel-head">Recent dispatches</div>
+        ${list.length === 0
+          ? html`<div class="tbl-empty">No dispatches yet. When a lead replies YES to a storm_strike SMS, the dispatch agent routes it to contractors in the metro. See the Fees section for settled claims.</div>`
+          : html`<table class="tbl"><thead><tr>
+                <th>When</th><th>Lead</th><th>Contractor</th><th class="tbl-num">Match</th><th>Status</th><th class="tbl-num">Payout</th><th>Actions</th>
+              </tr></thead><tbody>
+              ${list.map(d => html`<tr key=${d.id}>
+                <td class="tbl-mono">${String(d.created_at || '').slice(0,16).replace('T',' ')}</td>
+                <td class="tbl-mono">${String(d.lead_id || '').slice(0,8)}</td>
+                <td class="tbl-mono">${String(d.contractor_id || '').slice(0,8)}</td>
+                <td class="tbl-num">${d.match_score ?? '—'}</td>
+                <td><span class=${'dispatch-status ' + (d.status || 'sent')}>${d.status || 'sent'}</span></td>
+                <td class="tbl-num">${d.payout_amount ? fmtUsd(d.payout_amount) : '—'}</td>
+                <td>
+                  ${d.meta && d.meta.settled
+                    ? html`<span class="settled-badge">Settled $${d.meta.claim_amount ? fmtUsd(d.meta.claim_amount) : ''}</span>`
+                    : html`<button class="tbl-action go" disabled=${busy === d.id} onClick=${() => setShowForm(d.id)}>${busy === d.id ? 'Settling…' : 'Mark Settled'}</button>`}
+                </td>
+              </tr>`)}
+              </tbody></table>`}
+      </div>
+      ${showForm ? html`
+        <div class="settle-form panel" style=${{marginTop: '12px'}}>
+          <div class="panel-head">Mark claim settled — dispatch ${String(showForm).slice(0,8)}</div>
+          <div class="settle-row">
+            <label>Claim amount (USD)</label>
+            <input type="number" step="0.01" min="0" value=${amount} onInput=${(e) => setAmount(e.target.value)} placeholder="50000" autofocus />
+          </div>
+          <div class="settle-row">
+            <label>Notes (optional)</label>
+            <input type="text" value=${notes} onInput=${(e) => setNotes(e.target.value)} placeholder="adjuster notes, claim ref, etc." />
+          </div>
+          <div class="settle-actions">
+            <button class="tbl-action go" disabled=${busy === showForm} onClick=${() => submitSettle(showForm)}>${busy === showForm ? 'Settling…' : 'Confirm'}</button>
+            <button class="tbl-action" onClick=${() => { setShowForm(null); setAmount(''); setNotes(''); }}>Cancel</button>
+          </div>
+          <div class="settle-hint">Fee will be 3% of claim amount. Fee_events row will be created and the dispatch will be marked settled.</div>
+        </div>
+      ` : null}
+    </div>
+  `;
+}
+
 
 // ── INBOUND ───────────────────────────────────────────────────────────
 function Inbound() {
@@ -8996,6 +9102,7 @@ function App() {
             active.id === 'dispatch'    ? html`<${Dispatch} />` :
             active.id === 'inbound'     ? html`<${Inbound} />` :
             active.id === 'payouts'     ? html`<${Payouts} />` :
+            active.id === 'dispatches'  ? html`<${Dispatches} />` :
             active.id === 'fees'        ? html`<${Fees} />` :
             active.id === 'contractors' ? html`<${Contractors} />` :
             active.id === 'console'     ? html`<${Console} />` :
