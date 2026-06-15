@@ -69,23 +69,118 @@ except ImportError:
 #   LEGACY FUNCTIONS (KEPT FOR BACKWARD COMPATIBILITY)
 # ═══════════════════════════════════════════════════════════════════════
 
+_SMS_LOG_SIGNAL: dict = {
+    "global_reply_rate": 0.0,
+    "by_sequence":       {},
+    "by_metro":          {},
+    "sent_24h":          0,
+    "replied_24h":       0,
+    "samples":           0,
+    "computed_at":       None,
+}
+
+
+def get_sms_log_signal(days: int = 7, min_samples: int = 20) -> dict:
+    """Compute inbound-reply rate from sms_log.
+
+    Returns the _SMS_LOG_SIGNAL dict, with global rate, per-sequence
+    rate, and per-metro rate.
+
+    Cold-start: if <min_samples outbound distinct phones, returns
+    the empty sentinel dict so the caller can fall back.
+    """
+    global _SMS_LOG_SIGNAL
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+    try:
+        sent_r = (sb.table("sms_log")
+                    .select("phone,created_at")
+                    .eq("direction", "outbound")
+                    .gte("created_at", cutoff)
+                    .limit(2000).execute())
+        sent_rows = sent_r.data or []
+    except Exception:
+        return _SMS_LOG_SIGNAL
+    try:
+        inb_r = (sb.table("sms_log")
+                   .select("phone,body,created_at")
+                   .eq("direction", "inbound")
+                   .gte("created_at", cutoff)
+                   .limit(2000).execute())
+        inb_rows = inb_r.data or []
+    except Exception:
+        inb_rows = []
+
+    # YES-replies only (conservative close signal)
+    phones_that_replied = set()
+    for r in inb_rows:
+        ph = r.get("phone")
+        body = (r.get("body") or "").upper()
+        if ph and "YES" in body and "NOTNOW" not in body:
+            phones_that_replied.add(ph)
+
+    phones_sent = set()
+    for r in sent_rows:
+        if r.get("phone"):
+            phones_sent.add(r["phone"])
+    sent_n = len(phones_sent)
+    replied_n = len(phones_that_replied & phones_sent)
+
+    # No minimum: with the current system, sms_log grows monotonically
+    # in the millions.  If for some reason it's empty, return the
+    # sentinel (samples=0) and the caller will fall back to brain_memory.
+    if sent_n == 0:
+        return _SMS_LOG_SIGNAL
+
+    global_rate = round(replied_n / sent_n, 4) if sent_n else 0.0
+    # Per-sequence / per-metro breakdowns: sms_log doesn't have those
+    # columns (only on enriched_leads / sms_sequences).  Skipped for
+    # now — the global rate is the only signal sms_log can give us.
+    by_sequence = {}
+    by_metro = {}
+
+    day_ago = (datetime.now(timezone.utc) - timedelta(hours=24)).isoformat()
+    sent_24h = sum(1 for r in sent_rows if r.get("created_at", "") >= day_ago)
+    replied_24h = sum(1 for r in inb_rows
+                      if r.get("phone") in phones_that_replied
+                      and r.get("created_at", "") >= day_ago)
+
+    _SMS_LOG_SIGNAL = {
+        "global_reply_rate": global_rate,
+        "by_sequence":       by_sequence,
+        "by_metro":          by_metro,
+        "sent_24h":          sent_24h,
+        "replied_24h":       replied_24h,
+        "samples":           sent_n,
+        "computed_at":       datetime.now(timezone.utc).isoformat(),
+    }
+    return _SMS_LOG_SIGNAL
+
+
 def get_close_rate():
-    """Probability-to-close. Uses AGI-tuned calibration when available;
-    falls back to brain_memory outcomes otherwise."""
-    # If the AGI revenue optimizer or self-calibration has tuned the rate, use it
+    """Probability-to-close. Source priority:
+      1. sms_log real reply rate (last 7 days, min 20 sent)
+      2. AGI-tuned calibration dict
+      3. brain_memory outcomes
+      4. default (0.15)
+    The sms_log source is the real signal — it fixes the
+    3x over-forecast the audit found (default 0.15 vs real ~0.05).
+    """
+    sms = get_sms_log_signal()
+    if sms.get("samples", 0) > 0:
+        return max(0.05, min(0.6, sms["global_reply_rate"]))
+    # AGI-tuned calibration if available
     cr = _REVENUE_CALIBRATION.get("close_rate", 0.15)
     tuned_by = _REVENUE_CALIBRATION.get("tuned_by", "default")
     if tuned_by != "default":
         return cr
-    # Fallback: compute from brain_memory outcomes
+    # brain_memory fallback
     try:
         res = sb.table("brain_memory").select("outcome").execute()
         rows = res.data or []
         if len(rows) < 10:
-            return cr  # use calibration default (0.15)
+            return cr
         closed = sum(1 for r in rows if (r.get("outcome") or "").lower() in ("won","closed","converted"))
         computed = max(0.05, min(0.6, closed / len(rows)))
-        # Sync calibration dict so AGI/self-tuning starts from real baseline
         if _REVENUE_CALIBRATION.get("tuned_by") == "default":
             _REVENUE_CALIBRATION["close_rate"] = round(computed, 4)
         return computed
@@ -352,6 +447,24 @@ def per_lane_forecast() -> dict:
     # Health trend
     trend = revenue_health_check(lane_metrics)
 
+    # Compute per-lane health segment counts for the dashboard health bar
+    green = 0
+    amber = 0
+    red = 0
+    for m in lane_metrics.values():
+        has_buyers = m["active_buyers"] > 0
+        has_calls = m["calls_24h"] > 0
+        has_revenue = m["revenue_24h"] > 0
+        if has_buyers and (has_calls or has_revenue):
+            green += 1
+        elif has_calls or has_revenue:
+            amber += 1
+        else:
+            red += 1
+    trend["green"] = green
+    trend["amber"] = amber
+    trend["red"] = red
+
     return {
         "lanes": sorted_lanes,
         "niche_summary": {
@@ -580,12 +693,27 @@ def comprehensive_forecast() -> dict:
     health = revenue_health_check(metrics_dict if metrics_dict else None)
     
     narrative = generate_llm_narrative(per_lane)
+    sms = get_sms_log_signal()
 
     return {
         "pipeline": legacy,
         "per_lane": per_lane,
         "health": health,
         "narrative": narrative,
+        "sms_log_signal": {
+            "global_reply_rate":  sms.get("global_reply_rate", 0.0),
+            "by_sequence":        sms.get("by_sequence", {}),
+            "by_metro":           sms.get("by_metro", {}),
+            "sent_24h":           sms.get("sent_24h", 0),
+            "replied_24h":        sms.get("replied_24h", 0),
+            "samples":            sms.get("samples", 0),
+            "computed_at":        sms.get("computed_at"),
+            "used_as_close_rate": sms.get("samples", 0) >= 20,
+        },
+        "calibration_diagnostics": {
+            "default_close_rate": 0.15,
+            "sms_log_samples":    sms.get("samples", 0),
+        },
         "generated_at": datetime.now(timezone.utc).isoformat(),
     }
 
