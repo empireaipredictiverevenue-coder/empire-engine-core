@@ -41,6 +41,8 @@ from empire_splash import splash_page
 from empire_support import support_page
 from empire_demo import demo_page
 from empire_pricing import pricing_page, CPLPricingEngine, cpl_engine
+from empire_ppc import ppc_page
+from empire_ppl import ppl_page
 from empire_live import LiveBroadcaster, register_live_routes
 from empire_command_deck import command_deck_page
 from empire_command_spa import command_spa_page
@@ -670,6 +672,18 @@ async def pricing():
     except Exception as e:
         log.warning(f"[pricing] product_metadata query failed: {e}")
     return HTMLResponse(pricing_page(products=products))
+
+
+@app.get("/ppc", response_class=HTMLResponse)
+async def ppc_page_route():
+    """Pay-Per-Call landing page — live call routing for buyers."""
+    return HTMLResponse(ppc_page())
+
+
+@app.get("/ppl", response_class=HTMLResponse)
+async def ppl_page_route():
+    """Pay-Per-Lead marketplace — buy verified leads by niche."""
+    return HTMLResponse(ppl_page())
 
 
 @app.get("/demo", response_class=HTMLResponse)
