@@ -421,140 +421,173 @@ def _classify_by_queries(search_queries: List[str]) -> Optional[str]:
     return None
 
 
-# ── DEDUP: Check radar_targets for existing entry ──────────────────────
-
-def _already_exists(sb, name: str, address: str, metro: Dict) -> bool:
-    """Check if this business is already in radar_targets (by name + city).
-    Uses city filter to narrow the search scope and avoid full table scans."""
-    try:
-        city = metro["name"].split("-")[0].strip()
-        # Use the first 40 chars of name only for ilike, and narrow by city
-        name_short = name[:40].replace("'", "")
-        r = (sb.table("radar_targets")
-             .select("id")
-             .ilike("warehouse_name", f"%{name_short}%")
-             .eq("city", city)
-             .limit(1)
-             .execute())
-        return bool(r.data)
-    except Exception:
-        return False
-
-
-# ── MAIN SEARCH CYCLE ─────────────────────────────────────────────────
+# ── MAIN SEARCH CYCLE (OPTIMIZED) ──────────────────────────────────────
 
 async def _search_sub_niche(
     sb, sub_niche: str, config: Dict, metro: Dict, max_per_run: int = 100
 ) -> Dict:
-    """Search a single sub-niche in a single metro. Returns stats."""
+    """Search a single sub-niche in a single metro. Returns stats.
+
+    OPTIMIZED: Places API calls, dedup checks, and website scraping
+    all run in parallel via asyncio.gather. Batch inserts.
+    """
     metro_label = f"{metro['name']}, {metro['state']}"
     stats = {"found": 0, "qualified": 0, "inserted": 0, "skipped_dup": 0}
 
-    for query in config["queries"]:
-        full_query = f"{query} in {metro['name']}, {metro['state']}"
-        places = await _places_search(full_query, metro["lat"], metro["lon"])
-        stats["found"] += len(places)
+    # ── 1. Run ALL queries for this metro in parallel ────────────────
+    queries = [f"{q} in {metro['name']}, {metro['state']}" for q in config["queries"]]
+    results = await asyncio.gather(*[
+        _places_search(q, metro["lat"], metro["lon"]) for q in queries
+    ])
+    all_places = []
+    for r in results:
+        all_places.extend(r)
+    stats["found"] = len(all_places)
 
-        for place in places:
-            name = (place.get("name") or "").strip()
-            address = (place.get("address") or "").strip()
-            if not name or not address:
-                continue
+    if not all_places:
+        return stats
 
-            # Dedup against radar_targets (narrowed by city to avoid full scans)
-            if _already_exists(sb, name, address, metro):
-                stats["skipped_dup"] += 1
-                continue
+    # ── 2. Filter blanks, classify, and batch-dedup ──────────────────
+    city = metro["name"].split("-")[0].strip()
+    candidates = []
+    for place in all_places:
+        name = (place.get("name") or "").strip()
+        address = (place.get("address") or "").strip()
+        if not name or not address:
+            continue
+        sn = _classify_sub_niche(name, place.get("website", ""), place.get("types", []))
+        if not sn:
+            sn = sub_niche
+        candidates.append({"place": place, "name": name, "address": address, "sn": sn})
 
-            # Classify sub-niche (prefer the known sub-niche from search context)
-            sn = _classify_sub_niche(name, place.get("website", ""), place.get("types", []))
-            if not sn:
-                sn = sub_niche  # fall back to the context we're searching from
+    # ── 3. Batch dedup: check ALL names in one query per city ────────
+    # Collect short names, then query existing ones in one shot
+    short_names = [c["name"][:40].replace("'", "") for c in candidates]
+    try:
+        dedup_res = (
+            sb.table("radar_targets")
+            .select("warehouse_name")
+            .eq("city", city)
+            .in_("warehouse_name", list(set(short_names)))
+            .execute()
+        )
+        existing_names = set(r["warehouse_name"] for r in (dedup_res.data or []))
+    except Exception:
+        existing_names = set()
 
-            # Scrape website for additional contact info
-            website_data = await _scrape_website(place.get("website", ""))
+    deduped = []
+    for c in candidates:
+        if c["name"][:40].replace("'", "") in existing_names:
+            stats["skipped_dup"] += 1
+        else:
+            deduped.append(c)
 
-            # Score buy signal
-            score = _score_buy_signal(place, website_data)
-            if score < _MIN_QUALIFY_SCORE:
-                continue
+    if not deduped:
+        return stats
 
-            stats["qualified"] += 1
+    # ── 4. Parallel website scraping for ALL deduped candidates ──────
+    scrape_tasks = [_scrape_website(c["place"].get("website", "")) for c in deduped]
+    scraped_results = await asyncio.gather(*scrape_tasks)
 
-            # Build phone: prefer Places phone, fall back to scraped
-            phone = place.get("phone") or website_data.get("phone") or ""
-            email = website_data.get("email") or ""
+    # ── 5. Score, filter, prepare batch inserts ──────────────────────
+    batch = []
+    mail_batch = []
+    now_iso = datetime.now(timezone.utc).isoformat()
 
-            # Insert into radar_targets
-            # Normalize buy signal score (0-100) → urgency_score (0-10 int)
-            urgency = max(1, min(10, round(score / 10)))
-            try:
-                sb.table("radar_targets").insert({
-                    "warehouse_name": name[:200],
-                    "address": address[:300],
-                    "city": metro["name"].split("-")[0].strip(),
-                    "state": metro["state"],
-                    "phone": phone,
-                    "email": email,
-                    "source_url": (place.get("website") or "")[:500],
-                    "status": "active",
-                    "asset_value": urgency,
-                    "urgency_score": urgency,
-                    "meta": {
-                        "source": "B2B Lead Gen",
-                        "b2b_sub_niche": sn,
-                        "b2b_query": query,
-                        "b2b_metro": metro["name"],
-                        "buy_signal_score": score,
-                        "rating": place.get("rating"),
-                        "review_count": place.get("review_count"),
-                        "business_status": place.get("business_status"),
-                        "scraped_at": datetime.now(timezone.utc).isoformat(),
-                    },
-                    "created_at": datetime.now(timezone.utc).isoformat(),
-                }).execute()
-                stats["inserted"] += 1
+    for i, c in enumerate(deduped):
+        place = c["place"]
+        website_data = scraped_results[i]
+
+        score = _score_buy_signal(place, website_data)
+        if score < _MIN_QUALIFY_SCORE:
+            continue
+
+        stats["qualified"] += 1
+        phone = place.get("phone") or website_data.get("phone") or ""
+        email = website_data.get("email") or ""
+        urgency = max(1, min(10, round(score / 10)))
+
+        batch.append({
+            "warehouse_name": c["name"][:200],
+            "address": c["address"][:300],
+            "city": city,
+            "state": metro["state"],
+            "phone": phone,
+            "email": email,
+            "source_url": (place.get("website") or "")[:500],
+            "status": "active",
+            "asset_value": urgency,
+            "urgency_score": urgency,
+            "meta": {
+                "source": "B2B Lead Gen",
+                "b2b_sub_niche": c["sn"],
+                "b2b_metro": metro["name"],
+                "buy_signal_score": score,
+                "rating": place.get("rating"),
+                "review_count": place.get("review_count"),
+                "business_status": place.get("business_status"),
+                "scraped_at": now_iso,
+            },
+            "created_at": now_iso,
+        })
+
+        if email and c["sn"]:
+            mail_batch.append({
+                "email": email,
+                "target_addr": f"{city}, {metro['state']}",
+                "sequence_type": "b2b_outreach",
+                "current_step": 0,
+                "status": "active",
+                "next_send_at": now_iso,
+                "meta": {
+                    "company": c["name"][:200],
+                    "b2b_sub_niche": c["sn"],
+                    "metro": metro["name"],
+                    "source": "B2B Lead Gen",
+                },
+            })
+
+        # Cap at max_per_run
+        if stats["qualified"] >= max_per_run:
+            break
+
+    # ── 6. Batch insert radar_targets ────────────────────────────────
+    if batch:
+        try:
+            sb.table("radar_targets").insert(batch).execute()
+            stats["inserted"] = len(batch)
+            for item in batch:
                 log.info(
-                    f"[b2b] ✓ {sn} | {name[:50]} | {metro_label} | "
-                    f"score={score} | phone={'yes' if phone else 'no'} | "
-                    f"email={'yes' if email else 'no'}"
+                    f"[b2b] ✓ {item['meta']['b2b_sub_niche']} | "
+                    f"{item['warehouse_name'][:50]} | {metro_label} | "
+                    f"score={item['meta']['buy_signal_score']} | "
+                    f"phone={'yes' if item['phone'] else 'no'} | "
+                    f"email={'yes' if item['email'] else 'no'}"
                 )
+        except Exception as e:
+            log.error(f"[b2b] batch insert failed: {e}")
+            stats["inserted"] = 0
 
-                # Auto-enroll in B2B email drip if email was found
-                if email:
-                    try:
-                        # Check unsubscribe registry first
-                        unsub = sb.table("email_unsubscribes").select("email").eq("email", email).limit(1).execute()
-                        if unsub.data:
-                            log.debug(f"[b2b] email {email} is unsubscribed, skipping enrollment")
-                        else:
-                            existing_seq = sb.table("email_sequences").select("id").eq("email", email).limit(1).execute()
-                            if not existing_seq.data:
-                                sb.table("email_sequences").insert({
-                                    "email": email,
-                                    "target_addr": f"{metro['name'].split('-')[0].strip()}, {metro['state']}",
-                                    "sequence_type": "b2b_outreach",
-                                    "current_step": 0,
-                                    "status": "active",
-                                    "next_send_at": datetime.now(timezone.utc).isoformat(),
-                                    "meta": {
-                                        "company": name[:200],
-                                        "b2b_sub_niche": sn,
-                                        "metro": metro["name"],
-                                        "source": "B2B Lead Gen",
-                                    },
-                                }).execute()
-                                log.info(f"[b2b] ✉ enrolled {email} in b2b_outreach drip")
-                    except Exception as e:
-                        log.debug(f"[b2b] email enroll skipped for {email}: {e}")
-                # Limit per run
-                if stats["inserted"] >= max_per_run:
-                    return stats
-            except Exception as e:
-                log.debug(f"[b2b] insert failed for {name}: {e}")
+    # ── 7. Batch enroll email sequences (skip unsubscribed + existing) ──
+    if mail_batch:
+        try:
+            # Check unsubscribes in bulk
+            emails = list(set(m["email"] for m in mail_batch))
+            unsub_res = sb.table("email_unsubscribes").select("email").in_("email", emails).execute()
+            unsub_set = set(r["email"] for r in (unsub_res.data or []))
 
-        # Rate-limit: small delay between queries to avoid Places API throttling
-        await asyncio.sleep(0.3)
+            existing_seq_res = sb.table("email_sequences").select("email").in_("email", emails).execute()
+            existing_seq = set(r["email"] for r in (existing_seq_res.data or []))
+
+            to_enroll = [m for m in mail_batch
+                         if m["email"] not in unsub_set
+                         and m["email"] not in existing_seq]
+
+            if to_enroll:
+                sb.table("email_sequences").insert(to_enroll).execute()
+                log.info(f"[b2b] ✉ batch enrolled {len(to_enroll)} in b2b_outreach drip")
+        except Exception as e:
+            log.debug(f"[b2b] batch email enroll skipped: {e}")
 
     return stats
 
@@ -625,16 +658,23 @@ async def run_async(
 
         niche_stats = {"found": 0, "qualified": 0, "inserted": 0, "skipped_dup": 0}
 
-        for metro in metros:
-            metro_label = f"{metro['name']}, {metro['state']}"
-            if effective_dry_run:
+        if effective_dry_run:
+            for metro in metros:
+                metro_label = f"{metro['name']}, {metro['state']}"
                 log.info(
                     f"[b2b] [DRY-RUN] Would search '{sub_niche}' in {metro_label} "
                     f"({len(config['queries'])} queries)"
                 )
-                continue
+            continue
 
-            result = await _search_sub_niche(sb, sub_niche, config, metro, max_per_run=cfg.get("max_per_run", 100))
+        # OPTIMIZED: Process all metros for this sub-niche IN PARALLEL
+        metro_results = await asyncio.gather(*[
+            _search_sub_niche(sb, sub_niche, config, metro, max_per_run=cfg.get("max_per_run", 100))
+            for metro in metros
+        ])
+
+        for i, result in enumerate(metro_results):
+            metro_label = f"{metros[i]['name']}, {metros[i]['state']}"
             for k in niche_stats:
                 niche_stats[k] += result[k]
 
