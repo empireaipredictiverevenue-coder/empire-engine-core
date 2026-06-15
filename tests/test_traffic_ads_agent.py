@@ -426,42 +426,145 @@ class TestNarrative:
 # ═════════════════════════════════════════════════════════════════════
 
 class TestEdgeCases:
-    def test_db_query_failure_falls_through(self):
-        """When DB query raises, agent falls through to next data source."""
+
+
+    def test_connection_timeout_falls_to_mock(self):
+        """When DB connection times out, agent falls through to mock data."""
         db = MagicMock()
-        db.table.side_effect = Exception("DB timeout")
+        db.table.side_effect = Exception("connection timed out")
         agent = TrafficAdsAgent(get_db=lambda: db)
         result = agent.platforms_overview()
-        # Should fall through to mock
+        assert len(result["platforms"]) == len(_PLATFORMS)
+        assert result["total"]["impressions"] > 0
+
+    def test_connection_timeout_all_methods(self):
+        """All public methods handle DB timeout gracefully."""
+        db = MagicMock()
+        db.table.side_effect = Exception("connection timed out")
+        agent = TrafficAdsAgent(get_db=lambda: db)
+        assert agent.platforms_overview() is not None
+        assert agent.campaigns() is not None
+        assert agent.trend_detection() is not None
+        assert agent.budget_optimization() is not None
+        assert agent.organic_channels() is not None
+        assert agent.ads_summary() is not None
+        assert agent.narrative() is not None
+
+    def test_rate_limit_falls_to_mock(self):
+        """When DB returns 429 rate limit, agent falls through to mock data."""
+        db = MagicMock()
+        db.table.side_effect = Exception("HTTP 429 Too Many Requests")
+        agent = TrafficAdsAgent(get_db=lambda: db)
+        result = agent.platforms_overview()
+        # Should fall through to mock platforms
         assert len(result["platforms"]) == len(_PLATFORMS)
 
-    def test_partial_buyer_data(self):
-        """Buyers with missing optional fields still produce platform dicts."""
+    def test_rate_limit_call_logs(self):
+        """Rate-limit on call_logs query returns [] and falls to buyers."""
+        db = MagicMock()
+        # call_logs fails with 429
+        call_logs_q = MagicMock()
+        call_logs_q.execute.side_effect = Exception("HTTP 429 Too Many Requests")
+        call_logs_q.select.return_value = call_logs_q
+        call_logs_q.gte.return_value = call_logs_q
+        call_logs_q.not_.return_value = call_logs_q
+        call_logs_q.neq.return_value = call_logs_q
+        call_logs_q.limit.return_value = call_logs_q
+
+        # buyers succeeds with real data
+        buyers_q = MagicMock()
+        buyers_q.execute.return_value = MagicMock(data=[
+            {"id": "b1", "buyer_name": "Fallback Buyer", "niche": "Roofing",
+             "is_active": True, "status": "ACTIVE", "base_payout": 100.0,
+             "calls_offered": 50, "calls_accepted": 12, "calls_today": 3,
+             "monthly_retainer": 500.0, "fee_rate": 0.03, "daily_cap": 20},
+        ])
+        buyers_q.select.return_value = buyers_q
+        buyers_q.limit.return_value = buyers_q
+
+        def _table(name):
+            if name == "call_logs":
+                return call_logs_q
+            elif name == "buyers":
+                return buyers_q
+            q = MagicMock()
+            q.execute.return_value = MagicMock(data=[])
+            q.select.return_value = q
+            q.limit.return_value = q
+            return q
+
+        db.table.side_effect = _table
+        agent = TrafficAdsAgent(get_db=lambda: db)
+        result = agent.platforms_overview()
+        # Should fall through to buyers data
+        assert len(result["platforms"]) == 1
+        assert result["platforms"][0]["name"] == "Fallback Buyer"
+
+    def test_partial_null_fields_call_logs(self):
+        """call_logs rows with null fields aggregate without crashing."""
+        db = MagicMock()
+        logs_q = MagicMock()
+        logs_q.execute.return_value = MagicMock(data=[
+            {"channel": "voice", "fee_earned": None, "cost_usd": None,
+             "is_billable": None, "qualified": None},
+            {"channel": "voice", "fee_earned": 500.0, "cost_usd": 150.0,
+             "is_billable": True, "qualified": True},
+            {"channel": None, "fee_earned": 200.0, "cost_usd": 50.0,
+             "is_billable": True, "qualified": False},
+            {"channel": "", "fee_earned": 0.0, "cost_usd": 0.0,
+             "is_billable": False, "qualified": None},
+        ])
+        logs_q.select.return_value = logs_q
+        logs_q.gte.return_value = logs_q
+        logs_q.not_.return_value = logs_q
+        logs_q.not_.is_.return_value = logs_q
+        logs_q.neq.return_value = logs_q
+        logs_q.limit.return_value = logs_q
+
+        buyers_q = MagicMock()
+        buyers_q.execute.return_value = MagicMock(data=[])
+        buyers_q.select.return_value = buyers_q
+        buyers_q.limit.return_value = buyers_q
+
+        def _table(name):
+            if name == "call_logs":
+                return logs_q
+            elif name == "buyers":
+                return buyers_q
+            q = MagicMock()
+            q.execute.return_value = MagicMock(data=[])
+            q.select.return_value = q
+            q.limit.return_value = q
+            return q
+
+        db.table.side_effect = _table
+        agent = TrafficAdsAgent(get_db=lambda: db)
+        agg = agent._query_call_logs()
+        # Null channel and empty channel should be excluded
+        channels = [r["channel"] for r in agg]
+        assert "voice" in channels
+        # Null fields should be treated as 0/false
+        voice = next(r for r in agg if r["channel"] == "voice")
+        assert voice["revenue"] == 500.0  # None treated as 0, plus 500
+        assert voice["billable"] == 1  # only the True one
+        assert voice["qualified"] == 1  # only the True one
+
+    def test_partial_null_buyers(self):
+        """Buyers with null fields produce valid platform dicts."""
         buyers = [
-            {"id": "b1", "buyer_name": "Minimal Buyer", "niche": "Test"},
-            # Missing most numeric fields
+            {"id": "b1", "buyer_name": None, "niche": None,
+             "is_active": None, "base_payout": None, "calls_offered": None,
+             "calls_accepted": None, "calls_today": None,
+             "monthly_retainer": None, "fee_rate": None, "daily_cap": None},
+            {"id": "b2"},  # completely minimal row
         ]
         db = _make_mock_db(buyers_rows=buyers)
         agent = TrafficAdsAgent(get_db=lambda: db)
         platforms = agent._query_buyers_as_platforms()
-        assert len(platforms) == 1
-        p = platforms[0]
-        assert p["name"] == "Minimal Buyer"
-        assert p["total_calls"] == 0
-        assert p["revenue"] == 0.0
-        assert p["roas"] is None
-
-    def test_all_methods_return_without_crashing(self, agent_no_db):
-        """All public methods return without raising exceptions."""
-        methods = [
-            lambda: agent_no_db.platforms_overview(),
-            lambda: agent_no_db.campaigns(),
-            lambda: agent_no_db.trend_detection(),
-            lambda: agent_no_db.budget_optimization(),
-            lambda: agent_no_db.organic_channels(),
-            lambda: agent_no_db.ads_summary(),
-            lambda: agent_no_db.narrative(),
-        ]
-        for m in methods:
-            result = m()
-            assert result is not None, f"{m.__name__} returned None"
+        assert len(platforms) == 2
+        for p in platforms:
+            # buyer_name=None → "" via .get("buyer_name", "") or ""
+            assert p["total_calls"] == 0
+            assert p["revenue"] == 0.0
+            assert p["status"] in ("active", "inactive")
+            assert isinstance(p["daily_cap"], int)

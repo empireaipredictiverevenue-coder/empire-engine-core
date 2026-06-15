@@ -362,3 +362,76 @@ class TestEdgeCases:
         db = MagicMock()
         agent = StackAgent(get_db=lambda: db)
         assert agent.get_db() is db
+
+    def test_connection_timeout_db_query(self):
+        """DB connection timeout returns empty metrics dict."""
+        db = MagicMock()
+        db.table.side_effect = Exception("connection timed out")
+        agent = StackAgent(get_db=lambda: db)
+        metrics = agent._query_db_metrics()
+        assert metrics == {}
+
+    def test_connection_timeout_status(self):
+        """status() handles DB timeout without crashing."""
+        db = MagicMock()
+        db.table.side_effect = Exception("connection timed out")
+        agent = StackAgent(get_db=lambda: db)
+        from unittest.mock import patch
+        with patch("empire_stack_agent._get_pm2_status", return_value=[]):
+            with patch("empire_stack_agent._get_system_resources", return_value={}):
+                result = agent.status()
+        assert "db_metrics" in result
+        assert result["db_metrics"] == {}
+
+    def test_rate_limit_db_query(self):
+        """Rate-limited DB query returns empty metrics dict."""
+        db = MagicMock()
+        db.table.side_effect = Exception("HTTP 429 Too Many Requests")
+        agent = StackAgent(get_db=lambda: db)
+        metrics = agent._query_db_metrics()
+        assert metrics == {}
+
+    def test_partial_null_fields_db_metrics(self):
+        """DB rows with null fields produce valid metrics."""
+        db = MagicMock()
+
+        def _table(name):
+            q = MagicMock()
+            if name == "contractors":
+                q.select.return_value = q
+                q.limit.return_value = q
+                q.execute.return_value = MagicMock(data=[
+                    {"active": True},
+                    {"active": None},
+                    {"active": False},
+                    {},  # completely empty row
+                ])
+            elif name == "buyers":
+                q.select.return_value = q
+                q.limit.return_value = q
+                q.execute.return_value = MagicMock(data=[
+                    {"is_active": True},
+                    {"is_active": None},
+                ])
+            elif name == "leads":
+                q.select.return_value = q
+                q.limit.return_value = q
+                q.execute.return_value = MagicMock(data=[
+                    {"status": "PROCESSED"},
+                    {"status": None},
+                    {},
+                ])
+            else:
+                q.execute.return_value = MagicMock(data=[])
+                q.select.return_value = q
+            return q
+
+        db.table.side_effect = _table
+        agent = StackAgent(get_db=lambda: db)
+        metrics = agent._query_db_metrics()
+        assert metrics["total_contractors"] == 4
+        assert metrics["active_contractors"] == 1  # only the True one
+        assert metrics["total_buyers"] == 2
+        assert metrics["active_buyers"] == 1  # only the True one (None is falsy)
+        assert metrics["total_leads"] == 3
+        assert metrics["processed_leads"] == 1  # only the 'PROCESSED' one

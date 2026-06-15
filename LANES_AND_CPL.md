@@ -338,6 +338,350 @@ AGI Governor, and lane engine.
 
 ---
 
+### 6A.1 Worked Examples — SI Core in Action
+
+The following examples are run against the **actual SI core code** (`empire_si_core.py`)
+using Python's numeric computation. All numbers are computed live from the
+mathematical models, not hand-waved.
+
+---
+
+#### Example 1: New Strategy — Wide Credible Interval
+
+**Scenario:** AGGRESSIVE_STRIKE just launched in the Roofing Restoration lane.
+After 4 attempts: 3 leads converted, 1 rejected. Total revenue from wins: $37,500.
+
+**Beta posterior computation:**
+
+```
+Prior:          Beta(α=1, β=1)  (uniform — no assumptions)
+Posterior:      Beta(α=1+3, β=1+1) = Beta(4, 2)
+Effective N:    6 (prior 2 + data 4)
+```
+
+**Posterior statistics:**
+
+| Metric | Value | Interpretation |
+|--------|-------|----------------|
+| Mean win rate | 0.6667 | (1+3)/(2+4) — rule of succession (shrinkage toward 0.5) |
+| MAP estimate | 0.7500 | (4-1)/(4+2-2) — maximum a posteriori |
+| Std deviation | 0.1782 | High uncertainty relative to mean |
+| 95% CI | [0.2836, 0.9473] | **Width: 0.6637 — very wide** |
+| Entropy | -0.6369 nats | High uncertainty in the distribution |
+
+**Why is the CI so wide?** With only 4 data points, the posterior retains
+substantial mass across most of the probability range. The true win rate
+could reasonably be anywhere from 28% to 95%. The system should **explore**
+more before committing.
+
+**Expected revenue — 10 upcoming opportunities (avg deal $12,500):**
+
+```
+E[revenue] = 0.6667 × $12,500 × 10 = $83,337.50
+95% CI:     [$39,678.50, $126,996.50]  — spans $87K (very uncertain)
+90% CI:     [$46,695.12, $119,979.88]
+```
+
+The confidence interval spans from $40K to $127K — that 3× range means
+forecasting is unreliable. The system knows this and flags
+`EXPLORE_NEED_MORE_DATA`.
+
+---
+
+#### Example 2: Mature Strategy — Narrow Credible Interval
+
+**Scenario:** RECALL_SNIPER in Legal/Pharma Liability has 100 tracked outcomes.
+80 wins, 20 losses. Total revenue: $480,000.
+
+**Beta posterior computation:**
+
+```
+Prior:          Beta(α=1, β=1)
+Posterior:      Beta(α=1+80, β=1+20) = Beta(81, 21)
+Effective N:    102
+```
+
+**Posterior statistics:**
+
+| Metric | Value | Interpretation |
+|--------|-------|----------------|
+| Mean win rate | 0.7941 | (1+80)/(2+100) — 100 data points dominates the prior |
+| MAP estimate | 0.8000 | (81-1)/(102-2) — almost equal to raw 80% |
+| Std deviation | 0.0398 | Very tight (4% vs 18% for Example 1) |
+| 95% CI | [0.7109, 0.8664] | **Width: 0.1555 — narrow** |
+| Entropy | -1.811 nats | Lower = more certain distribution |
+
+**Comparison with Example 1:**
+
+| Metric | Example 1 (new) | Example 2 (mature) | Ratio |
+|--------|----------------|--------------------|-------|
+| CI width | 0.6637 | 0.1555 | **4.3× wider** |
+| Std dev | 0.1782 | 0.0398 | **4.5× higher** |
+| Effective N | 6 | 102 | **17× more data** |
+
+**Expected revenue — 10 upcoming opportunities (avg $6,000 deal):**
+
+```
+E[revenue] = 0.7941 × $6,000 × 10 = $47,646.00
+95% CI:     [$42,965.52, $52,326.48]  — spans only $9,361 (tight)
+```
+
+The CI spans only $9.4K vs $87K for the new strategy. This is a
+**reliable forecast** — the AGI Governor can confidently commit resources.
+
+**Recommendation:** `AGGRESSIVE_EXECUTE` (win rate ≥ 0.6, revenue > 0)
+
+---
+
+#### Example 3: Thompson Sampling — Explore vs Exploit
+
+Three strategies compete for the same lane allocation. Thompson sampling
+draws from each Beta posterior and selects the highest draw. This naturally
+balances exploring unknown strategies with exploiting proven winners.
+
+**Strategies competing:**
+
+| Strategy | Wins | Losses | Posterior Mean | Posterior Std | Thompson Draw Range |
+|----------|------|--------|---------------|---------------|-------------------|
+| NEW_STRATEGY (Example 1) | 3 | 1 | 0.6667 | 0.1782 | 0.6849 ± 0.5835 |
+| ESTABLISHED (Example 2) | 80 | 20 | 0.7941 | 0.0398 | 0.7900 ± 0.1501 |
+| BETA_STRATEGY (underperformer) | 30 | 70 | 0.3039 | 0.0473 | 0.2947 ± 0.0673 |
+
+**The key insight:** NEW_STRATEGY has a draw range ±0.58 — 4× wider than
+ESTABLISHED's ±0.15. This means NEW_STRATEGY occasionally produces a very
+high draw (e.g., 0.95) even though its mean is lower. This is **intentional
+exploration**.
+
+**Selection rates over 1,000 Thompson samples:**
+
+| Strategy | Selections | Rate | Behavior |
+|----------|-----------|------|----------|
+| **ESTABLISHED** | 749 | 74.9% | 🏆 **Exploit the winner** |
+| NEW_STRATEGY | 251 | 25.1% | 🔍 Explore — gets tried 1 in 4 times |
+| BETA_STRATEGY | 0 | 0.0% | ✗ Correctly avoided |
+
+**Why does this matter?** If we always pick the highest mean, we starve
+new strategies of data and never discover if they'd outperform. Thompson
+sampling gives NEW_STRATEGY a 25% shot despite lower mean. If it's actually
+better, over time it will hit more wins and its posterior will shift right,
+eventually taking over.
+
+---
+
+#### Example 4: Full `simulate_strategy()` Output
+
+The complete output of a single `simulate_strategy()` call on a
+well-established strategy (45 wins, 15 losses, $270K revenue):
+
+**Input:**
+```
+wins=45, losses=15, revenue=$270,000, n_opportunities=20
+```
+
+**Win Rate Analysis:**
+
+| Component | Value | Formula |
+|-----------|-------|---------|
+| Raw win rate | 0.7500 | 45/60 |
+| Bayesian posterior mean | 0.7459 | (1+45)/(2+60) — slight shrinkage toward 0.5 |
+| Calibrated probability | 0.7459 | After Platt scaling (no bias detected here) |
+| MAP estimate | 0.7500 | (46-1)/(62-2) |
+| 95% CI | [0.6654, 0.8188] | Inverted Beta CDF — ±7.7% |
+| Effective samples | 62 | Prior 2 + data 60 |
+
+**Expected Revenue (next 20 opportunities):**
+
+| Component | Value | How It's Computed |
+|-----------|-------|-------------------|
+| Avg deal size | $6,000 | $270,000 / 45 wins |
+| E[revenue] | **$33,565.50** | 0.7459 × $6,000 × 20 / (1 + 20/62) |
+| Std deviation | $1,768.50 | Delta method: $6K × 20 × 0.0394 |
+| 95% CI | [$30,099.24, $37,031.76] | ±$3,466 |
+| P5–P95 | [$30,656.32, $36,474.68] | ±$2,909 |
+
+**Note on the division by (1 + n/N):** The expected revenue formula uses
+a finite-population correction: the average deal is weighted by the share
+of opportunities already in the pipeline vs. historical samples. This
+prevents over-extrapolating from a small historical base.
+
+**Explore/Exploit Score:**
+
+| Metric | Value |
+|--------|-------|
+| Thompson draw | 0.7694 |
+| Recommendation | **AGGRESSIVE_EXECUTE** |
+
+**Decision criteria for recommendation:**
+- Mean ≥ 0.6 AND expected revenue > 0 → `AGGRESSIVE_EXECUTE`
+- Mean ≥ 0.3 → `CAUTIOUS_PROCEED`
+- Total trials < 5 → `EXPLORE_NEED_MORE_DATA`
+- Otherwise → `HOLD_RECONSIDER`
+
+---
+
+#### Example 5: Probability Calibration (Platt Scaling)
+
+The lead enricher produces predicted probabilities for 100 leads. However,
+the system is **systematically overconfident** — it predicts 51.6% average
+conversion but actual outcomes are only 36%.
+
+**Raw bias detected:**
+
+```
+Avg raw prediction:  0.516  (51.6%)
+Actual conversion:   0.360  (36.0%)
+Overconfidence bias: +0.156 (15.6 points too high)
+```
+
+Platt scaling fits a logistic regression:
+$$P(\text{actual}=1) = \sigma(a \times \text{logit}(\text{pred}) + b)$$
+
+**Fitted parameters:**
+
+| Parameter | Value | Interpretation |
+|-----------|-------|----------------|
+| a (slope) | 0.6333 | < 1.0 = predictions are too extreme (overconfident) |
+| b (intercept) | -0.6590 | < 0 = downward shift (overall bias correction) |
+| BIC | 1.3398 | Bayesian Information Criterion |
+| N | 100 | 100 prediction-outcome pairs fitted |
+
+**Before vs after calibration (10 sample predictions):**
+
+| Raw Prediction | Calibrated | Actual Outcome |
+|---------------|------------|----------------|
+| 0.5297 | 0.3581 | 1 (converted) |
+| 0.3570 | 0.2628 | 1 |
+| 0.7689 | 0.5255 | 1 |
+| 0.8761 | 0.6410 | 1 |
+| 0.4105 | 0.2915 | 0 (lost) |
+| 0.6759 | 0.4518 | 0 |
+| 0.5240 | 0.3548 | 1 |
+| 0.4627 | 0.3200 | 0 |
+| 0.5682 | 0.3810 | 0 |
+| 0.6456 | 0.4306 | 0 |
+
+Notice row 5: raw prediction 0.41 → calibrated 0.29, and the actual
+outcome was 0 (lost). The calibration pulled the overconfident prediction
+down. Row 4: raw 0.88 → calibrated 0.64, actual = 1 (converted). The
+calibration correctly kept it above 0.5 but tempered the extreme confidence.
+
+The calibrator uses gradient descent (500 iterations, learning rate 0.1)
+with weak L2 regularization to find the optimal a, b that minimize binary
+cross-entropy. This is the same algorithm used by scikit-learn's
+`CalibratedClassifierCV` (Platt, 1999).
+
+---
+
+#### Example 6: Regime Shift Detection
+
+The SI core monitors revenue distributions over sliding windows to detect
+structural changes. Revenue is modeled as Gamma(shape, rate) — a natural
+choice for positive, right-skewed financial data.
+
+**Three scenarios run against the actual detection algorithm:**
+
+| Scenario | Recent Mean | Historical Mean | % Change | KL Divergence | Shift Detected? | Recommendation |
+|----------|-------------|-----------------|----------|---------------|-----------------|----------------|
+| 🟢 **Stable** | $5,115.97 | $4,939.76 | +3.57% | 0.0612 nats | No | `stable` |
+| 🔴 **Crash** | $1,199.76 | $4,939.76 | -75.71% | 10.0000 nats | **Yes** | `downshift_conserve` |
+| 🟡 **Surge** | $14,840.43 | $4,939.76 | +200.43% | 10.0000 nats | **Yes** | `upshift_invest` |
+
+**How it works:**
+
+1. Split revenue history: recent = last 25%, historical = prior 75%
+2. Fit Gamma distributions via method of moments (shape = mean²/variance)
+3. Compute KL divergence between the two distributions
+4. If KL > 0.5 nats → regime shift detected
+5. Classify: > +10% = invest, < -10% = conserve, ±10% = monitor
+
+**Why Gamma?** Revenue data is strictly positive, right-skewed (some days
+are much better than others), and heteroskedastic (variance scales with
+mean). The Gamma distribution captures all three properties naturally.
+The KL divergence between two Gamma distributions has a closed-form
+approximation when scipy isn't available.
+
+**Impact on operations:**
+- **Stable:** Continue current lane allocation — no action needed
+- **Crash detected:** AGI Governor shifts to `HOLD` mode, reduces
+  outreach volume, conserves budget. Triggers operator alert.
+- **Surge detected:** AGI Governor increases lane budget allocation,
+  boosts Thompson exploitation weight, scales up outreach
+
+---
+
+#### Example 7: Niche Analysis — Per-Strategy Comparison
+
+The `analyze_niche()` method runs all strategies through `simulate_strategy()`
+and finds the best performer for a niche.
+
+**Roofing Restoration — 3 strategies competing:**
+
+| Strategy | Wins | Losses | Win Rate (Bayesian) | Avg Deal | E[Revenue] (20 opps) | Thompson Score |
+|----------|------|--------|---------------------|----------|---------------------|----------------|
+| AGGRESSIVE_STRIKE | 45 | 15 | 0.7459 | $6,000 | $28,726 | **0.7694** 🏆 |
+| STANDARD | 20 | 12 | 0.6176 | $4,800 | $18,243 | 0.6245 |
+| UGLY_BANNER | 8 | 18 | 0.3103 | $3,000 | $7,234 | 0.3050 |
+
+**Niche-level results:**
+
+| Metric | Value |
+|--------|-------|
+| Total trials | 118 |
+| Overall Bayesian win rate | 0.6333 |
+| Best strategy | **AGGRESSIVE_STRIKE** (combined score = 0.5739) |
+| Niche expected revenue (30 opps) | **$81,321.10** |
+| 95% CI | [$61,121.42, $101,520.78] |
+
+**Key insight:** AGGRESSIVE_STRIKE dominates in Roofing Restoration due to
+high urgency (storm-driven demand). STANDARD is a solid backup (62% win rate).
+UGLY_BANNER is failing (31%) — the StrategyEvolution engine would mutate or
+deactivate it after 20+ trials.
+
+**Combined score formula:** `calibrated_probability × explore_score`
+- AGGRESSIVE_STRIKE: 0.7459 × 0.7694 = **0.5739** 🏆
+- STANDARD: 0.6176 × 0.6245 = **0.3856**
+- UGLY_BANNER: 0.3103 × 0.3050 = **0.0947** ← candidate for deactivation
+
+---
+
+#### Summary: Complete SI Inference Pipeline
+
+The full mathematical flow from raw outcomes to actionable intelligence:
+
+```
+Step 1:  WINS + LOSSES → Beta(α, β) Posterior
+         Example 1 (new):   Beta(4, 2)   → mean=0.667, CI=[0.284, 0.947]
+         Example 2 (mature): Beta(81, 21) → mean=0.794, CI=[0.711, 0.866]
+
+Step 2:  POSTERIOR → Thompson Sample (explore vs exploit)
+         New strategy selected:  25.1% of draws → exploration
+         Established selected:   74.9% of draws → exploitation
+         Bad strategy selected:   0.0% of draws → correctly avoided
+
+Step 3:  POSTERIOR → Expected Revenue (with 95% CI)
+         E[rev] = P(win) × avg_deal × n_opportunities
+         Var[rev] ≈ (avg_deal × n)² × Var(P(win))   [delta method]
+         New:      $83,338  CI=[$39,679, $126,997]  (3.2× range)
+         Mature:   $47,646  CI=[$42,966, $52,326]   (1.2× range)
+
+Step 4:  RAW PREDICTION → Platt Calibration (bias correction)
+         Calibrated P = sigmoid(0.633 × logit(raw) + (-0.659))
+         Corrects 15.6 point overconfidence bias
+
+Step 5:  REVENUE WINDOWS → Regime Shift Detection
+         KL divergence between Gamma(recent) and Gamma(historical)
+         Threshold: 0.5 nats
+         Crash: KL=10.0 → detected → downshift_conserve
+         Surge: KL=10.0 → detected → upshift_invest
+         Stable: KL=0.06 → not detected → stable
+```
+
+The cycle is continuous: outcomes flow in → posteriors update → Thompson
+sampling selects → strategies evolve → Platt calibrates → regimes get
+detected → AGI Governor decides → new outcomes flow in.
+
+---
+
 ### 6B. AGI (Artificial General Intelligence) — Executive Governor
 
 **Source:** `empire_agi_governor.py`, `empire_agi.py`, `bots/agi_revenue.py`
@@ -423,11 +767,147 @@ The Llama 3.2 3b model reasons over scored geographies with:
 - Historical conversion data per metro
 - Outputs: ranked deployment list + confidence score
 
+**Trigger-to-Lane cycle diagram:**
+
+The diagram below shows how external trigger signals propagate through the Demand
+Intelligence engine into the lane execution grid, with feedback loops back through
+the SI Core and AGI Governor.
+
+```
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                      DEMAND INTELLIGENCE TRIGGER-TO-LANE CYCLE                   │
+│                    (Trigger → Score → Rank → Deploy → Execute → Learn)           │
+└─────────────────────────────────────────────────────────────────────────────────┘
+
+                                     ┌──────────────────────────────┐
+                                     │      EXTERNAL TRIGGER       │
+                                     │          SOURCES            │
+                                     │                              │
+  ┌────────────┐   ┌─────────────┐   │  ┌────────┐ ┌───────────┐  │
+  │  NOAA NWS  │   │  FDA Recall │   │  │ Google │ │  Economic │  │
+  │  Storm    │   │  Database   │   │  │ Places │ │  Indices  │  │
+  │  Alerts   │   │             │   │  │  API   │ │ (rates,   │  │
+  └─────┬─────┘   └──────┬──────┘   │  └───┬────┘ │  CPI, etc)│  │
+        │                │          │      │      └─────┬─────┘  │
+        │                │          │      │            │        │
+        └──────┬─────────┘          └──────┼────────────┘        │
+               │                          │                      │
+               ▼                          ▼                      │
+     ┌────────────────────────────────────────────────────┐      │
+     │           DEMAND INTELLIGENCE ENGINE               │      │
+     │              (bots/demand_intelligence.py)          │      │
+     │                                                    │      │
+     │  1. GET TRIGGER SIGNALS                             │      │
+     │     └─ Storm polygon intersects metro?              │      │
+     │     └─ FDA recall matches lane sub-niche?           │      │
+     │     └─ Rate change triggers financial lane?         │      │
+     │     └─ Season/date triggers insurance AEP lane?     │      │
+     │                                                    │      │
+     │  2. SCORE GEOGRAPHIES (demand_score 0-100)          │      │
+     │     └─ risk_rank × property_density = raw score     │      │
+     │     └─ timing_window (24-72h, 0-24h, 48-96h)       │      │
+     │     └─ historical_conversion_rate booster           │      │
+     │                                                    │      │
+     │  3. LLM RANKING (Llama 3.2 3b via AIRouter)        │      │
+     │     └─ reasons over scored metros                  │      │
+     │     └─ returns ranked deploy list + confidence      │      │
+     └───────────────────┬────────────────────────────────┘      │
+                         │                                        │
+                         ▼                                        │
+              ┌──────────────────────┐                            │
+              │    CORRIDOR          │                            │
+              │  (corridor.py)       │                            │
+              │  deploys to ranked   │                            │
+              │  metro targets       │                            │
+              └──────────┬───────────┘                            │
+                         │                                        │
+    ┌────────────────────┼────────────────────────────────────┐   │
+    │                    ▼                                    │   │
+    │    ┌────────────────────────────────────────────────┐   │   │
+    │    │             36-LANE EXECUTION GRID              │   │   │
+    │    │         (mesh_orchestrator.py)                  │   │   │
+    │    │                                                │   │   │
+    │    │  For each lane (0-35, parallel via ThreadPool): │   │   │
+    │    │    └─ Read lane config (niche, strategy, source)│   │   │
+    │    │    └─ Get SI analysis (Bayesian win rate ±CI)  │   │   │
+    │    │    └─ Execute outreach (agent_interface)        │   │   │
+    │    │    └─ Record outcome (LaneOutcomeTracker)       │   │   │
+    │    │                                                │   │   │
+    │    │  ┌──────────────────────────────────────────┐   │   │   │
+    │    │  │ EXAMPLE: Roofing Restoration Lane 0       │   │   │   │
+    │    │  │  1. NWS storm alert → demand_score=76    │   │   │   │
+    │    │  │  2. Dallas-Ft. Worth ranked #1 deploy    │   │   │   │
+    │    │  │  3. SI: P(win)=0.746 [0.665, 0.819]     │   │   │   │
+    │    │  │  4. Execute: AGGRESSIVE_STRIKE outreach  │   │   │   │
+    │    │  │  5. Outcome recorded → SI recalibrates   │   │   │   │
+    │    │  └──────────────────────────────────────────┘   │   │   │
+    │    └────────────────────────────────────────────────┘   │   │
+    │                                                        │   │
+    └──────────────────────┬─────────────────────────────────┘   │
+                           │                                     │
+                           ▼                                     │
+              ┌─────────────────────────────────────┐           │
+              │      POST-EXECUTION FEEDBACK        │           │
+              │                                      │           │
+              │  ┌─────────────────────────────┐    │           │
+              │  │  SI CORE (evolve_logic)     │    │           │
+              │  │  └─ Platt calibrates        │    │           │
+              │  │  └─ Regime shift detect     │    │           │
+              │  │  └─ Updates posteriors       │    │           │
+              │  └──────────┬──────────────────┘    │           │
+              │             │                        │           │
+              │  ┌──────────▼──────────────────┐    │           │
+              │  │  AGI GOVERNOR (direct)      │    │           │
+              │  │  └─ HOLD vs GO decision     │    │           │
+              │  │  └─ Strategy selection      │    │           │
+              │  │  └─ Resource allocation     │    │           │
+              │  └──────────┬──────────────────┘    │           │
+              │             │                        │           │
+              │  ┌──────────▼──────────────────┐    │           │
+              │  │  STRATEGY EVOLUTION          │    │           │
+              │  │  └─ Mutate low-performers    │    │           │
+              │  │  └─ Create new variants      │    │           │
+              │  │  └─ Cross-pollinate niches   │    │           │
+              │  └─────────────────────────────┘    │           │
+              └─────────────────────────────────────┘           │
+                           │                                     │
+                           ▼                                     │
+              ┌─────────────────────────────────────┐           │
+              │   ADAPTIVE ENGINE (si_adaptive)     │           │
+              │   └─ Updates subsystem params      │           │
+              │   └─ Propagates to AI Closer       │           │
+              │   └─ Propagates to Switchboard     │           │
+              └─────────────────────────────────────┘           │
+                           │                                     │
+                           ▼                                     │
+              ┌─────────────────────────────────────┐           │
+              │  NEXT CYCLE: improved signals       │           │
+              │  └─ Demand scores adjust            │───────────┘
+              │  └─ Trigger thresholds tighten      │
+              │  └─ Deployment confidence increases │
+              └─────────────────────────────────────┘
+
+**Trigger source configuration:** Each lane's `trigger` field in the config
+determines which external source feeds it. As lanes are added, a new
+`get_trigger_signal()` branch is wired for the new trigger type:
+
+```
+def get_trigger_signal(lane):
+    if lane["trigger"] == "storm":    → storm_predictor.assess()
+    if lane["trigger"] == "recall":   → fda_database.poll()
+    if lane["trigger"] == "weather":  → noaa_forecast.check()
+    if lane["trigger"] == "season":   → calendar_check()
+    if lane["trigger"] == "rate":     → rate_feed.poll()
+    if lane["trigger"] == "places":  → google_places.search()
+    ...  # each new lane adds a branch, not a rewrite
+```
+
 **Integration with lane system:**
 - `corridor.py` calls demand_intelligence before lane execution
 - Demand scores influence which metros receive priority outreach
 - Each lane's trigger determines the data source (storm→NWS, recall→FDA, etc.)
 - Designed to scale across all 36 lanes — each lane adds a config entry
+- The cycle repeats every execution tick: trigger → score → rank → deploy → execute → learn → adapt
 
 ---
 

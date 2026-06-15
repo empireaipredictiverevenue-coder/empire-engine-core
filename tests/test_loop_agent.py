@@ -287,3 +287,109 @@ class TestEdgeCases:
         result = agent.loop_overview()
         parsed = datetime.fromisoformat(result["timestamp"])
         assert parsed is not None
+
+    def test_connection_timeout_buyer_lanes(self):
+        """DB timeout in buyers query returns empty list."""
+        db = MagicMock()
+        db.table.side_effect = Exception("connection timed out")
+        agent = LoopAgent(get_db=lambda: db)
+        lanes = agent._query_buyer_lanes()
+        assert lanes == []
+
+    def test_connection_timeout_contractor_activity(self):
+        """DB timeout in contractors query returns empty metrics."""
+        db = MagicMock()
+        db.table.side_effect = Exception("connection timed out")
+        agent = LoopAgent(get_db=lambda: db)
+        activity = agent._query_contractor_activity()
+        assert activity == {"total": 0, "active": 0, "completed_jobs": 0}
+
+    def test_connection_timeout_overview(self):
+        """loop_overview() handles DB timeout gracefully."""
+        db = MagicMock()
+        db.table.side_effect = Exception("connection timed out")
+        agent = LoopAgent(get_db=lambda: db)
+        overview = agent.loop_overview()
+        assert overview["total_lanes"] == 36
+        assert overview["buyer_lanes"] == []
+        assert overview["contractor_activity"] == {"total": 0, "active": 0, "completed_jobs": 0}
+
+    def test_rate_limit_buyer_lanes(self):
+        """Rate-limited buyers query returns empty list."""
+        db = MagicMock()
+        db.table.side_effect = Exception("HTTP 429 Too Many Requests")
+        agent = LoopAgent(get_db=lambda: db)
+        lanes = agent._query_buyer_lanes()
+        assert lanes == []
+
+    def test_partial_null_buyers(self):
+        """Buyers with null fields produce valid lane records."""
+        db = MagicMock()
+
+        def _table(name):
+            q = MagicMock()
+            if name == "buyers":
+                q.select.return_value = q
+                q.limit.return_value = q
+                q.execute.return_value = MagicMock(data=[
+                    {"id": None, "niche": None, "base_payout": None,
+                     "calls_offered": None, "calls_accepted": None,
+                     "is_active": None, "monthly_retainer": None,
+                     "buyer_name": None},
+                    {"id": "b-456", "niche": "Roofing", "base_payout": 150.0,
+                     "calls_offered": 40, "calls_accepted": 15,
+                     "is_active": True, "monthly_retainer": 500.0,
+                     "buyer_name": "Test Buyer"},
+                ])
+            else:
+                q.execute.return_value = MagicMock(data=[])
+                q.select.return_value = q
+                q.limit.return_value = q
+            return q
+
+        db.table.side_effect = _table
+        agent = LoopAgent(get_db=lambda: db)
+        lanes = agent._query_buyer_lanes()
+        assert len(lanes) == 2
+        # Null row should have defaults (buyer_name: None → None, skip in next())
+        null_lane = next(l for l in lanes if l["buyer_name"] is None)
+        assert null_lane["niche"] == "General"
+        assert null_lane["wins"] == 0
+        assert null_lane["losses"] == 0
+        assert null_lane["revenue"] == 0.0
+        assert null_lane["status"] == "inactive"
+        # Valid row should map correctly
+        valid = next(l for l in lanes if l["buyer_name"] == "Test Buyer")
+        assert valid["niche"] == "Roofing"
+        assert valid["wins"] == 15
+        assert valid["losses"] == 25
+        assert valid["revenue"] == 150.0 * 15 + 500.0
+        assert valid["status"] == "active"
+
+    def test_partial_null_contractors(self):
+        """Contractors with null fields produce valid activity metrics."""
+        db = MagicMock()
+
+        def _table(name):
+            q = MagicMock()
+            if name == "contractors":
+                q.select.return_value = q
+                q.limit.return_value = q
+                q.execute.return_value = MagicMock(data=[
+                    {"active": True, "completed_jobs": 10},
+                    {"active": None, "completed_jobs": None},
+                    {"active": False, "completed_jobs": 5},
+                    {},  # completely empty
+                ])
+            else:
+                q.execute.return_value = MagicMock(data=[])
+                q.select.return_value = q
+                q.limit.return_value = q
+            return q
+
+        db.table.side_effect = _table
+        agent = LoopAgent(get_db=lambda: db)
+        activity = agent._query_contractor_activity()
+        assert activity["total"] == 4
+        assert activity["active"] == 1  # only the True one
+        assert activity["completed_jobs"] == 15  # 10 + 0 + 5 + 0

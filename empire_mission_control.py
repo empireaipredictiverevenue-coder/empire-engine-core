@@ -366,6 +366,33 @@ def _aggregate_compliance(get_db) -> dict:
     return out
 
 
+def _aggregate_cpl() -> dict:
+    out = {
+        "lanes_total": 0,
+        "lanes_priced": 0,
+        "avg_cpl_low": 0.0,
+        "avg_cpl_high": 0.0,
+        "avg_margin": 0.0,
+    }
+    try:
+        from empire_pricing import cpl_engine
+        lp = cpl_engine.lane_pricing()
+        lanes = lp.get("lanes", [])
+        priced = [l for l in lanes if l.get("cpl_available") is not False]
+        out["lanes_total"] = len(lanes)
+        out["lanes_priced"] = len(priced)
+        if priced:
+            out["avg_cpl_low"] = round(sum(l.get("cpl_low", 0) or 0 for l in priced) / len(priced), 2)
+            out["avg_cpl_high"] = round(sum(l.get("cpl_high", 0) or 0 for l in priced) / len(priced), 2)
+            margins = [l.get("margin_pct", 0) or 0 for l in priced if l.get("margin_pct") is not None]
+            if margins:
+                out["avg_margin"] = round(sum(margins) / len(margins), 2)
+    except Exception:
+        pass
+    return out
+
+
+
 def _aggregate_network(broadcaster) -> dict:
     """
     Network: WS connections, uptime, broadcaster message rate.
@@ -416,6 +443,7 @@ def mission_control_snapshot(get_db=None, broadcaster=None) -> dict:
         "revenue":    _aggregate_revenue(),
         "compliance": _aggregate_compliance(get_db),
         "network":    _aggregate_network(broadcaster),
+        "cpl":        _aggregate_cpl(),
     }
     payload["health"] = _health_color(payload)
 
