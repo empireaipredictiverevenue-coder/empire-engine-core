@@ -72,7 +72,7 @@ import re
 import asyncio
 import logging
 from datetime import datetime, timedelta, timezone
-from typing import Optional
+from typing import Callable, Optional
 from enum import Enum
 
 # TCPA compliance: opt-out, DNC, consent, quiet hours. Imported
@@ -419,11 +419,13 @@ class SMSSequenceEngine:
         get_db,                  # callable returning Supabase client
         identity_prefix: str = DEFAULT_IDENTITY_PREFIX,
         max_per_minute: int = 6,
+        on_yes_reply: Optional[Callable] = None,  # async (phone, body, sequence_dict) -> None
     ):
         self.voice_router    = voice_router
         self.get_db          = get_db
         self.identity_prefix = identity_prefix
         self.max_per_minute  = max_per_minute
+        self.on_yes_reply    = on_yes_reply  # Optional async callback(phone, body, sequence_dict)
 
         self.stats = {
             "sequences_active":  0,
@@ -678,6 +680,20 @@ class SMSSequenceEngine:
         except Exception as e:
             log.debug(f"[sms] mark_complete failed: {e}")
 
+    # ── YES DETECTION ────────────────────────────────────────────────────
+    @staticmethod
+    def _is_yes_reply(body: str) -> bool:
+        """Heuristic: does this SMS reply signal interest (YES/OK/SURE etc)?"""
+        if not body:
+            return False
+        cleaned = body.strip().upper()
+        if cleaned in ("YES", "Y", "YEAH", "YEP", "SURE", "OK", "OKAY", "YEA", "YUP"):
+            return True
+        words = cleaned.split()
+        if "YES" in words:
+            return True
+        return False
+
     # ── INBOUND HANDLING ────────────────────────────────────────────────
     async def handle_inbound(self, from_number: str, body: str) -> dict:
         """
@@ -726,24 +742,35 @@ class SMSSequenceEngine:
             )
             return {"ok": True, "action": "help_sent"}
 
-        # ── Other reply: pause sequence, flag for human follow-up ───────
+        # ── Other reply: pause sequence, store reply text, flag for human follow-up ─
+        db = self.get_db()
         try:
-            db = self.get_db()
+            # Fetch current meta to append reply_text
+            existing = db.table("sms_sequences").select("meta").eq("phone", normalized).limit(1).execute()
+            existing_meta = existing.data[0].get("meta") or {} if existing.data else {}
+            existing_meta["reply_text"] = body_clean[:500]
+            if "replied_at" not in existing_meta:
+                existing_meta["replied_at"] = datetime.now(timezone.utc).isoformat()
+
             db.table("sms_sequences").update({
-                "status":        "replied",
-                "replies_count": (db.rpc("increment_int", {"x": 1}).execute()
-                                  if False else 1),  # fallback below
+                "status":  "replied",
+                "meta":    existing_meta,
             }).eq("phone", normalized).execute()
-        except Exception:
-            # Simple update without RPC if RPC not available
-            try:
-                db = self.get_db()
-                db.table("sms_sequences").update({"status": "replied"}) \
-                    .eq("phone", normalized).execute()
-            except Exception as e:
-                log.debug(f"[sms] reply pause failed: {e}")
+        except Exception as e:
+            log.debug(f"[sms] reply pause/meta update failed: {e}")
 
         self.stats["sequences_replied"] += 1
+
+        # ── Detect YES/INTERESTED and trigger real-time dispatch ─────
+        if self.on_yes_reply and self._is_yes_reply(body_clean):
+            log.info(f"[sms] YES detected from {normalized}: {body_clean[:80]}")
+            try:
+                # Get the full sequence dict for the callback
+                seq_res = db.table("sms_sequences").select("*").eq("phone", normalized).limit(1).execute()
+                seq = seq_res.data[0] if seq_res.data else {}
+                await self.on_yes_reply(normalized, body_clean, seq)
+            except Exception as e:
+                log.warning(f"[sms] on_yes_reply callback failed: {e}")
 
         return {
             "ok":          True,

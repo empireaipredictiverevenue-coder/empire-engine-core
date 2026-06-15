@@ -229,9 +229,61 @@ voice_router = VoiceRouter(
     public_base_url=PUBLIC_BASE_URL,
 )
 
+async def _on_sms_yes_reply(phone: str, body: str, sequence: dict):
+    """
+    Real-time dispatch trigger. Called when a lead replies YES to an SMS.
+    Finds the corresponding lead by phone, matches contractors via the
+    matcher, and fans out dispatch notifications.
+    """
+    try:
+        db = get_db()
+        # Find the lead — try enriched_leads first (has radar_target_id), then radar_targets
+        lead = None
+        r = db.table("enriched_leads").select("id, radar_target_id, address, city, state, warehouse_name").eq("phone", phone).limit(1).execute()
+        if r.data and r.data[0].get("radar_target_id"):
+            rtid = r.data[0]["radar_target_id"]
+            r2 = db.table("radar_targets").select("*").eq("id", rtid).limit(1).execute()
+            if r2.data:
+                lead = r2.data[0]
+        if not lead:
+            r = db.table("radar_targets").select("*").eq("phone", phone).limit(1).execute()
+            if r.data:
+                lead = r.data[0]
+
+        if not lead:
+            log.info(f"[sms\u2192dispatch] no lead found for YES reply from {phone}")
+            return
+
+        # Match contractors
+        matched = await matcher.match_for_lead(
+            metro=lead.get("city") or "",
+            required_specialties=["commercial_roofing", "storm_damage"],
+            top_n=5,
+        )
+
+        if not matched:
+            log.info(f"[sms\u2192dispatch] no contractors matched for {phone} ({lead.get('city', '?')})")
+            return
+
+        # Fan out dispatch
+        result = await matcher.dispatch_to_matched(
+            matched=matched,
+            lead=lead,
+            urgency=9,
+            sign_token=_hub_sign_token,
+            send_email=_send_email,
+            public_base_url=PUBLIC_BASE_URL,
+            broadcaster=live_broadcaster,
+        )
+        log.info(f"[sms\u2192dispatch] dispatched {result.get('dispatched', 0)} contractors for {phone}")
+    except Exception as e:
+        log.warning(f"[sms\u2192dispatch] error for {phone}: {e}")
+
+
 sms_engine = SMSEngine(
     voice_router=voice_router,
     get_db=get_db,
+    on_yes_reply=_on_sms_yes_reply,
 )
 
 email_engine = EmailEngine(
