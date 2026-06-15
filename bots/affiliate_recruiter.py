@@ -272,6 +272,7 @@ class AffiliateRecruiter:
                             "phone": b.get("phone", ""),
                             "niche": b.get("niche", ""),
                             "offer_type": "partner",
+                            "email_quality": "high",  # buyers are trusted partners
                         })
 
             return prospects
@@ -286,7 +287,7 @@ class AffiliateRecruiter:
         """
         try:
             sb = _get_sb()
-            contractors = sb.table("contractors").select("id,name,email,phone,metro") \
+            contractors = sb.table("contractors").select("id,name,email,phone,metro,meta") \
                 .eq("active", True) \
                 .limit(500) \
                 .execute()
@@ -301,6 +302,10 @@ class AffiliateRecruiter:
                 aff = sb.table("affiliates").select("id") \
                     .eq("email", email).limit(1).execute()
                 if not aff.data:
+                    meta = c.get("meta", {}) or {}
+                    if not isinstance(meta, dict):
+                        meta = {}
+                    email_quality = meta.get("email_quality", "") if isinstance(meta, dict) else ""
                     prospects.append({
                         "source": "contractor",
                         "source_id": str(c["id"]),
@@ -309,6 +314,7 @@ class AffiliateRecruiter:
                         "phone": c.get("phone", ""),
                         "metro": c.get("metro", ""),
                         "offer_type": "referral",
+                        "email_quality": email_quality,
                     })
 
             return prospects
@@ -564,16 +570,32 @@ class AffiliateRecruiter:
 
         self.stats["prospects_found"] += len(buyer_prospects) + len(contractor_prospects)
 
-        # ── Phase 2-3: Enroll + Welcome (buyers first) ───────────────
+        # ── Phase 2-3: Enroll + Welcome (max 20 per cycle) ────────
+        cap = 20
+        enrolled_count = 0
         for prospect in buyer_prospects + contractor_prospects:
+            if enrolled_count >= cap:
+                log.info(f"[affiliate_recruiter] Reached batch limit of {cap}, deferring remaining")
+                results["deferred"] = len(buyer_prospects) + len(contractor_prospects) - enrolled_count
+                break
             try:
                 affiliate = await self._enroll_affiliate(prospect)
                 if affiliate:
                     results["enrolled"] += 1
-                    # Send welcome email
-                    sent = await self._send_welcome(affiliate, prospect.get("offer_type", "standard"))
-                    if sent:
-                        results["welcomes_sent"] += 1
+                    enrolled_count += 1
+                    # Determine email quality — phone-matched="high", name-pattern="guess"
+                    email_quality = prospect.get("email_quality", "")
+                    is_high_quality = email_quality == "high"
+                    
+                    if is_high_quality:
+                        # Verified email from phone match — send welcome
+                        sent = await self._send_welcome(affiliate, prospect.get("offer_type", "standard"))
+                        if sent:
+                            results["welcomes_sent"] += 1
+                    else:
+                        # Name-pattern generated email or unknown quality — skip email, mark for SMS
+                        log.info(f"[affiliate_recruiter] {affiliate['name']} — email_quality={email_quality or 'unknown'}, skipping welcome (SMS preferred)")
+                        results["sms_preferred"] = results.get("sms_preferred", 0) + 1
             except Exception as e:
                 log.warning(f"[affiliate_recruiter] Error processing prospect {prospect.get('email')}: {e}")
                 results["errors"] += 1
@@ -619,20 +641,21 @@ class AffiliateRecruiter:
         return results
 
     def _persist_cycle(self, results: dict):
-        """Save cycle results to affiliate_recruiter_logs table or agent_activity."""
+        """Save cycle results to agent_activity table."""
         try:
             sb = _get_sb()
             sb.table("agent_activity").insert({
                 "agent_name": "affiliate_recruiter",
                 "status": "complete",
                 "meta": {
-                    "cycle": self.stats["cycles_run"],
+                    "enrolled": results.get("enrolled", 0),
                     "results": results,
-                    "timestamp": self._last_cycle,
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
                 },
             }).execute()
-        except Exception:
-            pass
+            log.info(f"[affiliate_recruiter] Cycle persisted to agent_activity")
+        except Exception as e:
+            log.warning(f"[affiliate_recruiter] Could not persist cycle: {e}")
 
     # ── API METHODS ──────────────────────────────────────────────────
 
@@ -676,10 +699,18 @@ class AffiliateRecruiter:
                 .eq("status", "active").execute()
             dormant = len(r9.data or [])
 
+            # Count cycles_run from agent_activity (durable across CLI invocations)
+            try:
+                past = sb.table("agent_activity").select("id", count="exact") \
+                    .eq("agent_name", "affiliate_recruiter").limit(1).execute()
+                durable_cycles = getattr(past, "count", 0)
+            except Exception:
+                durable_cycles = 0
+
             return {
                 "timestamp": datetime.now(timezone.utc).isoformat(),
                 "last_cycle": self._last_cycle,
-                "cycles_run": self.stats["cycles_run"],
+                "cycles_run": durable_cycles,
                 "pipeline": {
                     "total_affiliates": total,
                     "active_affiliates": active,
