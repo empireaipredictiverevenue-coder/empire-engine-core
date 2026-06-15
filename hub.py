@@ -48,6 +48,7 @@ from empire_sms import SMSEngine, register_sms_routes
 from empire_contractors import register_contractor_routes
 from empire_qc_api import register_qc_routes
 from empire_hermes_api import register_hermes_routes
+from empire_wiki_viewer import register_wiki_routes
 from empire_attribution import register_attribution_routes
 from empire_email import EmailEngine, register_email_routes
 from empire_matching import ContractorMatcher, register_matching_routes
@@ -132,6 +133,7 @@ from empire_stack_agent import register_stack_routes
 from empire_network_agent import register_network_routes
 from empire_loop_agent import register_loop_routes
 from empire_analytics_agent import AnalyticsAgent
+from empire_psychology_mind_map import register_psychology_routes
 
 
 logging.basicConfig(level=logging.INFO)
@@ -569,6 +571,9 @@ register_qc_routes(app)
 # Hermes dashboard endpoint (operator SPA)
 register_hermes_routes(app)
 
+# Wiki viewer (the persistent project wiki)
+register_wiki_routes(app)
+
 @app.get("/", response_class=HTMLResponse)
 async def root():
     return HTMLResponse(splash_page())
@@ -656,6 +661,7 @@ register_traffic_ads_routes(app, require_auth=require_auth, get_db=get_db)
 register_stack_routes(app, require_auth=require_auth, get_db=get_db)
 register_network_routes(app, require_auth=require_auth, get_db=get_db)
 register_loop_routes(app, require_auth=require_auth, get_db=get_db)
+register_psychology_routes(app, require_auth=require_auth)
 register_auth_routes(app, auth_engine=auth_engine, require_auth=require_auth)
 register_inbound_routes(app, inbound_triage, require_auth=require_auth)
 register_console_routes(app, console=console, require_auth=require_auth, get_db=get_db)
