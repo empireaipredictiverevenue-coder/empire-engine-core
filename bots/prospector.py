@@ -28,18 +28,49 @@ from bots.places_helper import places_search as _places_search
 # "contractors" (the original behavior). B2B niches use
 # "companies" or "services" to broaden the search.
 NICHE_QUERY_SUFFIX: Dict[str, str] = {
+    # storm-response
     "roofing": "contractors",
     "restoration": "contractors",
     "water mitigation": "contractors",
     "general contractor": "contractors",
     "hvac": "contractors",
+    # storm-adjacent
     "gutter": "contractors",
     "solar installer": "companies",
     "tree removal": "services",
     "emergency services": "companies",
     "public insurance adjuster": "firms",
+    # b2b
     "managed it": "companies",
     "staffing": "agencies",
+    # legal
+    "personal injury lawyer": "firms",
+    "mass tort lawyer": "firms",
+    "class action lawyer": "firms",
+    "workers comp lawyer": "firms",
+    "medical malpractice lawyer": "firms",
+    # insurance
+    "medicare advantage agent": "agents",
+    "life insurance agent": "agents",
+    "final expense insurance": "agents",
+    # financial
+    "debt consolidation": "companies",
+    "business loan broker": "brokers",
+    "mortgage broker": "brokers",
+    # senior care
+    "assisted living": "facilities",
+    "home health agency": "agencies",
+    # healthcare
+    "addiction treatment center": "centers",
+    "mental health clinic": "clinics",
+    "medical alert system": "providers",
+    # education
+    "cdl truck driving school": "schools",
+    "nursing school": "schools",
+    # commercial
+    "commercial solar": "companies",
+    "commercial roofing": "contractors",
+    "debt relief": "companies",
 }
 
 

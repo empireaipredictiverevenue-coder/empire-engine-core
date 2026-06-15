@@ -13,16 +13,28 @@ last_verified: 2026-06-15
 Scans Google Places for contractor and B2B-service businesses in
 11 metros × 12 niches. Writes real businesses to the prospects table.
 
-### Niche list (12)
+### Niche list (33)
 
 Storm-response (5): roofing, restoration, water mitigation, general contractor, hvac
 Storm-adjacent (5): gutter, solar installer, tree removal, emergency services, public insurance adjuster
 B2B (2): managed it, staffing
+Legal (5): personal injury lawyer, mass tort lawyer, class action lawyer, workers comp lawyer, medical malpractice lawyer
+Insurance (3): medicare advantage agent, life insurance agent, final expense insurance
+Financial (3): debt consolidation, business loan broker, mortgage broker
+Senior care (2): assisted living, home health agency
+Healthcare non-emergency (3): addiction treatment center, mental health clinic, medical alert system
+Education (2): CDL truck driving school, nursing school
+Commercial (2): commercial solar, commercial roofing
+Debt (1): debt relief
 
 Each niche uses a niche-aware search query suffix (NICHE_QUERY_SUFFIX
 in bots/prospector.py) so the Google Places search is appropriate for
 the niche — "gutter contractors" for storm-response, "managed it
-companies" for b2b, "tree removal services" for emergency verticals.
+companies" for b2b, "personal injury lawyer firms" for legal.
+
+Note: this 33-niche list aligns with the 41-lane CPL model
+(/api/v1/cpl/lanes) so that every lane has a corresponding
+prospector run to feed it.
 
 ## When it runs
 

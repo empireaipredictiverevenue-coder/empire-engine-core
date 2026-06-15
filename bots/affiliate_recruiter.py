@@ -240,7 +240,7 @@ class AffiliateRecruiter:
         try:
             sb = _get_sb()
             # Buyers who are active
-            buyers = sb.table("buyers").select("id,buyer_name,email,phone,niche") \
+            buyers = sb.table("buyers").select("id,buyer_name,email,niche") \
                 .eq("is_active", True) \
                 .limit(500) \
                 .execute()
