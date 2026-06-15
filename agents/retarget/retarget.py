@@ -175,7 +175,7 @@ def _reactivate_source(source: dict) -> dict:
         sb.table("sms_sequences").update({
             "status":       "active",
             "current_step": 0,
-            "next_send_at": (datetime.now(timezone.utc) + timedelta(seconds=30)).isoformat(),
+            "next_send_at": (datetime.now(timezone.utc) + timedelta(days=30)).isoformat(),
             "meta":         meta,
         }).eq("id", source["id"]).execute()
         return {"ok": True, "sequence_id": source["id"], "retarget_count": retarget_count}
@@ -244,6 +244,7 @@ def _mark_retarget_done(sb, source_id: str) -> None:
         if r.data:
             meta = r.data[0].get("meta") or {}
             meta["retarget_done"] = True
+            meta["retarget_cooldown_until"] = (datetime.now(timezone.utc) + timedelta(days=30)).isoformat()
             meta["retarget_at"] = datetime.now(timezone.utc).isoformat()
             sb.table("sms_sequences").update({"meta": meta}).eq("id", source_id).execute()
     except Exception as e:
