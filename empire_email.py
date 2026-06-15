@@ -81,9 +81,10 @@ import logging
 import time
 from datetime import datetime, timedelta, timezone
 from typing import Callable, Optional
+import urllib.parse as _urlparse
 
 from fastapi import FastAPI, Request, HTTPException, Depends, Query
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, Response
 
 
 log = logging.getLogger("empire.email")
@@ -122,11 +123,14 @@ def _email_shell(
     unsubscribe_link:   str,
     postal_address:     str,
     sender_name:        str,
+    tracking_pixel_url: str = "",
 ) -> str:
     """Wrap a body with the standard Empire email shell + CAN-SPAM footer."""
+    pixel = f'<img src="{tracking_pixel_url}" width="1" height="1" alt="" style="display:none;" />' if tracking_pixel_url else ""
     return f"""<!DOCTYPE html>
 <html lang="en"><head><meta charset="UTF-8"></head>
 <body style="margin:0;padding:0;background:#0a0a0a;font-family:-apple-system,system-ui,'Helvetica Neue',sans-serif;">
+{pixel}
 <table cellpadding="0" cellspacing="0" border="0" width="100%" style="background:#0a0a0a;">
 <tr><td align="center" style="padding:32px 16px;">
   <table cellpadding="0" cellspacing="0" border="0" width="600" style="max-width:600px;background:#0a0a0a;color:#e4e4e7;">
@@ -151,11 +155,14 @@ def _build_b2b_shell(
     postal_address:     str,
     sender_name:        str,
     sub_niche_hint:     str = "",
+    tracking_pixel_url: str = "",
 ) -> str:
     """CAN-SPAM compliant email shell for B2B outreach."""
+    pixel = f'<img src="{tracking_pixel_url}" width="1" height="1" alt="" style="display:none;" />' if tracking_pixel_url else ""
     return f"""<!DOCTYPE html>
 <html lang="en"><head><meta charset="UTF-8"></head>
 <body style="margin:0;padding:0;background:#0a0a0a;font-family:-apple-system,system-ui,'Helvetica Neue',sans-serif;">
+{pixel}
 <table cellpadding="0" cellspacing="0" border="0" width="100%" style="background:#0a0a0a;">
 <tr><td align="center" style="padding:32px 16px;">
   <table cellpadding="0" cellspacing="0" border="0" width="600" style="max-width:600px;background:#0a0a0a;color:#e4e4e7;">
@@ -183,6 +190,7 @@ def _build_b2b_email(
     unsubscribe_link: str,
     postal_address: str,
     sender_name: str,
+    tracking_pixel_url: str = "",
 ) -> tuple[str, str]:
     """Returns (subject, html_body) for B2B outreach. Step 0-3."""
     niche_lower = sub_niche.lower() if sub_niche else "business services"
@@ -269,7 +277,7 @@ def _build_b2b_email(
             unsubscribe below.
           </p>
         """
-    html_body = _build_b2b_shell(body, unsubscribe_link=unsubscribe_link, postal_address=postal_address, sender_name=sender_name, sub_niche_hint=niche_lower)
+    html_body = _build_b2b_shell(body, unsubscribe_link=unsubscribe_link, postal_address=postal_address, sender_name=sender_name, sub_niche_hint=niche_lower, tracking_pixel_url=tracking_pixel_url)
     return subject, html_body
 
 
@@ -281,6 +289,7 @@ def _build_email(
     sender_name: str,
     sequence_type: str = "storm_strike",
     meta: Optional[dict] = None,
+    tracking_pixel_url: str = "",
 ) -> tuple[str, str]:
     """Returns (subject, html_body). Step 0-3.
     Routes to the correct template set based on sequence_type."""
@@ -294,6 +303,7 @@ def _build_email(
             unsubscribe_link=unsubscribe_link,
             postal_address=postal_address,
             sender_name=sender_name,
+            tracking_pixel_url=tracking_pixel_url,
         )
 
     # ── Storm / Property Owner Templates (default) ──
@@ -385,7 +395,7 @@ def _build_email(
             area, unless you unsubscribe below.
           </p>
         """
-    html_body = _email_shell(body, unsubscribe_link=unsubscribe_link, postal_address=postal_address, sender_name=sender_name)
+    html_body = _email_shell(body, unsubscribe_link=unsubscribe_link, postal_address=postal_address, sender_name=sender_name, tracking_pixel_url=tracking_pixel_url)
     return subject, html_body
 
 
@@ -419,6 +429,8 @@ class EmailSequenceEngine:
             "sequences_unsubscribed": 0,
             "sequences_bounced":      0,
             "emails_sent":            0,
+            "emails_tracked_opens":   0,
+            "emails_tracked_clicks":  0,
             "last_dispatch":          None,
             "last_error":             None,
         }
@@ -510,6 +522,12 @@ class EmailSequenceEngine:
 
             target_short = self._short_address(row.get("target_addr", ""))
             unsub_link = self._build_unsubscribe_link(email)
+            tracking_pixel = self._build_tracking_pixel_url(
+                email=email,
+                step=step,
+                sequence_id=str(row.get("id", "")),
+                sequence_type=row.get("sequence_type", "storm_strike"),
+            )
 
             subject, html = _build_email(
                 step=step,
@@ -519,6 +537,7 @@ class EmailSequenceEngine:
                 sender_name=self.sender_name,
                 sequence_type=row.get("sequence_type", "storm_strike"),
                 meta=row.get("meta", {}),
+                tracking_pixel_url=tracking_pixel,
             )
 
             result = await self.send_email(to=email, subject=subject, html=html)
@@ -580,6 +599,55 @@ class EmailSequenceEngine:
         }
         token = self.sign_token(payload)
         return f"{self.public_base_url}/email/unsubscribe?t={token}"
+
+    def _build_tracking_pixel_url(
+        self, email: str, step: int, sequence_id: str, sequence_type: str
+    ) -> str:
+        """Signed 1x1 tracking pixel URL for open detection."""
+        payload = {
+            "email":         email,
+            "step":          step,
+            "sequence_id":   sequence_id or None,
+            "sequence_type": sequence_type,
+            "exp":           int(time.time()) + (90 * 86400),  # 90-day valid
+            "iat":           int(time.time()),
+            "kind":          "email_open",
+        }
+        token = self.sign_token(payload)
+        return f"{self.public_base_url}/email/track/open?t={token}"
+
+    async def _track_event(
+        self,
+        email:         str,
+        event:         str,
+        sequence_id:   Optional[str] = None,
+        sequence_type: str = "storm_strike",
+        step:          int = 0,
+        link_url:      Optional[str] = None,
+        user_agent:    Optional[str] = None,
+        ip_address:    Optional[str] = None,
+        meta:          Optional[dict] = None,
+    ):
+        """Log a tracking event to the email_tracking table."""
+        try:
+            db = self.get_db()
+            db.table("email_tracking").insert({
+                "email":         email,
+                "event":         event,
+                "sequence_id":   sequence_id,
+                "sequence_type": sequence_type,
+                "step":          step,
+                "link_url":      link_url,
+                "user_agent":    user_agent,
+                "ip_address":    ip_address,
+                "meta":          meta or {},
+            }).execute()
+            if event == "open":
+                self.stats["emails_tracked_opens"] = self.stats.get("emails_tracked_opens", 0) + 1
+            elif event == "click":
+                self.stats["emails_tracked_clicks"] = self.stats.get("emails_tracked_clicks", 0) + 1
+        except Exception as e:
+            log.debug(f"[email] track_event failed: {e}")
 
     def _mark_complete(self, row: dict, last_step: Optional[int] = None):
         try:
@@ -669,6 +737,90 @@ def register_email_routes(
             return HTMLResponse(_unsub_page("You've been unsubscribed. No further emails will be sent."))
         else:
             return HTMLResponse(_unsub_page("Could not process unsubscribe. Please contact ops@empire-ai.co.uk", error=True), status_code=500)
+
+    # ── PUBLIC: TRACKING PIXEL (open detection) ──────────────────────────
+    @app.get("/email/track/open")
+    async def email_track_open(
+        t: str = Query(...),
+        request: Request = None,
+    ):
+        """1x1 transparent GIF pixel — logs open events when loaded.
+        Always returns a 1x1 GIF regardless of token validity so email
+        clients can't detect tracking failure via broken image."""
+        payload = engine.verify_token(t)
+        if payload and payload.get("kind") == "email_open":
+            ua = request.headers.get("user-agent", "") if request else ""
+            ip = request.client.host if request and request.client else None
+            await engine._track_event(
+                email=payload.get("email", ""),
+                event="open",
+                sequence_id=payload.get("sequence_id"),
+                sequence_type=payload.get("sequence_type", "storm_strike"),
+                step=payload.get("step", 0),
+                user_agent=ua[:500] if ua else None,
+                ip_address=ip,
+            )
+        # 1x1 transparent GIF (43 bytes)
+        return Response(
+            content=b"GIF89a\x01\x00\x01\x00\x80\x00\x00\xff\xff\xff\x00\x00\x00!\xf9\x04\x00\x00\x00\x00\x00,\x00\x00\x00\x00\x01\x00\x01\x00\x00\x02\x02D\x01\x00;",
+            media_type="image/gif",
+        )
+
+    # ── PUBLIC: CLICK TRACKING (redirect with logging) ────────────────────
+    @app.get("/email/track/click")
+    async def email_track_click(
+        t: str = Query(...),
+        url: str = Query(...),
+        request: Request = None,
+    ):
+        """Click tracking — logs the click event and redirects to the target URL."""
+        payload = engine.verify_token(t)
+        decoded_url = _urlparse.unquote(url)
+
+        # If token is valid (any kind), log the click
+        if payload:
+            ua = request.headers.get("user-agent", "") if request else ""
+            ip = request.client.host if request and request.client else None
+            await engine._track_event(
+                email=payload.get("email", ""),
+                event="click",
+                sequence_id=payload.get("sequence_id"),
+                sequence_type=payload.get("sequence_type", "storm_strike"),
+                step=payload.get("step", 0),
+                link_url=decoded_url[:2000],
+                user_agent=ua[:500] if ua else None,
+                ip_address=ip,
+            )
+
+        if decoded_url.startswith("http://") or decoded_url.startswith("https://"):
+            return RedirectResponse(url=decoded_url)
+        return RedirectResponse(url="/")
+
+    # ── PUBLIC: TRACKING STATS (dashboard endpoint) ───────────────────────
+    if require_auth:
+        @app.get("/api/v1/email/tracking")
+        async def email_tracking_stats(
+            event: str = Query(None, pattern="^(open|click|bounce|complaint|unsubscribe)$"),
+            sequence_type: str = Query(None),
+            days: int = Query(30, ge=1, le=365),
+            limit: int = Query(100, ge=1, le=1000),
+            auth: bool = Depends(require_auth),
+        ):
+            """Return recent email tracking events with optional filters."""
+            try:
+                db = engine.get_db()
+                since = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+                q = db.table("email_tracking").select("*") \
+                    .gte("created_at", since) \
+                    .order("created_at", desc=True) \
+                    .limit(limit)
+                if event:
+                    q = q.eq("event", event)
+                if sequence_type:
+                    q = q.eq("sequence_type", sequence_type)
+                return {"tracking": q.execute().data or []}
+            except Exception as e:
+                raise HTTPException(500, str(e))
 
     # ── PUBLIC: BOUNCE / COMPLAINT WEBHOOK (Resend webhook) ─────────────
     @app.post("/api/v1/email/webhook")
@@ -812,7 +964,7 @@ def register_email_routes(
                     skipped += 1
             return {"ok": True, "enrolled": enrolled, "skipped": skipped, "total_seen": len(rows)}
 
-    log.info("[email] Routes registered · /email/unsubscribe · /api/v1/email/{enroll,bulk-enroll,bulk-enroll-b2b,stats,webhook}")
+    log.info("[email] Routes registered · /email/{unsubscribe,track/open,track/click} · /api/v1/email/{enroll,bulk-enroll,bulk-enroll-b2b,stats,tracking,webhook}")
 
 
 def _unsub_page(message: str, *, error: bool = False) -> str:
