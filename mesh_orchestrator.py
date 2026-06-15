@@ -27,9 +27,13 @@ Niche allocation (expanded to 36 — 2026-06-14):
   Lanes 33    : Financial Services   (1 lane,  FINANCIAL_STRIKE, Financial Lead Gen)  ← NEW — Debt Settlement
   Lanes 34    : Home Services        (1 lane,  AGGRESSIVE_STRIKE, Storm Scout)        ← NEW — Solar Installation
   Lanes 35    : Home Services        (1 lane,  UGLY_BANNER, Web Auditor)             ← NEW — Plumbing
+  Lanes 36    : Commercial Roofing    (1 lane,  AGGRESSIVE_STRIKE, Storm Scout)        ← NEW — Commercial Roofing
+  Lanes 37    : Commercial Solar      (1 lane,  AGGRESSIVE_STRIKE, Storm Scout)        ← NEW — Commercial Solar
+  Lanes 38    : Debt Relief           (1 lane,  FINANCIAL_STRIKE, Financial Lead Gen)  ← NEW — Debt Relief
   Lanes 32-35 added 2026-06-14 based on CPL benchmark analysis: these 4 sub-niches
   were the highest-value uncovered verticals (Mortgage Refinance $250-600, Debt
   Settlement $100-300, Solar Installation $100-300, Plumbing $57-183).
+  Lanes 36-38 added 2026-06-15: Commercial Roofing, Commercial Solar, Debt Relief.
 """
 
 import concurrent.futures
@@ -87,6 +91,9 @@ LANES = {
     33: {"niche": "Financial Services",  "sub_niche": "Debt Settlement",   "strategy": "FINANCIAL_STRIKE","source": "Financial Lead Gen"},
     34: {"niche": "Home Services",       "sub_niche": "Solar Installation","strategy": "AGGRESSIVE_STRIKE","source": "Storm Scout"},
     35: {"niche": "Home Services",       "sub_niche": "Plumbing",          "strategy": "UGLY_BANNER",      "source": "Web Auditor"},
+    36: {"niche": "Commercial Roofing",    "sub_niche": "Commercial Roofing", "strategy": "AGGRESSIVE_STRIKE", "source": "Storm Scout"},
+    37: {"niche": "Commercial Solar",      "sub_niche": "Commercial Solar",   "strategy": "AGGRESSIVE_STRIKE", "source": "Storm Scout"},
+    38: {"niche": "Debt Relief",           "sub_niche": "Debt Relief",        "strategy": "FINANCIAL_STRIKE",  "source": "Financial Lead Gen"},
 }
 # ── LANE OUTCOME TRACKER (persistent across cycles) ─────────────────────
 # Accumulates wins, losses, and revenue per (niche, strategy) so the
@@ -251,8 +258,8 @@ def run_all_lanes() -> Dict:
     # Reset per-cycle recall cache before any lane runs
     reset_cycle_cache()
 
-    with concurrent.futures.ThreadPoolExecutor(max_workers=36) as executor:
-        results = list(executor.map(run_lane, range(36)))
+    with concurrent.futures.ThreadPoolExecutor(max_workers=39) as executor:
+        results = list(executor.map(run_lane, range(39)))
 
     # Aggregate
     active = [r for r in results if r.get("status") == "active"]
@@ -312,7 +319,7 @@ def lane_health_report() -> Dict:
     si = get_si_core()
     report = {"niches": {}, "lanes": []}
 
-    for lane_id in range(36):
+    for lane_id in range(39):
         lane_data = LANES.get(lane_id)
         if lane_data is None:
             continue

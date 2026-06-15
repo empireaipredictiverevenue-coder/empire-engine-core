@@ -158,6 +158,33 @@ CPL_BENCHMARKS: Dict[str, Dict] = {
             "Roofing Restoration":{"ppl": (162, 228), "ppc": (11, 258), "best": "both", "trigger": "Storm/hail, emergency", "notes": "78% hire first responder"},
         },
     },
+    "Commercial Roofing": {
+        "icon": "🏭",
+        "best_model": "both",
+        "volume": "medium",
+        "notes": "B2B sale focused on commercial/industrial flat roofing. Longer sales cycle, higher ticket than residential.",
+        "sub_niches": {
+            "Commercial Roofing": {"ppl": (100, 350), "ppc": (50, 200), "best": "both", "trigger": "Storm damage, building age, energy efficiency", "notes": "Higher ticket than residential; multi-sqft flat roof"},
+        },
+    },
+    "Commercial Solar": {
+        "icon": "☀️",
+        "best_model": "ppl",
+        "volume": "growing",
+        "notes": "B2B solar for commercial/industrial properties. Policy-driven (IRA, tax credits). Longer consideration cycle.",
+        "sub_niches": {
+            "Commercial Solar": {"ppl": (150, 400), "ppc": (75, 250), "best": "ppl", "trigger": "IRA/tax credits, energy cost reduction, ESG mandates", "notes": "B2B decision cycle; higher ticket than residential"},
+        },
+    },
+    "Debt Relief": {
+        "icon": "🛡️",
+        "best_model": "both",
+        "volume": "high",
+        "notes": "Covers debt settlement, consolidation, and credit repair. Economic distress drives demand.",
+        "sub_niches": {
+            "Debt Relief": {"ppl": (100, 350), "ppc": (30, 150), "best": "both", "trigger": "Economic distress, interest rate environment", "notes": "Blended CPL tracks Debt Settlement $100-300 + Debt Consolidation $150-400"},
+        },
+    },
 }
 
 # Lane-to-niche mapping (mirrors mesh_orchestrator.py)
@@ -199,6 +226,9 @@ _LANE_NICHE_MAP: Dict[int, Dict[str, str]] = {
     35: {"niche": "Home Services",       "sub_niche": "Plumbing", "strategy": "UGLY_BANNER"},
     36: {"niche": "Home Services",       "sub_niche": "Water Damage Restoration", "strategy": "AGGRESSIVE_STRIKE"},
     37: {"niche": "Home Services",       "sub_niche": "Plumbing", "strategy": "AGGRESSIVE_STRIKE"},
+    38: {"niche": "Commercial Roofing",    "sub_niche": "Commercial Roofing", "strategy": "AGGRESSIVE_STRIKE"},
+    39: {"niche": "Commercial Solar",      "sub_niche": "Commercial Solar",   "strategy": "AGGRESSIVE_STRIKE"},
+    40: {"niche": "Debt Relief",           "sub_niche": "Debt Relief",        "strategy": "FINANCIAL_STRIKE"},
 }
 
 
@@ -439,7 +469,7 @@ class CPLPricingEngine:
         Useful for the pricing page, API, and automated lane pricing strategies.
         """
         lanes = []
-        for lane_id in range(38):
+        for lane_id in range(41):
             lm = _LANE_NICHE_MAP.get(lane_id)
             if not lm:
                 continue
