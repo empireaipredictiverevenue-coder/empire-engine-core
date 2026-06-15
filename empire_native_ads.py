@@ -209,10 +209,26 @@ class NativeAdsNetwork:
         
         # Log impression
         ip_hash = hashlib.sha256((ip or "").encode()).hexdigest()[:16] if ip else ""
+        
+        # Resolve slot name to UUID if needed
+        slot_uuid = None
+        if slot_id:
+            try:
+                uuid.UUID(slot_id)
+                slot_uuid = slot_id
+            except (ValueError, AttributeError):
+                # Look up slot by name in ad_slots table
+                try:
+                    slot_res = db.table("ad_slots").select("id").eq("slot_name", slot_id).limit(1).execute()
+                    if slot_res.data:
+                        slot_uuid = str(slot_res.data[0]["id"])
+                except Exception:
+                    pass
+        
         impression = {
             "creative_id": creative["id"],
             "campaign_id": chosen["id"],
-            "slot_id": slot_id or None,
+            "slot_id": slot_uuid,
             "visitor_id": visitor_id or "",
             "ip_hash": ip_hash,
             "user_agent": "",
