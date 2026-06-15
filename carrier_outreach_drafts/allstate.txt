@@ -1,0 +1,35 @@
+To: vendorpartners@allstate.com
+From: phil@empire-ai.co.uk
+Subject: Vendor partner inquiry: settled-claim webhook for predictive contractor routing
+Carrier: Allstate
+Status: DRAFT — review before sending
+======================================================================
+
+Hi Allstate Vendor Partners team,
+
+I'm Phil, founder of Empire AI. We operate a predictive storm-response
+network that connects homeowners in the 72-hour post-storm window with
+vetted local contractors. We collect 3% of the settled claim as our fee.
+
+We currently ingest storm data, score properties, and route leads to
+contractors in 11 metros across TX/OK/LA/KS. Our first fee event was
+recorded last week. The model is working.
+
+The next step is integrating with carrier claims systems. For Allstate
+specifically, is there a vendor partner program that gives us access
+to settled-claim events? We need:
+  - Claim ID, settlement date, settled amount
+  - Property address (city + state is sufficient)
+  - Optionally: filing party / contractor name
+
+We don't need claimant PII, payment data, or anything sensitive. Just
+the "claim settled" signal so we know to invoice our 3%.
+
+If a vendor partner program exists, who do we contact? If it doesn't
+yet exist, I'm happy to schedule a call to walk through what we'd
+build together.
+
+Best,
+Phil
+Empire AI
+phil@empire-ai.co.uk
