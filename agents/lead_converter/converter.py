@@ -209,8 +209,12 @@ def _do_live_send(channel: str, phone: str, body: str, lead: dict) -> tuple[bool
             },
         }).encode()
     else:
-        # voice channel: no enroll route yet, mark as not-implemented
-        return False, f"channel_{channel}_not_wired"
+        # voice channel: not wired into the lead_converter. TCPA compliance
+        # requires explicit consent before voice calls, and the converter
+        # only has the lead's phone number from the storm pipeline (no
+        # TCPA opt-in recorded yet). Future voice agent will handle this
+        # with proper opt-in tracking.
+        return False, "voice_not_wired_in_converter_use_voice_agent"
 
     req = urllib.request.Request(url, data=payload, method="POST",
                                   headers={"Content-Type": "application/json",
