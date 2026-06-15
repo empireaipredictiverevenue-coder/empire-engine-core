@@ -48,3 +48,8 @@
 # 12. A/B Monitor — every 6h on :52. Polls /api/v1/ab-test/results and logs
 # to agent_activity. Real reply rate builds over 24-72h after sends.
 52 */6 * * * /root/sniper_env/bin/python3 /root/empire-v49/agents_ab_monitor.py >> /root/empire-v49/logs/agent_ab_monitor.log 2>&1
+
+# 13. Settled Claim Monitor — every 6h on :54. Polls mock carrier
+# for open claims and randomly settles 30% of them at 60-95% of
+# asset_value. Drives fee_events chain end-to-end.
+54 */6 * * * /root/sniper_env/bin/python3 /root/empire-v49/agents_settled_monitor.py >> /root/empire-v49/logs/agent_settled_monitor.log 2>&1
