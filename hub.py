@@ -258,7 +258,9 @@ async def _on_sms_yes_reply(phone: str, body: str, sequence: dict):
         # Match contractors
         matched = await matcher.match_for_lead(
             metro=lead.get("city") or "",
-            required_specialties=["commercial_roofing", "storm_damage"],
+            # Match against specialties contractors actually have in DB
+            # roofing(178), hvac(164), restoration(73), general_contractor(45)
+            required_specialties=["roofing", "restoration", "general_contractor"],
             top_n=5,
         )
 
