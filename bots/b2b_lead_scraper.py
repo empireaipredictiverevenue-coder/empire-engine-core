@@ -464,6 +464,8 @@ async def _search_sub_niche(
             email = website_data.get("email") or ""
 
             # Insert into radar_targets
+            # Normalize buy signal score (0-100) → urgency_score (0-10 int)
+            urgency = max(1, min(10, round(score / 10)))
             try:
                 sb.table("radar_targets").insert({
                     "warehouse_name": name[:200],
@@ -474,8 +476,8 @@ async def _search_sub_niche(
                     "email": email,
                     "source_url": (place.get("website") or "")[:500],
                     "status": "active",
-                    "asset_value": max(1, score // 10),
-                    "urgency_score": score,
+                    "asset_value": urgency,
+                    "urgency_score": urgency,
                     "meta": {
                         "source": "B2B Lead Gen",
                         "b2b_sub_niche": sn,
