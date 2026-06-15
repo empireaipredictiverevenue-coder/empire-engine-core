@@ -5,6 +5,7 @@ Main FastAPI application. Wires all modules together.
 """
 
 import os
+import uuid
 try:
     from dotenv import load_dotenv
     load_dotenv("/root/.env")
@@ -1799,7 +1800,8 @@ async def swarm_scan(auth: bool = Depends(require_auth)):
 
 @app.post("/api/v1/swarm/fire")
 async def swarm_fire(request: Request, auth: bool = Depends(require_auth)):
-    """Fire the God Mode Swarm Gate. Scans first if no packages provided.
+    """Fire the God Mode Swarm Gate as a background task.
+    Returns immediately with a run_id; poll /api/v1/swarm/jobs for results.
     Body (optional): {packages: [...], auto_script: true, auto_audio: true, auto_render: true}
     If no packages, auto-scans via SatelliteStrikeCore."""
     try:
@@ -1837,32 +1839,40 @@ async def swarm_fire(request: Request, auth: bool = Depends(require_auth)):
     auto_script = body.get("auto_script", True)
     auto_audio = body.get("auto_audio", True)
     auto_render = body.get("auto_render", True)
+    run_id = str(uuid.uuid4())
 
-    jobs = await swarm_gate.fire(packages, auto_script, auto_audio, auto_render)
+    # Fire in background — response returns immediately
+    asyncio.create_task(
+        _background_swarm_fire(run_id, swarm_gate, packages, auto_script, auto_audio, auto_render)
+    )
 
     return JSONResponse({
         "ok": True,
-        "jobs": [
-            {
-                "target_id": j.target_id,
-                "warehouse_name": j.warehouse_name,
-                "metro": j.metro,
-                "niche": j.niche,
-                "risk_level": j.risk_level,
-                "brain_decision": j.brain_decision,
-                "brain_confidence": j.brain_confidence,
-                "strategy": j.strategy,
-                "script": j.script[:120] if j.script else "",
-                "audio_path": j.audio_path[:80] if j.audio_path else "",
-                "video_status": j.video_status,
-                "status": j.status,
-                "error": j.error[:200] if j.error else "",
-            }
-            for j in jobs
-        ],
-        "count": len(jobs),
-        "stats": swarm_gate.snapshot(),
+        "run_id": run_id,
+        "status": "firing",
+        "total_targets": len(packages),
+        "message": f"Swarm firing {len(packages)} targets in background. Poll /api/v1/swarm/jobs for results.",
     })
+
+
+async def _background_swarm_fire(
+    run_id: str,
+    gate: GodModeSwarmGate,
+    packages: list,
+    auto_script: bool,
+    auto_audio: bool,
+    auto_render: bool,
+):
+    """Run swarm gate fire in a background task so the HTTP response
+    doesn't block while LLM scripts, TTS audio, and FFmpeg renders process."""
+    try:
+        log.info(f"[swarm] background fire {run_id}: {len(packages)} targets")
+        jobs = await gate.fire(packages, auto_script, auto_audio, auto_render)
+        completed = sum(1 for j in jobs if j.status == "complete")
+        failed = sum(1 for j in jobs if j.status == "failed")
+        log.info(f"[swarm] background fire {run_id} complete: {completed} ok, {failed} failed")
+    except Exception as e:
+        log.error(f"[swarm] background fire {run_id} crashed: {e}")
 
 
 @app.get("/api/v1/swarm/stats")
