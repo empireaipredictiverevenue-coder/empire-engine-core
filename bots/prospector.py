@@ -24,6 +24,24 @@ load_dotenv("/root/.env")
 sys.path.insert(0, "/root/empire-v49")
 from config.metros import METROS, metro_coords
 from bots.places_helper import places_search as _places_search
+# Map niche -> search query suffix. Storm-response niches use
+# "contractors" (the original behavior). B2B niches use
+# "companies" or "services" to broaden the search.
+NICHE_QUERY_SUFFIX: Dict[str, str] = {
+    "roofing": "contractors",
+    "restoration": "contractors",
+    "water mitigation": "contractors",
+    "general contractor": "contractors",
+    "hvac": "contractors",
+    "gutter": "contractors",
+    "solar installer": "companies",
+    "tree removal": "services",
+    "emergency services": "companies",
+    "public insurance adjuster": "firms",
+    "managed it": "companies",
+    "staffing": "agencies",
+}
+
 
 log = logging.getLogger("empire.prospector")
 
@@ -103,12 +121,15 @@ async def find_prospects(
         print(f"[PROSPECT] Unknown metro {metro}; options: {list(METROS.keys())}")
         return []
 
-    print(f"[PROSPECT] Searching {niche} contractors in {metro}...")
-    # Convert niche like "general contractor" to safe search query
+    # Build a niche-aware search query. Storm-response niches use
+    # "contractors in {metro}" (high recall for local service biz).
+    # B2B niches use "{niche} companies in {metro}" or
+    # "services" / "agencies" / "firms" to broaden the search.
     query_niche: str = niche.replace("_", " ")
-    leads: List[Dict[str, Any]] = await _places_search(
-        f"{query_niche} contractors in {metro}", lat, lon
-    )
+    suffix = NICHE_QUERY_SUFFIX.get(niche, "contractors")
+    query = f"{query_niche} {suffix} in {metro}"
+    print(f"[PROSPECT] Searching {query}...")
+    leads: List[Dict[str, Any]] = await _places_search(query, lat, lon)
     print(f"[PROSPECT] Places returned {len(leads)} businesses")
 
     prospects: List[Dict[str, Any]] = []

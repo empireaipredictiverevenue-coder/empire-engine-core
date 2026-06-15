@@ -10,7 +10,19 @@ last_verified: 2026-06-15
 
 ## What it does
 
-Scans Google Places for contractor businesses in 11 metros × 5 niches. Writes real businesses to prospects table.
+Scans Google Places for contractor and B2B-service businesses in
+11 metros × 12 niches. Writes real businesses to the prospects table.
+
+### Niche list (12)
+
+Storm-response (5): roofing, restoration, water mitigation, general contractor, hvac
+Storm-adjacent (5): gutter, solar installer, tree removal, emergency services, public insurance adjuster
+B2B (2): managed it, staffing
+
+Each niche uses a niche-aware search query suffix (NICHE_QUERY_SUFFIX
+in bots/prospector.py) so the Google Places search is appropriate for
+the niche — "gutter contractors" for storm-response, "managed it
+companies" for b2b, "tree removal services" for emergency verticals.
 
 ## When it runs
 
