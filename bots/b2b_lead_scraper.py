@@ -1,12 +1,15 @@
 """
 EMPIRE V49 · B2B LEAD SCRAPER
 ==============================
-Dedicated lead discovery agent for the 3 Business Services lanes:
+Dedicated lead discovery agent for 6 lanes:
   - Lane 29: Managed IT         (sub_niche="Managed IT")
   - Lane 30: Merchant Services  (sub_niche="Merchant Services")
   - Lane 31: HR & Staffing      (sub_niche="HR & Staffing")
+  - Lane 36: Commercial Roofing (sub_niche="Commercial Roofing")
+  - Lane 37: Commercial Solar   (sub_niche="Commercial Solar")
+  - Lane 38: Debt Relief        (sub_niche="Debt Relief")
 
-Uses Google Places API text search to find B2B companies in target
+Uses Google Places API text search to find companies in target
 metros, scrapes websites for contact info, scores by buy signal,
 and inserts qualified leads into radar_targets with the correct
 niche/sub_niche metadata so the lead-gen pipeline (scanner →
@@ -108,6 +111,43 @@ B2B_NICHES = {
         "website_keywords": ["staffing", "recruitment", "hr ", "talent", "employment",
                              "temp", "personnel", "workforce", "executive search",
                              "placement", "peo ", "employee leasing", "manpower"],
+    },
+    "Commercial Roofing": {
+        "queries": [
+            "commercial roofing contractor",
+            "commercial roofing company",
+            "industrial roofing services",
+            "flat roofing specialist",
+            "commercial roof repair",
+            "roofing contractor for businesses",
+        ],
+        "website_keywords": ["commercial roofing", "flat roof", "industrial roofing",
+                             "roofing contractor", "roofing company", "roof repair"],
+    },
+    "Commercial Solar": {
+        "queries": [
+            "commercial solar installation",
+            "solar energy company",
+            "commercial solar panel installer",
+            "business solar solutions",
+            "renewable energy for commercial",
+            "solar power for businesses",
+        ],
+        "website_keywords": ["commercial solar", "solar installation", "solar energy",
+                             "solar panel", "solar power", "renewable energy", "pv system"],
+    },
+    "Debt Relief": {
+        "queries": [
+            "debt relief services",
+            "debt settlement company",
+            "credit counseling agency",
+            "debt consolidation services",
+            "financial debt solutions",
+            "debt management company",
+        ],
+        "website_keywords": ["debt relief", "debt settlement", "credit counseling",
+                             "debt consolidation", "debt management", "debt solution",
+                             "credit relief", "financial counseling"],
     },
 }
 
@@ -366,7 +406,7 @@ def _score_buy_signal(place: Dict, website_data: Dict) -> int:
 # ── CLASSIFY B2B SUB-NICHE ────────────────────────────────────────────
 
 def _classify_sub_niche(name: str, website: str, place_types: List[str]) -> Optional[str]:
-    """Classify a business into one of the 3 B2B sub-niches based on name,
+    """Classify a business into one of the B2B sub-niches based on name,
     website URL, and Google Places types. Returns sub_niche string or None."""
     combined = (name + " " + (website or "")).lower()
 
@@ -393,17 +433,51 @@ def _classify_sub_niche(name: str, website: str, place_types: List[str]) -> Opti
         if kw in combined:
             return "HR & Staffing"
 
+    # Commercial Roofing keywords
+    cr_kw = ["commercial roofing", "flat roof", "industrial roofing",
+             "roofing contractor", "roofing company", "roof repair",
+             "commercial roof", "metal roofing"]
+    for kw in cr_kw:
+        if kw in combined:
+            return "Commercial Roofing"
+
+    # Commercial Solar keywords
+    cs_kw = ["commercial solar", "solar installation", "solar energy",
+             "solar panel", "solar power", "renewable energy",
+             "solar company", "solar contractor", "pv installation", "photovoltaic"]
+    for kw in cs_kw:
+        if kw in combined:
+            return "Commercial Solar"
+
+    # Debt Relief keywords
+    dr_kw = ["debt relief", "debt settlement", "credit counseling",
+             "debt consolidation", "debt management", "debt solution",
+             "credit relief", "financial counseling", "debt help",
+             "credit repair", "debt negotiation"]
+    for kw in dr_kw:
+        if kw in combined:
+            return "Debt Relief"
+
     # Fall back to Google Places types
     types_lower = [t.lower() for t in place_types]
     it_types = {"information_technology", "computer_company", "software_company",
                 "it_company", "cybersecurity", "data_center"}
     ms_types = {"finance_company", "bank", "financial_service"}
     hr_types = {"employment_agency", "employment_service", "recruitment_agency"}
+    cr_types = {"roofing_contractor", "general_contractor"}
+    cs_types = {"solar_energy_company", "solar_installer", "renewable_energy_company"}
+    dr_types = {"credit_counseling_service", "financial_consultant", "debt_relief_service"}
 
     if it_types & set(types_lower):
         return "Managed IT"
     if hr_types & set(types_lower):
         return "HR & Staffing"
+    if cr_types & set(types_lower):
+        return "Commercial Roofing"
+    if cs_types & set(types_lower):
+        return "Commercial Solar"
+    if dr_types & set(types_lower):
+        return "Debt Relief"
 
     return None  # couldn't confidently classify
 
@@ -460,24 +534,44 @@ async def _search_sub_niche(
             sn = sub_niche
         candidates.append({"place": place, "name": name, "address": address, "sn": sn})
 
-    # ── 3. Batch dedup: check ALL names in one query per city ────────
-    # Collect short names, then query existing ones in one shot
+    # ── 3. Batch dedup: check names AND phones in one query per city ────
+    # Collect short names + phones, then query existing ones in one shot
     short_names = [c["name"][:40].replace("'", "") for c in candidates]
+    candidate_phones = [c["place"].get("phone", "") for c in candidates]
+    candidate_phones = [p for p in candidate_phones if p]
     try:
         dedup_res = (
             sb.table("radar_targets")
-            .select("warehouse_name")
+            .select("warehouse_name,phone")
             .eq("city", city)
             .in_("warehouse_name", list(set(short_names)))
             .execute()
         )
         existing_names = set(r["warehouse_name"] for r in (dedup_res.data or []))
+        existing_phones = set(r["phone"] for r in (dedup_res.data or []) if r.get("phone"))
     except Exception:
         existing_names = set()
+        existing_phones = set()
+
+    # Also query phones globally (may exist from other cities/niches)
+    if candidate_phones:
+        try:
+            global_phone_res = (
+                sb.table("radar_targets")
+                .select("phone")
+                .in_("phone", list(set(candidate_phones)))
+                .execute()
+            )
+            existing_phones.update(r["phone"] for r in (global_phone_res.data or []) if r.get("phone"))
+        except Exception:
+            pass
 
     deduped = []
     for c in candidates:
+        c_phone = c["place"].get("phone", "")
         if c["name"][:40].replace("'", "") in existing_names:
+            stats["skipped_dup"] += 1
+        elif c_phone and c_phone in existing_phones:
             stats["skipped_dup"] += 1
         else:
             deduped.append(c)
@@ -551,22 +645,48 @@ async def _search_sub_niche(
         if stats["qualified"] >= max_per_run:
             break
 
-    # ── 6. Batch insert radar_targets ────────────────────────────────
+    # ── 6. Final phone dedup + batch insert ──────────────────────────
     if batch:
-        try:
-            sb.table("radar_targets").insert(batch).execute()
-            stats["inserted"] = len(batch)
-            for item in batch:
-                log.info(
-                    f"[b2b] ✓ {item['meta']['b2b_sub_niche']} | "
-                    f"{item['warehouse_name'][:50]} | {metro_label} | "
-                    f"score={item['meta']['buy_signal_score']} | "
-                    f"phone={'yes' if item['phone'] else 'no'} | "
-                    f"email={'yes' if item['email'] else 'no'}"
+        # Collect all phones in the batch
+        batch_phones = [b["phone"] for b in batch if b["phone"]]
+        if batch_phones:
+            try:
+                phone_check = (
+                    sb.table("radar_targets")
+                    .select("phone")
+                    .in_("phone", list(set(batch_phones)))
+                    .execute()
                 )
-        except Exception as e:
-            log.error(f"[b2b] batch insert failed: {e}")
-            stats["inserted"] = 0
+                conflict_phones = set(r["phone"] for r in (phone_check.data or []))
+                clean = [b for b in batch if not b["phone"] or b["phone"] not in conflict_phones]
+                stats["skipped_dup"] += len(batch) - len(clean)
+                batch = clean
+            except Exception:
+                pass  # proceed with best-effort insert
+
+        if batch:
+            try:
+                sb.table("radar_targets").insert(batch).execute()
+                stats["inserted"] = len(batch)
+                for item in batch:
+                    log.info(
+                        f"[b2b] ✓ {item['meta']['b2b_sub_niche']} | "
+                        f"{item['warehouse_name'][:50]} | {metro_label} | "
+                        f"score={item['meta']['buy_signal_score']} | "
+                        f"phone={'yes' if item['phone'] else 'no'} | "
+                        f"email={'yes' if item['email'] else 'no'}"
+                    )
+            except Exception as e:
+                log.error(f"[b2b] batch insert failed after phone dedup: {e}")
+                # Last resort: individual inserts with conflict skip
+                inserted = 0
+                for item in batch:
+                    try:
+                        sb.table("radar_targets").insert(item).execute()
+                        inserted += 1
+                    except Exception:
+                        stats["skipped_dup"] += 1
+                stats["inserted"] = inserted
 
     # ── 7. Batch enroll email sequences (skip unsubscribed + existing) ──
     if mail_batch:
@@ -738,7 +858,7 @@ def run(
 def main():
     """CLI entry point."""
     import argparse
-    p = argparse.ArgumentParser(description="B2B Lead Scraper — Managed IT, Merchant Services, HR & Staffing")
+    p = argparse.ArgumentParser(description="B2B Lead Scraper — 6 niches: Managed IT, Merchant Services, HR & Staffing, Commercial Roofing, Commercial Solar, Debt Relief")
     p.add_argument("--dry-run", action="store_true", help="Log discoveries without inserting to DB")
     p.add_argument("--sub-niche", choices=list(B2B_NICHES.keys()), help="Limit to one sub-niche")
     p.add_argument("--metro", help="Limit to one metro (e.g. 'Dallas-Fort Worth')")
