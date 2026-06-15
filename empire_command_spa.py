@@ -1439,6 +1439,68 @@ font-size:7px!important;color:#999!important;margin-top:2px!important
 .roi-table tr:hover td{background:var(--empire-raised)}
 .roi-table .pos{color:var(--signal-teal)}
 .roi-table .neg{color:#e74c3c}
+
+/* ── PSYCHOLOGY DASHBOARD ──────────────────────────────────────────── */
+.psy-summary-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:20px}
+.psy-loading{padding:64px;text-align:center;font-family:var(--font-mono);font-size:11px;color:var(--empire-mist)}
+.psy-error{padding:64px;text-align:center;font-family:var(--font-mono);font-size:11px;color:var(--status-red)}
+.psy-flow-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:6px;max-height:360px;overflow-y:auto}
+.psy-flow-card{font-family:var(--font-mono);font-size:9px;color:var(--empire-mist);background:var(--empire-elevated);padding:6px 10px;border:1px solid var(--empire-divider);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.psy-persona-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px;margin-bottom:20px}
+.psy-persona-card{background:var(--empire-surface);border:1px solid var(--empire-divider);padding:16px 18px}
+.psy-persona-head{padding-left:12px;margin-bottom:10px}
+.psy-persona-name{font-weight:500;font-size:14px;color:var(--empire-white);margin-bottom:2px}
+.psy-persona-sub{font-family:var(--font-mono);font-size:9px;color:var(--empire-fog);letter-spacing:.08em}
+.psy-persona-tone{font-family:var(--font-mono);font-size:9px;color:var(--strike-cyan);margin-bottom:6px;letter-spacing:.04em}
+.psy-persona-dec{font-family:var(--font-mono);font-size:9px;color:var(--empire-mist);letter-spacing:.04em}
+.psy-principle-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px;margin-bottom:20px}
+.psy-principle-card{background:var(--empire-elevated);border:1px solid var(--empire-divider);padding:12px 14px}
+.psy-principle-name{font-weight:500;font-size:13px;color:var(--empire-white);margin-bottom:4px}
+.psy-principle-cat{font-family:var(--font-mono);font-size:8px;color:var(--empire-fog);letter-spacing:.1em;text-transform:uppercase;margin-bottom:4px}
+.psy-principle-tactics{font-family:var(--font-mono);font-size:9px;color:var(--signal-teal);letter-spacing:.04em}
+.psy-detect-input{font-family:var(--font-mono);font-size:11px;resize:vertical;min-height:80px}
+.psy-detect-result{margin-top:16px;padding:16px;background:var(--empire-elevated);border:1px solid var(--empire-border);animation:empire-fade-up .2s var(--ease-out-empire)}
+.psy-detect-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
+.psy-detect-label{font-size:14px;color:var(--empire-white);font-weight:500}
+.psy-detect-label strong{color:var(--signal-teal)}
+.psy-detect-conf{font-family:var(--font-mono);font-size:10px;color:var(--strike-cyan)}
+.psy-detect-detail{padding-top:10px;border-top:1px solid var(--empire-divider)}
+.psy-detect-detail-row{font-family:var(--font-mono);font-size:10px;color:var(--empire-mist);margin-bottom:6px;letter-spacing:.04em}
+.psy-detect-pills{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.psy-detect-pill{display:inline-block;font-family:var(--font-mono);font-size:9px;letter-spacing:.08em;padding:4px 10px;border-radius:var(--radius-pill);border:1px solid var(--signal-teal-soft);color:var(--signal-teal);background:rgba(68,229,184,0.04)}
+.psy-niche-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px;margin-bottom:20px}
+.psy-niche-card{background:var(--empire-elevated);border:1px solid var(--empire-divider);padding:14px 16px}
+.psy-niche-name{font-weight:500;font-size:14px;color:var(--empire-white);margin-bottom:4px}
+.psy-niche-meta{font-family:var(--font-mono);font-size:9px;color:var(--empire-fog);letter-spacing:.08em;margin-bottom:8px}
+.psy-niche-speed{font-family:var(--font-mono);font-size:9px;color:var(--empire-mist);letter-spacing:.04em;margin-bottom:2px}
+.psy-niche-price{font-family:var(--font-mono);font-size:9px;color:var(--empire-mist);letter-spacing:.04em}
+/* --- SELF-AWARENESS DASHBOARD --------------------------------------- */
+.sa-empty{padding:48px;text-align:center;font-family:var(--font-mono);font-size:11px;color:var(--empire-fog);font-style:italic}
+.sa-think-label{font-family:var(--font-mono);font-size:9px;color:var(--empire-fog);letter-spacing:.14em;text-transform:uppercase;margin-bottom:10px}
+.sa-think-dots{display:flex;gap:6px;justify-content:center;margin-bottom:24px}
+.sa-think-dot{width:6px;height:6px;border-radius:50%;background:var(--signal-teal);animation:psy-think 1.4s ease-in-out infinite}
+.sa-think-dot:nth-child(2){animation-delay:.2s}
+.sa-think-dot:nth-child(3){animation-delay:.4s}
+@keyframes psy-think{0%,80%,100%{opacity:.2;transform:scale(.8)}40%{opacity:1;transform:scale(1.2)}}
+.sa-live-dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--signal-teal);box-shadow:var(--glow-signal);margin-right:6px;animation:empire-pulse var(--pulse-duration) infinite}
+.sa-live-dot.paused{background:var(--status-amber);box-shadow:none;animation:none}
+.sa-status{font-family:var(--font-mono);font-size:10px;color:var(--empire-mist);letter-spacing:.08em}
+.sa-stat-card{background:var(--empire-surface);border:1px solid var(--empire-border);padding:16px 18px;position:relative;overflow:hidden;transition:border-color .15s var(--ease-snap)}
+.sa-stat-card:hover{border-color:var(--empire-border-hi)}
+.sa-stat-card::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,var(--strike-cyan-soft),transparent)}
+.sa-stat-row{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px}
+.sa-stat-label{font-family:var(--font-mono);font-size:9px;color:var(--empire-mist);letter-spacing:.14em;text-transform:uppercase}
+.sa-stat-val{font-family:var(--font-display);font-weight:200;font-size:28px;color:var(--empire-white);line-height:1}
+.sa-stat-val.ok{color:var(--signal-teal)}
+.sa-stat-val.warn{color:var(--status-amber)}
+.sa-stat-val.bad{color:var(--status-red)}
+.sa-stat-val.dim{color:var(--empire-mist)}
+.sa-stat-meta{font-family:var(--font-mono);font-size:9px;color:var(--empire-fog);margin-top:8px;letter-spacing:.04em}
+.sa-graph-node{position:absolute;background:var(--empire-elevated);border:1px solid var(--empire-divider);border-radius:8px;padding:8px 12px;text-align:center;transition:all .2s var(--ease-snap);cursor:pointer;font-family:var(--font-mono);font-size:9px;color:var(--empire-white)}
+.sa-graph-node:hover{border-color:var(--signal-teal-soft);z-index:10;box-shadow:0 0 16px rgba(68,229,184,.15)}
+.sa-graph-node.active{border-color:var(--signal-teal);box-shadow:0 0 12px rgba(68,229,184,.2)}
+.sa-graph-rect{fill:var(--empire-elevated);stroke:var(--empire-divider);stroke-width:1px}
+.sa-graph-text{fill:var(--empire-mist);font-family:var(--font-mono);font-size:8px;text-anchor:middle}
 """
 
 _SPA_JS = r"""
@@ -1508,7 +1570,10 @@ const NAV_GROUPS = [
       { id: 'seo',           label: 'SEO',            sub: 'Audits · keywords · content · genome' },
       { id: 'personality',    label: 'Personality',    sub: 'Brain persona · per-niche config · thresholds' },
       { id: 'strategist',    label: 'Strategist',     sub: 'Strategic intel · analysis · narratives' },
+      { id: 'business-planner',label: 'Planner',        sub: 'Quarterly plans · niche actions · roadmap' },
       { id: 'analytics',     label: 'Analytics',      sub: 'KPIs · funnel · trends · anomalies' },
+      { id: 'psychology',    label: 'Psychology',    sub: 'Mind map · personas · persuasion' },
+      { id: 'self-awareness',label: 'Self-Aware',    sub: 'System model · narrative · anomalies' },
     ]
   },
   {
@@ -1525,6 +1590,7 @@ const NAV_GROUPS = [
       { id: 'loop', label: 'Loop', sub: 'Lanes · pacing · strategies' },
       { id: 'support',       label: 'Support',        sub: 'FAQ · contact · live chat' },
       { id: 'stack', label: 'Stack', sub: 'Infra · services · incidents' },
+      { id: 'agent-os',   label: 'Agent OS',     sub: 'Kernel · agents · IPC · boot' },
     ]
   },
 ];
@@ -6916,26 +6982,26 @@ function Affiliates() {
 
 // -- CPL PRICING + ROI CALCULATOR --------------------------------------------
 const CplPricing = () => {
-  const [lanes, setLanes] = React.useState(null);
-  const [loading, setLoading] = React.useState(true);
-  const [reloading, setReloading] = React.useState(false);
-  const [error, setError] = React.useState(null);
-  const [modelFilter, setModelFilter] = React.useState('all');
-  const [serviceOnly, setServiceOnly] = React.useState(false);
-  const [laneSearch, setLaneSearch] = React.useState('');
-  const [page, setPage] = React.useState(1);
-  const [tab, setTab] = React.useState('lanes');
+  const [lanes, setLanes] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [reloading, setReloading] = useState(false);
+  const [error, setError] = useState(null);
+  const [modelFilter, setModelFilter] = useState('all');
+  const [serviceOnly, setServiceOnly] = useState(false);
+  const [laneSearch, setLaneSearch] = useState('');
+  const [page, setPage] = useState(1);
+  const [tab, setTab] = useState('lanes');
   const perPage = 12;
   // ROI calculator state
-  const [roiNiche, setRoiNiche] = React.useState('Roofing Restoration');
-  const [roiVolume, setRoiVolume] = React.useState(100);
-  const [roiSellPrice, setRoiSellPrice] = React.useState('');
-  const [roiResult, setRoiResult] = React.useState(null);
-  const [roiLoading, setRoiLoading] = React.useState(false);
-  const [autoRefresh, setAutoRefresh] = React.useState(false);
-  const [lastRefreshed, setLastRefreshed] = React.useState(null);
-  const [cmpNicheFilter, setCmpNicheFilter] = React.useState(null);
-  const [nicheSearch, setNicheSearch] = React.useState('');
+  const [roiNiche, setRoiNiche] = useState('Roofing Restoration');
+  const [roiVolume, setRoiVolume] = useState(100);
+  const [roiSellPrice, setRoiSellPrice] = useState('');
+  const [roiResult, setRoiResult] = useState(null);
+  const [roiLoading, setRoiLoading] = useState(false);
+  const [autoRefresh, setAutoRefresh] = useState(false);
+  const [lastRefreshed, setLastRefreshed] = useState(null);
+  const [cmpNicheFilter, setCmpNicheFilter] = useState(null);
+  const [nicheSearch, setNicheSearch] = useState('');
 
   // Initial data fetch
   const prepareLaneData = (lanes) => lanes.map(l => {
@@ -6975,14 +7041,14 @@ const CplPricing = () => {
       .catch(e => { setError(e.message || 'Failed to load CPL data'); setLoading(false); setReloading(false); });
   };
 
-  React.useEffect(() => {
+  useEffect(() => {
     fetchLanes(modelToParam(modelFilter));
     setPage(1);
   }, [modelFilter]);
 
 
   // Auto-refresh: poll every 30 seconds when toggled on
-  React.useEffect(() => {
+  useEffect(() => {
     if (!autoRefresh) return;
     const interval = setInterval(() => {
       setReloading(true);
@@ -7869,6 +7935,857 @@ function Loop() {
   `;
 }
 
+
+
+// ── PSYCHOLOGY DASHBOARD ──────────────────────────────────────────────────────
+function PsychologyDashboard() {
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [activeTab, setActiveTab] = useState('mindmap');
+  const [detectText, setDetectText] = useState('');
+  const [detectResult, setDetectResult] = useState(null);
+
+  useEffect(() => {
+    apiFetch('/api/psychology/snapshot')
+      .then(d => { setData(d); setLoading(false); })
+      .catch(e => { setError(e.message); setLoading(false); });
+  }, []);
+
+  if (loading) return html`<div class="body"><div class="psy-loading">Loading psychology data...</div></div>`;
+  if (error) return html`<div class="body"><div class="psy-error">Error: ${error}</div></div>`;
+  if (!data) return html`<div class="body"><div class="psy-error">No data</div></div>`;
+
+  const mm = data.mind_map || { nodes: [], edges: [], summary: {} };
+  const eff = data.effectiveness || {};
+  const nodes = mm.nodes || [];
+  const summary = mm.summary || {};
+  const nicheNodes = nodes.filter(n => n.type === 'niche');
+  const personaNodes = nodes.filter(n => n.type === 'persona');
+  const principleNodes = nodes.filter(n => n.type === 'principle');
+
+  const detectPersona = async () => {
+    if (!detectText.trim()) return;
+    try {
+      const res = await apiFetch('/api/psychology/detect-persona?text=' + encodeURIComponent(detectText.trim()));
+      setDetectResult(res);
+    } catch(e) {
+      setDetectResult({ persona: 'error', confidence: 0, error: e.message });
+    }
+  };
+
+  return html`
+    <div class="body">
+      <div class="section-h">
+        <div>
+          <div class="section-title">Sales <em>Psychology</em> Mind Map</div>
+          <div class="section-sub">Persuasion principles &middot; Buyer personas &middot; Niche psychology</div>
+        </div>
+      </div>
+
+      <div class="pulse-tabs">
+        <button class="pulse-tab ${activeTab === 'mindmap' ? 'active' : ''}" onClick=${() => setActiveTab('mindmap')}>Mind Map</button>
+        <button class="pulse-tab ${activeTab === 'personas' ? 'active' : ''}" onClick=${() => setActiveTab('personas')}>Personas</button>
+        <button class="pulse-tab ${activeTab === 'principles' ? 'active' : ''}" onClick=${() => setActiveTab('principles')}>Principles</button>
+        <button class="pulse-tab ${activeTab === 'detect' ? 'active' : ''}" onClick=${() => setActiveTab('detect')}>Detect</button>
+        <button class="pulse-tab ${activeTab === 'niches' ? 'active' : ''}" onClick=${() => setActiveTab('niches')}>Niche Profiles</button>
+      </div>
+
+      ${activeTab === 'mindmap' && html`
+        <div class="psy-summary-grid">
+          <div class="stat-card"><div class="stat-label">Niches</div><div class="stat-value teal">${summary.niches || 0}</div></div>
+          <div class="stat-card"><div class="stat-label">Personas</div><div class="stat-value cyan">${summary.personas || 0}</div></div>
+          <div class="stat-card"><div class="stat-label">Principles</div><div class="stat-value">${summary.principles || 0}</div></div>
+          <div class="stat-card"><div class="stat-label">Techniques</div><div class="stat-value teal">${summary.techniques || 0}</div></div>
+          <div class="stat-card"><div class="stat-label">Nodes</div><div class="stat-value dim">${summary.total_nodes || 0}</div></div>
+          <div class="stat-card"><div class="stat-label">Connections</div><div class="stat-value dim">${summary.total_edges || 0}</div></div>
+          <div class="stat-card"><div class="stat-label">Combos Tracked</div><div class="stat-value cyan">${eff.total_combinations_tracked || 0}</div></div>
+          <div class="stat-card"><div class="stat-label">Conv Rate</div><div class="stat-value teal">${eff.overall_conversion_rate ? (eff.overall_conversion_rate * 100).toFixed(1) + '%' : 0}</div></div>
+        </div>
+
+        <div class="chart-panel">
+          <div class="chart-panel-h"><span class="chart-panel-title">Psychology Flow Map</span><span class="chart-panel-tag">Niche &rarr; Persona &rarr; Principle &rarr; Technique</span></div>
+          <div class="psy-flow-grid">
+            ${edges.slice(0, 60).map(e => html`<div class="psy-flow-card" key=${e.source}>${e.source}&rarr;${e.target}</div>`)}
+          </div>
+        </div>
+      `}
+
+      ${activeTab === 'personas' && html`
+        <div class="psy-persona-grid">
+          ${personaNodes.map(p => html`
+            <div class="psy-persona-card" key=${p.id}>
+              <div class="psy-persona-head"><div class="psy-persona-name">${p.label}</div><div class="psy-persona-sub">${p.subtitle}</div></div>
+              <div class="psy-persona-tone">Tone: ${p.metrics?.voice_tone || '—'}</div>
+              <div class="psy-persona-dec">Style: ${p.metrics?.decision_style || '—'}</div>
+            </div>
+          `)}
+        </div>
+        ${personaNodes.length === 0 && html`<div class="stub-body">No persona data.</div>`}
+      `}
+
+      ${activeTab === 'principles' && html`
+        <div class="psy-principle-list">
+          ${principleNodes.map(p => html`
+            <div class="psy-principle-card" key=${p.id}>
+              <div class="psy-principle-name">${p.label}</div>
+              <div class="psy-principle-cat">${p.subtitle}</div>
+              <div class="psy-principle-tactics">${p.metrics?.tactic_count || 0} tactics</div>
+            </div>
+          `)}
+        </div>
+      `}
+
+      ${activeTab === 'detect' && html`
+        <div class="chart-panel">
+          <div class="chart-panel-h"><span class="chart-panel-title">Persona Detection</span><span class="chart-panel-tag">Detect buyer persona from lead text</span></div>
+          <div class="fld">
+            <label class="fld-lbl">Lead text or objection</label>
+            <textarea class="fld-in psy-detect-input" rows="3" placeholder="Paste lead text, objection, or transcript..." value=${detectText} onInput=${(e) => setDetectText(e.target.value)}></textarea>
+          </div>
+          <button class="btn" onClick=${detectPersona} disabled=${!detectText.trim()}>Detect Persona</button>
+          ${detectResult && html`
+            <div class="psy-detect-result">
+              <div class="psy-detect-top">
+                <span class="psy-detect-label">Detected: <strong>${detectResult.label || detectResult.persona}</strong></span>
+                <span class="psy-detect-conf">Confidence: ${(detectResult.confidence * 100).toFixed(0)}%</span>
+              </div>
+              ${detectResult.recommended_approach && html`
+                <div class="psy-detect-detail">
+                  <div class="psy-detect-detail-row">Closer: ${detectResult.recommended_approach.best_closer_persona.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}</div>
+                  <div class="psy-detect-detail-row">Tone: ${detectResult.recommended_approach.script_tone}</div>
+                  <div class="psy-detect-detail-row">Style: ${detectResult.recommended_approach.decision_style}</div>
+                  <div class="psy-detect-pills">
+                    ${(detectResult.recommended_approach.top_principles || []).slice(0, 3).map(p => html`<span class="psy-detect-pill">${p.principle_name}</span>`)}
+                  </div>
+                </div>
+              `}
+            </div>
+          `}
+        </div>
+      `}
+
+      ${activeTab === 'niches' && html`
+        <div class="psy-niche-grid">
+          ${nicheNodes.map(n => html`
+            <div class="psy-niche-card" key=${n.id}>
+              <div class="psy-niche-name">${n.label}</div>
+              <div class="psy-niche-meta">${n.subtitle}</div>
+              <div class="psy-niche-speed">Speed: ${n.metrics?.decision_speed || '—'}</div>
+              <div class="psy-niche-price">Price sensitivity: ${n.metrics?.price_sensitivity || '—'}</div>
+            </div>
+          `)}
+        </div>
+        ${nicheNodes.length === 0 && html`<div class="stub-body">No niche profiles.</div>`}
+      `}
+    </div>
+  `;
+}
+
+function SelfAwarenessDashboard() {
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [narrative, setNarrative] = useState([]);
+  const [decisions, setDecisions] = useState([]);
+  const [selectedAgent, setSelectedAgent] = useState(null);
+  const [view, setView] = useState('graph');
+  const [liveConnected, setLiveConnected] = useState(false);
+  const narrativeRef = useRef(null);
+  const decisionsRef = useRef(null);
+
+  // Initial fetch
+  useEffect(() => {
+    apiFetch('/api/self-awareness/snapshot')
+      .then(d => { setData(d); setLoading(false); })
+      .catch(e => { setError(e.message); setLoading(false); });
+  }, []);
+
+  // WebSocket subscription for live events
+  useEffect(() => {
+    const onConnect = () => setLiveConnected(true);
+    const onDisconnect = () => setLiveConnected(false);
+    const onStats = e => { addThought(e, 'stats'); };
+    const onAny = e => {
+      if (e.type && e.type !== 'stats' && e.type !== 'hello' && e.type !== 'pong') {
+        addDecision(e);
+      }
+    };
+    function addThought(e, type) {
+      const ts = (e && e.ts && e.ts.slice) ? e.ts.slice(11, 19) : new Date().toLocaleTimeString();
+      setNarrative(prev => {
+        const next = [...prev, { ts, type: type || e.type || 'event', data: e }];
+        return next.slice(-100);
+      });
+    }
+    function addDecision(e) {
+      const ts = (e && e.ts && e.ts.slice) ? e.ts.slice(11, 19) : new Date().toLocaleTimeString();
+      setDecisions(prev => {
+        const next = [...prev, { ts, event: e }];
+        return next.slice(-50);
+      });
+    }
+    function subscribeLive() {
+      setLiveConnected(true);
+      window.EMPIRE_LIVE.on('stats', onStats);
+      window.EMPIRE_LIVE.on('*', onAny);
+      window.EMPIRE_LIVE.on('connect', onConnect);
+      window.EMPIRE_LIVE.on('disconnect', onDisconnect);
+    }
+    function unsubscribeLive() {
+      window.EMPIRE_LIVE.off('stats', onStats);
+      window.EMPIRE_LIVE.off('*', onAny);
+      window.EMPIRE_LIVE.off('connect', onConnect);
+      window.EMPIRE_LIVE.off('disconnect', onDisconnect);
+    }
+    if (typeof window !== 'undefined' && window.EMPIRE_LIVE) {
+      subscribeLive();
+      return unsubscribeLive;
+    }
+    const check = setInterval(() => {
+      if (window.EMPIRE_LIVE) {
+        clearInterval(check);
+        subscribeLive();
+      }
+    }, 500);
+    setTimeout(() => clearInterval(check), 10000);
+    return () => { clearInterval(check); if (window.EMPIRE_LIVE) unsubscribeLive(); };
+  }, []);
+
+  // Auto-scroll (only if user is near bottom)
+  function isNearBottom(ref) {
+    if (!ref.current) return true;
+    const el = ref.current;
+    return el.scrollHeight - el.scrollTop - el.clientHeight < 60;
+  }
+  useEffect(() => {
+    if (narrativeRef.current && isNearBottom(narrativeRef)) {
+      narrativeRef.current.scrollTop = narrativeRef.current.scrollHeight;
+    }
+  }, [narrative]);
+  useEffect(() => {
+    if (decisionsRef.current && isNearBottom(decisionsRef)) {
+      decisionsRef.current.scrollTop = decisionsRef.current.scrollHeight;
+    }
+  }, [decisions]);
+
+  if (loading) return html\`<div class="body"><div class="sa-think-label"><span class="sa-live-dot"></span> System is thinking<div class="sa-think-dots"><span class="sa-think-dot"></span><span class="sa-think-dot"></span><span class="sa-think-dot"></span></div></div></div>\`;
+  if (error) return html\`<div class="body"><div class="sa-empty">Error: \${error}</div></div>\`;
+  if (!data) return html\`<div class="body"><div class="sa-empty">No data</div></div>\`;
+
+  const model = data.system_model || {};
+  const health = model.health || {};
+  const agents = model.agents || [];
+  const deps = model.dependencies || {};
+  const caps = model.capabilities || {};
+  const lanes = model.lanes || {};
+  const revenue = model.revenue || {};
+  const anomalies = data.anomalies || [];
+  const narr = data.narrative || {};
+  const ts = data.ts || '';
+
+  const agentTotal = health.agent_total || agents.length;
+  const agentHealthy = health.agent_healthy || 0;
+  const healthPct = agentTotal > 0 ? Math.round((agentHealthy / agentTotal) * 100) : 0;
+  const healthColor = healthPct >= 80 ? 'teal' : healthPct >= 50 ? 'amber' : 'red';
+  const staleCount = (health.stale_agents || []).length;
+  const criticalCount = (health.critical_agents || []).length;
+  const winRate = lanes.overall_win_rate;
+  const rev24h = revenue.total_revenue_24h || 0;
+  const anomalyCount = data.anomaly_count || 0;
+  const critAnomalies = data.critical_count || 0;
+  const improveCount = data.improvement_count || 0;
+
+  // Build graph nodes (position agents in concentric rings)
+  const agentNames = Object.keys(deps).length > 0 ? Object.keys(deps) : agents.map(a => a.name);
+  const centerIdx = agentNames.indexOf('hub');
+  const center = centerIdx >= 0 ? agentNames[centerIdx] : (agentNames[0] || '');
+  const ring1 = center ? (deps[center] || []) : [];
+  const ring2 = agentNames.filter(n => n !== center && !ring1.includes(n));
+
+  function graphX(i, total, radius, cx) { return cx + radius * Math.cos((2 * Math.PI * i) / total - Math.PI / 2); }
+  function graphY(i, total, radius, cy) { return cy + radius * Math.sin((2 * Math.PI * i) / total - Math.PI / 2); }
+
+  const CX = 300, CY = 170;
+  const RADII = [0, 120, 220];
+
+  function getAgent(name) { return agents.find(a => a.name === name) || { name, status: 'UNKNOWN', capabilities: '' }; }
+
+  function agentStatusColor(status) {
+    if (status === 'ACTIVE' || status === 'online') return '#44E5B8';
+    if (status === 'STALE' || status === 'IDLE') return '#FFB800';
+    if (status === 'CRITICAL' || status === 'UNREGISTERED') return '#FF4444';
+    return '#64748b';
+  }
+
+  function agentNode(name, cx, cy, r) {
+    const a = getAgent(name);
+    const status = a.status;
+    const color = agentStatusColor(status);
+    const isSelected = selectedAgent === name;
+    return html\`<g class="sa-graph-node \${isSelected ? 'active' : ''}" onClick=\${() => setSelectedAgent(name === selectedAgent ? null : name)} transform="translate(\${cx - r}, \${cy - 8})">
+      <rect class="sa-graph-rect" width="\${r * 2}" height="16" rx="4" style="stroke:\${color};\${isSelected ? 'fill:rgba(' + (color === '#44E5B8' ? '68,229,184' : color === '#FFB800' ? '255,184,0' : '255,68,68') + ',0.08)' : ''}"/>
+      <text class="sa-graph-text" x="\${r}" y="11">\${name.length > 10 ? name.slice(0, 10) + '..' : name}</text>
+      <circle cx="4" cy="4" r="2" fill="\${color}" style="\${status === 'ACTIVE' ? 'animation:sa-node-pulse 2s ease-in-out infinite;filter:drop-shadow(0 0 4px ' + color + ')' : ''}"/>
+    </g>\`;
+  }
+
+  // Build edges from dependency graph
+  const edges = [];
+  for (const [agent, depList] of Object.entries(deps)) {
+    for (const dep of depList) {
+      edges.push({ from: dep, to: agent });
+    }
+  }
+
+  // Build narrative from data
+  const initialThoughts = [
+    { ts: ts ? ts.slice(11, 19) : '--', type: 'info', icon: '●', body: \`System <em>\${health.overall || 'unknown'}</em> · \${agentHealthy}/\${agentTotal} agents healthy · \${staleCount} stale, \${criticalCount} critical\` },
+  ];
+  if (anomalies.length > 0) {
+    initialThoughts.push({ ts: '--', type: anomalies[0].severity === 'critical' ? 'critical' : 'warn', icon: anomalies[0].severity === 'critical' ? '⚠' : '▲', body: anomalies[0].message });
+  }
+  if (improveCount > 0) {
+    initialThoughts.push({ ts: '--', type: 'info', icon: '●', body: \`<strong>\${improveCount}</strong> improvement suggestions available\` });
+  }
+
+  const allThoughts = [...initialThoughts, ...narrative];
+
+  return html\`
+    <div class="body">
+      <div class="section-h">
+        <div>
+          <div class="section-title"><em>Claude OS</em> · Self-Awareness</div>
+          <div class="section-sub">Live system model · Narrative · Dependency graph · Decisions</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:14px">
+          <span class="\${liveConnected ? 'sa-live-dot' : 'sa-live-dot paused'}"></span>
+          <span style="font-family:var(--font-mono);font-size:9px;color:var(--empire-fog);letter-spacing:.08em">\${liveConnected ? 'LIVE' : 'OFFLINE'}</span>
+          <button class="pulse-tab \${view === 'graph' ? 'active' : ''}" onClick=\${() => setView('graph')} style="font-size:10px;padding:6px 14px">Graph</button>
+          <button class="pulse-tab \${view === 'feed' ? 'active' : ''}" onClick=\${() => setView('feed')} style="font-size:10px;padding:6px 14px">Narrative</button>
+        </div>
+      </div>
+
+      <!-- Status bar -->
+      <div class="sa-status">
+        <div class="sa-stat-card">
+          <div class="sa-stat-row">
+            <span class="sa-stat-label">Health</span>
+          </div>
+          <div class="sa-stat-val \${healthColor}">\${healthPct}%</div>
+          <div class="sa-stat-meta">\${health.overall || 'unknown'} · \${agentHealthy}/\${agentTotal} agents</div>
+        </div>
+        <div class="sa-stat-card">
+          <div class="sa-stat-row">
+            <span class="sa-stat-label">Win Rate</span>
+            <span style="font-size:9px;color:var(--empire-fog)">\${lanes.active || 0} lanes</span>
+          </div>
+          <div class="sa-stat-val \${winRate >= 0.6 ? 'teal' : winRate >= 0.3 ? 'amber' : 'red'}">\${winRate != null ? (winRate * 100).toFixed(0) + '%' : '--'}</div>
+          <div class="sa-stat-meta">\${lanes.total_runs || 0} runs · \${lanes.evolutions_run || 0} evolutions</div>
+        </div>
+        <div class="sa-stat-card">
+          <div class="sa-stat-row">
+            <span class="sa-stat-label">Revenue</span>
+          </div>
+          <div class="sa-stat-val teal">\${rev24h > 0 ? '$' + rev24h.toLocaleString() : '--'}</div>
+          <div class="sa-stat-meta">24h · \${revenue.total_revenue_7d > 0 ? '$' + revenue.total_revenue_7d.toLocaleString() + ' 7d' : 'no data'}</div>
+        </div>
+        <div class="sa-stat-card">
+          <div class="sa-stat-row">
+            <span class="sa-stat-label">Anomalies</span>
+            <span style="font-size:9px;color:var(--empire-fog)">\${improveCount} improvements</span>
+          </div>
+          <div class="sa-stat-val \${critAnomalies > 0 ? 'red' : anomalyCount > 0 ? 'amber' : 'teal'}">\${anomalyCount}</div>
+          <div class="sa-stat-meta">\${critAnomalies > 0 ? critAnomalies + ' critical' : 'no critical issues'}</div>
+        </div>
+      </div>
+
+      \${view === 'graph' ? html\`
+        <!-- Main content: graph + narrative + decisions -->
+        <div class="sa-wrapper">
+          <!-- LEFT: Agent dependency graph -->
+          <div class="sa-panel">
+            <div class="sa-panel-h">
+              <strong>Agent Dependency Graph</strong>
+              <span>\${agentNames.length} nodes · \${edges.length} edges</span>
+            </div>
+            <div class="sa-panel-body" style="padding:0">
+              <div class="sa-graph-wrap">
+                <svg class="sa-graph-svg" viewBox="0 0 600 340">
+                  <!-- Center glow -->
+                  <circle cx="\${CX}" cy="\${CY}" r="180" class="sa-graph-ring"/>
+                  <circle cx="\${CX}" cy="\${CY}" r="120" class="sa-graph-ring"/>
+                  <circle cx="\${CX}" cy="\${CY}" r="60" class="sa-graph-ring"/>
+                  <circle cx="\${CX}" cy="\${CY}" r="30" class="sa-graph-center-dot"/>
+                  
+                  <!-- Edges -->
+                  \${edges.map((e, i) => {
+                    const fromIdx = agentNames.indexOf(e.from);
+                    const toIdx = agentNames.indexOf(e.to);
+                    if (fromIdx < 0 || toIdx < 0) return '';
+                    const fromRing = e.from === center ? 0 : ring1.includes(e.from) ? 1 : 2;
+                    const toRing = e.to === center ? 0 : ring1.includes(e.to) ? 1 : 2;
+                    let fromCx, fromCy, toCx, toCy;
+                    if (fromRing === 0) { fromCx = CX; fromCy = CY; }
+                    else {
+                      const group = fromRing === 1 ? ring1 : ring2;
+                      const idx = group.indexOf(e.from);
+                      if (idx < 0) return '';
+                      fromCx = graphX(idx, group.length, RADII[fromRing], CX);
+                      fromCy = graphY(idx, group.length, RADII[fromRing], CY);
+                    }
+                    if (toRing === 0) { toCx = CX; toCy = CY; }
+                    else {
+                      const group = toRing === 1 ? ring1 : ring2;
+                      const idx = group.indexOf(e.to);
+                      if (idx < 0) return '';
+                      toCx = graphX(idx, group.length, RADII[toRing], CX);
+                      toCy = graphY(idx, group.length, RADII[toRing], CY);
+                    }
+                    return html\`<line x1="\${fromCx}" y1="\${fromCy}" x2="\${toCx}" y2="\${toCy}" class="sa-graph-edge \${e.from === center || e.to === center ? 'active' : ''}"/>\`;
+                  })}
+                  
+                  <!-- Nodes -->
+                  \${agentNames.map((name, i) => {
+                    if (name === center) {
+                      return agentNode(name, CX - 50, CY - 8, 50);
+                    } else if (ring1.includes(name)) {
+                      const idx = ring1.indexOf(name);
+                      const x = graphX(idx, ring1.length, RADII[1], CX);
+                      const y = graphY(idx, ring1.length, RADII[1], CY);
+                      return agentNode(name, x - 36, y - 8, 36);
+                    } else {
+                      const idx = ring2.indexOf(name);
+                      if (idx < 0) return '';
+                      const x = graphX(idx, ring2.length, RADII[2], CX);
+                      const y = graphY(idx, ring2.length, RADII[2], CY);
+                      return agentNode(name, x - 32, y - 8, 32);
+                    }
+                  })}
+                </svg>
+              </div>
+              
+              <!-- Agent detail panel -->
+              \${selectedAgent ? (() => {
+                const a = getAgent(selectedAgent);
+                const depsList = deps[selectedAgent] || [];
+                const dependedBy = agentNames.filter(n => (deps[n] || []).includes(selectedAgent));
+                return html\`<div class="sa-agent-detail">
+                  <div class="sa-agent-detail-h">
+                    <div class="sa-agent-detail-name"><span style="color:\${agentStatusColor(a.status)}">●</span> \${selectedAgent}</div>
+                    <button class="sa-agent-detail-close" onClick=\${() => setSelectedAgent(null)}>✕</button>
+                  </div>
+                  <div class="sa-agent-detail-body">
+                    <div class="sa-agent-detail-grid">
+                      <div class="sa-agent-detail-field"><span class="lbl">Status</span><span class="val" style="color:\${agentStatusColor(a.status)}">\${a.status}</span></div>
+                      <div class="sa-agent-detail-field"><span class="lbl">Ping</span><span class="val">\${a.last_ping ? new Date(a.last_ping).toLocaleString() : 'never'}</span></div>
+                      <div class="sa-agent-detail-field" style="grid-column:1/-1"><span class="lbl">Capabilities</span><span class="val">\${a.capabilities || caps[selectedAgent] || 'none'}</span></div>
+                      <div class="sa-agent-detail-field"><span class="lbl">Depends On</span><span class="val">\${depsList.length ? depsList.join(', ') : 'none'}</span></div>
+                      <div class="sa-agent-detail-field"><span class="lbl">Depended By</span><span class="val">\${dependedBy.length ? dependedBy.join(', ') : 'none'}</span></div>
+                    </div>
+                  </div>
+                </div>\`;
+              })() : ''}
+            </div>
+          </div>
+
+          <!-- RIGHT: Live narrative + decisions -->
+          <div style="display:flex;flex-direction:column;gap:12px">
+            <!-- Narrative feed -->
+            <div class="sa-panel" style="flex:1">
+              <div class="sa-panel-h">
+                <strong>Live Narrative</strong>
+                <span>\${allThoughts.length} events</span>
+              </div>
+              <div class="sa-narrative-feed" ref=\${narrativeRef}>
+                \${allThoughts.length === 0 ? html\`<div class="sa-empty">Awaiting system signals...</div>\` : ''}
+                \${allThoughts.map(t => html\`
+                  <div class="sa-thought">
+                    <span class="sa-thought-ts">\${t.ts}</span>
+                    <span class="sa-thought-type \${t.type}">\${t.icon || t.type}</span>
+                    <span class="sa-thought-body">\${t.body}</span>
+                  </div>
+                `)}
+                <span class="sa-cursor"></span>
+              </div>
+            </div>
+
+            <!-- Decision trace feed -->
+            <div class="sa-panel" style="flex:0 0 auto;max-height:200px">
+              <div class="sa-panel-h">
+                <strong>Decision Trace</strong>
+                <span>\${decisions.length} live events</span>
+              </div>
+              <div class="sa-decision-feed" ref=\${decisionsRef}>
+                \${decisions.length === 0 ? html\`<div class="sa-empty">No live events yet. Connect to WebSocket to see real-time decisions.</div>\` : ''}
+                \${decisions.map(d => html\`
+                  <div class="sa-decision">
+                    <span class="sa-decision-ts">\${d.ts}</span>
+                    <span class="sa-decision-body">
+                      <span class="key">\${d.event.type}</span>
+                      \${Object.entries(d.event).filter(([k]) => k !== 'type' && k !== 'ts').slice(0, 3).map(([k, v]) => html\` <span class="key">\${k}:</span> <span class="val">\${typeof v === 'object' ? JSON.stringify(v).slice(0, 40) : String(v).slice(0, 40)}</span>\`).join('')}
+                    </span>
+                  </div>
+                `)}
+              </div>
+            </div>
+          </div>
+        </div>
+      ` : html\`
+        <!-- Narrative-only view -->
+        <div class="sa-panel" style="min-height:400px">
+          <div class="sa-panel-h">
+            <strong>System Narrative Stream</strong>
+            <span>\${allThoughts.length} events · \${narrative.length} live</span>
+          </div>
+          <div class="sa-narrative-feed" ref=\${narrativeRef} style="max-height:70vh">
+            \${allThoughts.map(t => html\`
+              <div class="sa-thought">
+                <span class="sa-thought-ts">\${t.ts}</span>
+                <span class="sa-thought-type \${t.type}">\${t.icon || t.type}</span>
+                <span class="sa-thought-body">\${t.body}</span>
+              </div>
+            `)}
+            <span class="sa-cursor"></span>
+          </div>
+        </div>
+      `}
+    </div>
+  `;
+}
+
+function AgentOSDashboard() {
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [tab, setTab] = useState('overview');
+  const [actioning, setActioning] = useState({});
+  const [actionError, setActionError] = useState(null);
+
+  async function fetchStatus() {
+    try {
+      const res = await apiFetch('/api/agent-os/status');
+      if (!res.ok) { setError('Failed to load'); setLoading(false); return; }
+      const d = await res.json();
+      setData(d);
+    } catch (e) { setError(e.message); }
+    setLoading(false);
+  }
+
+  async function actionAgent(name, action) {
+    setActionError(null);
+    setActioning(prev => ({ ...prev, [name]: action }));
+    try {
+      const r = await apiFetch(`/api/agent-os/agents/${name}/${action}`, { method: 'POST' });
+      if (!r.ok) { throw new Error(await r.text()); }
+      // Re-fetch to reflect new status
+      const res = await apiFetch('/api/agent-os/status');
+      if (res.ok) setData(await res.json());
+    } catch (e) {
+      setActionError(action + ' ' + name + ': ' + (e.message || e).slice(0, 60));
+    }
+    setActioning(prev => ({ ...prev, [name]: null }));
+  }
+
+  useEffect(() => { fetchStatus(); }, []);
+
+  if (loading) return html\`<div class="body"><div class="psy-loading">Loading Agent OS data...</div></div>\`;
+  if (error) return html\`<div class="body"><div class="psy-error">Error: \${error}</div></div>\`;
+  if (!data) return html\`<div class="body"><div class="psy-error">No data</div></div>\`;
+
+  const proc = data.processes || {};
+  const ipc = data.ipc || {};
+  const caps = data.capabilities || {};
+  const k = data.kernel || {};
+  const agents = proc.agents || {};
+  const agentList = Object.entries(agents);
+
+  const healthPct = proc.total_agents > 0 ? Math.round((proc.running / proc.total_agents) * 100) : 0;
+
+  return html\`
+    <div class="body">
+      \${actionError ? html\`<div style="margin-bottom:14px;padding:10px 16px;background:rgba(255,68,68,0.06);border:1px solid rgba(255,68,68,0.25);border-radius:6px;font-family:var(--font-mono);font-size:10px;color:var(--status-red);display:flex;align-items:center;gap:8px">
+        <span>⚠</span><span>\${actionError}</span>
+        <button style="margin-left:auto;background:none;border:none;color:var(--status-red);cursor:pointer;font-size:14px" onClick=\${() => setActionError(null)}>×</button>
+      </div>\` : ''}
+      <div class="section-h">
+        <div class="section-title"><em>Agent OS</em></div>
+        <div class="section-sub">Kernel · Process manager · IPC bus · Capability registry · Boot protocol</div>
+      </div>
+
+      <div class="pulse-tabs">
+        <button class="pulse-tab \${tab === 'overview' ? 'active' : ''}" onClick=\${() => setTab('overview')}>Overview</button>
+        <button class="pulse-tab \${tab === 'agents' ? 'active' : ''}" onClick=\${() => setTab('agents')}>Agents</button>
+        <button class="pulse-tab \${tab === 'ipc' ? 'active' : ''}" onClick=\${() => setTab('ipc')}>IPC Bus</button>
+        <button class="pulse-tab \${tab === 'capabilities' ? 'active' : ''}" onClick=\${() => setTab('capabilities')}>Capabilities</button>
+        <button class="pulse-tab \${tab === 'boot' ? 'active' : ''}" onClick=\${() => setTab('boot')}>Boot</button>
+      </div>
+
+      \${tab === 'overview' ? html\`
+        <div class="psy-summary-grid">
+          <div class="cpl-card">
+            <div class="cpl-card-label">Booted</div>
+            <div class="cpl-card-value \${k.booted ? 'positive' : 'warning'}">\${k.booted ? 'YES' : 'NO'}</div>
+          </div>
+          <div class="cpl-card">
+            <div class="cpl-card-label">Agents</div>
+            <div class="cpl-card-value">\${proc.total_agents || 0}</div>
+          </div>
+          <div class="cpl-card">
+            <div class="cpl-card-label">Running</div>
+            <div class="cpl-card-value positive">\${proc.running || 0}</div>
+          </div>
+          <div class="cpl-card">
+            <div class="cpl-card-label">Health</div>
+            <div class="cpl-card-value \${healthPct >= 80 ? 'positive' : healthPct >= 50 ? 'warning' : ''}">\${healthPct}%</div>
+          </div>
+          <div class="cpl-card">
+            <div class="cpl-card-label">Error</div>
+            <div class="cpl-card-value \${proc.error > 0 ? 'warning' : ''}">\${proc.error || 0}</div>
+          </div>
+          <div class="cpl-card">
+            <div class="cpl-card-label">IPC Events</div>
+            <div class="cpl-card-value">\${ipc.total_events_tracked || 0}</div>
+          </div>
+          <div class="cpl-card">
+            <div class="cpl-card-label">Capabilities</div>
+            <div class="cpl-card-value">\${(caps.total_capabilities) || 0}</div>
+          </div>
+          <div class="cpl-card">
+            <div class="cpl-card-label">Uptime</div>
+            <div class="cpl-card-value positive">\${k.uptime_seconds ? Math.round(k.uptime_seconds / 60) + 'm' : '0m'}</div>
+          </div>
+        </div>
+        <div class="cpl-health-meta" style="margin-top: 8px; text-align: center;">
+          Boot order: \${(proc.boot_order || []).slice(0, 10).join(' → ')}${(proc.boot_order || []).length > 10 ? ' …' : ''}
+        </div>
+      ` : ''}
+
+      \${tab === 'agents' ? html\`
+        <div class="cpl-service-summary" style="margin-bottom: 14px;">
+          <span class="cpl-service-count">\${agentList.length}</span>
+          <span class="cpl-service-label">agents registered</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">
+          <span class="cpl-service-count">\${agentList.length}</span>
+          <span class="cpl-service-label">agents registered</span>
+          <button class="gh-refresh-btn" style="margin-left:auto" onClick=\${() => fetchStatus()}>Refresh</button>
+        </div>
+        <table class="cpl-table">
+          <thead><tr><th>Agent</th><th>Status</th><th>Interval</th><th>Priority</th><th>Capabilities</th><th>Dependencies</th><th>Retries</th><th>Actions</th></tr></thead>
+          <tbody>
+            \${agentList.map(([name, a]) => {
+              const busy = actioning[name];
+              const running = a.status === 'RUNNING';
+              const isErr = a.status === 'ERROR';
+              return html\`<tr key=\${name} class="\${busy ? 'af-card stale' : ''}">
+              <td style="font-weight: 500;">\${name}</td>
+              <td><span class="hth-dot \${running ? 'green' : isErr ? 'red' : 'amber'}"></span> \${a.status}</td>
+              <td style="font-family: var(--font-mono);">\${a.interval || '-'}s</td>
+              <td>\${a.priority || '-'}</td>
+              <td style="color: var(--empire-mist); font-size: 10px;">\${(a.capabilities || []).join(', ')}</td>
+              <td style="color: var(--empire-mist); font-size: 10px;">\${(a.dependencies || []).join(', ') || '-'}</td>
+              <td>\${a.retry_count || 0}/\${a.max_retries || 3}</td>
+              <td style="white-space:nowrap">
+                \${!running ? html\`<button class="tbl-action go" disabled=\${!!busy} onClick=\${() => actionAgent(name, 'start')}>\${busy === 'start' ? '...' : 'Start'}</button>\` : ''}
+                \${running ? html\`<button class="tbl-action" disabled=\${!!busy} onClick=\${() => actionAgent(name, 'stop')}>\${busy === 'stop' ? '...' : 'Stop'}</button>\` : ''}
+                <button class="tbl-action" disabled=\${!!busy} onClick=\${() => actionAgent(name, 'restart')}>\${busy === 'restart' ? '...' : 'Restart'}</button>
+              </td>
+            </tr>\`;
+            })}
+          </tbody>
+        </table>
+      ` : ''}
+
+      \${tab === 'ipc' ? html\`
+        <div class="cpl-service-summary" style="margin-bottom: 14px;">
+          <span class="cpl-service-count">\${ipc.total_events_tracked || 0}</span>
+          <span class="cpl-service-label">events tracked</span>
+          <span style="margin-left: 16px; color: var(--empire-mist);">\${Object.keys(ipc.subscriptions || {}).length} subscriptions</span>
+        </div>
+        <table class="cpl-table">
+          <thead><tr><th>Event</th><th>Source</th><th>Priority</th><th>Time</th></tr></thead>
+          <tbody>
+            \${(ipc.recent_events || []).map(ev => html\`<tr key=\${ev.event_id}>
+              <td style="font-weight: 500;">\${ev.event_type}</td>
+              <td style="color: var(--empire-mist);">\${ev.source}</td>
+              <td><span class="cpl-badge \${ev.priority === 'critical' ? 'ppc' : 'ppl'}">\${ev.priority}</span></td>
+              <td style="font-family: var(--font-mono); font-size: 9px; color: var(--empire-fog);">\${new Date(ev.ts).toLocaleTimeString()}</td>
+            </tr>\`)}
+            \${(ipc.recent_events || []).length === 0 ? html\`<tr><td colspan="4" style="color: var(--empire-mist); text-align: center; padding: 20px;">No events yet</td></tr>\` : ''}
+          </tbody>
+        </table>
+      ` : ''}
+
+      \${tab === 'capabilities' ? html\`
+        <div class="cpl-service-summary" style="margin-bottom: 14px;">
+          <span class="cpl-service-count">\${caps.total_capabilities || 0}</span>
+          <span class="cpl-service-label">capabilities across</span>
+          <span class="cpl-service-total">\${caps.total_agents || 0}</span>
+          <span class="cpl-service-label">agents</span>
+        </div>
+        <table class="cpl-table">
+          <thead><tr><th>Capability</th><th>Agents</th></tr></thead>
+          <tbody>
+            \${Object.entries(caps.by_capability || {}).sort().map(([cap, agentList]) => html\`<tr key=\${cap}>
+              <td style="font-weight: 500;">\${cap}</td>
+              <td style="color: var(--empire-mist); font-size: 10px;">\${agentList.join(', ')}</td>
+            </tr>\`)}
+            \${Object.keys(caps.by_capability || {}).length === 0 ? html\`<tr><td colspan="2" style="color: var(--empire-mist); text-align: center; padding: 20px;">No capabilities registered</td></tr>\` : ''}
+          </tbody>
+        </table>
+      ` : ''}
+
+      \${tab === 'boot' ? html\`
+        <div class="cpl-service-summary" style="margin-bottom: 14px;">
+          <span class="cpl-service-count">\${(proc.boot_order || []).length}</span>
+          <span class="cpl-service-label">agents in boot order</span>
+        </div>
+        <table class="cpl-table">
+          <thead><tr><th>#</th><th>Agent</th><th>Status</th><th>Priority</th><th>Dependencies</th></tr></thead>
+          <tbody>
+            \${(proc.boot_order || []).map((name, i) => {
+              const a = agents[name] || {};
+              return html\`<tr key=\${name}>
+                <td style="color: var(--empire-fog);">\${i + 1}</td>
+                <td style="font-weight: 500;">\${name}</td>
+                <td><span class="hth-dot \${a.status === 'RUNNING' ? 'green' : a.status === 'ERROR' ? 'red' : 'amber'}"></span> \${a.status || 'unknown'}</td>
+                <td>\${a.priority || '-'}</td>
+                <td style="color: var(--empire-mist); font-size: 10px;">\${(a.dependencies || []).join(', ') || '-'}</td>
+              </tr>\`;
+            })}
+          </tbody>
+        </table>
+      ` : ''}
+    </div>
+  \`;
+}
+
+function BusinessPlannerDashboard() {
+  const [plan, setPlan] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [tab, setTab] = useState('overview');
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await apiFetch('/api/business-planner/plan');
+        if (!res.ok) { setError('Failed to load'); setLoading(false); return; }
+        const d = await res.json();
+        setPlan(d);
+      } catch (e) { setError(e.message); }
+      setLoading(false);
+    })();
+  }, []);
+  if (loading) return html`<div class="body"><div class="psy-loading">Generating business plan...</div></div>`;
+  if (error) return html`<div class="body"><div class="psy-error">Error: ${error}</div></div>`;
+  if (!plan) return html`<div class="body"><div class="psy-error">No plan data</div></div>`;
+  const exec = plan.executive_summary || {};
+  const niches = plan.niche_plans || [];
+  const actions = plan.action_roadmap || [];
+  const risks = plan.risk_assessment || {};
+  const psych = plan.psychology_insights || {};
+  const curr = exec.current_state || {};
+  const targets = exec.targets || {};
+  const criticalNiches = niches.filter(n => n.priority === 'critical');
+  const highNiches = niches.filter(n => n.priority === 'high');
+  const healthLabel = curr.health_label || 'unknown';
+  return html`
+    <div class="body">
+      <div class="section-h">
+        <div class="section-title"><em>Business Planner</em></div>
+        <div class="section-sub">Quarterly plan · Niche actions · Resource allocation · Risk assessment · Roadmap</div>
+      </div>
+      <div class="pulse-tabs">
+        <button class="pulse-tab ${tab === 'overview' ? 'active' : ''}" onClick=${() => setTab('overview')}>Overview</button>
+        <button class="pulse-tab ${tab === 'niches' ? 'active' : ''}" onClick=${() => setTab('niches')}>Niches</button>
+        <button class="pulse-tab ${tab === 'actions' ? 'active' : ''}" onClick=${() => setTab('actions')}>Actions</button>
+        <button class="pulse-tab ${tab === 'risks' ? 'active' : ''}" onClick=${() => setTab('risks')}>Risks</button>
+        <button class="pulse-tab ${tab === 'psychology' ? 'active' : ''}" onClick=${() => setTab('psychology')}>Psychology</button>
+      </div>
+      ${tab === 'overview' ? html`
+        <div class="psy-summary-grid">
+          <div class="cpl-card"><div class="cpl-card-label">Quarter</div><div class="cpl-card-value">${plan.quarter}</div></div>
+          <div class="cpl-card"><div class="cpl-card-label">Health</div><div class="cpl-card-value ${healthLabel === 'excellent' ? 'positive' : healthLabel === 'critical' ? 'warning' : ''}">${curr.health_score || 0}</div></div>
+          <div class="cpl-card"><div class="cpl-card-label">Current MRR</div><div class="cpl-card-value">$${curr.current_mrr || 0}</div></div>
+          <div class="cpl-card"><div class="cpl-card-label">Target MRR</div><div class="cpl-card-value positive">$${targets.target_mrr || 0}</div></div>
+          <div class="cpl-card"><div class="cpl-card-label">Win Rate</div><div class="cpl-card-value">${curr.overall_win_rate || 0}%</div></div>
+          <div class="cpl-card"><div class="cpl-card-label">Confidence</div><div class="cpl-card-value ${(exec.confidence_score || 0) >= 50 ? 'positive' : 'warning'}">${exec.confidence_score || 0}%</div></div>
+          <div class="cpl-card"><div class="cpl-card-label">Niches</div><div class="cpl-card-value">${niches.length}</div></div>
+          <div class="cpl-card"><div class="cpl-card-label">Actions</div><div class="cpl-card-value">${actions.length}</div></div>
+        </div>
+        <div class="cpl-health-meta" style="margin-top: 8px;">
+          ${plan.strategist_narrative ? html`<div style="font-size: 10px; color: var(--empire-mist); line-height: 1.6; padding: 8px 12px; background: var(--empire-elevated); border: 1px solid var(--empire-border); border-radius: 6px;">${plan.strategist_narrative}</div>` : ''}
+        </div>
+        <div style="margin-top: 16px;"><div class="cpl-card-label">Target Niches</div><div style="display: flex; gap: 4px; flex-wrap: wrap; margin-top: 6px;">
+          ${targets.target_niches ? html`<span class="cpl-badge ppl">${targets.target_niches} niches</span>` : ''}
+          ${targets.target_win_rate_pct ? html`<span class="cpl-badge ppc">${targets.target_win_rate_pct}% win rate</span>` : ''}
+          ${targets.target_mrr ? html`<span class="cpl-badge service">$${targets.target_mrr} MRR</span>` : ''}
+        </div></div>
+      ` : ''}
+      ${tab === 'niches' ? html`
+        <div class="cpl-service-summary" style="margin-bottom: 14px;">
+          <span class="cpl-service-count">${niches.length}</span><span class="cpl-service-label">niches planned</span>
+          ${criticalNiches.length > 0 ? html`<span class="cpl-badge ppc">${criticalNiches.length} critical</span>` : ''}
+          ${highNiches.length > 0 ? html`<span class="cpl-badge ppl">${highNiches.length} high</span>` : ''}
+        </div>
+        <table class="cpl-table"><thead><tr><th>Niche</th><th>Priority</th><th>Score</th><th>Verdict</th><th>Est. Monthly</th><th>Actions</th></tr></thead><tbody>
+          ${niches.map(n => html`<tr key=${n.niche}>
+            <td style="font-weight: 500;">${n.niche}</td>
+            <td><span class="cpl-badge ${n.priority === 'critical' ? 'ppc' : n.priority === 'high' ? 'ppl' : ''}">${n.priority}</span></td>
+            <td style="font-family: var(--font-mono);">${n.rank_rent_score}</td>
+            <td style="color: var(--empire-mist); font-size: 10px;">${n.verdict}</td>
+            <td style="font-family: var(--font-mono);">$${(n.current_monthly_revenue_est || 0).toLocaleString()}</td>
+            <td>${(n.actions || []).length} actions</td>
+          </tr>`)
+          ${niches.length === 0 ? html`<tr><td colspan="6" style="text-align: center; color: var(--empire-mist); padding: 20px;">No niche plans generated</td></tr>` : ''}
+        </tbody></table>
+      ` : ''}
+      ${tab === 'actions' ? html`
+        <div class="cpl-service-summary" style="margin-bottom: 14px;">
+          <span class="cpl-service-count">${actions.length}</span><span class="cpl-service-label">action items</span>
+        </div>
+        <table class="cpl-table"><thead><tr><th>ID</th><th>Action</th><th>Category</th><th>Priority</th><th>Timeline</th></tr></thead><tbody>
+          ${actions.map(a => html`<tr key=${a.id}>
+            <td style="font-family: var(--font-mono); font-size: 9px; color: var(--empire-fog);">${a.id}</td>
+            <td style="font-size: 10px;">${a.action.slice(0, 80)}${a.action.length > 80 ? '…' : ''}</td>
+            <td style="color: var(--empire-mist); font-size: 10px;">${a.category}</td>
+            <td><span class="cpl-badge ${a.priority === 'critical' ? 'ppc' : a.priority === 'high' ? 'ppl' : ''}">${a.priority}</span></td>
+            <td style="font-family: var(--font-mono); font-size: 9px;">${a.timeline || '-'}</td>
+          </tr>`)
+          ${actions.length === 0 ? html`<tr><td colspan="5" style="text-align: center; color: var(--empire-mist); padding: 20px;">No action items generated</td></tr>` : ''}
+        </tbody></table>
+      ` : ''}
+      ${tab === 'risks' ? html`
+        <div class="cpl-service-summary" style="margin-bottom: 14px;">
+          <span class="cpl-service-count">${risks.total_risks || 0}</span><span class="cpl-service-label">risks identified</span>
+          ${risks.critical_risks > 0 ? html`<span class="cpl-badge ppc">${risks.critical_risks} critical</span>` : ''}
+        </div>
+        <table class="cpl-table"><thead><tr><th>Risk</th><th>Severity</th><th>Recommendation</th></tr></thead><tbody>
+          ${(risks.risks || []).map(r => html`<tr key=${r.risk}>
+            <td style="font-weight: 500; font-size: 10px;">${r.risk}</td>
+            <td><span class="cpl-badge ${r.severity === 'critical' ? 'ppc' : 'ppl'}">${r.severity}</span></td>
+            <td style="color: var(--empire-mist); font-size: 10px;">${r.recommended_action || '-'}</td>
+          </tr>`)
+          ${(risks.risks || []).length === 0 ? html`<tr><td colspan="3" style="text-align: center; color: var(--empire-mist); padding: 20px;">No risks</td></tr>` : ''}
+        </tbody></table>
+      ` : ''}
+      ${tab === 'psychology' ? html`
+        <div class="psy-summary-grid">
+          <div class="cpl-card"><div class="cpl-card-label">Overall Conv.</div><div class="cpl-card-value ${psych.overall_conversion_rate >= 0.3 ? 'positive' : 'warning'}">${(psych.overall_conversion_rate * 100 || 0).toFixed(1)}%</div></div>
+          <div class="cpl-card"><div class="cpl-card-label">Attempts</div><div class="cpl-card-value">${psych.total_attempts || 0}</div></div>
+          <div class="cpl-card"><div class="cpl-card-label">Successes</div><div class="cpl-card-value positive">${psych.total_successes || 0}</div></div>
+          <div class="cpl-card"><div class="cpl-card-label">Combinations</div><div class="cpl-card-value">${psych.combinations_tracked || 0}</div></div>
+        </div>
+        <div style="margin-top: 12px; display: flex; gap: 8px; flex-wrap: wrap;">
+          ${psych.best_persona ? html`<span class="cpl-badge service">Best persona: ${psych.best_persona}</span>` : ''}
+          ${psych.best_principle ? html`<span class="cpl-badge ppl">Best principle: ${psych.best_principle}</span>` : ''}
+          ${psych.best_niche ? html`<span class="cpl-badge ppc">Best niche: ${psych.best_niche}</span>` : ''}
+        </div>
+      ` : ''}
+    </div>
+  `;
+}
 function App() {
 
 
@@ -8017,7 +8934,11 @@ function App() {
             active.id === 'health-monitor' ? html`<${HealthMonitor} />` :
             active.id === 'personality'   ? html`<${Personality} />` :
             active.id === 'strategist'    ? html`<${Strategist} />` :
+            active.id === 'business-planner' ? html`<${BusinessPlannerDashboard} />` :
             active.id === 'analytics'     ? html`<${Analytics} />` :
+            active.id === 'psychology'    ? html`<${PsychologyDashboard} />` :
+            active.id === 'self-awareness' ? html`<${SelfAwarenessDashboard} />` :
+            active.id === 'agent-os'       ? html`<${AgentOSDashboard} />` :
             active.id === 'bridge'        ? html`<${Bridge} />` :
             active.id === 'affiliates'    ? html`<${Affiliates} />` :
             active.id === 'cpl-pricing'   ? html`<${CplPricing} />` :

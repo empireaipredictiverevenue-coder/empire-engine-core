@@ -134,6 +134,9 @@ from empire_network_agent import register_network_routes
 from empire_loop_agent import register_loop_routes
 from empire_analytics_agent import AnalyticsAgent
 from empire_psychology_mind_map import register_psychology_routes
+from empire_self_awareness import register_self_awareness_routes
+from empire_business_planner import register_business_planner_routes
+from empire_agent_os import AgentKernel, register_agent_os_routes
 
 
 logging.basicConfig(level=logging.INFO)
@@ -662,6 +665,11 @@ register_stack_routes(app, require_auth=require_auth, get_db=get_db)
 register_network_routes(app, require_auth=require_auth, get_db=get_db)
 register_loop_routes(app, require_auth=require_auth, get_db=get_db)
 register_psychology_routes(app, require_auth=require_auth)
+register_self_awareness_routes(app, require_auth=require_auth, get_db=get_db)
+register_business_planner_routes(app, require_auth=require_auth)
+# Agentic OS Kernel — instantiated here because it's needed by route registration below
+agent_os_kernel = AgentKernel()
+register_agent_os_routes(app, kernel=agent_os_kernel, require_auth=require_auth, get_db=get_db)
 register_auth_routes(app, auth_engine=auth_engine, require_auth=require_auth)
 register_inbound_routes(app, inbound_triage, require_auth=require_auth)
 register_console_routes(app, console=console, require_auth=require_auth, get_db=get_db)
@@ -1133,6 +1141,8 @@ HookRoutes(require_auth=require_auth).register(app)
 # ── Strategist & Analytics Agents ───────────────────────────────────
 strategist_agent = StrategistAgent(get_db=get_db)
 analytics_agent = AnalyticsAgent(get_db=get_db)
+
+# Agentic OS Kernel was moved above route registration (see ROUTES section)
 
 
 # ── Synthetic Intelligence Brain (Operator → LLM → Kokoro TTS → FFmpeg Render) ──
@@ -2206,6 +2216,14 @@ except Exception:
     pass
 
 
+async def _agent_os_boot():
+    """Boot the Agentic OS kernel after a short delay to let other
+    systems stabilize."""
+    await asyncio.sleep(5)
+    await agent_os_kernel.boot()
+    log.info("[hub] Agentic OS kernel booted")
+
+
 async def _si_evolution_loop():
     """Background tick: evolve strategies every 5 minutes, adopt SI params every 60s."""
     evolve_every = 300   # seconds
@@ -2290,6 +2308,9 @@ async def startup():
     asyncio.create_task(suite_email_dispatcher.monitoring_loop())
     # Trial Conversion — auto-convert expired trials to paid every hour
     asyncio.create_task(suite_trial_conversion.monitoring_loop())
+    # Agentic OS — boot the kernel (registers built-in agents and starts scheduling)
+    asyncio.create_task(_agent_os_boot())
+
     log.info("Empire V49 · Operational")
 
 

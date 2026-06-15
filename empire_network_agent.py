@@ -85,17 +85,17 @@ class NetworkAgent:
                         if isinstance(specialties, list):
                             specialties = ", ".join(specialties)
                         members.append({
-                            "id": row.get("id", "")[:12],
-                            "name": row.get("name", "") or "Unnamed",
+                            "id": (row.get("id") or "")[:12],
+                            "name": row.get("name") or "Unnamed",
                             "type": "contractor",
                             "niche": specialties[:40] if specialties else "General",
-                            "metro": row.get("metro", "") or "Unknown",
+                            "metro": row.get("metro") or "Unknown",
                             "status": "active" if row.get("active") else "pending",
                             "leads": int(row.get("completed_jobs", 0) or 0),
                             "conversions": int(row.get("completed_jobs", 0) or 0) // 2,
                             "revenue": int(row.get("completed_jobs", 0) or 0) * 5000,
                             "quality_score": float(row.get("trust_score", 0) or 0),
-                            "joined": row.get("created_at", "")[:10] if row.get("created_at") else "",
+                            "joined": (row.get("created_at") or "")[:10],
                         })
                 except Exception:
                     pass

@@ -7,6 +7,7 @@ for per-vertical pricing strategy — CPL lookups, model recommendations,
 ROI estimates, and margin calculations across all 32 lanes.
 """
 
+import math
 from typing import Dict, List, Optional, Tuple
 
 from empire_tokens import empire_head
@@ -196,6 +197,8 @@ _LANE_NICHE_MAP: Dict[int, Dict[str, str]] = {
     33: {"niche": "Financial Services",  "sub_niche": "Debt Settlement", "strategy": "FINANCIAL_STRIKE"},
     34: {"niche": "Home Services",       "sub_niche": "Solar Installation", "strategy": "AGGRESSIVE_STRIKE"},
     35: {"niche": "Home Services",       "sub_niche": "Plumbing", "strategy": "UGLY_BANNER"},
+    36: {"niche": "Home Services",       "sub_niche": "Water Damage Restoration", "strategy": "AGGRESSIVE_STRIKE"},
+    37: {"niche": "Home Services",       "sub_niche": "Plumbing", "strategy": "AGGRESSIVE_STRIKE"},
 }
 
 
@@ -237,6 +240,8 @@ class CPLPricingEngine:
         """Search all niches for a sub-niche matching `query` (case-insensitive).
         Returns (niche_name, sub_niche_name, data) or None.
         """
+        if not query:
+            return None
         q = query.lower()
         for niche_name, niche_data in CPL_BENCHMARKS.items():
             for sn_name, sn_data in niche_data.get("sub_niches", {}).items():
@@ -363,7 +368,7 @@ class CPLPricingEngine:
         monthly_revenue = sell_price_per_lead * monthly_volume * close_rate
         gross_margin = monthly_revenue - monthly_acquisition_cost
         roi_pct = (gross_margin / monthly_acquisition_cost * 100) if monthly_acquisition_cost > 0 else 0
-        breakeven_volume = int(monthly_acquisition_cost / max(sell_price_per_lead * close_rate, 0.01))
+        breakeven_volume = int(math.ceil(monthly_acquisition_cost / max(sell_price_per_lead * close_rate, 0.01)))
 
         return {
             "niche": niche,
@@ -434,7 +439,7 @@ class CPLPricingEngine:
         Useful for the pricing page, API, and automated lane pricing strategies.
         """
         lanes = []
-        for lane_id in range(36):
+        for lane_id in range(38):
             lm = _LANE_NICHE_MAP.get(lane_id)
             if not lm:
                 continue
@@ -460,6 +465,17 @@ class CPLPricingEngine:
                 continue
 
             ppl_range = CPLPricingEngine.cpl_range(sn_data, "ppl")
+
+            # SEO/service lanes have None CPL values — mark as unavailable
+            if ppl_range == (None, None):
+                lanes.append({
+                    "lane_id": lane_id,
+                    "niche": niche,
+                    "sub_niche": sub_niche,
+                    "strategy": lm["strategy"],
+                    "cpl_available": False,
+                })
+                continue
             ppc_range = CPLPricingEngine.cpl_range(sn_data, "ppc")
 
             best_model = sn_data.get("best", CPL_BENCHMARKS.get(niche, {}).get("best_model", "both"))
@@ -480,6 +496,13 @@ class CPLPricingEngine:
                 "strategy": lm["strategy"],
                 "best_model": best_model,
                 "cpl_available": True,
+                "ppc_ready": (best_model in ("ppc", "both")) and (
+                    "storm" in (sn_data.get("trigger", "") or "").lower()
+                    or "roofing" in niche.lower()
+                    or ("emergency" in (sn_data.get("trigger", "") or "").lower() and best_model == "ppc")
+                    or "flood" in (sn_data.get("trigger", "") or "").lower()
+                    or "burst" in (sn_data.get("trigger", "") or "").lower()
+                ),
                 "cpl": {
                     "ppl": {"low": ppl_range[0], "high": ppl_range[1]},
                     "ppc": {"low": ppc_range[0], "high": ppc_range[1]},

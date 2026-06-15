@@ -430,26 +430,39 @@ class LocalBrainContext:
         payload so the server does grammar-constrained sampling — the LLM
         physically cannot emit tokens that don't conform to the schema. This
         is much more reliable than a free-form "return JSON" instruction in
-        the system prompt (Ollama: https://github.com/ollama/ollama/blob/main/docs/api.md#request-with-format).
+        the system prompt.
+
+        When `format_schema` is None, the LLM returns plain text by default
+        (no JSON constraint). The response is returned as {"response": text}.
+        When a schema is provided, the LLM returns structured JSON matching
+        that schema.
         """
         conn = http.client.HTTPConnection("localhost", 11434)
         headers = {"Content-Type": "application/json"}
-        payload = {
-            "model": os.environ.get("OLLAMA_MODEL", "llama3.2:3b"), # Swappable via OLLAMA_MODEL env var (e.g. "qwen3:8b", "llama3:8b")
+        payload: Dict[str, Any] = {
+            "model": os.environ.get("OLLAMA_MODEL", "llama3.2:3b"),
             "messages": [
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt}
             ],
             "stream": False,
-            # Grammar-constrained sampling when schema is provided; free-form
-            # "json" mode (less reliable) when not.
-            "format": format_schema if format_schema is not None else "json",
         }
+        # Only set format when a schema is provided; otherwise the LLM
+        # returns plain text (the default Ollama behavior).
+        if format_schema is not None:
+            payload["format"] = format_schema
+
         try:
             conn.request("POST", "/api/chat", json.dumps(payload), headers)
             response = conn.getresponse()
-            res_data = json.loads(response.read().decode())
-            return json.loads(res_data["message"]["content"])
+            raw = response.read().decode()
+            res_data = json.loads(raw)
+            content = res_data["message"]["content"]
+            # If a schema was provided, parse content as JSON; otherwise
+            # return the plain text response.
+            if format_schema is not None:
+                return json.loads(content)
+            return {"response": content}
         except Exception as e:
             return {"error": f"LLM Connection failed: {str(e)}"}
         finally:
@@ -681,9 +694,9 @@ async def chat_ask(
     )
     if "error" in result:
         return JSONResponse({"ok": False, "error": result["error"]}, status_code=503)
-    # The LLM returns JSON by default (format="json" in ask_local_llm).
-    # If the result is a dict with a string response, extract it.
-    # Otherwise, coerce the whole dict to text.
+    # ask_local_llm returns plain text (~{"response": text}) when no
+    # format_schema is provided (the default for this endpoint). Extract
+    # the response field, or fall back to any known key, or serialize.
     if isinstance(result, dict):
         response = result.get("response") or result.get("answer") or result.get("reply") or json.dumps(result)
     else:

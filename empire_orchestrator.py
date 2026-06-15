@@ -25,7 +25,7 @@ _NICHE_MAP = (
     (("tornado",),                       "Tornado Damage Repair"),
     (("hurricane",),                     "Hurricane Damage Restoration"),
     (("hail",),                          "Hail Damage Repair"),
-    (("flood", "flash flood"),            "Flood Damage Restoration"),
+    (("flood", "flash flood", "water", "heavy rain"), "Water Damage Restoration"),
     (("thunderstorm", "severe storm", "wind"),  "Storm Damage Restoration"),
 )
 _DEFAULT_NICHE = "Roofing Restoration"
