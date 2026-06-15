@@ -263,7 +263,9 @@ def run() -> dict:
 
             # urgency is high (real human replied YES) but cap at 10
             urgency = 9
-            specialties = ["commercial_roofing", "storm_damage"]
+            # Use specialties that match what contractors actually have in the DB
+            # Contractors: roofing (178), hvac (164), restoration (73), general_contractor (45)
+            specialties = ["roofing", "restoration", "general_contractor"]
 
             if cfg["dry_run"]:
                 # log would-dispatch, do NOT call hub
