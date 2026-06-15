@@ -99,9 +99,23 @@ def _update_config(sb, agent_name, status, finished_at):
 
 
 def _pick_sequence(lead: dict) -> str:
-    """Pick the sequence based on what we have on the lead."""
+    """Pick the sequence based on what we have on the lead.
+
+    Storm-strike leads go into one of two A/B cohorts based on a stable
+    hash of the lead id, so the cohort split is reproducible across
+    re-runs of the agent. 50/50 split:
+      - "storm_strike"     : the new shorter copy (≤200 chars per touch)
+      - "storm_strike_v2"  : the longer scarcity copy (the original v2)
+
+    Reply-rate comparison is via the operator SPA's "Reply rate by
+    sequence" view (TODO) and the per-sequence reply counts in
+    sms_sequences WHERE status='replied'.
+    """
     if lead.get("phone"):
-        return "storm_strike"
+        import hashlib
+        h = hashlib.md5(str(lead.get("id", "")).encode()).hexdigest()
+        bucket = int(h[:8], 16) % 2
+        return "storm_strike" if bucket == 0 else "storm_strike_v2"
     if lead.get("email"):
         return "lead_nurture"
     return "manual"

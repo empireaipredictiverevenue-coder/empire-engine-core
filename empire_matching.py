@@ -758,6 +758,28 @@ def register_matching_routes(
     async def matching_stats(auth: bool = Depends(require_auth)):
         return matcher.stats
 
+    # ── OPERATOR: DISPATCHES LIST (for the operator SPA "Dispatches" section) ─
+    @app.get("/api/v1/matching/dispatches")
+    async def matching_dispatches(
+        status: str = "all",
+        limit: int = 50,
+        auth: bool = Depends(require_auth),
+    ):
+        """List recent dispatches with status filter. Used by the operator SPA
+        "Dispatches" section to render the mark-settled UI."""
+        try:
+            db = matcher.get_db()
+            q = (db.table("dispatches")
+                   .select("id, created_at, lead_id, contractor_id, match_score, status, payout_amount, meta, accepted_at, completed_at, ghosted_at")
+                   .order("created_at", desc=True)
+                   .limit(max(1, min(limit, 500))))
+            if status and status != "all":
+                q = q.eq("status", status)
+            res = q.execute()
+            return {"dispatches": res.data or []}
+        except Exception as e:
+            raise HTTPException(500, str(e))
+
     # ── OPERATOR: LEADERBOARD ──────────────────────────────────────────
     @app.get("/api/v1/matching/leaderboard")
     async def matching_leaderboard(
