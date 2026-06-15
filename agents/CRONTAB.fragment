@@ -31,3 +31,16 @@
 # from `prospects` on :15. Without this, prospector_bridge has nothing to bridge
 # and contractor_outreach has nothing to recruit.
 5 */6 * * * /bin/bash /root/empire-v49/agents/prospector/cron.sh >> /root/empire-v49/logs/agent_prospector.log 2>&1
+
+# 9. Retarget — every 6h on :07. Walks replied sequences, reactivates soft-replies.
+# Conservative: skips DNC, already-active, STOP, YES, and phones with failed_send_count>=3.
+7 */6 * * * /bin/bash /root/empire-v49/agents/retarget/cron.sh >> /root/empire-v49/logs/agent_retarget.log 2>&1
+
+# 10. Warp Scout — every 6h on :50. Queries NOAA Storm Prediction Center,
+# writes per-metro risk to storm_risk_log, alerts on Slight+ (rank>=4).
+# Replaces the orphaned bots/storm_predictor.py while-loop daemon.
+50 */6 * * * /bin/bash /root/empire-v49/agents/warp_scout/cron.sh >> /root/empire-v49/logs/agent_warp_scout.log 2>&1
+
+# 11. Fee Watcher — every 6h on :55. Polls for settled-claim events.
+# Disabled by default until a claim event source (webhook or polling) is wired.
+55 */6 * * * /bin/bash /root/empire-v49/agents/fee_watcher/cron.sh >> /root/empire-v49/logs/agent_fee_watcher.log 2>&1

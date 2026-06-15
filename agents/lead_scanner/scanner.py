@@ -121,19 +121,37 @@ def run() -> dict:
                 .execute())
     # Filter to the lookback window in Python (so we can fall back to "all-time" if empty)
     candidates = [r for r in (rt_res.data or []) if r.get("created_at", "") >= since]
+    in_fallback = False
     if not candidates:
-        # First-run / backfill mode: no recent ones — take any active, oldest first
-        log.info(f"scanner: no radar_targets in last {cfg['lookback_hours']}h — falling back to all-time")
-        candidates = rt_res.data or []
+        # First-run / backfill mode: no recent ones. Re-query for the NEWEST
+        # active radar_targets (the previous query was order=asc, so we got the
+        # oldest first — that meant dedup ate them all because they were
+        # already in enriched_leads).
+        in_fallback = True
+        log.info(f"scanner: no radar_targets in last {cfg['lookback_hours']}h — falling back to all-time, NEWEST first")
+        fb_res = (sb.table("radar_targets")
+                    .select("id, address, city, state, phone, email, warehouse_name, asset_value, status, created_at, meta, source")
+                    .eq("status", "active")
+                    .order("created_at", desc=True)   # newest first in fallback
+                    .limit(cfg["max_per_run"] * 2)
+                    .execute())
+        candidates = fb_res.data or []
     log.info(f"scanner: {len(candidates)} candidate radar_targets since {since}")
 
-    # 2) Filter out ones we already have
+    # 2) Filter out ones we already have. Chunk the .in_() query so we
+    # don't blow up the URL on big backlogs (supabase returns invalid_json
+    # when the .in_() list is too long).
     if candidates:
-        existing_res = (sb.table("enriched_leads")
-                          .select("radar_target_id")
-                          .in_("radar_target_id", [r["id"] for r in candidates])
-                          .execute())
-        already = {r["radar_target_id"] for r in (existing_res.data or [])}
+        candidate_ids = [r["id"] for r in candidates]
+        CHUNK = 200
+        already: set = set()
+        for i in range(0, len(candidate_ids), CHUNK):
+            chunk = candidate_ids[i:i + CHUNK]
+            existing_res = (sb.table("enriched_leads")
+                              .select("radar_target_id")
+                              .in_("radar_target_id", chunk)
+                              .execute())
+            already.update(r["radar_target_id"] for r in (existing_res.data or []))
         candidates = [r for r in candidates if r["id"] not in already]
         log.info(f"scanner: {len(candidates)} after dedup against enriched_leads")
 
@@ -148,44 +166,71 @@ def run() -> dict:
     for rt in candidates:
         try:
             # best-effort city/state extraction from address if missing.
-            # Format: "<house_num> <street> [<city>] [<state_zip>]" — state is the second-to-last
-            # token when the last token is a 5-digit zip, else the last token.
+            # Real-world addresses from Google Places are comma-separated:
+            #   "<street>, <city>, <ST> <zip>, <country>"
+            # Empire-pipeline rows sometimes have just a business name in
+            # the address column — those can't be parsed, leave blank.
             city = rt.get("city")
             state = rt.get("state")
-            if not city or not state:
-                addr = rt.get("address") or ""
-                tokens = addr.split()
-                if len(tokens) >= 2:
-                    last = tokens[-1]
-                    if len(last) == 5 and last.isdigit():  # zip — state is 2nd-to-last
-                        if not state and len(tokens) >= 2:
-                            state = tokens[-2]
-                        if not city and len(tokens) >= 3:
-                            city = tokens[-3]
-                    else:
-                        if not state:
-                            state = tokens[-1]
-                        if not city and len(tokens) >= 2:
-                            city = tokens[-2]
+            meta = rt.get("meta") or {}
+            raw = meta.get("raw") or {}
+
+            # prefer Google Places structured data if available
+            if not city and raw.get("city"):
+                city = raw.get("city")
+            if not state and raw.get("state"):
+                state = raw.get("state")
+
+            # fall back to parsing the comma-separated address
+            if (not city or not state) and rt.get("address"):
+                addr = (rt.get("address") or "").strip()
+                # The address is comma-separated. Split on commas.
+                parts = [p.strip() for p in addr.split(",") if p.strip()]
+                if len(parts) >= 2:
+                    # Try: parts[-1] = country, parts[-2] = "ST zip", parts[-3] = city
+                    if not state and len(parts) >= 2:
+                        # second-to-last usually has "<ST> <zip>" or just "<ST>"
+                        st_zip = parts[-2] if not (len(parts) >= 3 and parts[-1] in ("USA", "US", "United States")) else parts[-2]
+                        # extract the 2-letter state
+                        st_tokens = st_zip.split()
+                        if st_tokens and len(st_tokens[0]) == 2 and st_tokens[0].isupper():
+                            state = st_tokens[0]
+                    if not city and len(parts) >= 3:
+                        # If last part is a country, city is parts[-3]; else parts[-2]
+                        if parts[-1] in ("USA", "US", "United States"):
+                            city = parts[-3] if len(parts) >= 3 else None
+                        else:
+                            city = parts[-2]
+
+            # phone fallback: top-level first, then meta.raw.phone
+            phone = rt.get("phone") or raw.get("phone")
+            if phone and isinstance(phone, str):
+                digits = "".join(c for c in phone if c.isdigit())
+                if len(digits) == 10:
+                    phone = "+1" + digits
+                elif len(digits) == 11 and digits.startswith("1"):
+                    phone = "+" + digits
+                elif not phone.startswith("+"):
+                    phone = phone  # leave as-is if can't normalize
 
             # warehouse_name fallback: meta.raw.name or meta.warehouse_name
             wh_name = rt.get("warehouse_name")
-            if not wh_name and rt.get("meta"):
-                wh_name = (rt["meta"].get("warehouse_name")
-                           or (rt["meta"].get("raw") or {}).get("name"))
+            if not wh_name and meta:
+                wh_name = (meta.get("warehouse_name")
+                           or raw.get("name"))
 
             insert_row = {
                 "radar_target_id": rt["id"],
                 "address": rt.get("address"),
                 "city": city,
                 "state": state,
-                "phone": rt.get("phone"),
-                "email": rt.get("email"),
+                "phone": phone,
+                "email": rt.get("email") or raw.get("email"),
                 "warehouse_name": wh_name,
                 "asset_value": rt.get("asset_value"),
                 "source": "radar_targets",
                 "status": "pending_enrichment",
-                "meta": rt.get("meta") or {},
+                "meta": meta,
             }
             sb.table("enriched_leads").insert(insert_row).execute()
             rows_processed += 1
