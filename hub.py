@@ -4526,6 +4526,63 @@ async def leads_ingest(request: Request, auth: bool = Depends(require_auth)):
     })
 
 
+# ─────────────────────────────────────────────────────────────────────
+# SMS NICHE PERFORMANCE — per-type breakdown for SPA dashboard
+# ─────────────────────────────────────────────────────────────────────
+
+@app.get("/api/v1/sms/niche-stats")
+async def sms_niche_stats(auth: bool = Depends(require_auth)):
+    """Return SMS sequence performance broken down by sequence_type (niche)."""
+    db = get_db()
+    try:
+        r = db.table("sms_sequences").select("sequence_type,status,current_step,phone").limit(3000).execute()
+        rows = r.data or []
+    except Exception as e:
+        return JSONResponse({"error": str(e)[:200], "niches": []}, status_code=500)
+
+    from collections import defaultdict
+    buckets = defaultdict(lambda: {"total": 0, "active": 0, "replied": 0,
+                                    "completed": 0, "opted_out": 0,
+                                    "paused": 0, "step_sum": 0, "phone_count": 0})
+    for row in rows:
+        st = row.get("sequence_type") or "unknown"
+        b = buckets[st]
+        b["total"] += 1
+        status = row.get("status", "")
+        if status == "active":
+            b["active"] += 1
+        elif status == "replied":
+            b["replied"] += 1
+        elif status == "completed":
+            b["completed"] += 1
+        elif status == "opted_out":
+            b["opted_out"] += 1
+        elif status == "paused":
+            b["paused"] += 1
+        b["step_sum"] += row.get("current_step", 0) or 0
+        if row.get("phone"):
+            b["phone_count"] += 1
+
+    niches = []
+    for st, b in sorted(buckets.items(), key=lambda x: -x[1]["total"]):
+        avg_step = round(b["step_sum"] / b["total"], 1) if b["total"] else 0
+        label = st.replace("_", " ").title()
+        niches.append({
+            "sequence_type": st,
+            "label": label,
+            "total": b["total"],
+            "active": b["active"],
+            "replied": b["replied"],
+            "completed": b["completed"],
+            "opted_out": b["opted_out"],
+            "paused": b["paused"],
+            "avg_step": avg_step,
+            "with_phone": b["phone_count"],
+        })
+
+    return JSONResponse({"niches": niches, "total": sum(b["total"] for b in buckets.values())})
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
