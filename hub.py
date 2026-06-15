@@ -59,6 +59,7 @@ from empire_fee_operator import register_operator_mark_settled
 from empire_abtest import register_ab_test_routes
 from empire_predictive import register_predictive_routes
 from empire_carrier import register_mock_carrier_routes
+from empire_inbound_monitor import register_inbound_monitor_routes
 from empire_auth import AuthEngine, register_auth_routes, require_role
 from empire_inbound import InboundCallTriage, register_inbound_routes
 from empire_brain_memory import BrainMemory
@@ -666,6 +667,7 @@ register_operator_mark_settled(app, require_auth=require_auth, get_db=get_db)
 register_ab_test_routes(app, require_auth=require_auth, get_db=get_db)
 register_predictive_routes(app, require_auth=require_auth, get_db=get_db)
 register_mock_carrier_routes(app, require_auth=require_auth, get_db=get_db)
+register_inbound_monitor_routes(app, require_auth=require_auth, get_db=get_db)
 register_profit_margin_routes(app, require_auth=require_auth, get_db=get_db)
 register_traffic_ads_routes(app, require_auth=require_auth, get_db=get_db)
 register_stack_routes(app, require_auth=require_auth, get_db=get_db)
@@ -4413,6 +4415,117 @@ async def webhook_lead(request: fastapi.Request, x_empire_secret: str = fastapi.
         })
     except Exception as e:
         return JSONResponse({"error": f'Database write error: {str(e)}'}, status_code=500)
+
+# ─────────────────────────────────────────────────────────────────────
+# LEAD INGESTION API — lightweight POST endpoint for radar_targets
+# ─────────────────────────────────────────────────────────────────────
+
+@app.post("/api/v1/leads/ingest")
+async def leads_ingest(request: Request, auth: bool = Depends(require_auth)):
+    """
+    Lightweight lead ingestion endpoint.
+
+    Accepts a single lead dict or a batch {leads: [...]}. Writes each
+    lead to radar_targets after deduplication by phone number and
+    warehouse_name+city. Idempotent.
+
+    Body (single): { warehouse_name (required), phone?, email?, address?, city?, state?, ... }
+    Body (batch): { leads: [...] }
+
+    Returns: { ok, ingested, skipped, errors }
+    """
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse({"ok": False, "error": "invalid_json"}, status_code=400)
+
+    db = get_db()
+    now_iso = datetime.now(timezone.utc).isoformat()
+
+    raw_leads = body.get("leads", [body]) if isinstance(body, dict) else []
+    if not raw_leads or not isinstance(raw_leads, list):
+        return JSONResponse({"ok": False, "error": "body must be a lead dict or {leads: [...]}"}, status_code=400)
+
+    ingested = 0
+    skipped = 0
+    errors = []
+
+    for i, lead in enumerate(raw_leads):
+        if not isinstance(lead, dict):
+            skipped += 1
+            errors.append({"index": i, "error": "not_a_dict"})
+            continue
+
+        name = (lead.get("warehouse_name") or "").strip()
+        if not name:
+            skipped += 1
+            errors.append({"index": i, "error": "warehouse_name_required"})
+            continue
+
+        phone = (lead.get("phone") or "").strip()
+        city = (lead.get("city") or "").strip()
+
+        # Dedup: skip if phone exists OR same name+city
+        try:
+            if phone:
+                dup = db.table("radar_targets").select("id").eq("phone", phone).limit(1).execute()
+                if dup.data:
+                    skipped += 1
+                    errors.append({"index": i, "error": "duplicate_phone", "phone": phone})
+                    continue
+
+            if city:
+                dup = db.table("radar_targets").select("id") \
+                    .eq("warehouse_name", name[:200]) \
+                    .eq("city", city) \
+                    .limit(1).execute()
+                if dup.data:
+                    skipped += 1
+                    errors.append({"index": i, "error": "duplicate_name_city", "name": name[:50], "city": city})
+                    continue
+        except Exception as e:
+            skipped += 1
+            errors.append({"index": i, "error": f"dedup_check_failed: {e}"})
+            continue
+
+        # Build insert payload
+        source = (lead.get("source") or "api_ingest").strip()
+        meta = dict(lead.get("meta") or {})
+        meta["source"] = source
+        meta["ingested_at"] = now_iso
+
+        insert_payload = {
+            "warehouse_name": name[:200],
+            "phone": phone[:20],
+            "email": (lead.get("email") or "").strip()[:200],
+            "address": (lead.get("address") or "").strip()[:300],
+            "city": city[:100],
+            "state": (lead.get("state") or "").strip()[:10],
+            "source_url": (lead.get("source_url") or "").strip()[:500],
+            "status": (lead.get("status") or "active").strip(),
+            "asset_value": int(lead["asset_value"]) if lead.get("asset_value") is not None else None,
+            "urgency_score": int(lead["urgency_score"]) if lead.get("urgency_score") is not None else None,
+            "damage_severity": (lead.get("damage_severity") or "").strip()[:50] or None,
+            "meta": meta,
+            "created_at": now_iso,
+        }
+        insert_payload = {k: v for k, v in insert_payload.items() if v is not None}
+
+        try:
+            db.table("radar_targets").insert(insert_payload).execute()
+            ingested += 1
+        except Exception as e:
+            skipped += 1
+            errors.append({"index": i, "error": f"insert_failed: {str(e)[:200]}", "name": name[:50]})
+
+    return JSONResponse({
+        "ok": ingested > 0 or len(errors) == 0,
+        "ingested": ingested,
+        "skipped": skipped,
+        "errors": errors[:50],
+    })
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
