@@ -517,11 +517,16 @@ async def _chat_handler(
     except Exception:
         return JSONResponse({"ok": False, "error": "invalid_json"}, status_code=400)
 
+    if not isinstance(body, dict):
+        return JSONResponse({"ok": False, "error": "invalid_payload"}, status_code=400)
+
     session_id = (body.get("session_id") or "").strip()
     message = (body.get("message") or "").strip()
 
     if not session_id:
         return JSONResponse({"ok": False, "error": "missing_session_id"}, status_code=400)
+    if len(session_id) > 128:
+        return JSONResponse({"ok": False, "error": "session_id_too_long"}, status_code=400)
     if not message:
         return JSONResponse({"ok": False, "error": "missing_message"}, status_code=400)
     if len(message) > 2000:
@@ -574,7 +579,8 @@ async def _chat_handler(
             )
             if r.status_code < 500:
                 data = r.json()
-                reply = data.get("response", "")
+                # Try common reply keys in order of likelihood
+                reply = data.get("response") or data.get("reply") or data.get("answer") or ""
             else:
                 reply = ""
     except Exception as e:

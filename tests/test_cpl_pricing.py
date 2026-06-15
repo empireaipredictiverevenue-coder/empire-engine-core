@@ -393,11 +393,11 @@ class TestSuggestSellPrice:
 
 class TestLanePricing:
 
-    def test_all_38_lanes_returned(self, engine):
-        """lane_pricing() should return data for all 38 lanes."""
+    def test_all_41_lanes_returned(self, engine):
+        """lane_pricing() should return data for all 41 lanes."""
         result = engine.lane_pricing()
-        assert result["total_lanes"] == 38
-        assert len(result["lanes"]) == 38
+        assert result["total_lanes"] == 41
+        assert len(result["lanes"]) == 41
 
     def test_lane_0_roofing(self, engine):
         """Lane 0 should be Roofing Restoration with valid CPL data."""
@@ -445,7 +445,7 @@ class TestLanePricing:
         result = engine.lane_pricing()
         ids = [l["lane_id"] for l in result["lanes"]]
         assert len(ids) == len(set(ids)), "lane IDs should be unique"
-        assert sorted(ids) == list(range(38))
+        assert sorted(ids) == list(range(41))
 
     def test_lane_roi_included(self, engine):
         """Each lane should include ROI data (except SEO/service lanes)."""
@@ -461,8 +461,8 @@ class TestLanePricing:
         assert "suggested_pricing" in lane10
         assert lane10["suggested_pricing"]["target_margin_pct"] == 60.0
 
-    def test_all_38_lanes_match_expected_niches(self, engine):
-        """Verify that all 38 lanes have the expected niche assignments."""
+    def test_all_41_lanes_match_expected_niches(self, engine):
+        """Verify that all 41 lanes have the expected niche assignments."""
         result = engine.lane_pricing()
         expected = {
             0: "Roofing Restoration", 5: "HVAC", 7: "SEO", 10: "Legal",
@@ -694,7 +694,7 @@ class TestIdempotencyAndConcurrency:
         r1 = engine.lane_pricing(model="both", monthly_volume=100)
         r2 = engine.lane_pricing(model="both", monthly_volume=100)
         assert r1["total_lanes"] == r2["total_lanes"]
-        for i in range(38):
+        for i in range(41):
             assert r1["lanes"][i]["lane_id"] == r2["lanes"][i]["lane_id"]
             assert r1["lanes"][i]["niche"] == r2["lanes"][i]["niche"]
             assert r1["lanes"][i]["cpl_available"] == r2["lanes"][i]["cpl_available"]
@@ -705,7 +705,7 @@ class TestIdempotencyAndConcurrency:
         """10 rapid sequential calls (simulating 5 min of 30s auto-refresh) should all return valid data."""
         for i in range(10):
             result = engine.lane_pricing(model="both", monthly_volume=100)
-            assert len(result["lanes"]) == 38, f"Call {i}: expected 38 lanes, got {len(result['lanes'])}"
+            assert len(result["lanes"]) == 41, f"Call {i}: expected 41 lanes, got {len(result['lanes'])}"
             # Every lane should have a valid structure
             for lane in result["lanes"]:
                 assert "lane_id" in lane
@@ -724,7 +724,7 @@ class TestIdempotencyAndConcurrency:
         for vol in volumes:
             result = engine.lane_pricing(model="both", monthly_volume=vol)
             assert result["total_lanes"] == reference["total_lanes"]
-            for i in range(38):
+            for i in range(41):
                 assert result["lanes"][i]["lane_id"] == reference["lanes"][i]["lane_id"]
                 assert result["lanes"][i]["niche"] == reference["lanes"][i]["niche"]
                 assert result["lanes"][i]["cpl_available"] == reference["lanes"][i]["cpl_available"]
@@ -737,7 +737,7 @@ class TestIdempotencyAndConcurrency:
         ppl = engine.lane_pricing(model="ppl", monthly_volume=100)
         ppc = engine.lane_pricing(model="ppc", monthly_volume=100)
         assert ppl["total_lanes"] == ppc["total_lanes"]
-        for i in range(38):
+        for i in range(41):
             assert ppl["lanes"][i]["lane_id"] == ppc["lanes"][i]["lane_id"]
             assert ppl["lanes"][i]["niche"] == ppc["lanes"][i]["niche"]
             assert ppl["lanes"][i]["cpl_available"] == ppc["lanes"][i]["cpl_available"]
@@ -784,7 +784,7 @@ class TestIdempotencyAndConcurrency:
         engine.lane_pricing(model="ppc", monthly_volume=1)
         # Subsequent call should be clean
         result = engine.lane_pricing(model="both", monthly_volume=100)
-        assert result["total_lanes"] == 38
+        assert result["total_lanes"] == 41
         lane0 = result["lanes"][0]
         assert lane0["cpl"]["ppl"]["low"] == 162  # Roofing data should be intact
         assert lane0["cpl"]["ppc"]["low"] == 11
