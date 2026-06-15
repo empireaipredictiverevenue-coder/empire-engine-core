@@ -395,6 +395,24 @@ _SPA_CSS = """
 .ld-note-save:disabled{opacity:.5;cursor:default}
 .ld-empty{font-family:var(--font-ui);font-size:11px;color:var(--empire-fog);font-style:italic;padding:32px 0;text-align:center}
 
+/* ── SMS PERFORMANCE DASHBOARD ─────────────────────────────────── */
+.sms-niche-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:14px;margin-bottom:24px}
+.sms-niche-card{background:var(--empire-surface);border:1px solid var(--empire-divider);padding:16px 18px;position:relative;overflow:hidden;transition:border-color .2s var(--ease-snap)}
+.sms-niche-card:hover{border-color:var(--empire-border-hi)}
+.sms-niche-card::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,var(--signal-teal-soft),transparent)}
+.sms-niche-val{font-family:var(--font-display);font-weight:200;font-size:28px;color:var(--empire-white);line-height:1}
+.sms-niche-val.teal{color:var(--signal-teal)}
+.sms-niche-val.cyan{color:var(--strike-cyan)}
+.sms-niche-val.dim{color:var(--empire-mist)}
+.sms-niche-val.warn{color:var(--status-amber)}
+.sms-niche-lbl{font-family:var(--font-mono);font-size:9px;color:var(--empire-fog);letter-spacing:.14em;text-transform:uppercase;margin-top:6px}
+.sms-niche-table-wrap{background:var(--empire-surface);border:1px solid var(--empire-border);overflow:hidden}
+.sms-niche-bar{height:6px;border-radius:3px;transition:width .6s var(--ease-out-empire);min-width:2px}
+.sms-niche-bar.active{background:var(--signal-teal)}
+.sms-niche-bar.replied{background:var(--strike-cyan)}
+.sms-niche-bar.opted_out{background:var(--status-amber)}
+.sms-niche-bar.completed{background:rgba(68,229,184,0.3)}
+
 /* ── ACTIVITY LOG ────────────────────────────────────────────────── */
 .act-feed{max-height:70vh;overflow-y:auto;background:var(--empire-surface);border:1px solid var(--empire-border);padding:4px 0}
 .act-day{font-family:var(--font-mono);font-size:9px;color:var(--empire-fog);letter-spacing:.14em;text-transform:uppercase;padding:14px 18px 8px;border-bottom:1px solid var(--empire-divider)}
@@ -1620,6 +1638,7 @@ const NAV_GROUPS = [
       { id: 'inbound',       label: 'Inbound',        sub: 'Calls · triage · recordings' },
       { id: 'leads',         label: 'Leads',          sub: 'Inbound leads · pipeline · intake' },
       { id: 'kanban',        label: 'Kanban',         sub: 'Agent task queue · pipeline stages' },
+      { id: 'sms-performance', label: 'SMS Performance', sub: 'Niche breakdown · sequence stats' },
     ]
   },
   {
@@ -5303,6 +5322,113 @@ function SniperFleet() {
 
 
 /* ── EMAIL TRACKING SECTION ───────────────────────────────────── */
+
+// ── SMS PERFORMANCE — niche-specific sequence breakdown ──────────────
+function SmsPerformance() {
+  const [data, setData] = React.useState(null);
+  const [busy, setBusy] = React.useState(true);
+  const [err, setErr] = React.useState(null);
+
+  const reload = React.useCallback(async () => {
+    setBusy(true);
+    try {
+      const r = await apiFetch('/api/v1/sms/niche-stats').then(x => x.json());
+      setData(r);
+      setErr(null);
+    } catch (e) {
+      setErr(e.message || 'Failed to load SMS niche stats');
+    } finally {
+      setBusy(false);
+    }
+  }, []);
+
+  React.useEffect(() => { reload(); }, [reload]);
+
+  if (err) return html`<div class="stub"><div class="stub-title"><em>SMS</em> Performance</div><div class="stub-body">${err}</div></div>`;
+  if (!data) return html`<div class="stub"><div class="stub-body">Loading…</div></div>`;
+
+  const niches = data.niches || [];
+  const total = data.total || 0;
+  const totalActive = niches.reduce((s, n) => s + (n.active || 0), 0);
+  const totalReplied = niches.reduce((s, n) => s + (n.replied || 0), 0);
+  const totalCompleted = niches.reduce((s, n) => s + (n.completed || 0), 0);
+  const totalOptedOut = niches.reduce((s, n) => s + (n.opted_out || 0), 0);
+
+  return html`
+    <div class="section-h">
+      <div>
+        <div class="section-title">SMS <em>Performance</em></div>
+        <div class="section-sub">Niches · sequence stats · enrollment breakdown by type</div>
+      </div>
+      <button class="tbl-action go" onClick=${reload}>↻ Refresh</button>
+    </div>
+
+    <div class="sms-niche-grid">
+      <div class="sms-niche-card">
+        <div class="sms-niche-val teal">${total}</div>
+        <div class="sms-niche-lbl">Total Sequences</div>
+      </div>
+      <div class="sms-niche-card">
+        <div class="sms-niche-val">${totalActive}</div>
+        <div class="sms-niche-lbl">Active</div>
+      </div>
+      <div class="sms-niche-card">
+        <div class="sms-niche-val cyan">${totalReplied}</div>
+        <div class="sms-niche-lbl">Replied</div>
+      </div>
+      <div class="sms-niche-card">
+        <div class="sms-niche-val">${totalCompleted}</div>
+        <div class="sms-niche-lbl">Completed</div>
+      </div>
+      <div class="sms-niche-card">
+        <div class="sms-niche-val warn">${totalOptedOut}</div>
+        <div class="sms-niche-lbl">Opted Out</div>
+      </div>
+    </div>
+
+    <div class="sms-niche-table-wrap">
+      <table class="tbl">
+        <thead>
+          <tr>
+            <th>Sequence Type</th>
+            <th style="text-align:right">Total</th>
+            <th style="text-align:right">Active</th>
+            <th style="text-align:right">Replied</th>
+            <th style="text-align:right">Completed</th>
+            <th style="text-align:right">Opted Out</th>
+            <th style="text-align:right">Avg Step</th>
+            <th style="text-align:right">With Phone</th>
+            <th>Active / Total</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${niches.map(n => html`
+            <tr>
+              <td><strong>${n.label}</strong></td>
+              <td class="tbl-num">${n.total}</td>
+              <td class="tbl-num">${n.active}</td>
+              <td class="tbl-num" style="color:var(--strike-cyan)">${n.replied}</td>
+              <td class="tbl-num" style="color:var(--signal-teal)">${n.completed}</td>
+              <td class="tbl-num" style="color:var(--status-amber)">${n.opted_out}</td>
+              <td class="tbl-num">${n.avg_step}</td>
+              <td class="tbl-num">${n.with_phone}</td>
+              <td>
+                <div style="display:flex;align-items:center;gap:8px">
+                  <div style="flex:1;height:6px;background:var(--empire-elevated);border-radius:3px;overflow:hidden">
+                    <div class="sms-niche-bar active" style="width:${(n.active / Math.max(n.total, 1) * 100).toFixed(0)}%"></div>
+                  </div>
+                  <span class="tbl-mono" style="color:var(--empire-mist);font-size:10px">${(n.active / Math.max(n.total, 1) * 100).toFixed(0)}%</span>
+                </div>
+              </td>
+            </tr>
+          `)}
+        </tbody>
+      </table>
+      ${niches.length === 0 ? html`<div class="tbl-empty">No SMS sequences found.</div>` : ''}
+    </div>
+  `;
+}
+
 function EmailTracking() {
   const [events, setEvents] = React.useState([]);
   const [days, setDays] = React.useState(30);
@@ -9485,6 +9611,7 @@ function App() {
             active.id === 'stack'        ? html`<${Stack} />` :
             active.id === 'network'      ? html`<${Network} />` :
             active.id === 'loop'         ? html`<${Loop} />` :
+            active.id === 'sms-performance' ? html`<${SmsPerformance} />` :
             html`<${Stub} section=${active} />`
           }
         </section>
