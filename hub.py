@@ -27,7 +27,7 @@ from empire_switchboard import _sb
 # Empire modules
 from empire_tokens import EMPIRE_TOKENS_CSS, EMPIRE_FONTS
 from empire_tokens import _sign_token as _hub_sign_token, _verify_token as _hub_verify_token
-from empire_layout import base_layout, section_stub, MODULES
+from empire_layout import base_layout, MODULES
 from empire_command_payouts import payouts_view
 from empire_command_contractors import contractors_view
 from empire_command_pipeline import pipeline_view
@@ -2869,7 +2869,7 @@ async def health_mesh(auth: bool = Depends(require_auth)):
     })
 
 
-# ─── /api/agents: Sniper Fleet (in-memory MOCK STUB — no real agent backend yet) ──
+# ─── /api/agents: Sniper Fleet ──
 from datetime import timedelta as _atd
 
 def _get_agent_leads():
@@ -3063,6 +3063,18 @@ async def revenue_usdc_ledger(limit: int = 10):
         return JSONResponse({"payments": [], "count": 0, "total_usdc_displayed": 0, "total_usdc_all_time": 0, "error": str(e)[:200]})
 
 
+# Shared product fallback used when Supabase product_metadata is unavailable
+_SUITE_FALLBACK = [
+    {"tier": "SEO_STARTER", "product_name": "seo_optimizer", "display_name": "SEO Starter", "monthly_price_usd": 99, "price_per_unit": None, "description": "Entry-level SEO: 5 audits, 50 keywords, 10 content pieces/mo", "features": []},
+    {"tier": "SEO_GROWTH", "product_name": "seo_optimizer", "display_name": "SEO Growth", "monthly_price_usd": 199, "price_per_unit": None, "description": "Growth SEO: 15 audits, 200 keywords, research pipeline", "features": []},
+    {"tier": "SEO_PRO", "product_name": "seo_optimizer", "display_name": "SEO Pro", "monthly_price_usd": 499, "price_per_unit": None, "description": "Pro SEO: unlimited audits, unlimited keywords, full pipeline", "features": []},
+    {"tier": "ROUTER_SaaS", "product_name": "inbound_router", "display_name": "Inbound Router", "monthly_price_usd": 499, "price_per_unit": "$0.25/routed call", "description": "AI triage inbound routing with Vonage PSTN", "features": []},
+    {"tier": "DATA_ENTERPRISE", "product_name": "data_vault", "display_name": "Data Vault", "monthly_price_usd": 799, "price_per_unit": "$0.02/stored record/mo", "description": "Enterprise data vault: structured storage, secure API", "features": []},
+    {"tier": "SPY_DATA", "product_name": "buyer_spy", "display_name": "Buyer Spy AI", "monthly_price_usd": 1499, "price_per_unit": "$5/analysis", "description": "AI-powered transcript analysis and competitive tracking", "features": []},
+    {"tier": "ALL_ACCESS", "product_name": "all_products", "display_name": "All Access", "monthly_price_usd": 2499, "price_per_unit": None, "description": "Full access to all Empire AI products", "features": []},
+]
+
+
 @app.get("/api/v1/products/catalog")
 async def products_catalog():
     """Combined product catalog: strike packs + suite SaaS tiers."""
@@ -3091,16 +3103,6 @@ async def products_catalog():
 
         # Suite SaaS products from product_metadata table (Supabase)
         # Falls back to hardcoded values if the table doesn't exist yet.
-        _SUITE_FALLBACK = [
-            {"tier": "SEO_STARTER",      "product_name": "seo_optimizer",  "display_name": "SEO Starter",     "monthly_price_usd": 99,   "price_per_unit": None,    "description": "Entry-level SEO with 5 audits, 50 keywords, 10 content pieces per month", "features": []},
-            {"tier": "SEO_GROWTH",      "product_name": "seo_optimizer",  "display_name": "SEO Growth",     "monthly_price_usd": 199,  "price_per_unit": None,    "description": "Growth-tier SEO: 15 audits, 200 keywords, 20 content pieces, research pipeline & landing pages", "features": []},
-            {"tier": "SEO_PRO",         "product_name": "seo_optimizer",  "display_name": "SEO Pro",        "monthly_price_usd": 499,  "price_per_unit": None,    "description": "Pro SEO with unlimited audits, unlimited keywords, full research & content pipeline", "features": []},
-            {"tier": "ROUTER_SaaS",     "product_name": "inbound_router", "display_name": "Inbound Router",  "monthly_price_usd": 499,  "price_per_unit": "$0.25 per routed call", "description": "Inbound call routing with AI triage, Vonage PSTN integration, and entitlement metering", "features": []},
-            {"tier": "DATA_ENTERPRISE", "product_name": "data_vault",     "display_name": "Data Vault",     "monthly_price_usd": 799,  "price_per_unit": "$0.02 per stored record/mo", "description": "Enterprise data vault with long-term retention, structured storage & secure API access", "features": []},
-            {"tier": "SPY_DATA",        "product_name": "buyer_spy",      "display_name": "Buyer Spy AI",   "monthly_price_usd": 1499, "price_per_unit": "$5 per analysis", "description": "Buyer intelligence: AI-powered transcript analysis, intent scoring & competitive tracking", "features": []},
-            {"tier": "ALL_ACCESS",      "product_name": "all_products",   "display_name": "All Access",     "monthly_price_usd": 2499, "price_per_unit": None,    "description": "Full access to all Empire AI products: inbound routing, data vault, buyer spy & SEO suite", "features": []},
-        ]
-
         suite_products_raw = []
         try:
             r = db.table("product_metadata") \
@@ -3109,7 +3111,7 @@ async def products_catalog():
                 .order("sort_order") \
                 .execute()
             suite_products_raw = r.data or []
-        except Exception:
+        except Exception as e:
             log.warning(f"[products] product_metadata query failed: {e} — using fallback pricing")
             suite_products_raw = _SUITE_FALLBACK
 
@@ -3215,6 +3217,106 @@ async def products_metadata(auth: bool = Depends(require_auth)):
         return JSONResponse({"products": [], "count": 0, "error": str(e)[:80]})
 
 
+
+
+# ─── Command Center Pro — Unified Product Health ────────────────────────
+@app.get("/api/v6/suite/ccp/health")
+async def command_center_health(auth: bool = Depends(require_auth)):
+    """Aggregated product health dashboard for Command Center Pro.
+    Returns per-product status (ok/warn/error), subscription counts,
+    MRR totals, and summary stats from live Supabase data."""
+    try:
+        db = get_db()
+
+        try:
+            result = db.table("product_metadata").select(
+                "tier,product_name,display_name,description,monthly_price_usd,"
+                "features,sort_order,is_active"
+            ).eq("is_active", True).order("sort_order").execute()
+            products = result.data or []
+        except Exception as e:
+            log.warning(f"[ccp] product_metadata query failed: {e} — returning empty")
+            products = []
+
+        try:
+            subs = suite_subscriptions.list_subscriptions()
+            active_subs = [s for s in subs if s.get("subscription_status") == "ACTIVE"]
+            active_count = len(active_subs)
+            total_mrr = round(sum(
+                float(s.get("monthly_recurring_revenue", 0)) for s in active_subs
+            ), 2)
+        except Exception as e:
+            log.warning(f"[ccp] suite_subscriptions query failed: {e} — returning zero metrics")
+            active_subs = []
+            active_count = 0
+            total_mrr = 0.0
+
+        sub_by_product = {}
+        for s in active_subs:
+            pn = s.get("product_name") or s.get("product", "")
+            if pn:
+                sub_by_product[pn] = sub_by_product.get(pn, 0) + 1
+
+        product_list = []
+        ok_count = warn_count = error_count = 0
+
+        for p in products:
+            name = p.get("display_name") or p.get("product_name") or p.get("tier", "Unknown")
+            pn = p.get("product_name", "")
+            tier = p.get("tier", "standard")
+            desc = p.get("description", "")
+            price = p.get("monthly_price_usd", 0)
+            is_active = p.get("is_active", True)
+
+            sub_count = sub_by_product.get(pn, 0)
+
+            if not is_active:
+                status = "error"
+                msg = "Product deactivated"
+            elif sub_count == 0:
+                status = "warn"
+                msg = "No active subscriptions"
+            else:
+                status = "ok"
+                msg = f"{sub_count} active subscriber{'s' if sub_count > 1 else ''}"
+
+            if status == "ok":
+                ok_count += 1
+            elif status == "warn":
+                warn_count += 1
+            else:
+                error_count += 1
+
+            product_list.append({
+                "name": name,
+                "slug": pn or name.lower().replace(" ", "-"),
+                "status": status,
+                "tier": tier,
+                "description": desc,
+                "monthly_price_usd": float(price) if price else 0,
+                "message": msg,
+                "subscribers": sub_count,
+            })
+
+        return JSONResponse({
+            "products": product_list,
+            "summary": {
+                "total": len(product_list),
+                "healthy": ok_count,
+                "warnings": warn_count,
+                "errors": error_count,
+            },
+            "total_mrr": total_mrr,
+            "active_subscriptions": active_count,
+        })
+    except Exception as e:
+        return JSONResponse({
+            "products": [],
+            "summary": {"total": 0, "healthy": 0, "warnings": 0, "errors": 0},
+            "total_mrr": 0,
+            "active_subscriptions": 0,
+            "error": str(e)[:120],
+        }, status_code=500)
 
 @app.get("/api/si/snapshot")
 async def si_strategy_snapshot(auth: bool = Depends(require_auth)):

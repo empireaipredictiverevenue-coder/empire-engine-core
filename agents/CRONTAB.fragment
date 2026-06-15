@@ -25,3 +25,9 @@
 # Discovers B2B companies via Google Places, scrapes websites for contacts,
 # and inserts qualified leads into radar_targets for the pipeline.
 0 */6 * * * cd /root/empire-v49 && python3 -m bots.b2b_lead_scraper >> /root/empire-v49/logs/agent_b2b_lead_scraper.log 2>&1
+
+# 8. Prospector (upstream) — every 6h on :05. Runs bots/prospector.py across all
+# configured metros + niches, writes to `prospects` table. prospector_bridge reads
+# from `prospects` on :15. Without this, prospector_bridge has nothing to bridge
+# and contractor_outreach has nothing to recruit.
+5 */6 * * * /bin/bash /root/empire-v49/agents/prospector/cron.sh >> /root/empire-v49/logs/agent_prospector.log 2>&1
