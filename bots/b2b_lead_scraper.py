@@ -92,8 +92,22 @@ B2B_NICHES = {
             "talent acquisition",
             "employment agency",
             "human resources outsourcing",
+            "temp agency",
+            "temporary staffing",
+            "executive search firm",
+            "professional employer organization",
+            "PEO services",
+            "workforce management",
+            "IT staffing",
+            "healthcare staffing",
+            "contract staffing",
+            "manpower services",
+            "employee leasing",
+            "labor staffing",
         ],
-        "website_keywords": ["staffing", "recruitment", "hr", "talent", "employment"],
+        "website_keywords": ["staffing", "recruitment", "hr ", "talent", "employment",
+                             "temp", "personnel", "workforce", "executive search",
+                             "placement", "peo ", "employee leasing", "manpower"],
     },
 }
 
@@ -366,7 +380,9 @@ def _classify_sub_niche(name: str, website: str, place_types: List[str]) -> Opti
 
     # HR & Staffing keywords
     hr_kw = ["staffing", "recruitment", "employment agency", "talent acquisition",
-             "hr consulting", "human resources", "temp agency", "personnel"]
+             "hr consulting", "human resources", "temp agency", "personnel",
+             "executive search", "workforce", "placement", "peo",
+             "employee leasing", "manpower", "labor staffing"]
     for kw in hr_kw:
         if kw in combined:
             return "HR & Staffing"
