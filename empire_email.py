@@ -145,15 +145,158 @@ def _email_shell(
 </body></html>"""
 
 
+def _build_b2b_shell(
+    body_html:          str,
+    unsubscribe_link:   str,
+    postal_address:     str,
+    sender_name:        str,
+    sub_niche_hint:     str = "",
+) -> str:
+    """CAN-SPAM compliant email shell for B2B outreach."""
+    return f"""<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"></head>
+<body style="margin:0;padding:0;background:#0a0a0a;font-family:-apple-system,system-ui,'Helvetica Neue',sans-serif;">
+<table cellpadding="0" cellspacing="0" border="0" width="100%" style="background:#0a0a0a;">
+<tr><td align="center" style="padding:32px 16px;">
+  <table cellpadding="0" cellspacing="0" border="0" width="600" style="max-width:600px;background:#0a0a0a;color:#e4e4e7;">
+    <tr><td style="padding-bottom:18px;border-bottom:1px solid #27272a;">
+      <div style="font-size:11px;color:#71717a;letter-spacing:.18em;text-transform:uppercase;">Empire AI · B2B Lead Network</div>
+      <div style="font-size:9px;color:#52525b;letter-spacing:.14em;text-transform:uppercase;margin-top:4px;">Paid commercial notice · {sender_name}</div>
+    </td></tr>
+    <tr><td style="padding:24px 0;">{body_html}</td></tr>
+    <tr><td style="padding-top:24px;border-top:1px solid #27272a;font-size:11px;color:#71717a;line-height:1.7;">
+      You are receiving this because we identified your company as a potential partner in our B2B lead generation network.
+      We are not affiliated with any government agency, your current service providers, or any insurance carrier.
+      <strong style="color:#a1a1aa;">{postal_address}</strong>.<br><br>
+      <a href="{unsubscribe_link}" style="color:#10b981;text-decoration:underline;">Unsubscribe</a> · One click · Effective immediately
+    </td></tr>
+  </table>
+</td></tr>
+</table>
+</body></html>"""
+
+
+def _build_b2b_email(
+    step: int,
+    company: str,
+    sub_niche: str,
+    unsubscribe_link: str,
+    postal_address: str,
+    sender_name: str,
+) -> tuple[str, str]:
+    """Returns (subject, html_body) for B2B outreach. Step 0-3."""
+    niche_lower = sub_niche.lower() if sub_niche else "business services"
+    if step == 0:
+        subject = f"Qualified {sub_niche} leads for {company}"
+        body = f"""
+          <div style="font-size:22px;font-weight:600;color:#f8fafd;letter-spacing:-0.02em;line-height:1.3;margin-bottom:16px;">
+            Introductory offer for <span style="color:#44E5B8;">{company}</span>
+          </div>
+          <p style="font-size:14px;line-height:1.7;color:#a1a1aa;margin:0 0 14px;">
+            Hello, we identified {company} as an established provider of {niche_lower} services
+            in your market. Empire AI operates a predictive lead generation network that sources
+            qualified, verified prospects for service providers.
+          </p>
+          <p style="font-size:14px;line-height:1.7;color:#a1a1aa;margin:0 0 14px;">
+            We deliver pre-qualified leads that match your service profile — no upfront cost.
+            Our model is simple: we only earn a success fee (3%) when a lead converts into a
+            closed deal. No retainer, no monthly minimum.
+          </p>
+          <div style="margin:24px 0;padding:18px 20px;background:#15263F;border-left:3px solid #44E5B8;font-size:13px;color:#c8d4e4;line-height:1.7;">
+            <strong style="color:#f8fafd;">How it works:</strong> We find businesses actively seeking
+            {niche_lower} providers → verify their contact information → deliver the lead to you.
+            You only pay when you close. <strong style="color:#f8fafd;">3% success fee on closed deals.</strong>
+          </div>
+          <p style="font-size:14px;line-height:1.7;color:#a1a1aa;margin:14px 0 0;">
+            Interested in seeing a sample lead for your area? Reply to this email and we'll
+            send one over within 24 hours.
+          </p>
+        """
+    elif step == 1:
+        subject = f"Following up · {company} lead generation"
+        body = f"""
+          <div style="font-size:22px;font-weight:600;color:#f8fafd;letter-spacing:-0.02em;line-height:1.3;margin-bottom:16px;">
+            How we source <span style="color:#5AC8FA;">{niche_lower}</span> leads
+          </div>
+          <p style="font-size:14px;line-height:1.7;color:#a1a1aa;margin:0 0 14px;">
+            We wanted to share more detail on our lead generation process for {sub_niche} providers.
+          </p>
+          <ul style="font-size:14px;line-height:1.8;color:#a1a1aa;margin:0 0 14px;padding-left:20px;">
+            <li>Active prospect discovery via local business listings and web presence</li>
+            <li>Contact verification (phone + email) for every lead delivered</li>
+            <li>Buy-intent scoring to prioritize high-potential prospects</li>
+            <li>3% success fee paid only on closed deals — no upfront cost</li>
+          </ul>
+          <p style="font-size:14px;line-height:1.7;color:#a1a1aa;margin:14px 0 0;">
+            If lead volume is a constraint for your sales team, we can help.
+            Reply to this email to discuss.
+          </p>
+        """
+    elif step == 2:
+        subject = f"{company} · what other providers are saying"
+        body = f"""
+          <div style="font-size:22px;font-weight:600;color:#f8fafd;letter-spacing:-0.02em;line-height:1.3;margin-bottom:16px;">
+            Results from our network
+          </div>
+          <p style="font-size:14px;line-height:1.7;color:#a1a1aa;margin:0 0 14px;">
+            Providers in our network report that the leads we deliver convert at a higher rate
+            than cold outreach because every prospect has been pre-scored for buy intent
+            and contact information is verified before delivery.
+          </p>
+          <p style="font-size:14px;line-height:1.7;color:#a1a1aa;margin:0 0 14px;">
+            Our model aligns incentives: we only get paid when you close a deal.
+            This means we are motivated to send you high-quality, actionable leads.
+          </p>
+          <p style="font-size:14px;line-height:1.7;color:#a1a1aa;margin:14px 0 0;">
+            We can start sending leads tailored to {company} within 48 hours of confirming
+            interest. Reply to this email to set up a test.
+          </p>
+        """
+    else:  # step 3 — last touch
+        subject = f"Last note from us · {company}"
+        body = f"""
+          <div style="font-size:22px;font-weight:600;color:#f8fafd;letter-spacing:-0.02em;line-height:1.3;margin-bottom:16px;">
+            Stepping back
+          </div>
+          <p style="font-size:14px;line-height:1.7;color:#a1a1aa;margin:0 0 14px;">
+            This is our last note about the lead generation program for {sub_niche} providers.
+            We don't believe in being persistent past what is useful.
+          </p>
+          <p style="font-size:14px;line-height:1.7;color:#a1a1aa;margin:0 0 14px;">
+            If you would like to explore receiving qualified {niche_lower} leads for {company},
+            simply reply to this email. Otherwise, no further messages on this topic.
+            You remain on our list only for future relevant opportunities, unless you
+            unsubscribe below.
+          </p>
+        """
+    html_body = _build_b2b_shell(body, unsubscribe_link=unsubscribe_link, postal_address=postal_address, sender_name=sender_name, sub_niche_hint=niche_lower)
+    return subject, html_body
+
+
 def _build_email(
     step: int,
     target_short: str,
     unsubscribe_link: str,
     postal_address: str,
     sender_name: str,
+    sequence_type: str = "storm_strike",
+    meta: Optional[dict] = None,
 ) -> tuple[str, str]:
-    """Returns (subject, html_body). Step 0-3."""
-    fee = "3%"
+    """Returns (subject, html_body). Step 0-3.
+    Routes to the correct template set based on sequence_type."""
+    if sequence_type == "b2b_outreach":
+        company = meta.get("company", target_short) if meta else target_short
+        sub_niche = (meta.get("b2b_sub_niche", "Business Services") if meta else "Business Services")
+        return _build_b2b_email(
+            step=step,
+            company=company,
+            sub_niche=sub_niche,
+            unsubscribe_link=unsubscribe_link,
+            postal_address=postal_address,
+            sender_name=sender_name,
+        )
+
+    # ── Storm / Property Owner Templates (default) ──
     if step == 0:
         subject = f"Storm activity detected near {target_short}"
         body = f"""
@@ -374,6 +517,8 @@ class EmailSequenceEngine:
                 unsubscribe_link=unsub_link,
                 postal_address=self.physical_address,
                 sender_name=self.sender_name,
+                sequence_type=row.get("sequence_type", "storm_strike"),
+                meta=row.get("meta", {}),
             )
 
             result = await self.send_email(to=email, subject=subject, html=html)
@@ -620,7 +765,54 @@ def register_email_routes(
                     skipped += 1
             return {"ok": True, "enrolled": enrolled, "skipped": skipped, "total_seen": len(rows)}
 
-    log.info("[email] Routes registered · /email/unsubscribe · /api/v1/email/{enroll,bulk-enroll,stats,webhook}")
+        @app.post("/api/v1/email/bulk-enroll-b2b")
+        async def email_bulk_b2b(request: Request, auth: bool = Depends(require_auth)):
+            """Enroll all B2B leads with emails into b2b_outreach sequence."""
+            try:
+                body = await request.json()
+            except Exception:
+                body = {}
+            max_leads = min(int(body.get("max", 500)), 2000)
+
+            try:
+                db = engine.get_db()
+                res = db.table("radar_targets") \
+                    .select("email, warehouse_name, meta, city, state") \
+                    .eq("status", "active") \
+                    .not_.is_("email", "null") \
+                    .neq("email", "") \
+                    .eq("meta->>source", "B2B Lead Gen") \
+                    .limit(max_leads).execute()
+                rows = res.data or []
+            except Exception as e:
+                raise HTTPException(500, f"radar_targets query failed: {e}")
+
+            enrolled, skipped = 0, 0
+            for t in rows:
+                tmeta = t.get("meta", {}) or {}
+                sub_niche = tmeta.get("b2b_sub_niche", "Business Services")
+                company = (t.get("warehouse_name") or "").strip()
+                target_addr = f"{t.get('city', '')}, {t.get('state', '')}"
+
+                r = await engine.enroll(
+                    email=t.get("email", ""),
+                    target_addr=target_addr,
+                    sequence_type="b2b_outreach",
+                    meta={
+                        "company": company,
+                        "b2b_sub_niche": sub_niche,
+                        "city": t.get("city"),
+                        "state": t.get("state"),
+                        "source": "B2B Lead Gen",
+                    },
+                )
+                if r.get("ok") and not r.get("existing"):
+                    enrolled += 1
+                else:
+                    skipped += 1
+            return {"ok": True, "enrolled": enrolled, "skipped": skipped, "total_seen": len(rows)}
+
+    log.info("[email] Routes registered · /email/unsubscribe · /api/v1/email/{enroll,bulk-enroll,bulk-enroll-b2b,stats,webhook}")
 
 
 def _unsub_page(message: str, *, error: bool = False) -> str:

@@ -519,6 +519,34 @@ async def _search_sub_niche(
                     f"score={score} | phone={'yes' if phone else 'no'} | "
                     f"email={'yes' if email else 'no'}"
                 )
+
+                # Auto-enroll in B2B email drip if email was found
+                if email:
+                    try:
+                        # Check unsubscribe registry first
+                        unsub = sb.table("email_unsubscribes").select("email").eq("email", email).limit(1).execute()
+                        if unsub.data:
+                            log.debug(f"[b2b] email {email} is unsubscribed, skipping enrollment")
+                        else:
+                            existing_seq = sb.table("email_sequences").select("id").eq("email", email).limit(1).execute()
+                            if not existing_seq.data:
+                                sb.table("email_sequences").insert({
+                                    "email": email,
+                                    "target_addr": f"{metro['name'].split('-')[0].strip()}, {metro['state']}",
+                                    "sequence_type": "b2b_outreach",
+                                    "current_step": 0,
+                                    "status": "active",
+                                    "next_send_at": datetime.now(timezone.utc).isoformat(),
+                                    "meta": {
+                                        "company": name[:200],
+                                        "b2b_sub_niche": sn,
+                                        "metro": metro["name"],
+                                        "source": "B2B Lead Gen",
+                                    },
+                                }).execute()
+                                log.info(f"[b2b] ✉ enrolled {email} in b2b_outreach drip")
+                    except Exception as e:
+                        log.debug(f"[b2b] email enroll skipped for {email}: {e}")
                 # Limit per run
                 if stats["inserted"] >= max_per_run:
                     return stats
