@@ -104,6 +104,7 @@ from empire_voice_control import VoiceController
 from empire_brain_personality import BrainPersonality
 from empire_strike_packs import StrikePackCatalog, SubscriptionEngine, DeliveryFilter, register_strike_pack_routes
 from empire_carrier_portfolio import PortfolioManager, StormMatcher, StormReportEngine, register_carrier_routes
+from empire_native_ads import NativeAdsNetwork, register_native_ads_routes
 
 # Empire AI Suite — 3-Product Monetization Gateway
 from suite_core import (
@@ -817,6 +818,15 @@ register_carrier_routes(
     matcher=carrier_storm_matcher,
     report_engine=carrier_report_engine,
     require_auth=require_auth,
+)
+
+# ── Native Ads Network — campaign management + ad serving ──────────
+native_ads = NativeAdsNetwork(get_db=get_db)
+register_native_ads_routes(
+    app,
+    ads=native_ads,
+    require_auth=require_auth,
+    public_base_url=PUBLIC_BASE_URL,
 )
 
 # ── Suite Gateway — 3-Product Monetization ───────────────────────────
