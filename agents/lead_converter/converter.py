@@ -99,18 +99,30 @@ def _update_config(sb, agent_name, status, finished_at):
 
 
 def _pick_sequence(lead: dict) -> str:
-    """Pick the sequence based on what we have on the lead.
+    """Pick the SMS sequence based on lead metadata.
 
-    Storm-strike leads go into one of two A/B cohorts based on a stable
-    hash of the lead id, so the cohort split is reproducible across
-    re-runs of the agent. 50/50 split:
-      - "storm_strike"     : the new shorter copy (≤200 chars per touch)
-      - "storm_strike_v2"  : the longer scarcity copy (the original v2)
-
-    Reply-rate comparison is via the operator SPA's "Reply rate by
-    sequence" view (TODO) and the per-sequence reply counts in
-    sms_sequences WHERE status='replied'.
+    Priority order:
+      1. b2b_sub_niche in meta → mapped to niche-specific sequence type
+         (commercial_roofing, commercial_solar, debt_relief, b2b_outreach)
+      2. phone present        → storm_strike A/B cohort (50/50 split by
+         stable hash of lead id for reproducible bucketing)
+      3. email only           → lead_nurture
+      4. fallback             → manual
     """
+    # Check b2b_sub_niche from lead meta for niche-specific sequences
+    meta = lead.get("meta") or {}
+    if isinstance(meta, dict):
+        sub_niche = meta.get("b2b_sub_niche", "")
+        if sub_niche == "Commercial Roofing":
+            return "commercial_roofing"
+        if sub_niche == "Commercial Solar":
+            return "commercial_solar"
+        if sub_niche == "Debt Relief":
+            return "debt_relief"
+        if sub_niche in ("HR & Staffing", "Managed IT", "Merchant Services"):
+            return "b2b_outreach"
+
+    # Phone leads: A/B storm_strike cohort split
     if lead.get("phone"):
         import hashlib
         h = hashlib.md5(str(lead.get("id", "")).encode()).hexdigest()

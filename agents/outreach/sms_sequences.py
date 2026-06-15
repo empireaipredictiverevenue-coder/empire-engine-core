@@ -3,22 +3,18 @@ Empire AI · Predictive Revenue
 Outreach Agent · SMS Sequences
 ================================
 
-Three TCPA-compliant SMS sequences, each with a fixed touch schedule
-and a mandatory "Reply STOP to opt out" footer on every outbound message.
+Seven TCPA-compliant SMS sequences, each with a fixed touch schedule
+and "STOP to opt out" on every outbound message.
 
 Sequences
 ---------
-1. storm_strike     — sent to a verified storm-affected property owner
-                       Goal: get a callback or SMS reply → contractor dispatch
-                       5 touches over 7 days
-
-2. contractor_recruit — sent to a vetted roofing/contracting business
-                        Goal: get them to accept dispatch terms
-                        3 touches over 10 days
-
-3. lead_nurture     — sent to a warm lead that didn't convert on storm_strike
-                      Goal: stay present, learn what they actually need
-                      4 touches over 14 days
+1. storm_strike        — storm-affected property owner, 5 touches / 7 days
+2. contractor_recruit  — recruiting contractors into dispatch, 3 touches / 10 days
+3. lead_nurture        — warm leads that didn't convert, 4 touches / 14 days
+4. b2b_outreach        — B2B service providers, 4 touches / 10 days
+5. commercial_roofing  — commercial property roof inspection, 5 touches / 7 days
+6. commercial_solar    — commercial solar install, 5 touches / 7 days
+7. debt_relief         — debt relief prospects, 5 touches / 7 days
 
 Variables (filled by personalization.py at runtime; written as {{var}} here
 so you can review the message copy in isolation):
@@ -163,11 +159,104 @@ B2B_OUTREACH = {
     ],
 }
 
+# ─────────────────────────────────────────────────────────────────────
+# Sequence 5: commercial_roofing (Commercial Roofing, 5 touches / 7 days)
+# Triggered by: radar_targets with b2b_sub_niche=Commercial Roofing
+# Goal: get them to reply YES for a free commercial roof inspection
+# ─────────────────────────────────────────────────────────────────────
+
+COMMERCIAL_ROOFING = {
+    "name": "commercial_roofing",
+    "description": "5-touch sequence for commercial property owners — storm-triggered roof inspection angle",
+    "triggers_on": "radar_targets with meta->>b2b_sub_niche='Commercial Roofing' AND phone IS NOT NULL",
+    "step_count": 5,
+    "schedule": [
+        (1, 0,   "{prefix} Storm damage flagged at {target_short}. "
+                 "We dispatch vetted commercial roof inspectors — "
+                 "no cost unless claim settles. Reply YES. STOP to opt out."),
+        (2, 24,  "{prefix} Commercial policies have a 72-hr filing window "
+                 "after severe weather. Reply YES to dispatch an adjuster. "
+                 "STOP to opt out."),
+        (3, 72,  "{prefix} If the inspector finds no structural damage, "
+                 "there's no charge. We only earn on settled claims. "
+                 "Reply YES. STOP to opt out."),
+        (4, 120, "{prefix} A $200K commercial roof settlement = "
+                 "$6,000 to you, $6,000 to us. We earn what you earn. "
+                 "Reply YES. STOP to opt out."),
+        (5, 168, "{prefix} Final note for {target_short}. Reply YES for a "
+                 "no-cost commercial roof assessment. Otherwise we won't "
+                 "message again. STOP to opt out."),
+    ],
+}
+
+# ─────────────────────────────────────────────────────────────────────
+# Sequence 6: commercial_solar (Commercial Solar, 5 touches / 7 days)
+# Triggered by: radar_targets with b2b_sub_niche=Commercial Solar
+# Goal: get them to reply YES for a free solar savings estimate
+# ─────────────────────────────────────────────────────────────────────
+
+COMMERCIAL_SOLAR = {
+    "name": "commercial_solar",
+    "description": "5-touch sequence for commercial properties — solar federal tax credit angle",
+    "triggers_on": "radar_targets with meta->>b2b_sub_niche='Commercial Solar' AND phone IS NOT NULL",
+    "step_count": 5,
+    "schedule": [
+        (1, 0,   "{prefix} Commercial solar for {target_short} — "
+                 "federal tax credits cover 30% of install. "
+                 "We handle the paperwork. Reply YES. STOP to opt out."),
+        (2, 24,  "{prefix} Most commercial properties in your area "
+                 "qualify for solar with $0 down. PPA financing available. "
+                 "Reply YES for a free savings estimate. STOP to opt out."),
+        (3, 72,  "{prefix} {target_short}, commercial electricity rates "
+                 "are up 22% YoY. Solar locks in your rate for 25 years. "
+                 "Reply YES. STOP to opt out."),
+        (4, 120, "{prefix} Other commercial properties in your area "
+                 "are installing solar ahead of the 2027 tariff step-down. "
+                 "Reply YES to see if you qualify. STOP to opt out."),
+        (5, 168, "{prefix} Last note for {target_short}. If solar makes "
+                 "sense for your property, reply YES for a free quote. "
+                 "Otherwise we won't reach out again. STOP to opt out."),
+    ],
+}
+
+# ─────────────────────────────────────────────────────────────────────
+# Sequence 7: debt_relief (Debt Relief, 5 touches / 7 days)
+# Triggered by: radar_targets with b2b_sub_niche=Debt Relief
+# Goal: get them to reply YES for a free debt consultation
+# ─────────────────────────────────────────────────────────────────────
+
+DEBT_RELIEF = {
+    "name": "debt_relief",
+    "description": "5-touch sequence for debt relief prospects — settlement program angle",
+    "triggers_on": "radar_targets with meta->>b2b_sub_niche='Debt Relief' AND phone IS NOT NULL",
+    "step_count": 5,
+    "schedule": [
+        (1, 0,   "{prefix} Debt relief options available in your area — "
+                 "we negotiate with creditors to reduce balances. "
+                 "No upfront fees. Reply YES. STOP to opt out."),
+        (2, 24,  "{prefix} Most clients see 40-60% reduction on "
+                 "unsecured debt through our settlement program. "
+                 "Free consultation. Reply YES. STOP to opt out."),
+        (3, 72,  "{prefix} {target_short}, credit card interest "
+                 "averages 24% APR. Our program stops interest "
+                 "and consolidates debt. Reply YES. STOP to opt out."),
+        (4, 120, "{prefix} Typical debt resolution takes 24-48 months. "
+                 "First settlement often happens within 90 days. "
+                 "No obligation to start. Reply YES. STOP to opt out."),
+        (5, 168, "{prefix} Final note. If debt relief could help "
+                 "your situation, reply YES for a free consultation. "
+                 "Otherwise we won't reach out again. STOP to opt out."),
+    ],
+}
+
 ALL_SEQUENCES = {
     "storm_strike":       STORM_STRIKE,
     "contractor_recruit": CONTRACTOR_RECRUIT,
     "lead_nurture":       LEAD_NURTURE,
     "b2b_outreach":       B2B_OUTREACH,
+    "commercial_roofing": COMMERCIAL_ROOFING,
+    "commercial_solar":   COMMERCIAL_SOLAR,
+    "debt_relief":        DEBT_RELIEF,
 }
 
 
