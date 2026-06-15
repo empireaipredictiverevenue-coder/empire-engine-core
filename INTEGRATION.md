@@ -241,7 +241,7 @@ On your Hetzner box (one-time setup):
       NTFY_TOPIC=... \\
       RESEND_API_KEY=... \\
       VONAGE_NUMBER=... \\
-      USDC_WALLET=egJ1t9NZkDs8FvMbfnQTqXzC4KNuhAc9XSfpG9y9AZM
+      EMPIRE_VAULT_WALLET=egJ1t9NZkDs8FvMbfnQTqXzC4KNuhAc9XSfpG9y9AZM
 
     # Allow WebSockets through the nginx proxy (Dokku does this by default
     # but verify; if needed:

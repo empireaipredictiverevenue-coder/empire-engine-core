@@ -92,7 +92,7 @@ B1. Get all your credentials in one place. You need:
       RESEND_FROM="Empire AI <ops@empire-ai.co.uk>"
       RESEND_DIGEST_TO=your_email@domain.com
 
-      USDC_WALLET=egJ1t9NZkDs8FvMbfnQTqXzC4KNuhAc9XSfpG9y9AZM
+      EMPIRE_VAULT_WALLET=egJ1t9NZkDs8FvMbfnQTqXzC4KNuhAc9XSfpG9y9AZM
       EMPIRE_OPERATOR_NUMBER=+12145559999        (your phone)
       PUBLIC_BASE_URL=https://empire-ai.co.uk
 
