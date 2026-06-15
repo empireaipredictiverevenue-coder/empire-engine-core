@@ -12,8 +12,8 @@ local contractors in the 72-hour post-storm window. We earn 3% of
 the settled claim amount, paid only on settlement.
 
 To scale we need a settled-claim event feed from carriers. We have
-a working system with a mock carrier API and our first fee event
-was recorded last week. We'd love to integrate with Liberty Mutual.
+a working system with a mock carrier API and have validated
+the 3% fee model end-to-end with first fee events recorded this week. We'd love to integrate with Liberty Mutual.
 
 The minimum data: claim ID, settlement date, settled amount, property
 city + state. No PII or payment data needed.

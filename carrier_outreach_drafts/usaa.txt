@@ -12,8 +12,8 @@ claims find vetted local contractors in the 72-hour post-storm window.
 Our fee is 3% of the settled claim amount, paid only on settlement.
 
 To scale this we need carrier-level visibility into settled-claim
-events. We're currently running with a mock carrier API and our first
-fee event was recorded last week. Real carrier integration is the
+events. We're currently running with a mock carrier API and have validated
+the 3% fee model end-to-end with first fee events recorded this week. Real carrier integration is the
 next step.
 
 Does USAA have a partner program that exposes settled-claim

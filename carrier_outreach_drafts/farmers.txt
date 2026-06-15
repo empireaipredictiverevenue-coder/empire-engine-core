@@ -11,8 +11,8 @@ I'm Phil, founder of Empire AI. We help homeowners with storm-damage
 claims find vetted local contractors in the 72-hour post-storm
 window. Our fee is 3% of the settled claim, paid only on settlement.
 
-We have a working system with mock carrier data, and our first fee
-event was recorded last week. Real carrier integration is the next
+We have a working system with mock carrier data, and have validated
+the 3% fee model end-to-end with first fee events recorded this week. Real carrier integration is the next
 step.
 
 We need a settled-claim event feed: claim ID, settlement date,
