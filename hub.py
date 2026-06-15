@@ -81,6 +81,7 @@ from empire_switchboard import register_switchboard_routes
 from empire_niche_terrain import NicheTerrain
 from empire_partner_onboarding import register_partner_routes
 from empire_affiliate_portal import register_affiliate_routes
+from empire_affiliate_recruit import register_affiliate_recruit_routes
 from empire_si_brain import SyntheticBrain, register_synthetic_routes
 from empire_si_strategy import StrategyEvolution
 from empire_si_adaptive import AdaptiveEngine
@@ -708,6 +709,8 @@ register_affiliate_routes(
     public_base_url=PUBLIC_BASE_URL,
     hub_token=HUB_TOKEN,
 )
+
+register_affiliate_recruit_routes(app, require_auth=require_auth)
 
 # ── Niche Social Terrain — learn habits + map communities per niche ──
 niche_terrain = NicheTerrain()
