@@ -1,0 +1,44 @@
+To: partners@statefarm.com
+From: phil@empire-ai.co.uk
+Subject: Partner API inquiry: settled-claim event notifications for predictive storm response
+Carrier: State Farm
+Status: DRAFT — review before sending
+======================================================================
+
+Hi State Farm Partnerships team,
+
+I'm Phil, founder of Empire AI. We help homeowners file and settle
+storm-damage claims faster by connecting them with vetted local
+contractors in the immediate post-storm window (typically 72 hours).
+
+Our revenue model: 3% of the settled claim amount, paid only when
+a claim settles. This means we have a strong financial incentive to
+connect you with claims that will settle, and to ensure those claims
+settle at fair market value.
+
+To make this work, we need a webhook or polling API for settled-claim
+events. The minimal data we need:
+  - Claim ID
+  - Settlement date
+  - Settled amount (USD)
+  - Property address (city + state is enough; full address is optional)
+  - Filing party (contractor name if available)
+
+We don't need claimant PII, payment data, or any sensitive information.
+We just need a "this claim is done" signal so we can invoice the 3%.
+
+Currently we're working with a mock carrier API for development, and
+we'd love to swap that for a real integration. Are partner integrations
+something State Farm offers, and if so, who do we talk to?
+
+We have a working hub at empire-ai.co.uk and a real contractor network
+in Texas, Oklahoma, and Louisiana. Our first paid fee event was
+recorded last week.
+
+If a partner program isn't the right channel, I'm also happy to take
+a meeting to discuss the model.
+
+Best,
+Phil
+Empire AI
+phil@empire-ai.co.uk

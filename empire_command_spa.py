@@ -297,6 +297,21 @@ _SPA_CSS = """
     .dispatch-status.completed{color:var(--signal-teal);background:rgba(68,229,184,0.08);border:1px solid rgba(68,229,184,0.2)}
     .dispatch-status.ghosted{color:#ff7b72;background:rgba(255,123,114,0.08);border:1px solid rgba(255,123,114,0.2)}
     .settled-badge{font-family:var(--font-mono);font-size:9px;color:var(--signal-teal);padding:2px 7px;background:rgba(68,229,184,0.06);border:1px solid rgba(68,229,184,0.2);border-radius:3px}
+    .live-inbox{margin-top:8px}
+    .inbox-bar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px}
+    .inbox-stat{font-family:var(--font-mono);font-size:10px;padding:4px 10px;border-radius:4px;letter-spacing:.06em}
+    .inbox-yes{color:var(--signal-teal);background:rgba(68,229,184,0.1);border:1px solid rgba(68,229,184,0.3)}
+    .inbox-stop{color:#ff7b72;background:rgba(255,123,114,0.1);border:1px solid rgba(255,123,114,0.3)}
+    .inbox-no{color:#f59e0b;background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.3)}
+    .inbox-other{color:var(--empire-mist);background:rgba(100,116,139,0.1);border:1px solid rgba(100,116,139,0.3)}
+    .inbox-intent{font-family:var(--font-mono);font-size:9px;letter-spacing:.06em;padding:2px 7px;border-radius:3px;text-transform:uppercase}
+    .inbox-intent.yes{color:var(--signal-teal);background:rgba(68,229,184,0.08);border:1px solid rgba(68,229,184,0.2)}
+    .inbox-intent.stop{color:#ff7b72;background:rgba(255,123,114,0.08);border:1px solid rgba(255,123,114,0.2)}
+    .inbox-intent.no{color:#f59e0b;background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.2)}
+    .inbox-intent.notnow{color:var(--empire-mist);background:rgba(100,116,139,0.1);border:1px solid rgba(100,116,139,0.2)}
+    .inbox-intent.freeform{color:var(--empire-mist);background:rgba(100,116,139,0.05);border:1px solid rgba(100,116,139,0.1)}
+    .inbox-empty{color:var(--empire-mist);font-size:12px;padding:8px 0}
+    .tbl-body{max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
     .sec-actions{display:flex;gap:8px}
 .pipeline-card-monthly{font-family:var(--font-mono);font-size:11px;color:var(--empire-white);font-weight:500}
 /* ── COMPLIANCE PANEL ────────────────────────────────────────────── */
@@ -2188,8 +2203,57 @@ function SwarmGate() {
     </div>
   `;
 }
+// ── LIVE INBOX ─────────────────────────────────────────────────────────
+function LiveInbox() {
+  const [msgs, setMsgs] = useState([]);
+  const [stats, setStats] = useState(null);
+  const [err, setErr] = useState(null);
+  useEffect(() => {
+    const reload = async () => {
+      try {
+        const r = await apiFetch('/api/v1/sms/inbound/recent?limit=15&minutes=1440').then(x => x.json());
+        setMsgs(r.messages || []);
+        setStats(r.by_intent || {});
+      } catch (e) { setErr(e.message); }
+    };
+    reload();
+    const t = setInterval(reload, 8000);
+    return () => clearInterval(t);
+  }, []);
+  if (err) return html`<div class="stub-body">${err}</div>`;
+  if (!stats) return html`<div class="stub-body">Loading inbox…</div>`;
+  return html`
+    <div class="live-inbox">
+      <div class="inbox-bar">
+        <span class="inbox-stat inbox-yes">✓ ${stats.yes || 0} YES</span>
+        <span class="inbox-stat inbox-stop">⊘ ${stats.stop || 0} STOP</span>
+        <span class="inbox-stat inbox-no">✗ ${stats.no || 0} NO</span>
+        <span class="inbox-stat inbox-other">…${(stats.notnow || 0) + (stats.freeform || 0)} other</span>
+      </div>
+      ${msgs.length === 0
+        ? html`<div class="inbox-empty">No inbound messages in the last 24h.</div>`
+        : html`<table class="tbl"><thead><tr>
+            <th>When</th><th>Phone</th><th>Body</th><th>Intent</th>
+          </tr></thead><tbody>
+          ${msgs.map(m => html`<tr key=${m.id}>
+            <td class="tbl-mono">${String(m.created_at || '').slice(11,19)}</td>
+            <td class="tbl-mono">${String(m.phone || '').slice(0,14)}</td>
+            <td class="tbl-body">${m.body || ''}</td>
+            <td><span class=${'inbox-intent inbox-' + m.intent}>${m.intent}</span></td>
+          </tr>`)}
+          </tbody></table>`}
+    </div>
+  `;
+}
+
+
 // ── PULSE SECTION ─────────────────────────────────────────────────────
 function Pulse({ events, wsConnected }) {
+  const [liveInboxKey, setLiveInboxKey] = useState(0);
+  // Bump on inbound events to trigger LiveInbox refresh
+  useEffect(() => {
+    if (events && events.length > 0 && events[0].type === 'sms_inbound') setLiveInboxKey(k => k+1);
+  }, [events]);
   const [stats, setStats] = useState(null);
   const [err, setErr] = useState(null);
   const [tab, setTab] = useState('overview');
@@ -2388,7 +2452,8 @@ function Pulse({ events, wsConnected }) {
 
   return html`
     <div>
-      <div class="section-h">
+      <div class="<${LiveInbox} />
+        section-h">
         <div>
           <div class="section-title">Live <em>Pulse</em></div>
           <div class="section-sub">Real-time situational awareness</div>

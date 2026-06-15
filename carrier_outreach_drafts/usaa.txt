@@ -1,0 +1,31 @@
+To: partnerships@usaa.com
+From: phil@empire-ai.co.uk
+Subject: Partner inquiry: settled-claim event feed for storm-damage contractor routing
+Carrier: USAA
+Status: DRAFT — review before sending
+======================================================================
+
+Hi USAA Partnerships team,
+
+I'm Phil, founder of Empire AI. We help homeowners with storm-damage
+claims find vetted local contractors in the 72-hour post-storm window.
+Our fee is 3% of the settled claim amount, paid only on settlement.
+
+To scale this we need carrier-level visibility into settled-claim
+events. We're currently running with a mock carrier API and our first
+fee event was recorded last week. Real carrier integration is the
+next step.
+
+Does USAA have a partner program that exposes settled-claim
+notifications? The minimum data we need:
+  - Claim ID
+  - Settlement date and amount
+  - Property city + state
+
+We're not looking for claimant PII or payment data. Just the "claim
+settled" signal so we can invoice our 3%.
+
+Best,
+Phil
+Empire AI
+phil@empire-ai.co.uk

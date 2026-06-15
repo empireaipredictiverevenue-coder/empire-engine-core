@@ -1,0 +1,26 @@
+To: partners@libertymutual.com
+From: phil@empire-ai.co.uk
+Subject: Partner API inquiry: settled-claim event notifications
+Carrier: Liberty Mutual
+Status: DRAFT — review before sending
+======================================================================
+
+Hi Liberty Mutual Partners team,
+
+I'm Phil, founder of Empire AI. We connect homeowners with vetted
+local contractors in the 72-hour post-storm window. We earn 3% of
+the settled claim amount, paid only on settlement.
+
+To scale we need a settled-claim event feed from carriers. We have
+a working system with a mock carrier API and our first fee event
+was recorded last week. We'd love to integrate with Liberty Mutual.
+
+The minimum data: claim ID, settlement date, settled amount, property
+city + state. No PII or payment data needed.
+
+If a partner program exists, who do we contact?
+
+Best,
+Phil
+Empire AI
+phil@empire-ai.co.uk

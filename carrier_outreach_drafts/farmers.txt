@@ -1,0 +1,26 @@
+To: partners@farmers.com
+From: phil@empire-ai.co.uk
+Subject: Partner inquiry: settled-claim event notifications for predictive contractor routing
+Carrier: Farmers
+Status: DRAFT — review before sending
+======================================================================
+
+Hi Farmers Partners team,
+
+I'm Phil, founder of Empire AI. We help homeowners with storm-damage
+claims find vetted local contractors in the 72-hour post-storm
+window. Our fee is 3% of the settled claim, paid only on settlement.
+
+We have a working system with mock carrier data, and our first fee
+event was recorded last week. Real carrier integration is the next
+step.
+
+We need a settled-claim event feed: claim ID, settlement date,
+settled amount, property city + state. No PII or payment data.
+
+If Farmers has a partner program, who do we contact?
+
+Best,
+Phil
+Empire AI
+phil@empire-ai.co.uk
