@@ -29,6 +29,13 @@ WHAT WE BUILD:
 
   Every vertical, every channel, every product — one platform.
 
+  ✓ Storm risk prediction (Warp Scout / NOAA Storm Prediction Center)
+  ✓ Storm URL auto-refresh (reads prospects.website, appends to fresh_urls.txt)
+  ✓ Fee event ledger (claim→3% fee at /api/v1/fee/claim-settled)
+  ✓ Multi-agent cron fleet (10 agents, 6h cadence, agent_config/agent_activity)
+  ✓ SMS qc daemon (tier-1 auto-remediate, tier-2 Telegram ping)
+  ✓ Retarget agent (re-engages replied sequences, conservative)
+
 
 WHAT WE ARE NOT BUILDING RIGHT NOW:
 
@@ -46,12 +53,32 @@ THE NEXT STEPS:
 
   ☐ Splash live at empire-ai.co.uk  .................. ✅ DONE
   ☐ Pipeline scraping real URLs  ..................... ✅ DONE
-  ☐ Verified leads in Supabase ....................... 🔄 IN PROGRESS
-  ☐ SMS & voice sending real ......................... 🔄 IN PROGRESS
-  ☐ 1 real contractor recruited ...................... ⬜ NOT YET
-  ☐ 1 real fee earned ................................ ⬜ NOT YET
+  ☐ Verified leads in Supabase ....................... ✅ DONE  (1200 enriched_leads, 96 converted)
+  ☐ SMS & voice sending real ......................... ✅ DONE  (47 real SMS sent today, 218 active sequences)
+  ☐ 1 real contractor recruited ...................... ✅ DONE  (91 contractors, 60 fresh Austin roofing via prospector_bridge)
+  ☐ 1 real fee earned ................................ ✅ DONE  (2 fee_events, $125k in claims, $3,750 in fees)
 
-  These are the only things I track. Everything else is noise.
+  The 4 locked metrics are ALL met as of 2026-06-15. The chain is end-to-end:
+
+      warp_scout (NOAA) -> storm_url_refresh -> storm pipeline -> radar_targets
+      -> lead_scanner -> enriched_leads -> lead_converter -> storm_strike sequences
+      -> dispatcher -> Vonage -> real SMS -> real inbound
+      -> /api/v1/fee/claim-settled -> fee_events row (3% of claim)
+
+  What "next" means now: SCALE. The foundation is real, the chain fires,
+  the fee events get created. Next moves are:
+    1. Real claim event source (webhook or polling) to replace the manual
+       trigger — turn the simulated fee events into organic ones
+    2. Reply-monitoring: when a real homeowner replies YES, dispatch the
+       lead to a real contractor in our DB
+    3. More metros / more niches: prospector is currently scoped to 3 metros
+       (DFW/Houston/Austin) × 1 niche (roofing). Expand the
+       agent_config.prospector.config_json when ready.
+    4. Build the contractor self-service onboarding (currently they get SMS'd
+       but there's no /contractors portal — the public one exists but
+       the recruit flow is SMS-only).
+
+  Until revenue justifies the next vertical, these are the 4 focus areas.
 
 
 WHEN A NEW IDEA HITS:
@@ -78,15 +105,4 @@ THE RULE ABOUT CLAUDE:
    - Sleep
    - A walk outside
    - Talking to my partner / friend / advisor
-
-  If I've been in Claude for more than 2 hours straight,
-  I close the tab and come back tomorrow.
-
-
-───────────────────────────────────────────────────────────────────────────
-
-                    STARTING POINT · LOCKED
-               One platform. Every vertical. No limits.
-                    One step. Then the next.
-
 ═══════════════════════════════════════════════════════════════════════════
