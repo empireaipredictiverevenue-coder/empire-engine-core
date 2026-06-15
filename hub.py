@@ -56,6 +56,7 @@ from empire_playbook import register_playbook_routes
 from empire_payouts import PayoutEngine, register_payout_routes
 from empire_fee import register_fee_routes
 from empire_fee_operator import register_operator_mark_settled
+from empire_abtest import register_ab_test_routes
 from empire_auth import AuthEngine, register_auth_routes, require_role
 from empire_inbound import InboundCallTriage, register_inbound_routes
 from empire_brain_memory import BrainMemory
@@ -660,6 +661,7 @@ register_playbook_routes(app, require_auth=require_auth, get_db=get_db)
 register_payout_routes(app, engine=payout_engine, require_auth=require_auth, require_owner=require_owner)
 register_fee_routes(app, require_auth=require_auth, get_db=get_db)
 register_operator_mark_settled(app, require_auth=require_auth, get_db=get_db)
+register_ab_test_routes(app, require_auth=require_auth, get_db=get_db)
 register_profit_margin_routes(app, require_auth=require_auth, get_db=get_db)
 register_traffic_ads_routes(app, require_auth=require_auth, get_db=get_db)
 register_stack_routes(app, require_auth=require_auth, get_db=get_db)

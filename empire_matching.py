@@ -117,6 +117,7 @@ Supabase schema additions:
 """
 
 import os
+import uuid
 import time
 import logging
 from datetime import datetime, timezone, timedelta
@@ -370,6 +371,56 @@ class ContractorMatcher:
                 sent += 1
             except Exception as e:
                 log.error(f"[matching] dispatch email failed for {contractor.get('email')}: {e}")
+
+            # SMS notification: contractors miss emails. Push the lead
+            # details as an SMS so the contractor has two channels.
+            # The accept-link is the same magic link sent via email.
+            try:
+                if contractor.get("phone"):
+                    from empire_voice import VoiceRouter
+                    _sms_router = VoiceRouter(
+                        vonage_api_key=os.environ.get("VONAGE_API_KEY", ""),
+                        vonage_api_secret=os.environ.get("VONAGE_API_SECRET", ""),
+                        vonage_app_id=os.environ.get("VONAGE_APPLICATION_ID", ""),
+                        vonage_private_key_path=os.environ.get("VONAGE_PRIVATE_KEY_PATH", ""),
+                        vonage_number=os.environ.get("VONAGE_NUMBER", ""),
+                        public_base_url=os.environ.get("PUBLIC_BASE_URL", ""),
+                    )
+                    sms_body = (
+                        f"⚡ Empire AI · New lead in {lead.get('city', 'your area')}: "
+                        f"{lead.get('address', 'a property')} · "
+                        f"urgency {urgency}/10. "
+                        f"Accept: {accept_link[:160]} "
+                        f"STOP to opt out"
+                    )
+                    sms_result = await _sms_router.send_sms(contractor["phone"], sms_body)
+                    if sms_result.get("ok"):
+                        # outreach_log: dispatch event audit
+                        db.table("outreach_log").insert({
+                            "enriched_lead_id": None,
+                            "agent_name": "matching_dispatch_sms",
+                            "run_id": str(uuid.uuid4()),
+                            "channel": "sms",
+                            "sequence": "manual_dispatch",
+                            "step": 0,
+                            "body_preview": sms_body[:200],
+                            "compliance_passed": True,
+                            "mode": "live",
+                            "sent_at": datetime.now(timezone.utc).isoformat(),
+                            "sent_status": "sent",
+                            "meta": {"dispatch_id": str(ins.data[0]["id"]) if ins.data else None, "contractor_id": str(contractor["id"])},
+                        }).execute()
+                        # sms_log: actual SMS audit (for reply rate tracking)
+                        db.table("sms_log").insert({
+                            "phone":         contractor["phone"],
+                            "direction":     "outbound",
+                            "body":          sms_body,
+                            "step":          0,
+                            "message_uuid":  sms_result.get("message_uuid"),
+                            "delivered":     True,
+                        }).execute()
+            except Exception as e:
+                log.warning(f"[matching] dispatch SMS failed for {contractor.get('phone')}: {e}")
 
         # Touch last_dispatched_at for the matched contractors
         try:
