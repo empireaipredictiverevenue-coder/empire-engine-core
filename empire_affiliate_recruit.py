@@ -239,6 +239,52 @@ body {
 }
 .foot a { color: #5AC8FA; text-decoration: none; }
 .foot a:hover { text-decoration: underline; }
+
+/* ── Native Ad Embed ── */
+.aff-ad {
+  max-width: 400px;
+  margin: 40px auto 24px;
+}
+.aff-ad-card {
+  background: #15263F;
+  border: 1px solid rgba(122,140,163,0.12);
+  border-radius: 8px;
+  padding: 16px 18px;
+  transition: border-color 0.2s;
+  text-align: center;
+}
+.aff-ad-card:hover {
+  border-color: rgba(68,229,184,0.25);
+}
+.aff-ad-headline {
+  font-weight: 600;
+  font-size: 14px;
+  color: #F8FAFD;
+  margin-bottom: 4px;
+}
+.aff-ad-body {
+  font-size: 12px;
+  color: #7A8CA3;
+  margin-bottom: 10px;
+  line-height: 1.5;
+}
+.aff-ad-cta {
+  display: inline-block;
+  padding: 8px 16px;
+  background: #44E5B8;
+  color: #000;
+  font-weight: 700;
+  font-size: 12px;
+  text-decoration: none;
+  border-radius: 4px;
+  transition: all 0.2s;
+  letter-spacing: 0.04em;
+}
+.aff-ad-cta:hover {
+  background: transparent;
+  color: #44E5B8;
+  outline: 1px solid #44E5B8;
+}
 """
 
 _AFFILIATE_RECRUIT_HTML = ("""<!DOCTYPE html>
@@ -351,6 +397,9 @@ _AFFILIATE_RECRUIT_HTML = ("""<!DOCTYPE html>
     </div>
   </div>
 
+  <!-- Native Ad Container -->
+  <div class="aff-ad" id="empire-ad-affiliates"></div>
+
   <div class="foot">
     <a href="/">Empire AI</a> · <a href="/pricing">Pricing</a> · <a href="/support">Support</a><br>
     &copy; 2026 Empire AI Ltd
@@ -410,6 +459,50 @@ function copyLink(el) {
     }, 1500);
   }).catch(() => {});
 }
+
+// Native Ad: fetch from ad server and render
+(function() {
+  var slot = 'sidebar-recruit';
+  var niche = 'Affiliate Program';
+  var visitor = localStorage.getItem('empire_visitor_id') || 'v_' + Math.random().toString(36).slice(2, 10);
+  localStorage.setItem('empire_visitor_id', visitor);
+
+  fetch('/api/v1/ads/serve?slot=' + encodeURIComponent(slot) + '&niche=' + encodeURIComponent(niche) + '&visitor_id=' + visitor)
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (!data.ok || !data.ad) return;
+      var ad = data.ad;
+      var el = document.getElementById('empire-ad-affiliates');
+      if (!el) return;
+
+      el.innerHTML =
+        '<div class="aff-ad-card">' +
+        '<div class="aff-ad-headline">' + ad.headline + '</div>' +
+        '<div class="aff-ad-body">' + ad.body + '</div>' +
+        '<a class="aff-ad-cta" href="#" data-impression="' + ad.impression_id + '" data-creative="' + ad.creative_id + '" data-campaign="' + ad.campaign_id + '" data-visitor="' + visitor + '" id="aff-cta">' + ad.cta_text + '</a>' +
+        '</div>';
+
+      var cta = document.getElementById('aff-cta');
+      if (cta) {
+        cta.addEventListener('click', function(e) {
+          e.preventDefault();
+          fetch('/api/v1/ads/click', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              impression_id: cta.getAttribute('data-impression'),
+              creative_id: cta.getAttribute('data-creative'),
+              campaign_id: cta.getAttribute('data-campaign'),
+              visitor_id: cta.getAttribute('data-visitor')
+            })
+          }).then(function(r) { return r.json(); }).then(function(data) {
+            if (data.destination) { window.location.href = data.destination; }
+          });
+        });
+      }
+    })
+    .catch(function() { /* silent fail */ });
+})();
 </script>
 </body></html>""").replace("{_AFFILIATE_PAGE_CSS}", _AFFILIATE_PAGE_CSS)
 
