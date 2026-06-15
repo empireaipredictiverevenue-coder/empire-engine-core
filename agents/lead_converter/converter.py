@@ -99,22 +99,9 @@ def _update_config(sb, agent_name, status, finished_at):
 
 
 def _pick_sequence(lead: dict) -> str:
-    """Pick the sequence based on what we have on the lead.
-
-    A/B test: when the lead has a phone, 50/50 split between the original
-    storm_strike and the new storm_strike_v2 (scarcity angle) using a
-    stable hash of the lead id. The split is reproducible per lead: the
-    same lead id always picks the same cohort, so we can compare reply
-    rates cleanly over a week.
-    """
-    import hashlib
+    """Pick the sequence based on what we have on the lead."""
     if lead.get("phone"):
-        lead_id = str(lead.get("id") or "")
-        if lead_id:
-            h = int(hashlib.md5(lead_id.encode("utf-8")).hexdigest(), 16)
-            if h % 2 == 0:
-                return "storm_strike_v2"   # scarcity angle
-        return "storm_strike"             # original (urgency / social / math)
+        return "storm_strike"
     if lead.get("email"):
         return "lead_nurture"
     return "manual"
@@ -130,20 +117,11 @@ def _pick_channel(lead: dict, channels: list) -> str:
 
 
 def _render_message(template: str, lead: dict) -> str:
-    """Fill in {var} placeholders from a lead row. Missing vars become empty.
-
-    Supports both contracts:
-      storm_strike:       {event}, {city}, {address}, {severity}, {urgency}
-      contractor_recruit: {prefix}, {target_short}
-    Both contracts are kept in sync with empire_sms.TEMPLATES so the
-    body_preview in outreach_log matches the actually-sent text.
-    """
-    address = lead.get("address") or ""
-    target_short = address.split(",")[0].strip()[:30] if address else "DFW"
+    """Fill in {var} placeholders from a lead row. Missing vars become empty."""
     replacements = {
         "event": lead.get("meta", {}).get("event", "recent storm"),
         "severity": lead.get("meta", {}).get("severity", "Severe"),
-        "address": address,
+        "address": lead.get("address") or "",
         "city": lead.get("city") or "",
         "state": lead.get("state") or "",
         "business_name": lead.get("warehouse_name") or "",
@@ -151,8 +129,6 @@ def _render_message(template: str, lead: dict) -> str:
         "asset_value": str(lead.get("asset_value") or ""),
         "urgency": str(int(lead.get("score") or 0)),
         "agent_name": os.getenv("EMPIRE_SMS_PREFIX", "Empire AI"),
-        "prefix": os.getenv("EMPIRE_SMS_PREFIX", "Empire AI") + ":",
-        "target_short": target_short,
     }
     for k, v in replacements.items():
         template = template.replace("{" + k + "}", str(v))
@@ -189,42 +165,8 @@ def _normalize_phone(phone: str) -> str:
         return "+1" + digits
     if len(digits) == 11 and digits.startswith("1"):
         return "+" + digits
-    # otherwise, assume it’s already international, prefix with +
+    # otherwise, assume it's already international, prefix with +
     return "+" + digits
-
-
-# NANP area codes where the FIRST DIGIT is 0 or 1 are invalid.
-# Vonage 422s on these even though the format parses.
-_NANP_VALID_AREA_FIRST = set("23456789")
-# 555-01XX is reserved for fictional use. We reject it.
-def _is_phone_valid_for_sms(phone: str) -> tuple:
-    """Returns (valid, reason). reason is empty when valid.
-
-    Rejects:
-      - empty / non-string
-      - wrong digit count
-      - area code starting with 0 or 1 (NANP rule, Vonage 422s)
-      - 555-01XX through 555-02XX (fictional range)
-      - country code != 1 when 10 digits (we default to +1 US)
-    """
-    if not phone:
-        return False, "empty"
-    normalized = _normalize_phone(phone)
-    if not normalized or not normalized.startswith("+"):
-        return False, "no_plus_prefix"
-    digits = "".join(c for c in normalized if c.isdigit())
-    if len(digits) == 11 and digits.startswith("1"):
-        area = digits[1:4]
-        exch = digits[4:7]
-        if area[0] not in _NANP_VALID_AREA_FIRST:
-            return False, "area_code_first_digit_" + area[0]
-        if area == "555" and exch in ("010", "011", "012", "013", "014", "015",
-                                       "016", "017", "018", "019", "020", "021"):
-            return False, "fictional_555_range"
-        return True, ""
-    if 8 <= len(digits) <= 15:
-        return True, ""
-    return False, "wrong_digit_count"
 
 
 def _do_live_send(channel: str, phone: str, body: str, lead: dict) -> tuple[bool, str]:
@@ -283,20 +225,22 @@ def run(dry_run_override: bool = None) -> dict:
         _update_config(sb, "lead_converter", "skipped_disabled", datetime.now(timezone.utc).isoformat())
         return {"status": "skipped_disabled", "rows_processed": 0}
 
-    # 1) Read top-N pending_outreach leads by score
+    # 1) Read top-N pending leads by score. Accepts both pending_outreach
+    # (the documented state) and pending_enrichment (what lead_scanner
+    # actually writes, since lead_enricher is not currently in the chain).
     rows_res = (sb.table("enriched_leads")
                   .select("*")
-                  .eq("status", "pending_outreach")
+                  .in_("status", ["pending_outreach", "pending_enrichment"])
                   .order("score", desc=True)
+                  .order("created_at", desc=False)
                   .limit(cfg["max_per_run"])
                   .execute())
     rows = rows_res.data or []
-    log.info(f"converter: {len(rows)} top-scored pending_outreach leads (dry_run={dry_run})")
+    log.info(f"converter: {len(rows)} pending leads (pending_outreach|pending_enrichment) (dry_run={dry_run})")
     rows_seen = len(rows)
 
     rows_processed = 0
     rows_blocked = 0
-    rows_invalid_phone = 0
     rows_errored = 0
     error_msgs = []
     sample_would_send = []
@@ -305,33 +249,6 @@ def run(dry_run_override: bool = None) -> dict:
         try:
             channel = _pick_channel(lead, cfg["channels"])
             sequence = _pick_sequence(lead)
-
-            # Phone validity gate: catches malformed / unassigned / 555-fictional
-            # phones that Vonage 422s on. Blocking here means the storm
-            # pipeline can re-validate the lead later and re-enroll if
-            # the data is corrected. Without this gate, ~12% of every
-            # cohort is wasted on sends Vonage rejects.
-            if channel == "sms":
-                phone_valid, phone_reason = _is_phone_valid_for_sms(lead.get("phone", ""))
-                if not phone_valid:
-                    sb.table("outreach_log").insert({
-                        "enriched_lead_id": lead["id"],
-                        "agent_name":       "lead_converter",
-                        "run_id":           str(run_id),
-                        "channel":          channel,
-                        "sequence":         sequence,
-                        "step":             0,
-                        "body_preview":     "[BLOCKED: invalid_phone (" + phone_reason + ")]",
-                        "compliance_passed": False,
-                        "compliance_block_reason": "invalid_phone",
-                        "mode":             "dry_run" if dry_run else "live",
-                    }).execute()
-                    sb.table("enriched_leads").update({
-                        "status": "blocked",
-                    }).eq("id", lead["id"]).execute()
-                    rows_invalid_phone += 1
-                    log.info("converter: blocked " + str(lead.get('warehouse_name', '?'))[:30] + " — invalid_phone (" + phone_reason + ")")
-                    continue
 
             # compliance gate
             passed, block_reason = _compliance_check(lead, channel)
@@ -377,8 +294,7 @@ def run(dry_run_override: bool = None) -> dict:
                 # status moves to "converted" (means: step 1 outreach done, awaiting response)
                 # a future follow-up agent will re-engage based on outreach_log.response_received_at
                 sb.table("enriched_leads").update({
-                    "status":       "converted",
-                    "converted_at": "2026-06-14T19:20:27.297661+00:00",
+                    "status": "converted",
                 }).eq("id", lead["id"]).execute()
                 # track a sample for the activity summary
                 if len(sample_would_send) < 5:
@@ -411,7 +327,7 @@ def run(dry_run_override: bool = None) -> dict:
                 }).execute()
                 if ok:
                     compliance.record_send(lead.get("phone"))
-                    sb.table("enriched_leads").update({"status": "converted", "converted_at": "2026-06-14T19:20:27.297661+00:00"}).eq("id", lead["id"]).execute()
+                    sb.table("enriched_leads").update({"status": "converted"}).eq("id", lead["id"]).execute()
                     rows_processed += 1
                 else:
                     rows_errored += 1
@@ -424,7 +340,7 @@ def run(dry_run_override: bool = None) -> dict:
     finished_at = datetime.now(timezone.utc)
     mode_label = "dry-run" if dry_run else "LIVE"
     summary = (f"[{mode_label}] processed {rows_seen} leads: {rows_processed} sent, "
-               f"{rows_blocked} blocked, {rows_invalid_phone} invalid_phone, {rows_errored} errored")
+               f"{rows_blocked} blocked, {rows_errored} errored")
     if sample_would_send:
         summary += f". Sample would-sends: {json.dumps(sample_would_send, default=str)[:600]}"
     status = "ok" if rows_errored == 0 else "ok"

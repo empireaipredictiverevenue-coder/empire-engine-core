@@ -61,11 +61,14 @@ def _sb():
 def _read_config(sb):
     r = sb.table("agent_config").select("*").eq("agent_name", AGENT_NAME).limit(1).execute()
     if not r.data:
-        return {"enabled": True, "dry_run": True}
+        return {"enabled": True, "dry_run": True, "metros": None, "niches": None}
     row = r.data[0]
+    cfg = row.get("config_json") or {}
     return {
         "enabled": row.get("enabled", True),
         "dry_run": row.get("dry_run", True),
+        "metros":  cfg.get("metros"),    # list[str] or None (None = all)
+        "niches":  cfg.get("niches"),    # list[str] or None (None = all)
     }
 
 
@@ -96,10 +99,10 @@ def _update_config(sb, status, finished_at):
     }).eq("agent_name", AGENT_NAME).execute()
 
 
-async def _run_prospector(dry_run: bool) -> dict:
+async def _run_prospector(dry_run: bool, metros=None, niches=None) -> dict:
     """Call bots/prospector.py run_multi() and return its summary dict."""
     from bots.prospector import run_multi
-    return await run_multi(dry_run=dry_run)
+    return await run_multi(dry_run=dry_run, metros=metros, niches=niches)
 
 
 def run_once(dry_run_override=None) -> dict:
@@ -116,7 +119,11 @@ def run_once(dry_run_override=None) -> dict:
         return {"status": "skipped", "reason": msg}
 
     try:
-        results = asyncio.run(_run_prospector(dry_run=dry_run))
+        results = asyncio.run(_run_prospector(
+            dry_run=dry_run,
+            metros=cfg.get("metros"),
+            niches=cfg.get("niches"),
+        ))
         summary = (
             f"[{'DRY-RUN' if dry_run else 'LIVE'}] "
             f"found={results.get('total_found', 0)} "

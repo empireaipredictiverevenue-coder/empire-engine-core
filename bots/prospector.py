@@ -127,7 +127,6 @@ async def find_prospects(
             "rating": p.get("rating"),
             "review_count": p.get("review_count") or p.get("user_ratings_total"),
             "buy_signal_score": score,
-            "business_status": p.get("business_status", ""),
             "status": "new",
         })
 
