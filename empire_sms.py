@@ -210,6 +210,28 @@ TEMPLATES = {
             "STOP to opt out."
         ),
     ],
+    "b2b_outreach": [
+        # Touch 0 — Initial contact. ≤160 chars. One offer, one ask.
+        (
+            "{prefix} We send qualified business leads to {target_short} — "
+            "no upfront cost. Reply YES for a free sample. STOP to opt out."
+        ),
+        # Touch 1 — Value prop. 3% success fee model.
+        (
+            "{prefix} {target_short}, you pay our 3% success fee "
+            "only on closed deals. No retainer. Reply YES. STOP to opt out."
+        ),
+        # Touch 2 — Test drive offer.
+        (
+            "{prefix} {target_short}, we can send a sample lead matching "
+            "your service profile today. No cost. Reply YES. STOP to opt out."
+        ),
+        # Touch 3 — Last touch.
+        (
+            "{prefix} Last note for {target_short}. If the timing is right, "
+            "reply YES anytime. We'll send a sample lead. STOP to opt out."
+        ),
+    ],
 }
 
 
