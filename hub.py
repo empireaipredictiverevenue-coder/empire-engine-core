@@ -71,6 +71,7 @@ from empire_dream import DreamLoop, set_dream_loop, get_latest_wisdom
 from empire_hourly_digest import HourlyDigestLoop
 from bots.seo_agent import run_loop as seo_run_loop
 from bots.backlinks_agent import run_loop as backlinks_run_loop
+from bots.traffic_specialist import run_loop as traffic_specialist_run_loop, register_traffic_specialist_routes
 from empire_console import SovereignConsole, register_console_routes
 from empire_orchestrator import StormOrchestrator, register_storm_routes
 from empire_ai_router import AIRouter
@@ -842,6 +843,9 @@ register_native_ads_routes(
     require_auth=require_auth,
     public_base_url=PUBLIC_BASE_URL,
 )
+
+# ── Traffic Specialist — autonomous traffic orchestration ─────────
+register_traffic_specialist_routes(app, require_auth=require_auth)
 
 # ── Suite Gateway — 3-Product Monetization ───────────────────────────
 suite_subscriptions = SuiteSubscriptionEngine(get_db=get_db)
@@ -2381,6 +2385,7 @@ async def startup():
     asyncio.create_task(hourly_digest.run())
     asyncio.create_task(seo_run_loop())
     asyncio.create_task(backlinks_run_loop())
+    asyncio.create_task(traffic_specialist_run_loop())
     asyncio.create_task(_si_evolution_loop())
     # Swarm Gate auto-pilot — scan storm forecasts + fire parallel video ads every 30 min
     asyncio.create_task(_swarm_autopilot_loop())
