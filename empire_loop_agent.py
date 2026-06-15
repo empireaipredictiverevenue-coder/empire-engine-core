@@ -42,6 +42,9 @@ _LANE_GROUPS = {
     "Healthcare": {"lanes": [27, 28], "strategy": "HEALTH_STRIKE", "source": "Healthcare Lead Gen"},
     "Business Services": {"lanes": [29, 30, 31], "strategy": "BIZ_STRIKE", "source": "B2B Lead Gen"},
     "Home Services": {"lanes": [34, 35], "strategy": "AGGRESSIVE_STRIKE", "source": "Storm Scout"},
+    "Commercial Roofing": {"lanes": [36], "strategy": "AGGRESSIVE_STRIKE", "source": "Storm Scout"},
+    "Commercial Solar": {"lanes": [37], "strategy": "AGGRESSIVE_STRIKE", "source": "Storm Scout"},
+    "Debt Relief": {"lanes": [38], "strategy": "FINANCIAL_STRIKE", "source": "Financial Lead Gen"},
 }
 
 # Seed mock stats — used as initial data when no real DB data exists yet
@@ -59,6 +62,9 @@ _MOCK_LANE_STATS = {
     24: {"wins": 15, "losses": 5, "revenue": 120000, "runs": 20, "pacing_hours": 8},
     34: {"wins": 5, "losses": 2, "revenue": 45000, "runs": 7, "pacing_hours": 12},
     35: {"wins": 10, "losses": 5, "revenue": 30000, "runs": 15, "pacing_hours": 10},
+    36: {"wins": 0, "losses": 0, "revenue": 0, "runs": 0, "pacing_hours": 8},
+    37: {"wins": 0, "losses": 0, "revenue": 0, "runs": 0, "pacing_hours": 8},
+    38: {"wins": 0, "losses": 0, "revenue": 0, "runs": 0, "pacing_hours": 8},
 }
 
 _STRATEGY_COMPARE = [
@@ -112,6 +118,12 @@ _RANK_RENT_BENCHMARKS = {
                       "typical_rent": 1200, "typical_lead_value": 55},
     "Consumer CPA": {"msv": 20000, "avg_cpc": 12.00, "competition": "medium",
                      "typical_rent": 900, "typical_lead_value": 35},
+    "Commercial Roofing": {"msv": 18000, "avg_cpc": 20.00, "competition": "medium",
+                           "typical_rent": 2000, "typical_lead_value": 120},
+    "Commercial Solar": {"msv": 15000, "avg_cpc": 25.00, "competition": "medium",
+                         "typical_rent": 2500, "typical_lead_value": 180},
+    "Debt Relief": {"msv": 25000, "avg_cpc": 30.00, "competition": "high",
+                    "typical_rent": 2000, "typical_lead_value": 130},
 }
 
 # ══════════════════════════════════════════════════════════════════════════
@@ -616,7 +628,7 @@ class LoopAgent:
         """
         events = []
 
-        for lid in range(36):
+        for lid in range(39):
             if lid in self._deactivated_lanes:
                 continue
 
@@ -666,7 +678,7 @@ class LoopAgent:
         # Cross-pollinate: find the best-performing lane overall and share its strategy
         best_lane = None
         best_wr = 0
-        for lid in range(36):
+        for lid in range(39):
             stats = self.tracker.get_stats(lid)
             if stats and stats["runs"] >= 20 and stats["win_rate"] > best_wr:
                 best_wr = stats["win_rate"]
@@ -703,7 +715,7 @@ class LoopAgent:
 
     def loop_overview(self) -> dict:
         """Aggregate lane health, execution cadence, and success rates."""
-        total_lanes = 36
+        total_lanes = 39
         assigned_lanes = sum(len(g["lanes"]) for g in _LANE_GROUPS.values())
         all_stats = self.tracker.all_stats()
         total_runs = self.tracker.total_runs()
@@ -854,7 +866,7 @@ class LoopAgent:
     def optimization_suggestions(self) -> list[dict]:
         """Lane-specific tuning recommendations — now with Rank & Rent and evolution insights."""
         suggestions = []
-        for lid in range(36):
+        for lid in range(39):
             detail = self.lane_detail(lid)
             if detail.get("status") == "no_data":
                 continue

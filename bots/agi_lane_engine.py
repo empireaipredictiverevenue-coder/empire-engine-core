@@ -118,6 +118,9 @@ except ImportError:
         (33, "Financial Services", "FINANCIAL_STRIKE", "Financial Lead Gen", "inbound"),
         (34, "Home Services", "AGGRESSIVE_STRIKE", "Storm Scout", "storm"),
         (35, "Home Services", "UGLY_BANNER", "Web Auditor", "audit"),
+        (36, "Commercial Roofing", "AGGRESSIVE_STRIKE", "Storm Scout", "storm"),
+        (37, "Commercial Solar", "AGGRESSIVE_STRIKE", "Storm Scout", "storm"),
+        (38, "Debt Relief", "FINANCIAL_STRIKE", "Financial Lead Gen", "inbound"),
     ]
     for lid, niche, strategy, source, trigger in _LANE_CFG:
         LANES[lid] = {"niche": niche, "strategy": strategy,
