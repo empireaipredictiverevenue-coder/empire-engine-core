@@ -39,7 +39,7 @@ def _list_pages() -> list:
         # by keeping the title as-is
         mtime = p.stat().st_mtime
         pages.append((p.stem, title, mtime))
-    pages.sort(key=lambda x: -x[2])
+    pages.sort(key=lambda x: x[0].lower())  # alphabetical, case-insensitive
     return pages
 
 
