@@ -32,6 +32,10 @@ METROS: Dict[str, Dict[str, float | str]] = {
     "Tulsa":               {"lat": 36.1540, "lon": -95.9928, "state": "OK"},
     "Denver":              {"lat": 39.7392, "lon": -104.9903, "state": "CO"},
     "St. Louis":           {"lat": 38.6270, "lon": -90.1994, "state": "MO"},
+    "New Orleans":         {"lat": 29.9511, "lon": -90.0715, "state": "LA"},
+    "Memphis":             {"lat": 35.1495, "lon": -90.0490, "state": "TN"},
+    "Atlanta":             {"lat": 33.7490, "lon": -84.3880, "state": "GA"},
+    "Nashville":           {"lat": 36.1627, "lon": -86.7816, "state": "TN"},
 }
 
 

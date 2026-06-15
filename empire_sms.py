@@ -123,39 +123,33 @@ STEP_DELAYS = {
 # ─────────────────────────────────────────────────────────────────────────────
 TEMPLATES = {
     "storm_strike": [
-        # Touch 0 — Initial contact. Full identification + opt-out.
+        # Touch 0 — Initial contact. One fact, one ask, one proof. ≤160 chars.
         (
-            "{prefix} Severe weather flagged at your facility ({target_short}). "
-            "Our predictive system detects possible roof/structural damage. "
-            "3% success fee only if a claim settles. "
-            "Reply YES for free assessment. Reply STOP to opt out."
+            "{prefix} Storm flagged at {target_short}. "
+            "We dispatch 1 vetted roofer to your area — no cost unless claim settles. "
+            "Reply YES to schedule free assessment. STOP to opt out."
         ),
-        # Touch 1 — 1 hour later. Urgency.
+        # Touch 1 — urgency. Document the window, one ask.
         (
-            "{prefix} The 72-hour insurance documentation window is open. "
-            "Most policies recommend filing within this period for best outcomes. "
-            "Reply YES to schedule an inspection. Reply STOP to opt out."
+            "{prefix} Insurance doc window is 72 hrs from the storm — "
+            "most policies want filing inside that. Reply YES if you want the "
+            "roofer dispatched. STOP to opt out."
         ),
-        # Touch 2 — 4 hours later. Social proof (non-specific to avoid
-        # fabricated claims; the original "Three other facilities... locked in
-        # coverage today" is false unless we have data).
+        # Touch 2 — value. No inspection = no fee, no claim = no fee.
         (
-            "{prefix} Other property owners in your area are being "
-            "contacted about storm damage. We only earn on settled claims, "
-            "so the inspection is at no cost to you. "
-            "Reply YES for a free roof assessment. Reply STOP to opt out."
+            "{prefix} Quick reminder: we only earn on settled claims. "
+            "If the roofer doesn't find damage, the inspection is free. "
+            "If you file nothing, we earn nothing. Reply YES. STOP to opt out."
         ),
-        # Touch 3 — 24 hours later. Value math.
+        # Touch 3 — value math, scoped. Remove the typo (typically).
         (
-            "{prefix} Quick math: a $2M facility w/ storm damage typically settles "
-            "around $180K-$400K. Our fee on $250K settled = $2,500. "
-            "Reply YES to start the assessment. Reply STOP to opt out."
+            "{prefix} A $250K settled claim = $7,500 to you, $7,500 to us. "
+            "We only earn if the roofer earns. Reply YES to start. STOP to opt out."
         ),
-        # Touch 4 — 72 hours later. Final touch + clear opt-out.
+        # Touch 4 — last call. Clear opt-out, no nag.
         (
-            "{prefix} Last note from us — the 72hr documentation window has closed. "
-            "If you'd still like a no-cost assessment, reply YES. "
-            "Otherwise no further messages. Reply STOP to confirm opt-out."
+            "{prefix} Last note from us. If you want the no-cost assessment, "
+            "reply YES. Otherwise we won't message again. STOP to opt out."
         ),
     ],
     "storm_strike_v2": [
@@ -197,33 +191,23 @@ TEMPLATES = {
         ),
     ],
     "contractor_recruit": [
-        # Touch 0 — Initial pitch. Free-trial framing, no-call ask, splash CTA.
+        # Touch 0 — Initial pitch. One ask. ≤160 chars. Specific to their work.
         (
-            "{prefix} We pay contractors a 3% referral fee on every "
-            "settled insurance claim — and your first 2 closed deals "
-            "are 100% complimentary. No fee, no contract, no call needed. "
-            "See the offer, watch the 2-min demo, and self-onboard at "
-            "empire-ai.co.uk/contractors. Reply STOP to opt out."
+            "{prefix} Storm leads for roofers in your metro — "
+            "first 2 closed deals on us, 3% after. "
+            "90-sec self-onboard at empire-ai.co.uk/contractors. STOP to opt out."
         ),
-        # Touch 1 — 96 hours later. Demo CTA, persistence without nagging.
+        # Touch 1 — 96h follow-up. Just point at the demo.
         (
-            "{prefix} Quick follow-up — we added a live demo on the page "
-            "so you can see the lead flow before deciding. Qualified, "
-            "storm-affected commercial properties delivered to your "
-            "dispatch queue. You only pay when the claim settles. "
-            "First 2 deals on us. empire-ai.co.uk/contractors "
-            "Reply STOP to opt out."
+            "{prefix} 30-sec demo on the contractors page if you want to see "
+            "the lead flow first. empire-ai.co.uk/contractors. STOP to opt out."
         ),
-        # Touch 2 — 240 hours later. Soft close + REFERRAL ask.
-        # (Referrals are a $0 CAC channel — each contractor knows 2-3 others
-        # in adjacent metros. Captured via POST /api/contractors/refer.)
+        # Touch 2 — 240h soft close. Two paths, one ask.
         (
-            "{prefix} Closing note. Three options: "
-            "(1) self-onboard at empire-ai.co.uk/contractors — 90s, first 2 deals on us, "
-            "(2) reply NOTNOW and we'll check back next quarter, "
-            "(3) know another roofer who'd want qualified leads? "
-            "Reply REFER with their name + number and we'll reach out. "
-            "Reply STOP to opt out."
+            "{prefix} Closing note. Two paths: "
+            "(1) self-onboard — 90s, first 2 deals on us, or "
+            "(2) reply NOTNOW and we'll check back next quarter. "
+            "STOP to opt out."
         ),
     ],
 }
