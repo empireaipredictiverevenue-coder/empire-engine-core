@@ -32,8 +32,9 @@ we'd love to swap that for a real integration. Are partner integrations
 something State Farm offers, and if so, who do we talk to?
 
 We have a working hub at empire-ai.co.uk and a real contractor network
-in Texas, Oklahoma, and Louisiana. Our first paid fee event was
-recorded last week.
+in Texas, Oklahoma, and Louisiana. We've validated the 3% fee model end-to-end with first fee events
+recorded in our system this week (testing through a mock carrier API
+while we line up real integration partners).
 
 If a partner program isn't the right channel, I'm also happy to take
 a meeting to discuss the model.
