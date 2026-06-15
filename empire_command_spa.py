@@ -1613,6 +1613,7 @@ const NAV_GROUPS = [
       { id: 'payouts',       label: 'Payouts',        sub: 'Pending · approvals · history' },
       { id: 'dispatches',    label: 'Dispatches',     sub: 'Lead matches · mark settled' },
       { id: 'fees',          label: 'Fees',           sub: 'Settled claims · 3% per claim' },
+      { id: 'predicted',     label: 'Predicted',      sub: 'Forecasted fees by segment' },
       { id: 'contractors',   label: 'Contractors',    sub: 'Applications & approvals' },
       { id: 'partners',      label: 'Partners',       sub: 'Buyers · pending · approvals' },
       { id: 'revenue',       label: 'Revenue',        sub: 'Predictive revenue · per-lane MRR · LLM forecast' },
@@ -3277,6 +3278,76 @@ function Fees() {
           <p style=${{marginBottom: '8px'}}><strong>2. Operator mark-settled:</strong> <code>POST /api/v1/fee/operator-mark-settled</code> with <code>{dispatch_id, claim_amount, meta}</code>. Looks up the dispatch, resolves the lead + contractor, writes the fee event.</p>
           <p style=${{marginBottom: '8px'}}><strong>3. Manual trigger:</strong> <code>python3 -m agents.fee_watcher.trigger --claim-amount 50000 --contractor-id &lt;uuid&gt;</code></p>
           <p style=${{marginBottom: '0'}}>All three paths converge on the same <code>fee_events</code> table with <code>fee_amount = claim_amount × 0.03</code>.</p>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+
+// ── PREDICTED REVENUE ──────────────────────────────────────────────────
+function Predicted() {
+  const [data, setData] = useState(null);
+  const [err, setErr] = useState(null);
+  const reload = async () => {
+    try {
+      const r = await apiFetch('/api/v1/predictive/revenue?days=30').then(x => x.json());
+      setData(r);
+    } catch (e) { setErr(e.message); }
+  };
+  useEffect(() => { reload(); }, []);
+
+  if (err) return html`<div class="stub"><div class="stub-body">${err}</div></div>`;
+  if (!data) return html`<div class="stub"><div class="stub-body">Loading projection…</div></div>`;
+
+  const fmtUsd = (n) => '$' + Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+  const seq = data.by_sequence_type || [];
+  const metros = (data.by_metro || []).slice(0, 10);
+  const niches = data.by_niche || [];
+
+  return html`
+    <div>
+      <div class="section-h"><div><div class="section-title">Predicted Revenue</div><div class="section-sub">Projected fees by segment · ${data.window_days}-day window</div></div><div class="sec-actions"><button class="tbl-action go" onClick=${reload}>↻ Refresh</button></div></div>
+      <div class="fee-stats">
+        <div class="fee-stat"><div class="fee-stat-label">Projected total</div><div class="fee-stat-value teal">${fmtUsd(data.total_projected_fees_usd)}</div></div>
+        <div class="fee-stat"><div class="fee-stat-label">Active sequences</div><div class="fee-stat-value">${data.total_active_sequences.toLocaleString()}</div></div>
+        <div class="fee-stat"><div class="fee-stat-label">Blended reply rate</div><div class="fee-stat-value">${data.blended_reply_rate_pct}%</div></div>
+        <div class="fee-stat"><div class="fee-stat-label">Avg claim (real)</div><div class="fee-stat-value dim">${fmtUsd(data.avg_claim_usd)}</div></div>
+      </div>
+      <div class="panel">
+        <div class="panel-head">By sequence type</div>
+        ${seq.length === 0 ? html`<div class="tbl-empty">No active sequences.</div>` : html`
+          <table class="tbl"><thead><tr>
+            <th>Sequence</th><th class="tbl-num">Active</th><th class="tbl-num">Reply rate</th><th class="tbl-num">Projected fees</th>
+          </tr></thead><tbody>
+            ${seq.map(s => html`<tr key=${s.sequence_type}>
+              <td><strong>${s.sequence_type}</strong></td>
+              <td class="tbl-num">${s.active_sequences}</td>
+              <td class="tbl-num">${s.reply_rate_pct}%</td>
+              <td class="tbl-num"><strong>${fmtUsd(s.projected_fees_usd)}</strong></td>
+            </tr>`)}
+          </tbody></table>`}
+      </div>
+      <div class="panel" style=${{marginTop: '16px'}}>
+        <div class="panel-head">By metro (top 10)</div>
+        ${metros.length === 0 ? html`<div class="tbl-empty">No metro data.</div>` : html`
+          <table class="tbl"><thead><tr>
+            <th>Metro</th><th class="tbl-num">Active</th><th class="tbl-num">Reply rate</th><th class="tbl-num">Projected fees</th>
+          </tr></thead><tbody>
+            ${metros.map(m => html`<tr key=${m.metro}>
+              <td><strong>${m.metro}</strong></td>
+              <td class="tbl-num">${m.active_sequences}</td>
+              <td class="tbl-num">${m.reply_rate_pct}%</td>
+              <td class="tbl-num"><strong>${fmtUsd(m.projected_fees_usd)}</strong></td>
+            </tr>`)}
+          </tbody></table>`}
+      </div>
+      <div class="panel" style=${{marginTop: '16px'}}>
+        <div class="panel-head">How this is computed</div>
+        <div class="panel-body" style=${{fontSize: '12px', color: 'var(--empire-mist)', lineHeight: '1.6'}}>
+          <p>Projected fees = active sequences × historical reply rate × avg claim size × 3%</p>
+          <p>Reply rate is computed over the last ${data.window_days} days. Avg claim is the all-time average from fee_events. As more fee_events arrive, the projection narrows.</p>
+          <p style=${{marginTop: '8px'}}><strong>Note:</strong> today's 875 sends haven't replied yet (24-72h reply window). Current reply rate is dominated by historical seed data. The projection will revise as organic replies come in.</p>
         </div>
       </div>
     </div>
@@ -9309,6 +9380,7 @@ function App() {
             active.id === 'payouts'     ? html`<${Payouts} />` :
             active.id === 'dispatches'  ? html`<${Dispatches} />` :
             active.id === 'fees'        ? html`<${Fees} />` :
+            active.id === 'predicted'   ? html`<${Predicted} />` :
             active.id === 'contractors' ? html`<${Contractors} />` :
             active.id === 'console'     ? html`<${Console} />` :
             active.id === 'audit'       ? html`<${Audit} />` :
