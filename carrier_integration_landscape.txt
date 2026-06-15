@@ -1,0 +1,220 @@
+Empire AI · Carrier Integration Landscape · 2026-06-15
+=======================================================
+
+Researched the actual state of carrier-side claim data access. Real
+findings below — what each carrier actually offers, what the
+integration path looks like, and what's realistic to pursue.
+
+The 5 carriers from the outreach drafts each have a different shape.
+None of them have a public "settled-claim webhook" API. The integration
+moves through one of 3 paths (A direct, B aggregator, C portal).
+
+==================================================================
+PATH A: DIRECT CARRIER PARTNERSHIP
+==================================================================
+
+1. STATE FARM
+   Public claim API:      NO
+   B2B portal:            YES — b2b.statefarm.com
+   Premier Service Program: YES — preferred-contractor network
+                             (b2b.statefarm.com/b2b-content/claim-services/premier-service)
+   "Is State Farm taking new vendors?" YES — they accept new
+   suppliers. Empire AI could potentially register as a vendor
+   (we supply leads to contractors who work State Farm claims).
+   "Contractor Locator Service" — public page for finding
+   State Farm-preferred contractors in your area. Our contractors
+   could be listed here. (statefarm.com/claims/home-and-property/contractor-locator)
+   Other auto insurance carriers: Claim View is for inter-carrier
+   coordination, not vendor access. Skip.
+   Realistic timeline: 1-3 months vendor approval.
+   Integration shape: B2B portal login → manual claim view +
+   EFT/remittance data. No real-time webhook. Would need to be
+   polled or scraped.
+
+2. ALLSTATE
+   Public claim API:      NO
+   Developer portal:      YES — developer.allstate.com (private,
+                           authorized access only)
+   Partner portal:        YES — partner-portal.allstate.com
+   Good Hands Repair Network: YES — 4,500+ certified repair shops.
+                              Empire AI's contractors could apply.
+                              (allstate.com/claims/auto-motorcycle/repair-shop-network)
+   Good Hands Rescue Network: separate, roadside assistance, not relevant.
+   Realistic timeline: 1-3 months vendor approval. Repair-network
+   application is faster (2-4 weeks).
+   Integration shape: Same as State Farm — B2B portal, manual
+   access, no real-time webhook. Or: Good Hands Repair Network
+   application gives the contractor a steady flow of Allstate
+   claims to work, with Allstate direct-billing the customer.
+
+3. USAA, LIBERTY MUTUAL, FARMERS
+   No public claim APIs.
+   Closed partner programs requiring signed agreements.
+   Realistic timeline: 1-6 months each.
+
+==================================================================
+PATH B: INSURTECH AGGREGATOR (FASTEST)
+==================================================================
+
+These platforms already integrate with multiple carriers. Empire AI
+could integrate through them and get aggregated settled-claim data
+across many carriers in one go.
+
+1. COVERFORCE
+   - Insurance API marketplace
+   - Developer portal: coverforce.stoplight.io/proposals
+   - "Request API Access" workflow
+   - Connects to multiple Tier 1 carriers
+   - Fastest path: 1-2 weeks for API access
+   - They do "consultancy services to help you develop your API set
+     if none exists today" — could be a paid accelerator
+
+2. COGITATE
+   - Digital Edge Insurance Platform
+   - 60+ pre-integrated data/solution providers
+   - cogitate.com/api-ecosystem
+   - cogitate.com/partner-integrations
+   - Carrier API integrations for policy, billing, claims
+   - Carrier integrations at cogitate.com/carrier-integrations
+   - Realistic timeline: 2-4 weeks for technical integration
+
+3. SNAPSHEET
+   - Claims management software
+   - "Connect policy, billing, underwriting, and vendor systems
+     through open APIs and webhooks"
+   - snapsheetclaims.com/products/integration-apis
+   - Already has carrier integrations
+   - Realistic timeline: 2-4 weeks
+
+4. CCC INTELLIGENT SOLUTIONS
+   - "Given a powerful partnership with their Good Hands Network
+     repair facilities, Allstate wanted to improve efficiency"
+   - Shop scheduling integration with Allstate
+   - cccis.com
+   - Realistic timeline: 2-6 weeks (enterprise sales motion)
+
+5. VERTAFORE
+   - Vertafore API modernization
+   - Carrier/MGA Download
+   - Realistic timeline: 2-6 weeks
+
+==================================================================
+PATH C: B2B PORTAL LOGIN (FASTEST POSSIBLE)
+==================================================================
+
+Login to the B2B portal, manually look up claims. Not real-time,
+not automated, but immediate.
+
+1. State Farm B2B Portal
+   - b2b.statefarm.com (Supplier → Contact Us Form to register)
+   - Once registered: Claim View, EFT/remittance, supplier engagement
+   - Real-time? NO. Manual lookups.
+   - Timeline: 1-2 weeks for the contact form to be processed.
+
+2. Allstate Partner Portal
+   - partner-portal.allstate.com (need to "reach out to your
+     Allstate contact" to get access)
+   - Real-time? NO. Manual lookups.
+   - Timeline: depends on existing relationship.
+
+==================================================================
+RECOMMENDATION (in order of fastest value)
+==================================================================
+
+(1) PATH C FIRST: register at b2b.statefarm.com as a supplier.
+    Get B2B login. Manually look up claim data while we work on
+    the real integration. 1-2 weeks for registration.
+
+(2) PATH B: apply for CoverForce API access (or Cogitate/Snapsheet).
+    CoverForce has the shortest "Request API Access" flow. 1-2
+    weeks for an API key, then implement the adapter for the
+    aggregator. Aggregator gives us multi-carrier in one go.
+
+(3) PATH A in parallel: send the 5 outreach drafts. Allstate Good
+    Hands Repair Network application is the most direct value
+    (4,500-shop network, direct-billing, real-time updates).
+
+The fastest path to a real revenue event is PATH B with CoverForce:
+1-2 weeks for API access, then we have a real settled-claim feed
+in days. PATH A gives more direct relationships but takes months.
+
+==================================================================
+NOTE ON THE OUTREACH DRAFTS
+==================================================================
+
+The 5 drafts I wrote assume each carrier has a settled-claim webhook.
+None of them do. The drafts are still useful — they introduce Empire
+AI, explain the 3% fee model, and ask about partner programs.
+
+If you want to refine the drafts:
+- State Farm: ask about Premier Service Program and the B2B portal
+  supplier registration (these are the actual paths)
+- Allstate: ask about Good Hands Repair Network application
+  (this is the actual path)
+- USAA, Liberty Mutual, Farmers: same generic partner-inquiry tone
+  (their programs are too closed to predict specific names)
+
+==================================================================
+RELEVANT URLS (one-stop reference)
+==================================================================
+
+State Farm
+  b2b.statefarm.com                                    — B2B portal home
+  b2b.statefarm.com/b2b-content/select-service         — Select Service program
+  b2b.statefarm.com/b2b-content/claim-services/premier-service — Premier Service
+  b2b.statefarm.com/b2b-content/suppliers/suppliers-taking-vendors — vendor info
+  b2b.statefarm.com/b2b-content/select-service/ss-help-faq — Select Service FAQ
+  statefarm.com/claims/home-and-property/contractor-locator — public contractor search
+  reportloss.claims.statefarm.com                      — file a claim (other carrier)
+  forms.b2b.statefarm.com/contact-us                   — Contact Us form (supplier)
+
+Allstate
+  allstate.com/claims                                   — claims home
+  allstate.com/claims/auto-motorcycle/repair-shop-network — Good Hands Repair Network
+  allstate.com/lps/rescuenetwork                        — Good Hands Rescue Network
+  developer.allstate.com                                — Developer portal (private)
+  partner-portal.allstate.com                           — Partner portal (private)
+  vendorpartners@allstate.com                          — generic vendor partner email (guess)
+
+USAA
+  usaa.com                                              — home
+  partnerships@usaa.com                                 — generic partnerships (guess)
+
+Liberty Mutual
+  libertymutual.com                                     — home
+  partners@libertymutual.com                            — generic partners (guess)
+
+Farmers
+  farmers.com                                           — home
+  partners@farmers.com                                  — generic partners (guess)
+
+Aggregators
+  coverforce.stoplight.io/proposals                     — CoverForce API access
+  coverforce.com/products/carrier-platform              — CoverForce carrier platform
+  cogitate.com/api-ecosystem                            — Cogitate API ecosystem
+  cogitate.com/partner-integrations                     — Cogitate partner integrations
+  cogitate.com/carrier-integrations                     — Cogitate carrier integrations
+  snapsheetclaims.com/products/integration-apis        — Snapsheet API
+  cccis.com                                             — CCC Intelligent Solutions
+  vertafore.com/resources/blog/api-modernization-insurance-carriers — Vertafore API
+
+==================================================================
+STATE OF EXISTING EMPIRE AI CODE
+==================================================================
+
+The carrier adapter pattern is already scaffolded at:
+  /root/empire-v49/carrier_adapters.py
+  MockCarrierAdapter is the only one with health=True.
+  Stubs for State Farm, Allstate, USAA, Liberty Mutual, Farmers.
+  agent_config.settled_claim_monitor.config_json.active_carrier_adapter = "mock".
+
+When a real integration lands:
+  1. Implement the methods on the matching stub class.
+  2. Flip active_carrier_adapter to the carrier name.
+  3. The chain switches automatically.
+
+Estimated time to implement each adapter once we have the API:
+  - CoverForce aggregator: 1-3 days
+  - State Farm B2B portal: 3-5 days (manual scraping)
+  - Allstate Good Hands Repair Network: 3-5 days (manual scraping)
+  - Direct carrier API (State Farm / Allstate): 5-10 days (depends on docs)
