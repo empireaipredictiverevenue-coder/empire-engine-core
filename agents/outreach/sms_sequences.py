@@ -137,10 +137,37 @@ LEAD_NURTURE = {
     ],
 }
 
+# ─────────────────────────────────────────────────────────────────────
+# Sequence 4: b2b_outreach (Managed IT / Merchant Services / HR & Staffing, 4 touches / 10 days)
+# Triggered by: B2B lead scraped with phone number AND email
+# Goal: get them to reply YES and explore lead generation partnership
+# ─────────────────────────────────────────────────────────────────────
+
+B2B_OUTREACH = {
+    "name": "b2b_outreach",
+    "description": "4-touch sequence for B2B service providers (Managed IT, Merchant Services, HR & Staffing)",
+    "triggers_on": "radar_targets with meta->>source='B2B Lead Gen' AND phone IS NOT NULL AND email IS NOT NULL",
+    "step_count": 4,
+    "schedule": [
+        (1, 0,    "{prefix} We send qualified leads to {target_short} — "
+                  "Managed IT / business service providers. Reply YES for "
+                  "a free sample lead. STOP to opt out."),
+        (2, 24,   "{prefix} {target_short}, you pay our 3% success fee "
+                  "only on closed deals. No retainer, no minimum. "
+                  "Reply YES. STOP to opt out."),
+        (3, 72,   "{prefix} {target_short}, we can send a sample lead "
+                  "matching your service profile today. No cost, no "
+                  "obligation. Reply YES. STOP to opt out."),
+        (4, 168,  "{prefix} Last note for {target_short}. If timing is "
+                  "right, reply YES anytime. STOP to opt out."),
+    ],
+}
+
 ALL_SEQUENCES = {
     "storm_strike":       STORM_STRIKE,
     "contractor_recruit": CONTRACTOR_RECRUIT,
     "lead_nurture":       LEAD_NURTURE,
+    "b2b_outreach":       B2B_OUTREACH,
 }
 
 
