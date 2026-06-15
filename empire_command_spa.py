@@ -274,6 +274,23 @@ _SPA_CSS = """
 .pipeline-card-fees{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px}
 .pipeline-fee-tag{font-family:var(--font-mono);font-size:9px;color:var(--signal-teal);letter-spacing:.06em;padding:3px 7px;background:rgba(68,229,184,0.06);border:1px solid rgba(68,229,184,0.2);border-radius:4px}
 .pipeline-fee-tag.retainer{color:var(--strike-cyan);border-color:rgba(90,200,250,0.2);background:rgba(90,200,250,0.06)}
+    .fee-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px}
+    @media(max-width:900px){.fee-stats{grid-template-columns:repeat(2,1fr)}}
+    .fee-stat{background:var(--empire-surface);border:1px solid var(--empire-divider);border-radius:8px;padding:14px 16px}
+    .fee-stat-label{font-family:var(--font-mono);font-size:9px;letter-spacing:.18em;text-transform:uppercase;color:var(--empire-mist);margin-bottom:6px}
+    .fee-stat-value{font-size:22px;font-weight:300;letter-spacing:-.02em}
+    .fee-stat-value.teal{color:var(--signal-teal)}
+    .fee-stat-value.dim{color:var(--empire-mist)}
+    .fee-status{font-family:var(--font-mono);font-size:10px;letter-spacing:.06em;padding:2px 7px;border-radius:3px}
+    .fee-status.pending{color:var(--strike-cyan);background:rgba(90,200,250,0.08);border:1px solid rgba(90,200,250,0.2)}
+    .fee-status.paid{color:var(--signal-teal);background:rgba(68,229,184,0.08);border:1px solid rgba(68,229,184,0.2)}
+    .settle-form{margin-top:8px}
+    .settle-row{display:flex;flex-direction:column;gap:6px;margin-bottom:12px}
+    .settle-row label{font-family:var(--font-mono);font-size:9px;letter-spacing:.18em;text-transform:uppercase;color:var(--empire-mist)}
+    .settle-row input{background:var(--empire-canvas);border:1px solid var(--empire-divider);color:var(--empire-silver);padding:8px 10px;border-radius:4px;font-family:var(--font-mono);font-size:13px}
+    .settle-actions{display:flex;gap:8px;margin-top:8px}
+    .settle-hint{font-size:11px;color:var(--empire-mist);margin-top:8px;line-height:1.5}
+    .sec-actions{display:flex;gap:8px}
 .pipeline-card-monthly{font-family:var(--font-mono);font-size:11px;color:var(--empire-white);font-weight:500}
 /* ── COMPLIANCE PANEL ────────────────────────────────────────────── */
 .compliance-panel{background:var(--empire-surface);border:1px solid var(--empire-border);padding:20px;margin-bottom:24px}
@@ -1545,6 +1562,7 @@ const NAV_GROUPS = [
     id: 'revenue', label: 'REVENUE', icon: '💰', defaultOpen: true,
     items: [
       { id: 'payouts',       label: 'Payouts',        sub: 'Pending · approvals · history' },
+      { id: 'fees',          label: 'Fees',           sub: 'Settled claims · 3% per claim' },
       { id: 'contractors',   label: 'Contractors',    sub: 'Applications & approvals' },
       { id: 'partners',      label: 'Partners',       sub: 'Buyers · pending · approvals' },
       { id: 'revenue',       label: 'Revenue',        sub: 'Predictive revenue · per-lane MRR · LLM forecast' },
@@ -3048,6 +3066,75 @@ function Payouts() {
 }
 
 // ── CONTRACTORS ───────────────────────────────────────────────────────
+// ── FEES ──────────────────────────────────────────────────────────────
+function Fees() {
+  const [list, setList] = useState(null);
+  const [stats, setStats] = useState(null);
+  const [err, setErr] = useState(null);
+  const [busy, setBusy] = useState(null);
+
+  const reload = async () => {
+    try {
+      const [l, s] = await Promise.all([
+        apiFetch('/api/v1/fee/list?limit=50').then(r => r.json()),
+        apiFetch('/api/v1/fee/stats').then(r => r.json()),
+      ]);
+      setList(l.fees || []);
+      setStats(s || {});
+    } catch (e) { setErr(e.message); }
+  };
+  useEffect(() => { reload(); }, []);
+
+  if (err) return html`<div class="stub"><div class="stub-body">${err}</div></div>`;
+  if (!list) return html`<div class="stub"><div class="stub-body">Loading fees…</div></div>`;
+
+  const fmtUsd = (n) => '$' + Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const totalClaim = stats.total_claim_usd || 0;
+  const totalFee = stats.total_fee_usd || 0;
+  const byStatus = stats.by_status || {};
+  const count = stats.count || 0;
+
+  return html`
+    <div>
+      <div class="section-h"><div><div class="section-title">Fees</div><div class="section-sub">Settled-claim events · 3% per settled claim · ${count} total</div></div><div class="sec-actions"><button class="tbl-action go" onClick=${reload}>↻ Refresh</button></div></div>
+      <div class="fee-stats">
+        <div class="fee-stat"><div class="fee-stat-label">Total claim amount</div><div class="fee-stat-value teal">${fmtUsd(totalClaim)}</div></div>
+        <div class="fee-stat"><div class="fee-stat-label">Total fees (3%)</div><div class="fee-stat-value">${fmtUsd(totalFee)}</div></div>
+        <div class="fee-stat"><div class="fee-stat-label">Pending</div><div class="fee-stat-value">${byStatus.pending || 0}</div></div>
+        <div class="fee-stat"><div class="fee-stat-label">Paid</div><div class="fee-stat-value dim">${byStatus.paid || 0}</div></div>
+      </div>
+      <div class="panel">
+        <div class="panel-head">Recent fee events</div>
+        ${list.length === 0
+          ? html`<div class="tbl-empty">No fee events yet. When a real claim settles, the webhook at <code>POST /api/v1/fee/claim-settled</code> writes rows here. Operator mark-settled also writes to this table.</div>`
+          : html`<table class="tbl"><thead><tr>
+                <th>When</th><th>Claim</th><th>Contractor</th><th class="tbl-num">Claim $</th><th class="tbl-num">Fee $</th><th>Status</th><th>Source</th>
+              </tr></thead><tbody>
+              ${list.map(f => html`<tr key=${f.id}>
+                <td class="tbl-mono">${String(f.settled_at || f.created_at || '').slice(0,16).replace('T',' ')}</td>
+                <td class="tbl-mono">${String(f.claim_id || '').slice(0,28)}</td>
+                <td class="tbl-mono">${String(f.contractor_id || '').slice(0,8)}</td>
+                <td class="tbl-num">${fmtUsd(f.claim_amount)}</td>
+                <td class="tbl-num"><strong>${fmtUsd(f.fee_amount)}</strong></td>
+                <td><span class=${'fee-status ' + (f.status || 'pending')}>${f.status || 'pending'}</span></td>
+                <td class="tbl-mono">${f.source || '—'}</td>
+              </tr>`)}
+              </tbody></table>`}
+      </div>
+      <div class="panel" style=${{marginTop: '16px'}}>
+        <div class="panel-head">How fees get created</div>
+        <div class="panel-body" style=${{fontSize: '12px', color: 'var(--empire-mist)', lineHeight: '1.6'}}>
+          <p style=${{marginBottom: '8px'}}><strong>1. Carrier webhook (when integrated):</strong> <code>POST /api/v1/fee/claim-settled</code> with <code>{claim_id, claim_amount, contractor_id, lead_id, settled_at}</code></p>
+          <p style=${{marginBottom: '8px'}}><strong>2. Operator mark-settled:</strong> <code>POST /api/v1/fee/operator-mark-settled</code> with <code>{dispatch_id, claim_amount, meta}</code>. Looks up the dispatch, resolves the lead + contractor, writes the fee event.</p>
+          <p style=${{marginBottom: '8px'}}><strong>3. Manual trigger:</strong> <code>python3 -m agents.fee_watcher.trigger --claim-amount 50000 --contractor-id &lt;uuid&gt;</code></p>
+          <p style=${{marginBottom: '0'}}>All three paths converge on the same <code>fee_events</code> table with <code>fee_amount = claim_amount × 0.03</code>.</p>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+
 function Contractors() {
   const [apps, setApps] = useState(null);
   const [err, setErr] = useState(null);
@@ -8909,6 +8996,7 @@ function App() {
             active.id === 'dispatch'    ? html`<${Dispatch} />` :
             active.id === 'inbound'     ? html`<${Inbound} />` :
             active.id === 'payouts'     ? html`<${Payouts} />` :
+            active.id === 'fees'        ? html`<${Fees} />` :
             active.id === 'contractors' ? html`<${Contractors} />` :
             active.id === 'console'     ? html`<${Console} />` :
             active.id === 'audit'       ? html`<${Audit} />` :
