@@ -1525,6 +1525,48 @@ font-size:7px!important;color:#999!important;margin-top:2px!important
 .sa-graph-node.active{border-color:var(--signal-teal);box-shadow:0 0 12px rgba(68,229,184,.2)}
 .sa-graph-rect{fill:var(--empire-elevated);stroke:var(--empire-divider);stroke-width:1px}
 .sa-graph-text{fill:var(--empire-mist);font-family:var(--font-mono);font-size:8px;text-anchor:middle}
+
+/* ── EMAIL TRACKING DASHBOARD ───────────────────────────────── */
+.et-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 20px; }
+.et-card { background: var(--empire-surface); border: 1px solid var(--empire-border); padding: 18px 20px; position: relative; overflow: hidden; transition: border-color 0.2s var(--ease-snap); }
+.et-card:hover { border-color: var(--empire-border-hi); }
+.et-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 1px; background: linear-gradient(90deg, transparent, var(--signal-teal-soft), transparent); }
+.et-card-label { font-family: var(--font-mono); font-size: 9px; color: var(--empire-mist); letter-spacing: 0.18em; text-transform: uppercase; margin-bottom: 10px; }
+.et-card-value { font-family: var(--font-mono); font-weight: 500; font-size: 28px; letter-spacing: -0.02em; color: var(--empire-white); line-height: 1; }
+.et-card-value.teal { color: var(--signal-teal); }
+.et-card-value.cyan { color: var(--strike-cyan); }
+.et-card-value.dim { color: var(--empire-mist); }
+.et-card-value.amber { color: var(--status-amber); }
+.et-card-meta { font-family: var(--font-mono); font-size: 9px; color: var(--empire-fog); margin-top: 6px; letter-spacing: 0.04em; }
+.et-filters { display: flex; gap: 14px; align-items: center; margin-bottom: 20px; flex-wrap: wrap; }
+.et-filter-tag { font-family: var(--font-mono); font-size: 10px; color: var(--empire-mist); letter-spacing: 0.08em; }
+.et-filter-btn { padding: 6px 14px; font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.12em; text-transform: uppercase; border: 1px solid var(--empire-border); background: transparent; color: var(--empire-mist); cursor: pointer; border-radius: 4px; }
+.et-filter-btn:hover { color: var(--empire-white); border-color: var(--empire-border-hi); }
+.et-filter-btn.active { color: var(--signal-teal); border-color: var(--signal-teal-soft); background: rgba(68,229,184,0.04); }
+.et-bar-row { display: grid; grid-template-columns: 140px 1fr 70px; gap: 12px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--empire-divider); font-family: var(--font-mono); }
+.et-bar-row:last-child { border-bottom: none; }
+.et-bar-label { font-size: 10px; color: var(--empire-white); font-weight: 500; }
+.et-bar-track { height: 10px; background: var(--empire-elevated); border-radius: 4px; overflow: hidden; }
+.et-bar-fill { height: 100%; border-radius: 4px; transition: width 0.6s var(--ease-out-empire); min-width: 2px; }
+.et-bar-fill.open { background: var(--signal-teal); }
+.et-bar-fill.click { background: var(--strike-cyan); }
+.et-bar-fill.bounce { background: var(--status-amber); }
+.et-bar-val { font-size: 11px; color: var(--signal-teal); font-weight: 500; text-align: right; }
+.et-chart-panel { background: var(--empire-surface); border: 1px solid var(--empire-border); padding: 18px; margin-bottom: 20px; }
+.et-chart-panel-h { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 14px; padding-bottom: 12px; border-bottom: 1px solid var(--empire-divider); }
+.et-chart-panel-title { font-weight: 500; font-size: 13px; letter-spacing: 0.02em; }
+.et-chart-panel-tag { font-family: var(--font-mono); font-size: 10px; color: var(--empire-mist); letter-spacing: 0.14em; }
+.et-badge { display: inline-block; padding: 3px 8px; font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase; border-radius: 4px; border: 1px solid; }
+.et-badge.open { color: var(--signal-teal); border-color: var(--signal-teal-soft); }
+.et-badge.click { color: var(--strike-cyan); border-color: rgba(90,200,250,0.2); }
+.et-badge.bounce { color: var(--status-amber); border-color: var(--status-amber); }
+.et-badge.complaint { color: var(--status-red); border-color: var(--status-red); }
+.et-badge.unsubscribe { color: var(--empire-mist); border-color: var(--empire-border); }
+.et-email { font-family: var(--font-mono); font-size: 10px; color: var(--empire-mist); max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.et-seq-type { font-family: var(--font-mono); font-size: 9px; color: var(--empire-fog); letter-spacing: 0.08em; }
+.et-seq-type.b2b { color: var(--strike-cyan); }
+.et-seq-type.storm { color: var(--signal-teal); }
+.et-empty { font-family: var(--font-ui); font-size: 11px; color: var(--empire-fog); font-style: italic; padding: 32px 0; text-align: center; }
 """
 
 _SPA_JS = r"""
@@ -1583,6 +1625,7 @@ const NAV_GROUPS = [
       { id: 'cpl-pricing',  label: 'CPL Pricing',   sub: 'Per-lane margins . sell prices . benchmarks' },
       { id: 'profit-margin', label: 'Profit Margin',  sub: 'P&L · bottlenecks · maximiser' },
       { id: 'traffic-ads',  label: 'Traffic & Ads', sub: 'Campaigns · trends · budget' },
+      { id: 'email-tracking', label: 'Email Tracking', sub: 'Opens · clicks · engagement' },
     ]
   },
   {
@@ -5121,6 +5164,168 @@ function SniperFleet() {
 }
 
 // ── STUB SECTION (other tabs) ────────────────────────────────────────
+
+
+/* ── EMAIL TRACKING SECTION ───────────────────────────────────── */
+function EmailTracking() {
+  const [events, setEvents] = React.useState([]);
+  const [days, setDays] = React.useState(30);
+  const [eventFilter, setEventFilter] = React.useState('all');
+  const [busy, setBusy] = React.useState(true);
+  const [err, setErr] = React.useState(null);
+
+  async function reload() {
+    setBusy(true);
+    setErr(null);
+    try {
+      let url = '/api/v1/email/tracking?days=' + days + '&limit=500';
+      if (eventFilter !== 'all') url += '&event=' + eventFilter;
+      const r = await apiFetch(url);
+      const data = await r.json();
+      setEvents(data.tracking || []);
+    } catch (e) {
+      setErr(e.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  React.useEffect(() => { reload(); }, [days, eventFilter]);
+
+  // Compute stats
+  const total = events.length;
+  const opens = events.filter(e => e.event === 'open').length;
+  const clicks = events.filter(e => e.event === 'click').length;
+  const bounces = events.filter(e => e.event === 'bounce').length;
+  const complaints = events.filter(e => e.event === 'complaint').length;
+  const unsubs = events.filter(e => e.event === 'unsubscribe').length;
+  const uniqueEmails = new Set(events.map(e => e.email)).size;
+  const uniqueOpens = new Set(events.filter(e => e.event === 'open').map(e => e.email)).size;
+  const uniqueClicks = new Set(events.filter(e => e.event === 'click').map(e => e.email)).size;
+  const delivered = total - bounces - complaints;
+  const openRate = delivered > 0 ? ((uniqueOpens / delivered) * 100).toFixed(1) : '0.0';
+  const clickRate = uniqueOpens > 0 ? ((uniqueClicks / uniqueOpens) * 100).toFixed(1) : '0.0';
+
+  // Breakdown by sequence type
+  const bySeqType = {};
+  events.forEach(e => {
+    const st = e.sequence_type || 'unknown';
+    if (!bySeqType[st]) bySeqType[st] = { total: 0, opens: 0, clicks: 0, bounces: 0 };
+    bySeqType[st].total++;
+    if (e.event === 'open') bySeqType[st].opens++;
+    if (e.event === 'click') bySeqType[st].clicks++;
+    if (e.event === 'bounce') bySeqType[st].bounces++;
+  });
+  const seqTypes = Object.keys(bySeqType).sort();
+
+
+  // Latest 50 events for the table
+  const recentEvents = events.slice(0, 50);
+
+  const eventOpts = ['all', 'open', 'click', 'bounce', 'complaint', 'unsubscribe'];
+  const dayOpts = [7, 14, 30, 90];
+
+  if (err) return html`<div class="stub"><div class="stub-title">Error</div><div class="stub-body">${err}</div></div>`;
+
+  return html`
+    <div class="section-h">
+      <div class="section-title">Email <em>Tracking</em></div>
+      <div class="section-sub">${total} events tracked</div>
+    </div>
+
+    <div class="et-filters">
+      <span class="et-filter-tag">Event:</span>
+      ${eventOpts.map(e => html`<button class=${'et-filter-btn' + (eventFilter === e ? ' active' : '')} onClick=${() => setEventFilter(e)}>${e === 'all' ? 'All' : e}</button>`)}
+      <span class="et-filter-tag" style="margin-left:12px">Period:</span>
+      ${dayOpts.map(d => html`<button class=${'et-filter-btn' + (days === d ? ' active' : '')} onClick=${() => setDays(d)}>${d}d</button>`)}
+      ${busy ? html`<span style="margin-left:8px; font-family:var(--font-mono); font-size:10px; color:var(--empire-mist)">loading…</span>` : ''}
+    </div>
+
+    <div class="et-grid">
+      <div class="et-card">
+        <div class="et-card-label">Total Events</div>
+        <div class="et-card-value teal">${total}</div>
+        <div class="et-card-meta">In last ${days} days</div>
+      </div>
+      <div class="et-card">
+        <div class="et-card-label">Unique Opens</div>
+        <div class="et-card-value cyan">${uniqueOpens}</div>
+        <div class="et-card-meta">${openRate}% open rate of ${delivered} delivered</div>
+      </div>
+      <div class="et-card">
+        <div class="et-card-label">Unique Clicks</div>
+        <div class="et-card-value teal">${uniqueClicks}</div>
+        <div class="et-card-meta">${clickRate}% click rate of ${uniqueOpens} openers</div>
+      </div>
+      <div class="et-card">
+        <div class="et-card-label">Bounces / Complaints</div>
+        <div class="et-card-value ${bounces > 5 ? 'amber' : 'dim'}">${bounces} / ${complaints}</div>
+        <div class="et-card-meta">${unsubs} unsubscribes</div>
+      </div>
+    </div>
+
+    <div class="et-chart-panel">
+      <div class="et-chart-panel-h">
+        <div class="et-chart-panel-title">Event Breakdown by Sequence Type</div>
+        <div class="et-chart-panel-tag">${seqTypes.length} campaigns</div>
+      </div>
+      ${seqTypes.length === 0 ? html`<div class="et-empty">No tracking data for this period</div>` :
+        seqTypes.map(st => {
+          const s = bySeqType[st];
+          const maxVal = Math.max(s.opens, s.clicks, 1);
+          const label = st === 'b2b_outreach' ? 'B2B Outreach' : st === 'storm_strike' ? 'Storm Strike' : st;
+          return html`
+            <div class="et-bar-row">
+              <div class="et-bar-label">${label}</div>
+              <div>
+                <div class="et-bar-track"><div class="et-bar-fill open" style="width:${(s.opens/maxVal*100).toFixed(0)}%"></div></div>
+                <div class="et-bar-track" style="margin-top:3px"><div class="et-bar-fill click" style="width:${(s.clicks/maxVal*100).toFixed(0)}%"></div></div>
+              </div>
+              <div class="et-bar-val">${s.opens} opens / ${s.clicks} clicks</div>
+            </div>
+          `;
+        })
+      }
+    </div>
+
+    <div class="et-chart-panel">
+      <div class="et-chart-panel-h">
+        <div class="et-chart-panel-title">Recent Events</div>
+        <div class="et-chart-panel-tag">${recentEvents.length} of ${total} shown</div>
+      </div>
+      ${recentEvents.length === 0 ? html`<div class="et-empty">No events to display</div>` :
+        html`
+          <table class="tbl">
+            <thead>
+              <tr>
+                <th>Time</th>
+                <th>Email</th>
+                <th>Event</th>
+                <th>Campaign</th>
+                <th>Step</th>
+                <th>Link</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${recentEvents.map(e => html`
+                <tr>
+                  <td class="tbl-mono" style="font-size:10px;color:var(--empire-fog)">${e.created_at ? e.created_at.slice(11, 19) : '--'}</td>
+                  <td><span class="et-email" title=${e.email}>${e.email}</span></td>
+                  <td><span class="et-badge ${e.event}">${e.event}</span></td>
+                  <td><span class="et-seq-type ${e.sequence_type === 'b2b_outreach' ? 'b2b' : 'storm'}">${(e.sequence_type || '').replace('_', ' ')}</span></td>
+                  <td class="tbl-num" style="color:var(--empire-mist)">${e.step != null ? e.step : '--'}</td>
+                  <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
+                    ${e.link_url ? html`<a href=${e.link_url} target="_blank" style="color:var(--strike-cyan);font-size:10px;font-family:var(--font-mono)">link</a>` : html`<span style="color:var(--empire-fog);font-size:10px">--</span>`}
+                  </td>
+                </tr>
+              `)}
+            </tbody>
+          </table>
+        `
+      }
+    </div>
+  `;
+}
 function Stub({ section }) {
   return html`
     <div>
@@ -9139,6 +9344,7 @@ function App() {
             active.id === 'cpl-pricing'   ? html`<${CplPricing} />` :
 
             active.id === 'traffic-ads'  ? html`<${TrafficAds} />` :
+            active.id === 'email-tracking' ? html`<${EmailTracking} />` :
             active.id === 'stack'        ? html`<${Stack} />` :
             active.id === 'network'      ? html`<${Network} />` :
             active.id === 'loop'         ? html`<${Loop} />` :
