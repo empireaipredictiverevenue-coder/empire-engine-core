@@ -191,9 +191,16 @@ def _build_b2b_email(
     postal_address: str,
     sender_name: str,
     tracking_pixel_url: str = "",
+    click_tracking_url: str = "",
 ) -> tuple[str, str]:
     """Returns (subject, html_body) for B2B outreach. Step 0-3."""
     niche_lower = sub_niche.lower() if sub_niche else "business services"
+    cta_btn = (
+        f'<table cellpadding="0" cellspacing="0" border="0" style="margin:22px 0;">'
+        f'<tr><td align="center" style="background:#44E5B8;border-radius:6px;padding:14px 32px;">'
+        f'<a href="{click_tracking_url}" style="color:#0A1A2F;font-size:14px;font-weight:700;text-decoration:none;font-family:-apple-system,system-ui,sans-serif;letter-spacing:-0.01em;">See Our Pricing →</a>'
+        f'</td></tr></table>'
+    ) if click_tracking_url else ""
     if step == 0:
         subject = f"Qualified {sub_niche} leads for {company}"
         body = f"""
@@ -215,6 +222,7 @@ def _build_b2b_email(
             {niche_lower} providers → verify their contact information → deliver the lead to you.
             You only pay when you close. <strong style="color:#f8fafd;">3% success fee on closed deals.</strong>
           </div>
+          {cta_btn}
           <p style="font-size:14px;line-height:1.7;color:#a1a1aa;margin:14px 0 0;">
             Interested in seeing a sample lead for your area? Reply to this email and we'll
             send one over within 24 hours.
@@ -235,6 +243,7 @@ def _build_b2b_email(
             <li>Buy-intent scoring to prioritize high-potential prospects</li>
             <li>3% success fee paid only on closed deals — no upfront cost</li>
           </ul>
+          {cta_btn}
           <p style="font-size:14px;line-height:1.7;color:#a1a1aa;margin:14px 0 0;">
             If lead volume is a constraint for your sales team, we can help.
             Reply to this email to discuss.
@@ -255,6 +264,7 @@ def _build_b2b_email(
             Our model aligns incentives: we only get paid when you close a deal.
             This means we are motivated to send you high-quality, actionable leads.
           </p>
+          {cta_btn}
           <p style="font-size:14px;line-height:1.7;color:#a1a1aa;margin:14px 0 0;">
             We can start sending leads tailored to {company} within 48 hours of confirming
             interest. Reply to this email to set up a test.
@@ -276,6 +286,7 @@ def _build_b2b_email(
             You remain on our list only for future relevant opportunities, unless you
             unsubscribe below.
           </p>
+          {cta_btn}
         """
     html_body = _build_b2b_shell(body, unsubscribe_link=unsubscribe_link, postal_address=postal_address, sender_name=sender_name, sub_niche_hint=niche_lower, tracking_pixel_url=tracking_pixel_url)
     return subject, html_body
@@ -290,6 +301,7 @@ def _build_email(
     sequence_type: str = "storm_strike",
     meta: Optional[dict] = None,
     tracking_pixel_url: str = "",
+    click_tracking_url: str = "",
 ) -> tuple[str, str]:
     """Returns (subject, html_body). Step 0-3.
     Routes to the correct template set based on sequence_type."""
@@ -304,9 +316,17 @@ def _build_email(
             postal_address=postal_address,
             sender_name=sender_name,
             tracking_pixel_url=tracking_pixel_url,
+            click_tracking_url=click_tracking_url,
         )
 
     # ── Storm / Property Owner Templates (default) ──
+    cta_btn = (
+        f'<table cellpadding="0" cellspacing="0" border="0" style="margin:22px 0;">'
+        f'<tr><td align="center" style="background:#44E5B8;border-radius:6px;padding:14px 32px;">'
+        f'<a href="{click_tracking_url}" style="color:#0A1A2F;font-size:14px;font-weight:700;text-decoration:none;font-family:-apple-system,system-ui,sans-serif;letter-spacing:-0.01em;">Get Free Assessment →</a>'
+        f'</td></tr></table>'
+    ) if click_tracking_url else ""
+
     if step == 0:
         subject = f"Storm activity detected near {target_short}"
         body = f"""
@@ -328,6 +348,7 @@ def _build_email(
             claim — paid by the property owner from the settlement, not upfront. If
             no claim is filed or no settlement is reached, you owe us nothing.
           </div>
+          {cta_btn}
           <p style="font-size:14px;line-height:1.7;color:#a1a1aa;margin:14px 0 0;">
             Reply to this email or call us at the number in your records to request a
             no-cost assessment. Or simply ignore this — we'll send a brief follow-up
@@ -353,6 +374,7 @@ def _build_email(
             <li>Empire's 3% success fee is paid only on settlement — no upfront cost</li>
             <li>If we find no damage, the assessment is free and we move on</li>
           </ul>
+          {cta_btn}
           <p style="font-size:14px;line-height:1.7;color:#a1a1aa;margin:14px 0 0;">
             Reply to this email for a no-cost assessment.
           </p>
@@ -373,6 +395,7 @@ def _build_email(
             not represent the insurer or the claim. We coordinate the contractor side
             only. Empire's 3% fee is paid from the settlement, after it lands.
           </p>
+          {cta_btn}
           <p style="font-size:14px;line-height:1.7;color:#a1a1aa;margin:14px 0 0;">
             If there's no damage, no fee. No claim, no fee. That's the entire model.
           </p>
@@ -394,6 +417,7 @@ def _build_email(
             only for the duration of future legitimate severe weather alerts in your
             area, unless you unsubscribe below.
           </p>
+          {cta_btn}
         """
     html_body = _email_shell(body, unsubscribe_link=unsubscribe_link, postal_address=postal_address, sender_name=sender_name, tracking_pixel_url=tracking_pixel_url)
     return subject, html_body
@@ -522,11 +546,16 @@ class EmailSequenceEngine:
 
             target_short = self._short_address(row.get("target_addr", ""))
             unsub_link = self._build_unsubscribe_link(email)
+            seq_id = str(row.get("id", ""))
+            seq_type = row.get("sequence_type", "storm_strike")
             tracking_pixel = self._build_tracking_pixel_url(
-                email=email,
-                step=step,
-                sequence_id=str(row.get("id", "")),
-                sequence_type=row.get("sequence_type", "storm_strike"),
+                email=email, step=step, sequence_id=seq_id, sequence_type=seq_type,
+            )
+            ref_label = "b2b" if seq_type == "b2b_outreach" else "storm"
+            landing = "/demo" if ref_label == "storm" else "/pricing"
+            click_tracking = self._build_click_tracking_url(
+                email=email, step=step, sequence_id=seq_id, sequence_type=seq_type,
+                target_url=f"{self.public_base_url}{landing}?ref=email_{ref_label}_step{step}",
             )
 
             subject, html = _build_email(
@@ -535,9 +564,10 @@ class EmailSequenceEngine:
                 unsubscribe_link=unsub_link,
                 postal_address=self.physical_address,
                 sender_name=self.sender_name,
-                sequence_type=row.get("sequence_type", "storm_strike"),
+                sequence_type=seq_type,
                 meta=row.get("meta", {}),
                 tracking_pixel_url=tracking_pixel,
+                click_tracking_url=click_tracking,
             )
 
             result = await self.send_email(to=email, subject=subject, html=html)
@@ -615,6 +645,29 @@ class EmailSequenceEngine:
         }
         token = self.sign_token(payload)
         return f"{self.public_base_url}/email/track/open?t={token}"
+
+    def _build_click_tracking_url(
+        self,
+        email:         str,
+        step:          int,
+        sequence_id:   str,
+        sequence_type: str,
+        target_url:    str,
+    ) -> str:
+        """Wrap a target URL in the click tracking redirect.
+        The resulting href logs the click + redirects to target_url."""
+        payload = {
+            "email":         email,
+            "step":          step,
+            "sequence_id":   sequence_id or None,
+            "sequence_type": sequence_type,
+            "exp":           int(time.time()) + (90 * 86400),
+            "iat":           int(time.time()),
+            "kind":          "email_click",
+        }
+        token = self.sign_token(payload)
+        encoded = _urlparse.quote(target_url, safe="")
+        return f"{self.public_base_url}/email/track/click?t={token}&url={encoded}"
 
     async def _track_event(
         self,
