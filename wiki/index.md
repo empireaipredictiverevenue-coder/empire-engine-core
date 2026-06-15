@@ -48,6 +48,12 @@ page is listed first.
 - [`qc-events-api.md`](qc-events-api.md) — the GET / PATCH
   endpoints for resolving QC events.
 
+## Forecasting
+
+- [`forecaster.md`](forecaster.md) — the predictive_revenue engine.
+  8 functions, 4 input sources, sms_log-based calibration. The
+  3x over-forecast gap, the audit, the fix.
+
 ## Operators
 
 - [`hermes-dashboard.md`](hermes-dashboard.md) — the operator
