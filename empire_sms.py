@@ -845,24 +845,21 @@ def register_sms_routes(
         body = payload.get("text") or payload.get("message", "")
         message_id = payload.get("messageId") or payload.get("message-id") or payload.get("message_id") or ""
 
-        result = await engine.handle_inbound(from_number, body)
-
-        # Side-effects (added 2026-06-16):
-        #   1. log every inbound SMS to inbox_messages so the daily
-        #      digest can summarize reply activity.
-        #   2. send a Telegram alert to Phil for every reply (any intent).
+        # Side-effects FIRST (added 2026-06-16): log to inbox_messages +
+        # Telegram alert. We do this before handle_inbound because that
+        # can hang on downstream sends (dispatch YES, confirmation SMS).
+        # Capturing the inbound early means we never lose the reply.
         try:
-            intent = (result or {}).get("action", "unknown")
-            get_db().table("inbox_messages").insert({
+            engine.get_db().table("inbox_messages").insert({
                 "channel":           "sms",
                 "from_address":      from_number,
                 "to_address":        payload.get("to", ""),
                 "subject":           None,
                 "body":              body[:4000],
                 "received_at":       datetime.now(timezone.utc).isoformat(),
-                "classified_intent": intent,
+                "classified_intent": "pending",
                 "in_reply_to":       message_id,
-                "meta":              {"engine_result": result, "vonage_message_id": message_id},
+                "meta":              {"vonage_message_id": message_id},
             }).execute()
         except Exception as e:
             log.debug(f"[sms] inbox_messages insert failed: {e}")
@@ -876,7 +873,7 @@ def register_sms_routes(
                     f"📱 *SMS reply*\n"
                     f"  from: +{from_number}\n"
                     f"  text: {body[:120]}\n"
-                    f"  intent: *{result.get('action', '?') if result else '?'}*\n"
+                    f"  intent: *pending* (processing…)\n"
                 )
                 payload_json = json.dumps({
                     "chat_id": tg_chat, "text": alert,
@@ -890,6 +887,23 @@ def register_sms_routes(
                 # best-effort, don't fail the inbound on telegram error
         except Exception:
             pass
+
+        result = await engine.handle_inbound(from_number, body)
+
+        # After handle_inbound completes, update the row with the
+        # classified intent. This way, the side-effect capture is
+        # guaranteed to fire even if handle_inbound hangs.
+        try:
+            intent = (result or {}).get("action", "unknown") if result else "unknown"
+            engine.get_db().table("inbox_messages").update({
+                "classified_intent": intent,
+                "meta": {
+                    "vonage_message_id": message_id,
+                    "engine_result": result,
+                },
+            }).eq("in_reply_to", message_id).eq("channel", "sms").execute()
+        except Exception as e:
+            log.debug(f"[sms] inbox_messages update failed: {e}")
 
         # Push to live dashboards
         if broadcaster:
