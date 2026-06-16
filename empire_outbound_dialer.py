@@ -246,3 +246,98 @@ def initiate_legal_call(lead_phone: str, device_name: str):
     _log_compliance_call(lead_phone, "legal_call_placed", "", f"device={clean_device}")
 
     return response
+
+
+def initiate_contractor_recruit_call(contractor: dict) -> dict:
+    """Make an outbound call to recruit a contractor into our network.
+
+    `contractor` is a dict with at least: phone, name, metro, meta.
+    Runs compliance checks (call hours + DNC) before placing the call.
+
+    Returns: {ok, uuid, status, error?, blocked?, rule?, reason?}
+    """
+    phone = contractor.get("phone", "")
+    if not phone:
+        return {"ok": False, "error": "no_phone"}
+
+    try:
+        compliance_check(phone)
+    except Exception as e:
+        # ComplianceBlock or other. Caller can branch on `blocked`.
+        return {
+            "ok": False,
+            "blocked": True,
+            "rule": getattr(e, "rule", "compliance"),
+            "reason": getattr(e, "reason", str(e)),
+        }
+
+    # Pull display name + first name from contractor meta
+    meta = contractor.get("meta") or {}
+    full_name = (meta.get("contact_name") or "").strip()
+    first_name = full_name.split()[0] if full_name else ""
+    metro = contractor.get("metro") or "your area"
+    business = contractor.get("name") or "your business"
+
+    # Render the contractor_recruit voice script.
+    # Lazy import to avoid a circular dep with agents.outreach.voice_scripts.
+    try:
+        from agents.outreach.voice_scripts import get_script
+        script = get_script("contractor_recruit")
+        intro = script["intro"].format(first_name=first_name or "there", metro=metro)
+        main  = script["main"].format(first_name=first_name or "there", metro=metro)
+        opt_out = script["opt_out_disclosure"]
+        body  = f"{intro} ... {main} ... {opt_out}"
+    except Exception as e:
+        # Fallback to a hardcoded body if the script can't be loaded.
+        body = (
+            f"Hi {first_name or 'there'}, this is a paid call from Empire AI. "
+            f"We send storm leads to roofers in {metro}. You pay 3% only on "
+            f"settled claims, first 2 deals on us. Self-onboard at "
+            f"empire-ai.co.uk/contractors. Press 9 to opt out."
+        )
+        log.warning(f"[contractor_recruit] voice_scripts import failed, using fallback: {e}")
+
+    # Build the NCCO. Two actions:
+    # 1. talk: deliver the script as TTS using the "Amy" voice.
+    # 2. (optional) connect to operator_number for warm hand-off if the
+    #    contractor wants to talk live. Disabled by default to keep the
+    #    call < 90s; enable via EMPIRE_OPERATOR_NUMBER + LIVE_HANDOFF=1.
+    ncco = [{"action": "talk", "voiceName": "Amy", "text": body}]
+    if os.getenv("LIVE_HANDOFF") == "1":
+        operator_number = os.getenv("EMPIRE_OPERATOR_NUMBER", "")
+        if operator_number:
+            ncco.append({
+                "action":   "connect",
+                "endpoint": [{"type": "phone", "number": operator_number.lstrip("+")}],
+                "timeout":  20,
+                "limit":    1800,
+            })
+
+    # Place the call
+    response = _vonage.place_call_sync(to_number=phone, ncco=ncco)
+
+    # Audit
+    _log_compliance_call(
+        phone, "outbound_call_placed", "",
+        f"contractor_recruit name={business} first_name={first_name} metro={metro}",
+    )
+
+    # Also log to outreach_log so the activity shows up alongside SMS
+    try:
+        _sb.table("outreach_log").insert({
+            "enriched_lead_id": None,
+            "agent_name":       "contractor_recruit_call",
+            "run_id":           f"manual-{int(_time.time())}",
+            "channel":          "voice",
+            "sequence":         "contractor_recruit",
+            "step":             0,
+            "body_preview":     body[:280],
+            "compliance_passed": True,
+            "mode":             "live",
+            "sent_at":          datetime.now(timezone.utc).isoformat(),
+            "sent_status":      "placed" if response.get("ok") else "failed",
+        }).execute()
+    except Exception as e:
+        log.debug(f"[contractor_recruit] outreach_log write failed: {e}")
+
+    return response
