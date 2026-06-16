@@ -161,13 +161,18 @@ def _pick_sequence(lead: dict) -> str:
         if sub_niche in ("HR & Staffing", "Managed IT", "Merchant Services"):
             return "b2b_outreach"
 
-    # 3. Phone leads: A/B storm_strike cohort split (default for
-    # storm-response niches)
+    # 3. Phone leads: A/B storm_strike cohort split. The hub's
+    # sms_sequences only knows about 'storm_strike' right now (v2 is
+    # planned but not defined yet). The A/B bucket is kept for future
+    # use; for now both buckets route to storm_strike so leads never
+    # hit a KeyError.
     if lead.get("phone"):
         import hashlib
         h = hashlib.md5(str(lead.get("id", "")).encode()).hexdigest()
         bucket = int(h[:8], 16) % 2
-        return "storm_strike" if bucket == 0 else "storm_strike_v2"
+        # bucket is reserved for the day v2 ships; today both → storm_strike
+        _ = bucket  # noqa: F841
+        return "storm_strike"
     if lead.get("email"):
         return "lead_nurture"
     return "manual"
@@ -282,6 +287,30 @@ def _do_live_send(channel: str, phone: str, body: str, lead: dict) -> tuple[bool
         return False, f"{type(e).__name__}: {e}"
 
 
+def _hub_alive(timeout: float = 2.0) -> bool:
+    """Quick TCP-level health check on the hub. Avoids blasting leads
+    into URLError when the hub is down (PM2 crash-loop, restart, etc).
+    Returns True if the hub accepts a TCP connection on the configured
+    port within `timeout` seconds."""
+    import socket
+    hub_url = os.getenv("HUB_URL", "http://127.0.0.1:8000")
+    # crude parse: assume http://host:port
+    try:
+        # strip scheme
+        hostport = hub_url.split("://", 1)[1]
+        # strip path
+        hostport = hostport.split("/", 1)[0]
+        if ":" in hostport:
+            host, port_s = hostport.rsplit(":", 1)
+            port = int(port_s)
+        else:
+            host, port = hostport, 80
+        with socket.create_connection((host, port), timeout=timeout):
+            return True
+    except Exception:
+        return False
+
+
 def run(dry_run_override: bool = None) -> dict:
     started_at = datetime.now(timezone.utc)
     run_id = uuid.uuid4()
@@ -292,6 +321,15 @@ def run(dry_run_override: bool = None) -> dict:
     if not cfg["enabled"]:
         _log_activity(sb, "lead_converter", run_id, started_at, "skipped_disabled",
                       summary="disabled in agent_config")
+        _update_config(sb, "lead_converter", "skipped_disabled", datetime.now(timezone.utc).isoformat())
+        return {"status": "skipped_disabled", "rows_processed": 0}
+
+    # Hub precheck. In live mode, the hub MUST be up — otherwise we'd
+    # blast 200 leads into URLErrors. In dry_run we don't need the hub
+    # at all (we just log locally), so skip the check.
+    if not dry_run and not _hub_alive():
+        _log_activity(sb, "lead_converter", run_id, started_at, "skipped_disabled",
+                      summary="hub at HUB_URL unreachable — skipping live run to avoid blasting leads into URLError")
         _update_config(sb, "lead_converter", "skipped_disabled", datetime.now(timezone.utc).isoformat())
         return {"status": "skipped_disabled", "rows_processed": 0}
 
