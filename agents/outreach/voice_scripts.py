@@ -132,12 +132,44 @@ OPT_OUT_CONFIRMATION = {
                           "this number.",
 }
 
+# ─────────────────────────────────────────────────────────────────────
+# Script 6: contractor_recruit (outbound call to recruit a contractor)
+# Goal: 90-sec pitch, get the contractor to self-onboard at empire-ai.co.uk
+# Used by: contractor_outreach agent (manual call CLI for now)
+# ─────────────────────────────────────────────────────────────────────
+
+CONTRACTOR_RECRUIT = {
+    "name": "contractor_recruit",
+    "max_duration_seconds": 90,
+    # TCPA-required: identify as paid commercial within first 5 seconds
+    "intro": "Hi {first_name}, this is a paid call from Empire AI on behalf "
+             "of our contractor network. Got 30 seconds?",
+    "main": "I'm calling roofers in {metro} because we just started routing "
+            "storm leads into this market — and you came up as one of the "
+            "top local contractors. Quick version: we send you pre-qualified "
+            "storm leads, you close them, you pay us 3% only when the "
+            "insurance claim settles. First 2 closed deals are 100% on us, "
+            "no fee, no contract. Most contractors who try it close their "
+            "first deal within 30 days. You can self-onboard in 90 seconds "
+            "at empire-ai.co.uk/contractors — no call needed to sign up. "
+            "Worth a look?",
+    # If voicemail — leave short callback with the link. Don't repeat pitch.
+    "if_voicemail": "Hi {first_name}, this is Empire AI — a quick note for "
+                    "your roofing business in {metro}. We send storm leads, "
+                    "you close them, 3% fee only on settled claims, first 2 "
+                    "deals on us. Self-onboard at empire-ai.co.uk/contractors. "
+                    "Press 9 to opt out of future calls.",
+    "opt_out_disclosure": "To opt out of future calls from Empire AI, "
+                          "press 9 at any time or tell me now.",
+}
+
 ALL_SCRIPTS = {
     "initial_strike":         INITIAL_STRIKE,
     "no_answer_followup":     NO_ANSWER_FOLLOWUP,
     "callback_confirmation":  CALLBACK_CONFIRMATION,
     "contractor_handoff":     CONTRACTOR_HANDOFF,
     "opt_out_confirmation":   OPT_OUT_CONFIRMATION,
+    "contractor_recruit":     CONTRACTOR_RECRUIT,
 }
 
 
