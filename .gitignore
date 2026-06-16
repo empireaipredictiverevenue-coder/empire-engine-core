@@ -61,3 +61,7 @@ test-ledger/
 
 # Obsidian vault per-user app config (theme, spellcheck, font prefs — not portable)
 notes/.obsidian/
+# autoresearch local artifacts
+integrations/autoresearch/.venv/
+integrations/autoresearch/results.tsv
+integrations/autoresearch/__pycache__/
