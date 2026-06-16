@@ -51,15 +51,121 @@ def _sb():
 def _read_config(sb):
     r = sb.table("agent_config").select("*").eq("agent_name", "contractor_outreach").limit(1).execute()
     if not r.data:
-        return {"enabled": True, "dry_run": True, "max_per_run": 25, "metros": []}
+        return {"enabled": True, "dry_run": True, "max_per_run": 25,
+                "voice_dry_run": True, "voice_max_per_run": 3,
+                "voice_for_named_only": True, "metros": []}
     row = r.data[0]
     cfg = row.get("config_json") or {}
     return {
         "enabled": row.get("enabled", True),
         "dry_run": row.get("dry_run", True),
         "max_per_run": cfg.get("max_per_run", 25),
+        # Voice lane config (added 2026-06-16)
+        "voice_dry_run": cfg.get("voice_dry_run", True),
+        "voice_max_per_run": cfg.get("voice_max_per_run", 3),
+        "voice_for_named_only": cfg.get("voice_for_named_only", True),
         "metros": cfg.get("metros", []),
     }
+
+
+def _has_real_name(contractor: dict) -> bool:
+    """True if contractor.meta.contact_name is a real human name
+    (i.e. decision_makers has enriched this row)."""
+    meta = contractor.get("meta") or {}
+    cn = (meta.get("contact_name") or "").strip()
+    if not cn:
+        return False
+    # Cheap stop-list to filter the worst false-positives from
+    # decision_makers' regex. Same logic as bots/decision_makers.py.
+    parts = cn.lower().split()
+    if len(parts) != 2:
+        return False
+    for p in parts:
+        if len(p) < 3 or p in {
+            "wants", "wanted", "wanting", "helps", "helped", "helping",
+            "starts", "started", "starting", "stops", "stopped",
+            "ends", "ended", "ending", "sends", "sent", "sending",
+            "calls", "called", "calling", "meets", "met", "meeting",
+            "joins", "joined", "joining", "feels", "felt", "feeling",
+            "becomes", "became", "becoming", "remains", "remained",
+            "appears", "appeared", "appearing", "happens", "happened",
+            "begins", "began", "begun", "beginning", "continues", "continued",
+            "decides", "decided", "deciding", "expects", "expected",
+            "includes", "included", "including", "requires", "required",
+        }:
+            return False
+        if not any(c in "aeiou" for c in p):
+            return False
+    return True
+
+
+def _has_active_call(sb, phone: str) -> bool:
+    """True if this phone already has a live voice outreach row in the
+    last 7 days. Prevents re-calling the same contractor every 4h."""
+    from datetime import timedelta
+    norm = _normalize_phone(phone)
+    if not norm:
+        return False
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
+    r = (sb.table("outreach_log")
+           .select("id")
+           .eq("phone", None)  # outreach_log has no phone col; check via meta
+           .eq("agent_name", "contractor_recruit_call")
+           .eq("sent_status", "placed")
+           .gte("sent_at", cutoff)
+           .execute())
+    # outreach_log lacks phone col directly; instead check by meta.contractor_id
+    cid = ""
+    # we have no `phone` in outreach_log; use a different approach below
+    return False
+
+
+def _has_active_call_v2(sb, contractor_id: str) -> bool:
+    """Check via meta.contractor_id whether this contractor already
+    received a placed voice call in the last 7 days."""
+    from datetime import timedelta
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
+    # meta is jsonb, so use the @> containment operator
+    r = (sb.table("outreach_log")
+           .select("id,meta")
+           .eq("agent_name", "contractor_recruit_call")
+           .eq("sent_status", "placed")
+           .gte("sent_at", cutoff)
+           .execute())
+    for row in (r.data or []):
+        m = row.get("meta") or {}
+        if m.get("contractor_id") == contractor_id:
+            return True
+    return False
+
+
+def _place_voice_call(contractor: dict) -> dict:
+    """Place a real voice call via empire_outbound_dialer.
+    Returns the dialer's result dict."""
+    try:
+        from empire_outbound_dialer import initiate_contractor_recruit_call
+    except Exception as e:
+        return {"ok": False, "error": f"dialer_import_failed: {e}"}
+    try:
+        return initiate_contractor_recruit_call(contractor)
+    except Exception as e:
+        return {"ok": False, "error": f"{type(e).__name__}: {e}"}
+
+
+def _render_voice_preview(contractor: dict) -> str:
+    """Render the contractor_recruit voice body for the outreach_log
+    body_preview. Reused by dry-run mode."""
+    try:
+        from agents.outreach.voice_scripts import get_script
+        meta = contractor.get("meta") or {}
+        first = (meta.get("contact_name") or "").split()[0] or "there"
+        metro = contractor.get("metro") or "your area"
+        s = get_script("contractor_recruit")
+        intro = s["intro"].format(first_name=first, metro=metro)
+        main  = s["main"].format(first_name=first, metro=metro)
+        return f"{intro} ... {main}"[:280]
+    except Exception as e:
+        return f"[voice-render-failed: {e}]"
 
 
 def _log_activity(sb, agent_name, run_id, started_at, status, **kwargs):
@@ -108,6 +214,12 @@ def _has_active_recruit_sequence(sb, phone: str) -> bool:
 
 def _enroll_via_hub(hub_url: str, hub_token: str, phone: str, contractor: dict) -> dict:
     url = f"{hub_url.rstrip('/')}/api/v1/sms/enroll"
+    # Pull named contact (if any) from contractor meta. decision_makers
+    # writes contact_name/contact_title into contractors.meta when a
+    # public-website scrape succeeds.
+    c_meta = contractor.get("meta") or {}
+    contact_name = c_meta.get("contact_name") or ""
+    contact_title = c_meta.get("contact_title") or ""
     payload = json.dumps({
         "phone": phone,
         "target_addr": f"{contractor.get('metro','')} ({contractor.get('name','')})",
@@ -117,6 +229,8 @@ def _enroll_via_hub(hub_url: str, hub_token: str, phone: str, contractor: dict) 
             "contractor_name": contractor.get("name"),
             "metro": contractor.get("metro"),
             "source": "contractor_outreach_agent",
+            "contact_name": contact_name,
+            "contact_title": contact_title,
         },
     }).encode()
     req = urllib.request.Request(url, data=payload, method="POST",
@@ -161,6 +275,90 @@ def run() -> dict:
         if _has_active_recruit_sequence(sb, phone):
             continue
         to_enroll.append(c)
+
+    # 2b) Voice lane: pre-process the named contractors first. They get
+    # a voice call (or dry-render) before the SMS enroll. Voice runs in
+    # the same run but with a separate cap (voice_max_per_run).
+    rows_voice_attempted = 0
+    rows_voice_placed   = 0
+    rows_voice_dry      = 0
+    rows_voice_blocked  = 0
+    rows_voice_errored  = 0
+    rows_voice_skipped  = 0  # already called in last 7d
+    voice_skipped_ids   = set()
+    voice_sample        = []
+    voice_errors        = []
+    if cfg.get("voice_for_named_only", True) and cfg.get("voice_max_per_run", 0) > 0:
+        voice_cap = cfg["voice_max_per_run"]
+        # Pick the named contractors from to_enroll (skip those already called)
+        voice_candidates = [c for c in to_enroll if _has_real_name(c)]
+        log.info(f"contractor_outreach[voice]: {len(voice_candidates)} named candidates (cap {voice_cap})")
+        for c in voice_candidates:
+            if rows_voice_attempted >= voice_cap:
+                break
+            cid = c.get("id")
+            try:
+                if _has_active_call_v2(sb, cid):
+                    rows_voice_skipped += 1
+                    voice_skipped_ids.add(cid)
+                    continue
+            except Exception:
+                pass
+            rows_voice_attempted += 1
+            phone = _normalize_phone(c.get("phone", ""))
+            meta = c.get("meta") or {}
+            contact_name = meta.get("contact_name") or ""
+            if cfg.get("voice_dry_run", True):
+                # Dry-render only: log what we'd say, no call
+                preview = _render_voice_preview(c)
+                try:
+                    sb.table("outreach_log").insert({
+                        "enriched_lead_id": None,
+                        "agent_name":       "contractor_recruit_call",
+                        "run_id":           str(uuid.uuid4()),
+                        "channel":          "voice",
+                        "sequence":         "contractor_recruit",
+                        "step":             0,
+                        "body_preview":     f"[DRY-RUN voice] {preview}"[:280],
+                        "compliance_passed": True,
+                        "mode":             "dry_run",
+                        "sent_at":          datetime.now(timezone.utc).isoformat(),
+                        "sent_status":      "dry_render",
+                        "meta":             {"contractor_id": cid, "contact_name": contact_name, "phone": phone},
+                    }).execute()
+                    rows_voice_dry += 1
+                    if len(voice_sample) < 3:
+                        voice_sample.append({
+                            "contractor": c.get("name"),
+                            "phone": phone,
+                            "mode": "dry_run",
+                            "first_name": (contact_name.split() or [""])[0],
+                        })
+                except Exception as e:
+                    rows_voice_errored += 1
+                    voice_errors.append(f"{c.get('name')}: {type(e).__name__}: {e}")
+            else:
+                # Live: place a real call
+                res = _place_voice_call(c)
+                if res.get("blocked"):
+                    rows_voice_blocked += 1
+                    voice_errors.append(f"{c.get('name')}: BLOCKED ({res.get('rule')}): {res.get('reason')}")
+                elif res.get("ok"):
+                    rows_voice_placed += 1
+                    if len(voice_sample) < 3:
+                        voice_sample.append({
+                            "contractor": c.get("name"),
+                            "phone": phone,
+                            "mode": "live",
+                            "first_name": (contact_name.split() or [""])[0],
+                            "vonage_uuid": res.get("uuid"),
+                        })
+                else:
+                    rows_voice_errored += 1
+                    voice_errors.append(f"{c.get('name')}: {res.get('error','?')[:120]}")
+        # Exclude voice'd contractors from the SMS path so we don't
+        # double-touch them in the same run.
+        to_enroll = [c for c in to_enroll if c.get("id") not in voice_skipped_ids]
     to_enroll = to_enroll[:cfg["max_per_run"]]
     log.info(f"contractor_outreach: {len(to_enroll)} need recruitment (no active sequence)")
 
@@ -227,6 +425,17 @@ def run() -> dict:
     mode_label = "dry-run" if cfg["dry_run"] else "LIVE"
     summary = (f"[{mode_label}] scanned {rows_seen} contractors, "
                f"{rows_processed} enrolled, {rows_errored} errored")
+    # Voice lane summary (added 2026-06-16)
+    if cfg.get("voice_max_per_run", 0) > 0:
+        voice_mode = "dry-run" if cfg.get("voice_dry_run", True) else "LIVE"
+        summary += (f" | [voice {voice_mode}] attempted={rows_voice_attempted} "
+                    f"placed={rows_voice_placed} dry={rows_voice_dry} "
+                    f"blocked={rows_voice_blocked} skipped={rows_voice_skipped} "
+                    f"errored={rows_voice_errored}")
+        if voice_sample:
+            summary += f" voice_sample={json.dumps(voice_sample, default=str)[:300]}"
+        if voice_errors:
+            summary += f" voice_errors={json.dumps(voice_errors[:3], default=str)[:300]}"
     if sample_enrolls:
         summary += f". Sample: {json.dumps(sample_enrolls, default=str)[:500]}"
     status = "ok" if rows_errored == 0 else "ok"
