@@ -161,12 +161,14 @@ def _find_existing_contractor_by_phone(sb: Any, phone: str) -> Optional[Dict[str
 def _build_contractor_row(prospect: Dict[str, Any], phone_e164: str) -> Dict[str, Any]:
     """Map a prospect row to a contractors insert payload."""
     biz: str = str(prospect.get("business_name") or "")
-    # The contractors.email column is NOT NULL. We don't have a real
-    # email from Google Places; use a synthetic one keyed off the
-    # business name. contact_discovery will overwrite with the real
-    # email on its next run.
-    biz_slug: str = re.sub(r"[^a-z0-9]+", "", biz.lower())[:40] or "unknown"
-    synthetic_email: str = f"unknown.{biz_slug}@prospector.placeholder"
+    # contractors.email is NOT NULL with a UNIQUE constraint. We don't
+    # have a real email from Google Places; use a synthetic one keyed
+    # off the PHONE (globally unique) instead of the business name
+    # (collides on franchises like "The Brothers That Just Do Gutters"
+    # which appear in 11 metros). contact_discovery overwrites this
+    # with the real email on its next run.
+    digits: str = "".join(c for c in phone_e164 if c.isdigit())
+    synthetic_email: str = f"unknown.{digits}@prospector.placeholder"
 
     meta: Dict[str, Any] = {
         "source":              "prospector_bridge",
