@@ -191,9 +191,12 @@ class VonageAdapter:
             # Advanced machine detection — async mode means NO silence at call start.
             # Detection runs in the background while the NCCO plays immediately.
             # The event webhook receives machine/human events as they're determined.
+            # beep_timeout is 30-120s per Vonage validation. 45s is a
+            # reasonable human answer window — TTS starts after that.
             "advanced_machine_detection": {
                 "behavior": "continue",
                 "mode": "default",
+                "beep_timeout": 45,
             },
         }
         if event_webhook:
@@ -252,6 +255,7 @@ class VonageAdapter:
             "advanced_machine_detection": {
                 "behavior": "continue",
                 "mode": "default",
+                "beep_timeout": 45,
             },
         }
         if event_webhook:
