@@ -135,7 +135,7 @@ def send_email(to: str, subject: str, body: str) -> str:
     if not resend_key:
         return "ERROR: no RESEND_API_KEY"
     payload = json.dumps({
-        "from":    "Phillip Livesley <phil@empire-ai.co.uk>",
+        "from":    "Phillip Livesley <philliplivesley@empire-ai.co.uk>",
         "to":      [to],
         "subject": subject,
         "text":    body,
