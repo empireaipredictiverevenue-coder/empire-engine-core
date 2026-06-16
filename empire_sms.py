@@ -191,20 +191,21 @@ TEMPLATES = {
         ),
     ],
     "contractor_recruit": [
-        # Touch 0 — Initial pitch. One ask. ≤160 chars. Specific to their work.
+        # Touch 0 — Initial pitch. Uses {greeting} = "Hi {first_name}," if
+        # we have a name, else "{prefix}" (TCPA-required "Empire AI:").
         (
-            "{prefix} Storm leads for roofers in your metro — "
+            "{greeting} Storm leads for roofers in your metro — "
             "first 2 closed deals on us, 3% after. "
             "90-sec self-onboard at empire-ai.co.uk/contractors. STOP to opt out."
         ),
         # Touch 1 — 96h follow-up. Just point at the demo.
         (
-            "{prefix} 30-sec demo on the contractors page if you want to see "
+            "{greeting} 30-sec demo on the contractors page if you want to see "
             "the lead flow first. empire-ai.co.uk/contractors. STOP to opt out."
         ),
         # Touch 2 — 240h soft close. Two paths, one ask.
         (
-            "{prefix} Closing note. Two paths: "
+            "{greeting} Closing note. Two paths: "
             "(1) self-onboard — 90s, first 2 deals on us, or "
             "(2) reply NOTNOW and we'll check back next quarter. "
             "STOP to opt out."
@@ -544,8 +545,22 @@ class SMSSequenceEngine:
                 continue
 
             template = template_list[step]
+            # For contractor_recruit, build a "Hi {first_name}," greeting
+            # if we have a contact_name in meta. For other sequences, keep
+            # the TCPA-compliant {prefix} only.
+            first_name = ""
+            try:
+                m = row.get("meta") or {}
+                cn = (m.get("contact_name") or "").strip()
+                if cn and row.get("sequence_type") == "contractor_recruit":
+                    first_name = cn.split()[0]
+            except Exception:
+                first_name = ""
+            greeting = (f"Hi {first_name}," if first_name else self.identity_prefix)
             body = template.format(
                 prefix=self.identity_prefix,
+                greeting=greeting,
+                first_name=first_name,
                 target_short=_short_address(row.get("target_addr", "")),
             )
 
