@@ -166,6 +166,24 @@ def _call_dispatch_endpoint(hub_url: str, hub_token: str, lead_id: str, urgency:
         return {"ok": False, "error": f"{type(e).__name__}: {e}"}
 
 
+def _hub_alive(timeout: float = 2.0) -> bool:
+    """Quick TCP-level health check on the hub. Avoids blasting YES
+    dispatches into URLError when the hub is down."""
+    import socket
+    hub_url = os.getenv("HUB_URL", "http://127.0.0.1:8000")
+    try:
+        hostport = hub_url.split("://", 1)[1].split("/", 1)[0]
+        if ":" in hostport:
+            host, port_s = hostport.rsplit(":", 1)
+            port = int(port_s)
+        else:
+            host, port = hostport, 80
+        with socket.create_connection((host, port), timeout=timeout):
+            return True
+    except Exception:
+        return False
+
+
 def _is_yes(body: str) -> bool:
     """Heuristic: 'YES' anywhere in the inbound body counts. Case-insensitive. Trimmed."""
     if not body:
@@ -183,6 +201,14 @@ def run() -> dict:
     if not cfg["enabled"]:
         _log_activity(sb, "dispatch", run_id, started_at, "skipped_disabled",
                       summary="disabled in agent_config")
+        _update_config(sb, "dispatch", "skipped_disabled", datetime.now(timezone.utc).isoformat())
+        return {"status": "skipped_disabled", "rows_processed": 0}
+
+    # Hub precheck. /api/v1/matching/dispatch is a hub endpoint; if the
+    # hub is down we'd just produce URLErrors on every YES reply.
+    if not cfg.get("dry_run", True) and not _hub_alive():
+        _log_activity(sb, "dispatch", run_id, started_at, "skipped_disabled",
+                      summary="hub at HUB_URL unreachable — skipping live dispatch to avoid blasting YES into URLError")
         _update_config(sb, "dispatch", "skipped_disabled", datetime.now(timezone.utc).isoformat())
         return {"status": "skipped_disabled", "rows_processed": 0}
 
