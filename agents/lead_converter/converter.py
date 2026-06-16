@@ -98,18 +98,57 @@ def _update_config(sb, agent_name, status, finished_at):
     }).eq("agent_name", agent_name).execute()
 
 
+# B2B niches (from the 33-niche prospector config) — leads from these
+# get routed to b2b_outreach instead of storm_strike. The 3% success
+# fee pitch in storm_strike is wrong for staffing/HR/IT/insurance/etc.
+B2B_NICHES = {
+    # proven b2b
+    "managed it", "staffing",
+    # legal
+    "personal injury lawyer", "mass tort lawyer", "class action lawyer",
+    "workers comp lawyer", "medical malpractice lawyer",
+    # insurance
+    "medicare advantage agent", "life insurance agent", "final expense insurance",
+    # financial
+    "debt consolidation", "business loan broker", "mortgage broker",
+    # senior care
+    "assisted living", "home health agency",
+    # healthcare
+    "addiction treatment center", "mental health clinic", "medical alert system",
+    # education
+    "cdl truck driving school", "nursing school",
+    # debt
+    "debt relief",
+}
+
+# Commercial variants → commercial_roofing, commercial_solar
+COMMERCIAL_NICHE_MAP = {
+    "commercial roofing": "commercial_roofing",
+    "commercial solar": "commercial_solar",
+}
+
+
 def _pick_sequence(lead: dict) -> str:
     """Pick the SMS sequence based on lead metadata.
 
     Priority order:
-      1. b2b_sub_niche in meta → mapped to niche-specific sequence type
-         (commercial_roofing, commercial_solar, debt_relief, b2b_outreach)
-      2. phone present        → storm_strike A/B cohort (50/50 split by
-         stable hash of lead id for reproducible bucketing)
-      3. email only           → lead_nurture
-      4. fallback             → manual
+      1. Lead's own niche (from radar_targets) routes to the right
+         sequence type: B2B → b2b_outreach, commercial → commercial_*,
+         storm → storm_strike A/B
+      2. b2b_sub_niche in lead.meta → legacy routing from matrix agents
+      3. Phone + storm niche → A/B cohort split (storm_strike vs
+         storm_strike_v2, 50/50 by hash of lead id)
+      4. email only → lead_nurture
+      5. fallback → manual
     """
-    # Check b2b_sub_niche from lead meta for niche-specific sequences
+    # 1. Check the lead's own niche (from the radar_target it came from)
+    niche = (lead.get("niche") or "").lower()
+    if niche in B2B_NICHES:
+        return "b2b_outreach"
+    if niche in COMMERCIAL_NICHE_MAP:
+        return COMMERCIAL_NICHE_MAP[niche]
+
+    # 2. Legacy: b2b_sub_niche in meta (from matrix agents' older leads)
     meta = lead.get("meta") or {}
     if isinstance(meta, dict):
         sub_niche = meta.get("b2b_sub_niche", "")
@@ -122,7 +161,8 @@ def _pick_sequence(lead: dict) -> str:
         if sub_niche in ("HR & Staffing", "Managed IT", "Merchant Services"):
             return "b2b_outreach"
 
-    # Phone leads: A/B storm_strike cohort split
+    # 3. Phone leads: A/B storm_strike cohort split (default for
+    # storm-response niches)
     if lead.get("phone"):
         import hashlib
         h = hashlib.md5(str(lead.get("id", "")).encode()).hexdigest()
