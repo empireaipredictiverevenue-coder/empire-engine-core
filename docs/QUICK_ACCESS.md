@@ -3,6 +3,32 @@
 > Operator-agent memory file. Read at session start so I don't have to
 > re-learn the system.
 
+## Two outbound brands (do not confuse)
+
+Empire-AI sends email under TWO different From addresses, run by
+two different systems:
+
+1. **B2B pipeline** (predictive-revenue coder's lane)
+   - From: `Empire-AI Operations <noreply@empire-ai.co.uk>`
+   - Run by: `automate_empire.sh` (cron at :30 hourly)
+   - Targets: B2B prospects (qualified leads for various services)
+   - DO NOT touch this lane. It's generating real leads (alt-pay replied).
+   - If the brand name is wrong, escalate to the predictive-revenue coder.
+
+2. **My lane** (carrier outreach, voice, inbound handler)
+   - From: `Phillip Livesley <philliplivesley@empire-ai.co.uk>`
+   - Runs: contractor_outreach cron (every 4h), carrier draft send, voice calls
+   - Targets: 5 insurance carriers (Allstate, Farmers, Liberty Mutual, State Farm, USAA)
+     + 24 named contractors
+   - Always passes explicit From in the API call (not env fallback)
+
+If you see "Empire-AI Operations" in an inbox: that's the B2B lane, not mine.
+If you see "Phillip Livesley": that's mine.
+
+The env var `FROM_NAME="Empire-AI Operations"` in /root/.env is for the
+B2B pipeline. DO NOT delete it (breaks the other system). My scripts
+ignore it (they pass explicit From).
+
 ## Inbound email
 - **Gmail IMAP** is wired. `flavag83@gmail.com` (app password in `/root/.env`).
   - IMAP creds: `GMAIL_ADDRESS`, `GMAIL_APP_PASSWORD` (16-char)
