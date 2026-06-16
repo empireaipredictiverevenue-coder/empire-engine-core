@@ -103,7 +103,7 @@ STOP_KEYWORDS = {"STOP", "STOPALL", "UNSUBSCRIBE", "CANCEL", "END", "QUIT", "REM
 HELP_KEYWORDS = {"HELP", "INFO", "SUPPORT"}
 
 # Quiet hours — no SMS during these local hours (TCPA + good practice)
-QUIET_HOURS_START = 21  # 9 PM
+QUIET_HOURS_START = 21  # 9 PM (RESTORED from TEMP 24)
 QUIET_HOURS_END   = 8   # 8 AM
 
 # Sequence step delays (from previous send). Tuned for storm urgency.
@@ -419,7 +419,7 @@ class SMSSequenceEngine:
         voice_router,            # empire_voice.VoiceRouter
         get_db,                  # callable returning Supabase client
         identity_prefix: str = DEFAULT_IDENTITY_PREFIX,
-        max_per_minute: int = 6,
+        max_per_minute: int = 6,    # RESTORED from TEMP 30 (used to drain queue)
         on_yes_reply: Optional[Callable] = None,  # async (phone, body, sequence_dict) -> None
     ):
         self.voice_router    = voice_router
