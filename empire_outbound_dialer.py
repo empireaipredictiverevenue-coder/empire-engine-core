@@ -359,4 +359,20 @@ def initiate_contractor_recruit_call(contractor: dict) -> dict:
     except Exception as e:
         log.debug(f"[contractor_recruit] outreach_log write failed: {e}")
 
+    # Update contractor voice outcome tracking columns.
+    # Outcomes are inferred from the Vonage call status (limited without
+    # the AMD event webhook). Manual updates happen when we get a real
+    # signal (human answer, opt-out, etc.) via /api/v1/voice/inbound.
+    if response.get("ok") and contractor.get("id"):
+        try:
+            _sb.table("contractors").update({
+                "last_voice_call_at": datetime.now(timezone.utc).isoformat(),
+                "voice_call_count":   (contractor.get("voice_call_count") or 0) + 1,
+                # Outcome is left null at placement time. It gets set
+                # by /api/v1/voice/inbound based on DTMF (press 9 = opted_out,
+                # press 1 = callback) or by AMD events (voicemail/no_answer).
+            }).eq("id", contractor["id"]).execute()
+        except Exception as e:
+            log.debug(f"[contractor_recruit] contractor voice tracking update failed: {e}")
+
     return response
