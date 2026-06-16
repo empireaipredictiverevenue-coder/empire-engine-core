@@ -344,6 +344,17 @@ def initiate_contractor_recruit_call(contractor: dict) -> dict:
             "mode":             "live",
             "sent_at":          datetime.now(timezone.utc).isoformat(),
             "sent_status":      "placed" if response.get("ok") else "failed",
+            # meta.contractor_id is what the contractor_outreach agent
+            # uses for the "already-called in last 7d" dedup check.
+            # Without this, manual CLI calls and agent calls would
+            # both miss the dedup and call the same person twice.
+            "meta": {
+                "contractor_id": contractor.get("id"),
+                "phone": phone,
+                "first_name": first_name,
+                "metro": metro,
+                "source": "manual_cli" if not os.getenv("EMPIRE_BYPASS_CALL_HOURS") == "1" else "manual_cli_test",
+            },
         }).execute()
     except Exception as e:
         log.debug(f"[contractor_recruit] outreach_log write failed: {e}")
