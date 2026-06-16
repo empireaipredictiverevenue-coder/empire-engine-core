@@ -84,6 +84,12 @@ def _check_dnc(phone: str) -> bool:
         return True  # fail open — log but allow
 def _within_call_hours(tz_name: str) -> bool:
     """Check if current time is within the allowed calling window."""
+    # Bypass for manual test calls. Set EMPIRE_BYPASS_CALL_HOURS=1 in env.
+    # Required for the human-monitored test call from /tmp/call_one_contractor.py
+    # since the only available window in many US timezones is 8am-9pm local
+    # and the box is in a timezone that may be off-hours.
+    if os.getenv("EMPIRE_BYPASS_CALL_HOURS") == "1":
+        return True
     try:
         h = datetime.now(ZoneInfo(tz_name)).hour
     except Exception:
@@ -324,10 +330,12 @@ def initiate_contractor_recruit_call(contractor: dict) -> dict:
 
     # Also log to outreach_log so the activity shows up alongside SMS
     try:
+        # run_id column is a uuid type; generate one instead of f-stringing an int
+        import uuid as _uuid
         _sb.table("outreach_log").insert({
             "enriched_lead_id": None,
             "agent_name":       "contractor_recruit_call",
-            "run_id":           f"manual-{int(_time.time())}",
+            "run_id":           str(_uuid.uuid4()),
             "channel":          "voice",
             "sequence":         "contractor_recruit",
             "step":             0,
