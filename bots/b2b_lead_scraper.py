@@ -177,6 +177,19 @@ _MAX_RESULTS_PER_QUERY = 20
 # Min buy-signal score to qualify as a lead (0-100)
 _MIN_QUALIFY_SCORE = 30
 
+# Hard daily cap on Google Places API (Text Search) calls. Google
+# bills ~$32 per 1000 calls; £154 in one day = ~6000 calls = a runaway
+# agent (we saw 30 b2b_lead_scraper runs in 24h on Jun 15). Set to
+# 500 so one full run (6 niches x 16 metros x ~7 queries = ~672)
+# hits the cap and stops mid-grid, never the full bill.
+# Tune with PLACES_DAILY_BUDGET env.
+_DEFAULT_DAILY_BUDGET = 500
+
+# Module-level counter for the current process. Combined with the
+# daily counter persisted in agent_config, this means: even if 5
+# parallel runs go off at once, they all stop at the budget.
+_PLACES_CALLS_THIS_RUN = 0
+
 # Contact info regexes (shared with contact_discovery)
 _PHONE_RE = re.compile(r"(\+?1?[\s.-]?\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4})")
 _EMAIL_RE = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
@@ -190,6 +203,63 @@ def _sb():
     if not url or not key:
         raise RuntimeError("SUPABASE_URL and SUPABASE_SERVICE_KEY must be set in env")
     return create_client(url, key)
+
+
+# ── PLACES API DAILY BUDGET COUNTER ──────────────────────────────────
+
+def _today_utc() -> str:
+    """YYYY-MM-DD in UTC. Counter resets when this changes."""
+    return datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
+
+def _places_calls_today(sb) -> int:
+    """Return how many Places API calls have been recorded today (UTC).
+
+    Stored in agent_config.config_json for b2b_lead_scraper. Reads
+    + writes are best-effort — if Supabase is unreachable we return 0
+    so the agent keeps running (a single run's runaway is still
+    capped by the in-process _PLACES_CALLS_THIS_RUN counter).
+    """
+    try:
+        r = (sb.table("agent_config")
+               .select("config_json")
+               .eq("agent_name", "b2b_lead_scraper")
+               .limit(1)
+               .execute())
+        if not r.data:
+            return 0
+        cfg = r.data[0].get("config_json") or {}
+        date = cfg.get("places_date", "")
+        if date != _today_utc():
+            return 0  # counter from a previous day, treat as fresh
+        return int(cfg.get("places_calls_today", 0))
+    except Exception:
+        return 0
+
+
+def _record_places_call(sb) -> None:
+    """Increment the daily counter in agent_config. Best-effort."""
+    global _PLACES_CALLS_THIS_RUN
+    try:
+        r = (sb.table("agent_config")
+               .select("config_json")
+               .eq("agent_name", "b2b_lead_scraper")
+               .limit(1)
+               .execute())
+        if not r.data:
+            return
+        cfg = dict(r.data[0].get("config_json") or {})
+        today = _today_utc()
+        if cfg.get("places_date") != today:
+            cfg["places_date"] = today
+            cfg["places_calls_today"] = 0
+        cfg["places_calls_today"] = int(cfg.get("places_calls_today", 0)) + 1
+        sb.table("agent_config").update({
+            "config_json": cfg,
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        }).eq("agent_name", "b2b_lead_scraper").execute()
+    except Exception as e:
+        log.debug(f"[b2b] could not record places call: {e}")
 
 
 def _read_config(sb, default_max=100, default_threshold=30):
@@ -243,9 +313,28 @@ def _update_config(sb, status, finished_at):
 
 async def _places_search(query: str, lat: float, lon: float) -> List[Dict]:
     """Search Google Places for businesses matching a query near a location."""
+    global _PLACES_CALLS_THIS_RUN
     api_key = os.getenv("GOOGLE_MAPS_API_KEY", "")
     if not api_key:
         log.warning("no GOOGLE_MAPS_API_KEY set — B2B scraper cannot run")
+        return []
+
+    # Daily budget guard. The agent is allowed to spend up to
+    # PLACES_DAILY_BUDGET calls per UTC day across all runs.
+    # Counter is persisted in agent_config so multiple parallel runs
+    # (or runs that restart the process) all see the same number.
+    try:
+        budget = int(os.getenv("PLACES_DAILY_BUDGET", str(_DEFAULT_DAILY_BUDGET)))
+    except ValueError:
+        budget = _DEFAULT_DAILY_BUDGET
+    sb = _sb()
+    used_today = _places_calls_today(sb)
+    if used_today >= budget:
+        log.warning(
+            f"[b2b] Places daily budget exhausted ({used_today}/{budget}). "
+            f"Skipping search for '{query}'. Raise PLACES_DAILY_BUDGET "
+            f"in env to allow more, or wait until tomorrow (UTC)."
+        )
         return []
 
     url = "https://places.googleapis.com/v1/places:searchText"
@@ -269,6 +358,9 @@ async def _places_search(query: str, lat: float, lon: float) -> List[Dict]:
         async with httpx.AsyncClient(timeout=15) as client:
             r = await client.post(url, headers=headers, json=body)
             r.raise_for_status()
+            # Billable API call happened. Count it.
+            _PLACES_CALLS_THIS_RUN += 1
+            _record_places_call(sb)
             data = r.json()
             out = []
             for p in data.get("places", []):
@@ -825,6 +917,15 @@ async def run_async(
 
     # Log activity to Supabase
     status = "ok" if total_stats["total_errored"] == 0 else "partial"
+    # Surface Places API call count for the daily-budget sanity check.
+    try:
+        budget = int(os.getenv("PLACES_DAILY_BUDGET", str(_DEFAULT_DAILY_BUDGET)))
+    except ValueError:
+        budget = _DEFAULT_DAILY_BUDGET
+    places_today = _places_calls_today(sb)
+    total_stats["places_api_calls_this_run"] = _PLACES_CALLS_THIS_RUN
+    total_stats["places_api_calls_today"] = places_today
+    total_stats["places_daily_budget"] = budget
     _log_activity(sb, run_id, started_at, status,
                   rows_seen=total_stats["total_found"],
                   rows_processed=total_stats["total_inserted"],
@@ -838,7 +939,9 @@ async def run_async(
         f"{total_stats['total_qualified']} qualified, "
         f"{total_stats['total_inserted']} inserted, "
         f"{total_stats['total_skipped_dup']} dups skipped "
-        f"({total_stats['elapsed_seconds']}s)"
+        f"({total_stats['elapsed_seconds']}s) "
+        f"[Places API: {_PLACES_CALLS_THIS_RUN} this run, "
+        f"{places_today}/{budget} today]"
     )
 
     return total_stats
