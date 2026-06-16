@@ -843,8 +843,53 @@ def register_sms_routes(
 
         from_number = payload.get("msisdn") or payload.get("from", "")
         body = payload.get("text") or payload.get("message", "")
+        message_id = payload.get("messageId") or payload.get("message-id") or payload.get("message_id") or ""
 
         result = await engine.handle_inbound(from_number, body)
+
+        # Side-effects (added 2026-06-16):
+        #   1. log every inbound SMS to inbox_messages so the daily
+        #      digest can summarize reply activity.
+        #   2. send a Telegram alert to Phil for every reply (any intent).
+        try:
+            intent = (result or {}).get("action", "unknown")
+            get_db().table("inbox_messages").insert({
+                "channel":           "sms",
+                "from_address":      from_number,
+                "to_address":        payload.get("to", ""),
+                "subject":           None,
+                "body":              body[:4000],
+                "received_at":       datetime.now(timezone.utc).isoformat(),
+                "classified_intent": intent,
+                "in_reply_to":       message_id,
+                "meta":              {"engine_result": result, "vonage_message_id": message_id},
+            }).execute()
+        except Exception as e:
+            log.debug(f"[sms] inbox_messages insert failed: {e}")
+
+        try:
+            import urllib.request as _ur
+            tg_token = os.environ.get("TELEGRAM_BOT_TOKEN", "")
+            tg_chat  = os.environ.get("TELEGRAM_HOME_CHANNEL", "808657420")
+            if tg_token:
+                alert = (
+                    f"📱 *SMS reply*\n"
+                    f"  from: +{from_number}\n"
+                    f"  text: {body[:120]}\n"
+                    f"  intent: *{result.get('action', '?') if result else '?'}*\n"
+                )
+                payload_json = json.dumps({
+                    "chat_id": tg_chat, "text": alert,
+                    "parse_mode": "Markdown", "disable_web_page_preview": True,
+                }).encode()
+                _ur.Request(
+                    f"https://api.telegram.org/bot{tg_token}/sendMessage",
+                    data=payload_json, method="POST",
+                    headers={"Content-Type": "application/json"},
+                )
+                # best-effort, don't fail the inbound on telegram error
+        except Exception:
+            pass
 
         # Push to live dashboards
         if broadcaster:
