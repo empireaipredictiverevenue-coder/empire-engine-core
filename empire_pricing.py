@@ -666,7 +666,7 @@ def _suite_product_cards(products: list) -> str:
         {chr(10).join(f'        <li>{f}</li>' for f in features[:6])}
       </div>
       <div class="pr-card-price">${price:,.0f}<span class="pr-card-price-sub">/mo</span></div>
-      <a href="/command" class="pr-card-cta">Subscribe</a>
+      <a href="/crypto/checkout/{tier}" class="pr-card-cta">Subscribe with USDC</a>
     </div>''')
     return '<div class="pr-prods">\n' + "\n".join(cards) + '\n    </div>'
 
@@ -706,7 +706,7 @@ FALLBACK_SUITE_HTML = '''<!-- SECTION 1: SUITE PRODUCTS                         
         </ul>
         <div class="pr-card-price">$499 <small>/mo</small></div>
         <div class="pr-card-price-sub">+ $0.25 per routed call</div>
-        <a href="/auth/login" class="pr-card-cta">Get started</a>
+        <a href="/crypto/checkout/ROUTER_SaaS" class="pr-card-cta">Subscribe with USDC</a>
       </div>
 
       <!-- Product 2: Data Vault -->
@@ -729,7 +729,7 @@ FALLBACK_SUITE_HTML = '''<!-- SECTION 1: SUITE PRODUCTS                         
         </ul>
         <div class="pr-card-price">$799 <small>/mo</small></div>
         <div class="pr-card-price-sub">+ $0.02 per stored record/mo</div>
-        <a href="/auth/login" class="pr-card-cta">Get started</a>
+        <a href="/crypto/checkout/DATA_ENTERPRISE" class="pr-card-cta">Subscribe with USDC</a>
       </div>
 
       <!-- Product 3: Buyer Spy AI -->
@@ -752,7 +752,7 @@ FALLBACK_SUITE_HTML = '''<!-- SECTION 1: SUITE PRODUCTS                         
         </ul>
         <div class="pr-card-price">$1,499 <small>/mo</small></div>
         <div class="pr-card-price-sub">+ $5 per analysis</div>
-        <a href="/auth/login" class="pr-card-cta">Get started</a>
+        <a href="/crypto/checkout/SPY_DATA" class="pr-card-cta">Subscribe with USDC</a>
       </div>
 
     </div>
@@ -1325,7 +1325,7 @@ def pricing_page(products: list = None) -> str:
         </ul>
         <div class="pr-card-price">$999 <small>/mo</small></div>
         <div class="pr-card-price-sub">+ $0.10 per audio minute processed</div>
-        <a href="/auth/login" class="pr-card-cta">Get started</a>
+        <a href="/crypto/checkout/OMNI_BRIDGE" class="pr-card-cta">Subscribe with USDC</a>
       </div>
 
       <!-- Product 5: Agent Orchestrator -->
@@ -1348,7 +1348,7 @@ def pricing_page(products: list = None) -> str:
         </ul>
         <div class="pr-card-price">$1,999 <small>/mo</small></div>
         <div class="pr-card-price-sub">+ $0.50 per agent-step executed</div>
-        <a href="/auth/login" class="pr-card-cta">Get started</a>
+        <a href="/crypto/checkout/AGENT_ORCHESTRATOR" class="pr-card-cta">Subscribe with USDC</a>
       </div>
 
       <!-- Product 6: B2B Pro -->
@@ -1371,7 +1371,7 @@ def pricing_page(products: list = None) -> str:
         </ul>
         <div class="pr-card-price">$2,999 <small>/mo</small></div>
         <div class="pr-card-price-sub">+ $10 per lead purchased</div>
-        <a href="/auth/login" class="pr-card-cta">Get started</a>
+        <a href="/crypto/checkout/B2B_PRO" class="pr-card-cta">Subscribe with USDC</a>
       </div>
 
     </div>
@@ -1405,8 +1405,7 @@ def pricing_page(products: list = None) -> str:
         <div class="pr-pack-channels">
           <span class="pr-pack-channel">Email</span>
           <span class="pr-pack-channel">SMS</span>
-        </div>
-        <a href="/auth/login" class="pr-card-cta" style="font-size:9px; padding:8px 16px;">Subscribe</a>
+        </div>            <a href="/crypto/checkout/STRIKE_STANDARD" class="pr-card-cta" style="font-size:9px; padding:8px 16px;">Subscribe with USDC</a>
       </div>
 
       <!-- Combo -->
@@ -1421,8 +1420,7 @@ def pricing_page(products: list = None) -> str:
           <span class="pr-pack-channel">Email</span>
           <span class="pr-pack-channel">SMS</span>
           <span class="pr-pack-channel">Voice</span>
-        </div>
-        <a href="/auth/login" class="pr-card-cta" style="font-size:9px; padding:8px 16px;">Subscribe</a>
+        </div>            <a href="/crypto/checkout/STRIKE_COMBO" class="pr-card-cta" style="font-size:9px; padding:8px 16px;">Subscribe with USDC</a>
       </div>
 
       <!-- Whale -->
@@ -1438,8 +1436,7 @@ def pricing_page(products: list = None) -> str:
           <span class="pr-pack-channel">SMS</span>
           <span class="pr-pack-channel">Voice</span>
           <span class="pr-pack-channel">API</span>
-        </div>
-        <a href="/auth/login" class="pr-card-cta" style="font-size:9px; padding:8px 16px;">Subscribe</a>
+        </div>            <a href="/crypto/checkout/STRIKE_WHALE" class="pr-card-cta" style="font-size:9px; padding:8px 16px;">Subscribe with USDC</a>
       </div>
 
       <!-- Enterprise -->
@@ -1456,8 +1453,7 @@ def pricing_page(products: list = None) -> str:
           <span class="pr-pack-channel">Voice</span>
           <span class="pr-pack-channel">API</span>
           <span class="pr-pack-channel">Webhook</span>
-        </div>
-        <a href="/auth/login" class="pr-card-cta" style="font-size:9px; padding:8px 16px;">Subscribe</a>
+        </div>            <a href="/crypto/checkout/STRIKE_ENTERPRISE" class="pr-card-cta" style="font-size:9px; padding:8px 16px;">Subscribe with USDC</a>
       </div>
 
     </div>
