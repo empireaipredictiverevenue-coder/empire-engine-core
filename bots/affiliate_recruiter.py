@@ -53,6 +53,7 @@ SUPABASE_URL = os.environ.get("SUPABASE_URL", "")
 SUPABASE_KEY = os.environ.get("SUPABASE_SERVICE_KEY", "")
 HUB_URL = os.environ.get("PUBLIC_BASE_URL", "http://localhost:8000")
 RESEND_API_KEY = os.environ.get("RESEND_API_KEY", "")
+RESEND_AFFILIATE_KEY = os.environ.get("RESEND_AFFILIATE_KEY", "") or RESEND_API_KEY
 
 _sb = None
 
@@ -164,15 +165,16 @@ def _generate_referral_code(name: str) -> str:
 
 
 async def _send_email_direct(to: str, subject: str, html: str) -> dict:
-    """Send an email via Resend API. Returns {ok, id, error}."""
-    if not RESEND_API_KEY:
-        return {"ok": False, "error": "RESEND_API_KEY missing"}
+    """Send an email via Resend API using the affiliate-dedicated key.
+    Falls back to RESEND_API_KEY if RESEND_AFFILIATE_KEY is not set."""
+    if not RESEND_AFFILIATE_KEY:
+        return {"ok": False, "error": "RESEND_AFFILIATE_KEY (and RESEND_API_KEY fallback) missing"}
     try:
         async with httpx.AsyncClient(timeout=20.0) as client:
             r = await client.post(
                 "https://api.resend.com/emails",
                 headers={
-                    "Authorization": f"Bearer {RESEND_API_KEY}",
+                    "Authorization": f"Bearer {RESEND_AFFILIATE_KEY}",
                     "Content-Type": "application/json",
                 },
                 json={
@@ -592,6 +594,7 @@ class AffiliateRecruiter:
                         sent = await self._send_welcome(affiliate, prospect.get("offer_type", "standard"))
                         if sent:
                             results["welcomes_sent"] += 1
+                        await asyncio.sleep(0.3)  # respect Resend 5 req/s rate limit
                     else:
                         # Name-pattern generated email or unknown quality — skip email, mark for SMS
                         log.info(f"[affiliate_recruiter] {affiliate['name']} — email_quality={email_quality or 'unknown'}, skipping welcome (SMS preferred)")
@@ -607,7 +610,13 @@ class AffiliateRecruiter:
         # Skip — they're handled by nurture below
 
         # ── Phase 4: Nurture dormant affiliates (>7d, 0 clicks) ──────
+        nurture_cap = 10  # max nurtures per cycle to preserve email quota
+        nurture_sent_count = 0
         for dormant in dormant_prospects:
+            if nurture_sent_count >= nurture_cap:
+                log.info(f"[affiliate_recruiter] Nurture batch cap of {nurture_cap} reached, deferring {len(dormant_prospects) - nurture_sent_count}")
+                results["nurtures_deferred"] = len(dormant_prospects) - nurture_sent_count
+                break
             try:
                 created_raw = dormant.get("created_at", "")
                 if created_raw:
@@ -624,6 +633,8 @@ class AffiliateRecruiter:
                     sent = await self._send_nurture(dormant)
                     if sent:
                         results["nurtures_sent"] += 1
+                        nurture_sent_count += 1
+                    await asyncio.sleep(0.3)  # respect Resend 5 req/s rate limit
             except Exception as e:
                 log.warning(f"[affiliate_recruiter] Nurture error: {e}")
                 results["errors"] += 1
@@ -643,10 +654,12 @@ class AffiliateRecruiter:
     def _persist_cycle(self, results: dict):
         """Save cycle results to agent_activity table."""
         try:
+            import uuid as _uuid
             sb = _get_sb()
             sb.table("agent_activity").insert({
                 "agent_name": "affiliate_recruiter",
-                "status": "complete",
+                "run_id": str(_uuid.uuid4()),
+                "status": "ok",
                 "meta": {
                     "enrolled": results.get("enrolled", 0),
                     "results": results,
