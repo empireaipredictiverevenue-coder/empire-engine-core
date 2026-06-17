@@ -181,6 +181,80 @@ def tg_send(msg: str) -> str:
 
 # --- Webhook endpoints ---
 
+def _record_email_reply_in_outreach_log(sb, from_email: str, subject: str, body: str, intent: str) -> bool:
+    """Find the matching outbound email and propagate the reply back to
+    outreach_log.response_received_at.
+
+    Match strategy:
+      1) Find the most recent outbox_messages row where to_address == from_email
+      2) Use outbox_messages.in_reply_to (Resend message id) to look up the
+         original outreach_log row that sent the original email
+      3) Update that outreach_log row's response_received_at + response_text
+
+    Idempotent: skips rows that already have a response_received_at.
+    Returns True if a row was updated.
+    """
+    if not from_email:
+        return False
+    from_email = from_email.lower().strip()
+    now_iso = datetime.now(timezone.utc).isoformat()
+    try:
+        # 1) Find the outbox row (most recent sent email to this address)
+        ob_r = (sb.table("outbox_messages")
+                  .select("id, in_reply_to, meta, sent_at")
+                  .eq("to_address", from_email)
+                  .eq("sent_status", "sent")
+                  .order("sent_at", desc=True)
+                  .limit(1).execute())
+        if not ob_r.data:
+            return False
+        ob = ob_r.data[0]
+        # 2) Resolve to outreach_log. The original email was sent via
+        #    outbox + resend. The in_reply_to field may carry the original
+        #    outreach_log id in meta, OR we may need to search by meta.
+        outreach_id = None
+        ob_meta = ob.get("meta") or {}
+        if isinstance(ob_meta, dict):
+            outreach_id = ob_meta.get("outreach_log_id")
+        # If not in meta, search by in_reply_to
+        if not outreach_id and ob.get("in_reply_to"):
+            r2 = (sb.table("outreach_log")
+                      .select("id")
+                      .eq("meta->>resend_message_id", ob["in_reply_to"])
+                      .limit(1).execute())
+            if r2.data:
+                outreach_id = r2.data[0]["id"]
+        # Fallback: find recent outreach_log row that sent to this email
+        if not outreach_id:
+            r3 = (sb.table("outreach_log")
+                      .select("id, response_received_at, meta")
+                      .eq("meta->>to_email", from_email)
+                      .is_("response_received_at", "null")
+                      .not_.is_("sent_at", "null")
+                      .order("sent_at", desc=True)
+                      .limit(1).execute())
+            if r3.data:
+                outreach_id = r3.data[0]["id"]
+        if not outreach_id:
+            return False
+
+        # 3) Update the outreach_log row
+        sb.table("outreach_log").update({
+            "response_received_at": now_iso,
+            "response_text": (subject or "")[:200] + " | " + (body or "")[:800],
+            "meta": {
+                "reply_intent": intent,
+                "reply_recorded_at": now_iso,
+                "reply_recorded_by": "inbound_handler_email",
+                "reply_from_email": from_email,
+            },
+        }).eq("id", outreach_id).execute()
+        return True
+    except Exception as e:
+        print(f"outreach_log email reply-record failed: {e}")
+        return False
+
+
 @app.post("/api/v1/inbound/email")
 async def inbound_email(request: Request):
     """Resend inbound webhook. Resend POSTs the parsed email here when
@@ -239,6 +313,10 @@ async def inbound_email(request: Request):
         }).execute()
     except Exception as e:
         print(f"inbox_messages insert failed: {e}")
+
+    # NEW: record the reply on the matching outreach_log row so the
+    # predictive endpoint + dispatcher + downstream agents see it.
+    _record_email_reply_in_outreach_log(sb, from_email, subject, text_body, intent)
 
     # Auto-reply logic
     followup_body = draft_followup(carrier_name or "the team", intent, subject) if is_carrier else None
