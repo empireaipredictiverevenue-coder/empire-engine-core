@@ -64,7 +64,7 @@ from empire_crypto_payments import CryptoPaymentEngine, register_crypto_payment_
 from empire_fee import register_fee_routes
 from empire_fee_operator import register_operator_mark_settled
 from empire_abtest import register_ab_test_routes
-from empire_predictive import register_predictive_routes
+from empire_predictive import register_predictive_routes, register_organic_signal_routes
 from empire_carrier import register_mock_carrier_routes
 from empire_inbound_monitor import register_inbound_monitor_routes
 from empire_auth import AuthEngine, register_auth_routes, require_role
@@ -912,6 +912,7 @@ register_fee_routes(app, require_auth=require_auth, get_db=get_db)
 register_operator_mark_settled(app, require_auth=require_auth, get_db=get_db)
 register_ab_test_routes(app, require_auth=require_auth, get_db=get_db)
 register_predictive_routes(app, require_auth=require_auth, get_db=get_db)
+register_organic_signal_routes(app, require_auth=require_auth, get_db=get_db)  # /api/v1/signal/organic
 register_mock_carrier_routes(app, require_auth=require_auth, get_db=get_db)
 register_inbound_monitor_routes(app, require_auth=require_auth, get_db=get_db)
 register_profit_margin_routes(app, require_auth=require_auth, get_db=get_db)

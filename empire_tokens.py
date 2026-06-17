@@ -623,7 +623,11 @@ EMPIRE_COMPONENTS_CSS = """
 # ─────────────────────────────────────────────────────────────────────────────
 # Convenience helper: full <head> contents for any view.
 # ─────────────────────────────────────────────────────────────────────────────
-def empire_head(title: str = "Empire AI · Command Deck", extra: str = "") -> str:
+def empire_head(
+    title: str = "Empire AI · Command Deck",
+    extra: str = "",
+    meta_html: str = "",
+) -> str:
     """Returns the complete <head> block (fonts + tokens + base + components)."""
     return f"""<head>
 <meta charset="UTF-8">
@@ -637,6 +641,7 @@ def empire_head(title: str = "Empire AI · Command Deck", extra: str = "") -> st
 {EMPIRE_COMPONENTS_CSS}
 {extra}
 </style>
+{meta_html}
 </head>"""
 
 

@@ -1649,6 +1649,7 @@ const NAV_GROUPS = [
       { id: 'dispatches',    label: 'Dispatches',     sub: 'Lead matches · mark settled' },
       { id: 'fees',          label: 'Fees',           sub: 'Settled claims · 3% per claim' },
       { id: 'predicted',     label: 'Predicted',      sub: 'Forecasted fees by segment' },
+      { id: 'signal',        label: 'Signal',         sub: 'Organic replies + confidence gate' },
       { id: 'contractors',   label: 'Contractors',    sub: 'Applications & approvals' },
       { id: 'partners',      label: 'Partners',       sub: 'Buyers · pending · approvals' },
       { id: 'revenue',       label: 'Revenue',        sub: 'Predictive revenue · per-lane MRR · LLM forecast' },
@@ -3583,6 +3584,85 @@ function Predicted() {
   `;
 }
 
+
+
+function OrganicSignal() {
+  const [data, setData] = useState(null);
+  const [err, setErr] = useState(null);
+  const reload = async () => {
+    try {
+      const r = await apiFetch('/api/v1/signal/organic?windows_days=1,7,30,90');
+      setData(await r.json());
+    } catch (e) { setErr(e.message); }
+  };
+  useEffect(() => { reload(); }, []);
+
+  if (err) return html`<div class="stub"><div class="stub-body">${err}</div></div>`;
+  if (!data) return html`<div class="stub"><div class="stub-body">Loading signal…</div></div>`;
+
+  const gate = data.confidence_gate || {};
+  const gateMet = gate.gate_met === true;
+  const gatePct = gate.threshold ? Math.min(100, Math.round(100 * (gate.best_window_replies || 0) / gate.threshold)) : 0;
+
+  return html`
+    <div>
+      <div class="section-h">
+        <div>
+          <div class="section-title">Organic Signal</div>
+          <div class="section-sub">Ground-truth replies across windows · confidence gate for projections</div>
+        </div>
+        <div class="sec-actions"><button class="tbl-action go" onClick=${reload}>↻ Refresh</button></div>
+      </div>
+
+      <div class="fee-stats">
+        <div class="fee-stat"><div class="fee-stat-label">1d replies</div><div class="fee-stat-value">${(data.windows.find(w => w.days === 1) || {}).replied || 0}</div></div>
+        <div class="fee-stat"><div class="fee-stat-label">7d replies</div><div class="fee-stat-value">${(data.windows.find(w => w.days === 7) || {}).replied || 0}</div></div>
+        <div class="fee-stat"><div class="fee-stat-label">30d replies</div><div class="fee-stat-value">${(data.windows.find(w => w.days === 30) || {}).replied || 0}</div></div>
+        <div class="fee-stat"><div class="fee-stat-label">All-time</div><div class="fee-stat-value dim">${data.total_replies_all_time || 0}</div></div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head">
+          <span>Confidence gate for projection</span>
+          <span style=${{color: gateMet ? 'var(--signal-teal)' : 'rgba(255,180,0,.85)'}}>${gateMet ? '✓ MET' : gate.replies_to_gate + ' to go'}</span>
+        </div>
+        <div style=${{padding: '14px 0'}}>
+          <div style=${{height: '14px', background: 'rgba(255,255,255,.06)', borderRadius: '7px', overflow: 'hidden', position: 'relative'}}>
+            <div style=${{height: '100%', width: gatePct + '%', background: gateMet ? 'linear-gradient(90deg, var(--signal-teal), #4FB89E)' : 'linear-gradient(90deg, rgba(255,180,0,.6), rgba(255,180,0,.85))', borderRadius: '7px', transition: 'width .6s var(--ease-out-empire)'}}></div>
+          </div>
+          <div style=${{marginTop: '10px', fontFamily: 'var(--font-mono, ui-monospace)', fontSize: '11px', color: 'var(--empire-mist)'}}>${(gate.best_window_replies || 0)} / ${gate.threshold || 10} organic replies (best window)</div>
+        </div>
+        <div class="panel-body" style=${{fontSize: '12px', color: 'var(--empire-mist)', lineHeight: '1.6'}}>
+          Once ${gate.threshold || 10} organic replies accumulate, the Predicted Revenue section stops showing "Pending signal" and starts surfacing real dollar projections.
+        </div>
+      </div>
+
+      <div class="panel" style=${{marginTop: '16px'}}>
+        <div class="panel-head">By window</div>
+        <table class="tbl"><thead><tr><th>Window</th><th class="tbl-num">Sent</th><th class="tbl-num">Replied</th><th class="tbl-num">Reply rate</th></tr></thead><tbody>
+          ${(data.windows || []).map(w => html`<tr key=${w.days}><td><strong>${w.days}d</strong></td><td class="tbl-num">${w.sent}</td><td class="tbl-num">${w.replied}</td><td class="tbl-num">${w.rate_pct}%</td></tr>`)}
+        </tbody></table>
+      </div>
+
+      <div class="panel" style=${{marginTop: '16px'}}>
+        <div class="panel-head">Most recent replies</div>
+        ${(data.most_recent_replies || []).length === 0 ? html`<div class="tbl-empty">No organic replies yet.</div>` : html`
+          <table class="tbl"><thead><tr><th>When</th><th>Sequence</th><th>Reply text</th></tr></thead><tbody>
+            ${(data.most_recent_replies || []).map(r => html`<tr key=${r.at}><td class="tbl-mono">${(r.at || '').slice(0, 19)}</td><td>${r.sequence || '?'}</td><td>${(r.response_text || '').slice(0, 100)}</td></tr>`)}
+          </tbody></table>
+        `}
+      </div>
+
+      <div class="panel" style=${{marginTop: '16px'}}>
+        <div class="panel-head">How this is computed</div>
+        <div class="panel-body" style=${{fontSize: '12px', color: 'var(--empire-mist)', lineHeight: '1.6'}}>
+          <p>Reply counts come from <code style=${{fontFamily: 'var(--font-mono, ui-monospace)', fontSize: '11px', background: 'rgba(255,255,255,.04)', padding: '1px 5px', borderRadius: '2px'}}>outreach_log.response_received_at</code> — set by the inbound handler (SMS via Vonage, email via Resend) every time a contact replies.</p>
+          <p>Best window = the window with the most replies. The 10-reply threshold is a confidence gate: below 10, the Predicted Revenue projection is too noisy to be useful (low_confidence=true).</p>
+        </div>
+      </div>
+    </div>
+  `;
+}
 
 function Contractors() {
   const [apps, setApps] = useState(null);
@@ -9652,6 +9732,7 @@ function App() {
             active.id === 'dispatches'  ? html`<${Dispatches} />` :
             active.id === 'fees'        ? html`<${Fees} />` :
             active.id === 'predicted'   ? html`<${Predicted} />` :
+            active.id === 'signal'      ? html`<${OrganicSignal} />` :
             active.id === 'contractors' ? html`<${Contractors} />` :
             active.id === 'console'     ? html`<${Console} />` :
             active.id === 'audit'       ? html`<${Audit} />` :
