@@ -122,6 +122,19 @@ B2B_NICHES = {
 }
 
 # Commercial variants → commercial_roofing, commercial_solar
+
+# Legal sub-niches (5 lanes from mesh_orchestrator LANES 16-20) → legal_mass_tort.
+# Buyer names in `buyers` table are still PENDING placeholders; until Phil recruits
+# real buyers and sets is_active=True, the lead_converter routes to legal_mass_tort
+# but no real dispatch happens. Sequence was added 2026-06-17.
+LEGAL_NICHES = {
+    "pharma liability", "pharma_liability",
+    "medical device",   "medical_device",
+    "consumer product", "consumer_product",
+    "class action",     "class_action",
+    "mass tort",        "mass_tort",
+}
+
 COMMERCIAL_NICHE_MAP = {
     "commercial roofing": "commercial_roofing",
     "commercial solar": "commercial_solar",
@@ -147,6 +160,8 @@ def _pick_sequence(lead: dict) -> str:
         return "b2b_outreach"
     if niche in COMMERCIAL_NICHE_MAP:
         return COMMERCIAL_NICHE_MAP[niche]
+    if niche in LEGAL_NICHES:
+        return "legal_mass_tort"
 
     # 2. Legacy: b2b_sub_niche in meta (from matrix agents' older leads)
     meta = lead.get("meta") or {}
@@ -179,7 +194,16 @@ def _pick_sequence(lead: dict) -> str:
 
 
 def _pick_channel(lead: dict, channels: list) -> str:
-    """Pick the channel. SMS first if phone is present, voice as backup."""
+    """Pick the channel. SMS first if phone, voice as backup.
+
+    NOTE: email-only leads (no phone, has email) currently flow through
+    this function but the lead_converter doesn't have an email send
+    path. The compliance gate catches the no_phone case and blocks
+    the lead, leaving it in 'blocked' status. The proper fix is to
+    integrate agents/email_discovery_fallback's discovered emails
+    with the empire_email.py engine and a separate email channel.
+    For now, SMS is the only wired channel.
+    """
     if "sms" in channels and lead.get("phone"):
         return "sms"
     if "voice" in channels and lead.get("phone"):

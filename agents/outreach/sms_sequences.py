@@ -3,7 +3,7 @@ Empire AI · Predictive Revenue
 Outreach Agent · SMS Sequences
 ================================
 
-Seven TCPA-compliant SMS sequences, each with a fixed touch schedule
+Eight TCPA-compliant SMS sequences, each with a fixed touch schedule
 and "STOP to opt out" on every outbound message.
 
 Sequences
@@ -15,6 +15,7 @@ Sequences
 5. commercial_roofing  — commercial property roof inspection, 5 touches / 7 days
 6. commercial_solar    — commercial solar install, 5 touches / 7 days
 7. debt_relief         — debt relief prospects, 5 touches / 7 days
+8. legal_mass_tort     — legal case claimants (5 sub-niches), 4 touches / 10 days
 
 Variables (filled by personalization.py at runtime; written as {{var}} here
 so you can review the message copy in isolation):
@@ -249,6 +250,37 @@ DEBT_RELIEF = {
     ],
 }
 
+
+# ─────────────────────────────────────────────────────────────────────
+# Sequence 8: legal_mass_tort (legal claimants, 4 touches / 10 days)
+# Triggered by: radar_targets with niche in {pharma_liability, medical_device,
+#               consumer_product, class_action, mass_tort} AND phone IS NOT NULL
+# Goal: get them to reply YES for a free case review by the matching legal buyer
+# Added 2026-06-17. 5 buyers in `buyers` table are PENDING placeholders
+# (sub_niche=Pharma Liability / Medical Device / Consumer Product / Class Action /
+# Mass Tort) — Phil recruits real buyers; until is_active=True and
+# destination_phone is set, the lead_converter routes to this sequence
+# but no real dispatch happens. Conservative TCPA angle.
+# ─────────────────────────────────────────────────────────────────────
+
+LEGAL_MASS_TORT = {
+    "name": "legal_mass_tort",
+    "description": "4-touch sequence for legal case claimants across 5 sub-niches (Pharma Liability, Medical Device, Consumer Product, Class Action, Mass Tort)",
+    "triggers_on": "radar_targets with niche in {pharma_liability, medical_device, consumer_product, class_action, mass_tort} AND phone IS NOT NULL",
+    "step_count": 4,
+    "schedule": [
+        (1, 0,   "{prefix} Legal case review available for {target_short}. "
+                 "No cost unless you win. Reply YES. STOP to opt out."),
+        (2, 48,  "{prefix} {target_short}, we work with vetted law firms. "
+                 "Free case review, no obligation. Reply YES. STOP to opt out."),
+        (3, 120, "{prefix} Most claimants in {state} qualify for a free case "
+                 "review. Reply YES for a callback within 24 hours. STOP to opt out."),
+        (4, 240, "{prefix} Last note. {target_short} — if a legal case review "
+                 "could help, reply YES. Otherwise we won't message again. STOP to opt out."),
+    ],
+}
+
+
 ALL_SEQUENCES = {
     "storm_strike":       STORM_STRIKE,
     "contractor_recruit": CONTRACTOR_RECRUIT,
@@ -257,6 +289,7 @@ ALL_SEQUENCES = {
     "commercial_roofing": COMMERCIAL_ROOFING,
     "commercial_solar":   COMMERCIAL_SOLAR,
     "debt_relief":        DEBT_RELIEF,
+    "legal_mass_tort":    LEGAL_MASS_TORT,
 }
 
 

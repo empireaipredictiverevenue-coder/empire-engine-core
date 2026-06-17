@@ -329,6 +329,29 @@ TEMPLATES = {
             "Otherwise we won't reach out again. STOP to opt out."
         ),
     ],
+    "legal_mass_tort": [
+        # Touch 0 — Initial contact. Free case review angle. ≤160 chars.
+        (
+            "{prefix} Legal case review available for {target_short}. "
+            "No cost unless you win. Reply YES. STOP to opt out."
+        ),
+        # Touch 1 — Vetted law firm framing.
+        (
+            "{prefix} {target_short}, we work with vetted law firms. "
+            "Free case review, no obligation. Reply YES. STOP to opt out."
+        ),
+        # Touch 2 — State qualification + 24h callback.
+        (
+            "{prefix} Most claimants in {state} qualify for a free case "
+            "review. Reply YES for a callback within 24 hours. STOP to opt out."
+        ),
+        # Touch 3 — Last call. Soft opt-out.
+        (
+            "{prefix} Last note. {target_short} — if a legal case review "
+            "could help, reply YES. Otherwise we won't message again. STOP to opt out."
+        ),
+    ],
+
 }
 
 
