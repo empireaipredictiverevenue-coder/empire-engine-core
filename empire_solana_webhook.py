@@ -139,7 +139,7 @@ def register_solana_webhook_routes(
                 to_addr = transfer.get("toUserAccount", "")
 
                 # Filter: must be USDC mint and going to our vault wallet
-                if mint != USDC_MINT:
+                if mint != usdc_mint:
                     continue
                 if to_addr != vault_wallet:
                     continue
@@ -280,7 +280,7 @@ def register_solana_webhook_routes(
         return {
             "webhook": "/api/v1/webhooks/solana",
             "vault_wallet": vault[:8] + "..." if len(vault) > 20 else vault,
-            "usdc_mint": USDC_MINT,
+            "usdc_mint": usdc_mint,
             "helius_secret_configured": has_secret,
             "payout_engine_enabled": getattr(payout_engine, "execution_enabled", False),
             "crypto_payment_engine": crypto_enabled,
