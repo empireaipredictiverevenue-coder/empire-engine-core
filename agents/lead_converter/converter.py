@@ -63,7 +63,7 @@ def _read_config(sb):
             "enabled": True,
             "dry_run": True,
             "max_per_run": 10,
-            "channels": ["sms", "voice"],
+            "channels": ["sms", "voice", "email"],
             "default_sequence": "storm_strike",
         }
     row = r.data[0]
@@ -72,7 +72,7 @@ def _read_config(sb):
         "enabled": row.get("enabled", True),
         "dry_run": row.get("dry_run", True),
         "max_per_run": cfg.get("max_per_run", 10),
-        "channels": cfg.get("channels", ["sms", "voice"]),
+        "channels": cfg.get("channels", ["sms", "voice", "email"]),
         "default_sequence": cfg.get("default_sequence", "storm_strike"),
     }
 
@@ -135,6 +135,12 @@ LEGAL_NICHES = {
     "mass tort",        "mass_tort",
 }
 
+# Adjuster niches → insurance_adjuster_recruit
+ADJUSTER_NICHES = {
+    "public insurance adjuster", "public_adjuster", "insurance adjuster",
+}
+
+
 COMMERCIAL_NICHE_MAP = {
     "commercial roofing": "commercial_roofing",
     "commercial solar": "commercial_solar",
@@ -158,6 +164,8 @@ def _pick_sequence(lead: dict) -> str:
     niche = (lead.get("niche") or "").lower()
     if niche in B2B_NICHES:
         return "b2b_outreach"
+    if niche in ADJUSTER_NICHES:
+        return "insurance_adjuster_recruit"
     if niche in COMMERCIAL_NICHE_MAP:
         return COMMERCIAL_NICHE_MAP[niche]
     if niche in LEGAL_NICHES:
@@ -194,20 +202,15 @@ def _pick_sequence(lead: dict) -> str:
 
 
 def _pick_channel(lead: dict, channels: list) -> str:
-    """Pick the channel. SMS first if phone, voice as backup.
-
-    NOTE: email-only leads (no phone, has email) currently flow through
-    this function but the lead_converter doesn't have an email send
-    path. The compliance gate catches the no_phone case and blocks
-    the lead, leaving it in 'blocked' status. The proper fix is to
-    integrate agents/email_discovery_fallback's discovered emails
-    with the empire_email.py engine and a separate email channel.
-    For now, SMS is the only wired channel.
+    """Pick the channel. SMS first if phone, voice as backup,
+    email for leads that have email but no phone.
     """
     if "sms" in channels and lead.get("phone"):
         return "sms"
     if "voice" in channels and lead.get("phone"):
         return "voice"
+    if "email" in channels and lead.get("email"):
+        return "email"
     return "sms"  # fallback; will be caught by compliance
 
 
@@ -231,7 +234,17 @@ def _render_message(template: str, lead: dict) -> str:
 
 
 def _compliance_check(lead: dict, channel: str) -> tuple[bool, str]:
-    """Returns (passed, block_reason)."""
+    """Returns (passed, block_reason).
+
+    For SMS/voice: checks phone, opted-out, DNC, consent, quiet hours.
+    For email: checks email is present and not unsubscribed.
+    """
+    if channel == "email":
+        email = (lead.get("email") or "").strip()
+        if not email or "@" not in email:
+            return False, "no_valid_email"
+        return True, ""
+
     phone = (lead.get("phone") or "").strip()
     if not phone:
         return False, "no_phone"
@@ -265,18 +278,18 @@ def _normalize_phone(phone: str) -> str:
 
 
 def _do_live_send(channel: str, phone: str, body: str, lead: dict) -> tuple[bool, str]:
-    """Call the hub to enroll the lead in the SMS sequence. Returns (ok, sent_status_or_error)."""
+    """Call the hub to enroll the lead in the SMS or email sequence.
+    Returns (ok, sent_status_or_error)."""
     import urllib.request
     hub_url = os.getenv("HUB_URL", "http://127.0.0.1:8000")
     hub_token = os.getenv("HUB_TOKEN", "")
     if not hub_token:
         return False, "no_hub_token_in_env"
 
-    normalized = _normalize_phone(phone)
-    if not normalized:
-        return False, "phone_normalize_failed"
-
     if channel == "sms":
+        normalized = _normalize_phone(phone)
+        if not normalized:
+            return False, "phone_normalize_failed"
         url = f"{hub_url}/api/v1/sms/enroll"
         payload = json.dumps({
             "phone": normalized,
@@ -287,6 +300,24 @@ def _do_live_send(channel: str, phone: str, body: str, lead: dict) -> tuple[bool
                 "warehouse_name": lead.get("warehouse_name"),
                 "source": "lead_converter",
                 "body_preview": body[:200],
+            },
+        }).encode()
+    elif channel == "email":
+        email = (lead.get("email") or "").strip().lower()
+        if not email or "@" not in email:
+            return False, "no_valid_email"
+        url = f"{hub_url}/api/v1/email/enroll"
+        payload = json.dumps({
+            "email": email,
+            "target_addr": lead.get("address", ""),
+            "sequence_type": lead.get("_sequence", "lead_nurture"),
+            "meta": {
+                "enriched_lead_id": lead.get("id"),
+                "warehouse_name": lead.get("warehouse_name"),
+                "source": "lead_converter",
+                "email_guess": lead.get("meta", {}).get("email_guess", False),
+                "city": lead.get("city", ""),
+                "state": lead.get("state", ""),
             },
         }).encode()
     else:

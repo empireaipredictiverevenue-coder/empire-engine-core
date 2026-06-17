@@ -293,6 +293,31 @@ module.exports = {
       log_date_format: 'YYYY-MM-DD HH:mm:ss Z',
     },
 
+    // ── Email Pulse Monitor (dispatch queue + tracking observer) ────────
+    {
+      name: 'email-pulse-monitor',
+      script: '/root/empire-v49/bots/email_pulse_monitor.py',
+      cwd: '/root/empire-v49',
+      interpreter: 'python3',
+      exec_mode: 'fork',
+      instances: 1,
+      env: {
+        PYTHONUNBUFFERED: '1',
+        EMAIL_PULSE_INTERVAL_MINUTES: '15',
+      },
+      listen_timeout: 15000,
+      kill_timeout: 10000,
+      max_restarts: 5,
+      min_uptime: 10000,
+      restart_delay: 5000,
+      max_memory_restart: '200M',
+      error_file: '/root/.pm2/logs/email-pulse-monitor-error.log',
+      out_file: '/root/.pm2/logs/email-pulse-monitor-out.log',
+      pid_file: '/root/.pm2/pids/email-pulse-monitor.pid',
+      merge_logs: true,
+      log_date_format: 'YYYY-MM-DD HH:mm:ss Z',
+    },
+
     // ── Traffic Specialist (cross-channel traffic orchestration) ────────
     {
       name: 'traffic-specialist',
