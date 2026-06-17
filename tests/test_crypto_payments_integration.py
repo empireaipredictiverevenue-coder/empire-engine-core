@@ -17,7 +17,7 @@ import json
 import uuid
 import time as _time
 from datetime import datetime, timezone, timedelta
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, AsyncMock
 
 import pytest
 from fastapi import FastAPI
@@ -29,6 +29,7 @@ from empire_crypto_payments import (
     register_crypto_payment_routes,
     _RATE_LIMIT_BUCKET,
 )
+from empire_solana_webhook import register_solana_webhook_routes
 
 
 # ── HELPERS ──────────────────────────────────────────────────────────
@@ -113,8 +114,18 @@ def engine(get_db):
 
 
 @pytest.fixture
-def test_app(engine) -> FastAPI:
-    """Create a minimal FastAPI app with crypto payment routes registered."""
+def _clear_webhook_secret():
+    """Clear HELIUS_WEBHOOK_SECRET so webhook tests don't need auth."""
+    import os as _os
+    _saved = _os.environ.pop("HELIUS_WEBHOOK_SECRET", None)
+    yield
+    if _saved is not None:
+        _os.environ["HELIUS_WEBHOOK_SECRET"] = _saved
+
+
+@pytest.fixture
+def test_app(engine, mock_db, _clear_webhook_secret) -> FastAPI:
+    """Create a minimal FastAPI app with crypto payment and webhook routes registered."""
     app = FastAPI(title="Test-Crypto")
 
     # Add CORS (mirrors hub.py setup)
@@ -132,6 +143,19 @@ def test_app(engine) -> FastAPI:
         engine=engine,
         require_auth=None,
         public_base_url="http://testserver",
+    )
+
+    # Register webhook routes with a mock payout engine
+    payout_engine = MagicMock()
+    payout_engine.on_settlement_detected = AsyncMock(return_value={"ok": True})
+    payout_engine.execution_enabled = True
+
+    register_solana_webhook_routes(
+        app,
+        payout_engine=payout_engine,
+        vault_wallet=engine.vault_wallet,
+        get_db=MagicMock(return_value=mock_db),
+        crypto_payment_engine=engine,
     )
     return app
 
@@ -551,6 +575,64 @@ class TestStatsRoute:
 # ═══════════════════════════════════════════════════════════════════════
 #  Product / tier price constants
 # ═══════════════════════════════════════════════════════════════════════
+
+# ═══════════════════════════════════════════════════════════════════════
+#  Webhook endpoint
+# ═══════════════════════════════════════════════════════════════════════
+
+class TestSolanaWebhookRoute:
+    """Helius webhook endpoint processes USDC transfers."""
+
+    def test_webhook_status_endpoint(self, client):
+        """GET /api/v1/webhooks/solana/status returns config."""
+        r = client.get("/api/v1/webhooks/solana/status")
+        assert r.status_code == 200
+        data = r.json()
+        assert "webhook" in data
+        assert "vault_wallet" in data
+        assert "usdc_mint" in data
+        # Verify usdc_mint is the correct USDC mint address (not a NameError)
+        assert data["usdc_mint"] == "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
+        assert "helius_secret_configured" in data
+        assert "crypto_payment_engine" in data
+
+    def test_webhook_without_secret_accepts_payload(self, client):
+        """Without HELIUS_WEBHOOK_SECRET set, webhook accepts payload."""
+        # In the test app, no env var is set so auth is bypassed
+        payload = [{
+            "signature": "TX" + "1" * 63,
+            "tokenTransfers": [],
+        }]
+        r = client.post("/api/v1/webhooks/solana", json=payload)
+        assert r.status_code == 200
+
+    def test_webhook_invalid_json_returns_400(self, client):
+        r = client.post("/api/v1/webhooks/solana", data="not json",
+                        headers={"Content-Type": "application/json"})
+        assert r.status_code == 400
+
+    def test_webhook_not_array_returns_400(self, client):
+        r = client.post("/api/v1/webhooks/solana", json={"not": "array"})
+        assert r.status_code == 400
+        assert "array" in r.json()["detail"].lower()
+
+    def test_webhook_usdc_mint_filtering(self, client):
+        """Webhook only processes USDC mints, not other tokens."""
+        payload = [{
+            "signature": "TX" + "2" * 63,
+            "tokenTransfers": [{
+                "mint": "So11111111111111111111111111111111111111112",  # SOL, not USDC
+                "fromUserAccount": "SENDER",
+                "toUserAccount": "vAu1tWaLl3tAdDr3550000",
+                "tokenAmount": 1.0,
+            }],
+        }]
+        r = client.post("/api/v1/webhooks/solana", json=payload)
+        assert r.status_code == 200
+        data = r.json()
+        assert data["processed"] == 0  # Non-USDC token skipped
+        assert data["skipped"] == 1    # Skipped because mint didn't match
+
 
 class TestTierPricesRoute:
     """Checkout pages display correct prices for all tiers."""
