@@ -30,7 +30,6 @@ os.chdir(ROOT)
 # Patterns that should NEVER appear in marketing code. Each is a regex
 # matched against line content.
 STALE_PATTERNS = [
-    # The original "1% success fee" wording, with allowances
     (r'\b1\s*%\s*success\s+fee', '1% success fee'),
     (r"Empire's\s+1\s*%\s+fee", "Empire's 1% fee"),
     (r'\b1\s*%\s*fee\s+earned', '1% fee earned (funnel/landing labels)'),
@@ -69,8 +68,25 @@ ALLOW = [
     'memory_store.db',
 ]
 
+# Directories to skip entirely at walk level (never descend into)
+SKIP_DIRS = frozenset({
+    '.git', 'node_modules', '__pycache__', 'backups', 'data',
+    'test-ledger', '_to_delete_20260525-0808', 'scripts_archive',
+})
+
 # File extensions we scan
-SCAN_EXTS = {'.py', '.md', '.html', '.j2', '.tmpl', '.txt', '.json', '.yaml', '.yml'}
+SCAN_EXTS = frozenset({'.py', '.md', '.html', '.j2', '.tmpl', '.txt', '.json', '.yaml', '.yml'})
+
+# Max file size to scan (bytes) — skip binary blobs / large assets
+MAX_FILE_SIZE = 512 * 1024  # 512 KB
+
+# Files to skip by name (regardless of extension)
+SKIP_FILES = frozenset({
+    'kanban.db', 'state.db', 'memory_store.db',
+    'sovereign_core_knowledge_base.json',
+    'master_diagnostics_suite.py',
+})
+
 
 def is_allowed_path(rel: str) -> bool:
     """Return True if this file path is in the allow-list (skip whole file)."""
@@ -81,6 +97,7 @@ def is_allowed_path(rel: str) -> bool:
         elif ':' not in spec and spec == rel:
             return True
     return False
+
 
 def is_allowed_line(rel: str, lineno: int) -> bool:
     """Return True if this (file, line) is in the allow-list (line-specific)."""
@@ -101,36 +118,45 @@ def is_allowed_line(rel: str, lineno: int) -> bool:
                 continue
     return False
 
+
 def main():
     issues = []
     files_scanned = 0
-    for path in ROOT.rglob('*'):
-        if not path.is_file():
-            continue
-        rel = str(path.relative_to(ROOT))
-        if any(skip in rel for skip in ['.git/', 'node_modules/', '__pycache__/',
-                                        'backups/', 'data/', 'test-ledger/',
-                                        '_to_delete_']):
-            continue
-        if path.suffix not in SCAN_EXTS:
-            continue
-        if path.name in ('kanban.db', 'state.db', 'memory_store.db',
-                         'sovereign_core_knowledge_base.json',
-                         'master_diagnostics_suite.py'):
-            continue
-        try:
-            content = path.read_text(encoding='utf-8', errors='ignore')
-        except Exception:
-            continue
-        files_scanned += 1
-        for lineno, line in enumerate(content.splitlines(), 1):
-            rel = str(path.resolve().relative_to(ROOT.resolve()))
-            if is_allowed_path(rel) or is_allowed_line(rel, lineno):
+
+    for root, dirs, files in os.walk(ROOT):
+        # Prune skip directories — never descend into them
+        dirs[:] = [d for d in dirs if d not in SKIP_DIRS]
+
+        for fname in files:
+            if fname in SKIP_FILES:
                 continue
-            for pattern, label in STALE_PATTERNS:
-                if re.search(pattern, line, re.IGNORECASE):
-                    issues.append((rel, lineno, label, line.strip()[:120]))
-                    break  # one report per line is enough
+            path = Path(root) / fname
+            if path.suffix not in SCAN_EXTS:
+                continue
+            # Skip large files (binary blobs, generated assets)
+            try:
+                if path.stat().st_size > MAX_FILE_SIZE:
+                    continue
+            except OSError:
+                continue
+
+            rel = str(path.relative_to(ROOT))
+            if is_allowed_path(rel):
+                continue
+
+            try:
+                content = path.read_text(encoding='utf-8', errors='ignore')
+            except Exception:
+                continue
+            files_scanned += 1
+
+            for lineno, line in enumerate(content.splitlines(), 1):
+                if is_allowed_line(rel, lineno):
+                    continue
+                for pattern, label in STALE_PATTERNS:
+                    if re.search(pattern, line, re.IGNORECASE):
+                        issues.append((rel, lineno, label, line.strip()[:120]))
+                        break  # one report per line is enough
 
     print(f"Scanned {files_scanned} files for stale 1% fee copy.")
     if issues:
@@ -144,6 +170,7 @@ def main():
     else:
         print("Clean — no stale 1% fee copy found.")
         sys.exit(0)
+
 
 if __name__ == '__main__':
     try:

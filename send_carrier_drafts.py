@@ -12,6 +12,13 @@ load_dotenv("/root/.env", override=True)
 import httpx
 from supabase import create_client
 
+SB = None
+def _sb():
+    global SB
+    if SB is None:
+        SB = create_client(os.environ.get("SUPABASE_URL", ""), os.environ.get("SUPABASE_SERVICE_KEY", ""))
+    return SB
+
 RESEND_API_KEY = os.environ.get("RESEND_API_KEY", "")
 FROM_ADDRESS = os.environ.get("FROM_ADDRESS", "noreply@empire-ai.co.uk")
 FROM_NAME = os.environ.get("FROM_NAME", "Empire-AI Operations")
@@ -62,7 +69,29 @@ def send_email(to: str, subject: str, body: str) -> dict:
         )
         data = r.json() if r.headers.get("content-type", "").startswith("application/json") else {}
         ok = r.status_code < 300
-        return {"ok": ok, "id": data.get("id"), "status_code": r.status_code, "raw": data}
+        resend_id = data.get("id") if ok else None
+        # Write to outbox_messages so the inbound handler can propagate
+        # replies back to outreach_log (Issue: carrier replies were being
+        # logged to inbox_messages but not linked to an outbound message).
+        if ok:
+            try:
+                _sb().table("outbox_messages").insert({
+                    "channel": "email",
+                    "to_address": to,
+                    "subject": subject,
+                    "body": body[:4000],
+                    "sent_at": datetime.now(timezone.utc).isoformat(),
+                    "sent_status": "sent",
+                    "in_reply_to": None,
+                    "meta": {
+                        "trigger": "carrier_outreach_draft",
+                        "resend_message_id": resend_id,
+                        "carrier_draft": True,
+                    },
+                }).execute()
+            except Exception as e:
+                print(f"[WARN] outbox_messages write failed: {e}")
+        return {"ok": ok, "id": resend_id, "status_code": r.status_code, "raw": data}
     except Exception as e:
         return {"ok": False, "error": str(e)}
 

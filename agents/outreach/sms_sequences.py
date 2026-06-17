@@ -263,6 +263,37 @@ DEBT_RELIEF = {
 # but no real dispatch happens. Conservative TCPA angle.
 # ─────────────────────────────────────────────────────────────────────
 
+# ─────────────────────────────────────────────────────────────────────
+# Sequence 9: insurance_adjuster_recruit (public adjusters, 4 touches / 10 days)
+# Triggered by: enriched_leads with niche=public insurance adjuster AND phone IS NOT NULL
+# Goal: recruit public adjusters as referral partners — they bring claims,
+# we connect them to contractors, we earn 3% on settled claims together.
+# First 2 deals fee-free. No exclusivity, no up-front cost.
+# Added 2026-06-17.
+# ─────────────────────────────────────────────────────────────────────
+
+INSURANCE_ADJUSTER_RECRUIT = {
+    "name": "insurance_adjuster_recruit",
+    "description": "4-touch sequence to recruit public insurance adjusters as referral partners — no cost to join, 3% fee on settled claims, first 2 deals fee-free",
+    "triggers_on": "enriched_leads with niche='public insurance adjuster' AND phone IS NOT NULL",
+    "step_count": 4,
+    "schedule": [
+        (1, 0,   "{prefix} We refer storm-damage claims to licensed public adjusters. "
+                 "First 2 deals are 100%% complimentary — no fee, no contract. "
+                 "Reply YES for details. STOP to opt out."),
+        (2, 48,  "{prefix} Most adjusters in {state} carry 5-20 storm claims "
+                 "per season. We can add 10-15 pre-qualified leads on top. "
+                 "We earn our 3%% only on what settles. Reply YES. STOP to opt out."),
+        (3, 120, "{prefix} {target_short}, you set your fee with the client. "
+                 "We collect 3%% of the settled claim when a referral converts. "
+                 "No exclusivity, no minimums. Reply YES. STOP to opt out."),
+        (4, 240, "{prefix} Last note — if recruiting adjuster partners "
+                 "interests you, reply YES and we'll send the onboarding link. "
+                 "Otherwise we won't message again. STOP to opt out."),
+    ],
+}
+
+
 LEGAL_MASS_TORT = {
     "name": "legal_mass_tort",
     "description": "4-touch sequence for legal case claimants across 5 sub-niches (Pharma Liability, Medical Device, Consumer Product, Class Action, Mass Tort)",
@@ -282,6 +313,8 @@ LEGAL_MASS_TORT = {
 
 
 ALL_SEQUENCES = {
+    "insurance_adjuster_recruit": INSURANCE_ADJUSTER_RECRUIT,
+    
     "storm_strike":       STORM_STRIKE,
     "contractor_recruit": CONTRACTOR_RECRUIT,
     "lead_nurture":       LEAD_NURTURE,

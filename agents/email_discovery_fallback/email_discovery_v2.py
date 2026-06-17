@@ -40,6 +40,7 @@ KNOWN_DOMAINS = {
     "tyson": "tyson.com",
     "smithfield": "smithfieldfoods.com",
     "carter": "carter-inc.com",  # guess
+    "ash grove": "ashgrove.com",  # MX verified 2026-06-17
     "abf": "abf.com",
     "estes": "estes-express.com",
     "yrc": "yrc.com",
@@ -88,6 +89,10 @@ KNOWN_DOMAINS = {
     "under armour": "underarmour.com",
     "keurig dr": "keurig.com",
     "keurig": "keurig.com",
+    "utility": "utility.com",
+    "vopak": "vopak.com",
+    "vopak terminal": "vopak.com",
+    "vopak deer": "vopak.com",
     "del monte": "delmonte.com",
     "birdville isd": "birdvilleschools.net",
     "birdville": "birdvilleschools.net",
@@ -101,11 +106,22 @@ KNOWN_DOMAINS = {
     "redbudd": "redbuddcompanies.com",  # guess
     "matt brower": "mclaneco.com",
     "cart.com": "cart.com",
+    "computersupport": "computersupport.com",  # MX verified 2026-06-17
+    "execsearches": "execsearches.com",  # MX verified 2026-06-17
+    "physicaladdress": "physicaladdress.com",  # MX verified 2026-06-17
+    "ssls.com": "ssls.com",  # MX verified 2026-06-17 (full name-key to avoid false positives on 'ssl' substring)
+    "workforce": "workforce.com",  # MX verified 2026-06-17
     "kroger fulfillment": "kroger.com",
     "tcc": "tccmaterials.com",  # guess
     "interpark": "interpark.com",  # guess
     "spr distribution": "sprdist.com",  # guess
     "at home distribution": "athome.com",
+    "cj warehouse": "cj.com",  # MX verified 2026-06-17
+    "cj logistics": "cjlogistics.com",  # MX verified 2026-06-17
+    "stallion": "stallion.com",  # MX verified 2026-06-17
+    "long ma": "long.com",  # MX verified 2026-06-17
+    "mrs bairds": "mrsbairds.com",  # MX verified 2026-06-17
+    "bairds": "mrsbairds.com",  # MX verified 2026-06-17
     "goodyear": "goodyear.com",
     "axogen": "axogeninc.com",
     "intermodal": "intermodalinc.com",  # guess
@@ -133,6 +149,7 @@ KNOWN_DOMAINS = {
     "specsavers": "specsavers.com",
     "united christian": "ucchurch.org",  # guess
     "serco": "serco.com",
+    "pdc": "pdc.com",  # MX verified 2026-06-17
     "office depot": "officedepot.com",
     "office max": "officedepot.com",
     "williamson-dickie": "williamson-dickie.com",
@@ -157,6 +174,72 @@ KNOWN_DOMAINS = {
     "royse city isd": "roysecityisd.net",
     "matt brower": "mclaneco.com",
     "martin brower": "mclaneco.com",
+    # MX verified 2026-06-17 batch (blocked leads audit)
+    "textron": "textron.com",
+    "bell helicopter": "bell.com",
+    "bell textron": "textron.com",
+    "land o'lakes": "landolakes.com",
+    "landolakes": "landolakes.com",
+    "molson": "molsoncoors.com",
+    "molson coors": "molsoncoors.com",
+    "coors": "molsoncoors.com",
+    "dr pepper": "drpepper.com",
+    "drpepper": "drpepper.com",
+    "motts": "motts.com",
+    "tenaris": "tenaris.com",
+    "vistra": "vistra.com",
+    "vistracorp": "vistracorp.com",
+    "freeport lng": "freeportlng.com",
+    "turner industries": "turnerindustries.com",
+    "turnerindustries": "turnerindustries.com",
+    "tiff's treats": "tiffstreats.com",
+    "tiffstreats": "tiffstreats.com",
+    "intsel": "intsel.com",
+    "idealease": "idealease.com",
+    "cardone": "cardone.com",
+    "kenco": "kenco.com",
+    "andrews distributing": "andrews.com",
+    "atmos energy": "atmosenergy.com",
+    "atmosenergy": "atmosenergy.com",
+    "boyd": "boyd.com",
+    "argos": "argos.com",
+    "karat": "karat.com",
+    "eanes": "eanes.com",
+    "hockley": "hockley.com",
+    "amco": "amco.com",
+    "accent warehouse": "accentservices.com",
+    "accent services": "accentservices.com",
+    # MX verified 2026-06-17 batch 2 (blocked leads audit)
+    "ritchie": "rbauction.com",
+    "rbauction": "rbauction.com",
+    "safran": "safran.com",
+    "shiner": "shiner.com",
+    "spoetzl": "spoetzl.com",
+    "wild acre": "wildacrebrewing.com",
+    "wildacrebrewing": "wildacrebrewing.com",
+    "texaloy": "texaloy.com",
+    "romeo engineering": "romeoeng.com",
+    "tejas research": "tejasre.com",
+    "vandergriff": "vandergriff.com",
+    "vending nut": "vendingnut.com",
+    "wagner logistics": "wagnerlogistics.com",
+    "national trench": "nta.org",
+    "north texas tollway": "ntta.org",
+    "love's truck": "loves.com",
+    "loves truck": "loves.com",
+    "spartan printing": "spartanprinting.com",
+    "delta rigging": "deltarigging.com",
+    "falcon steel": "falconsteel.com",
+    "humble isd": "humbleisd.net",
+    "spec's": "specs.com",
+    "specs distribution": "specs.com",
+    "spr packaging": "sprpackaging.com",
+    "roly's": "rolys.com",
+    "rolys trucking": "rolystrucking.com",
+    "pca packaging": "packagingcorp.com",
+    "bana box": "banabox.com",
+    "nalco": "nalco.com",
+    "ppg": "ppg.com",
 }
 
 

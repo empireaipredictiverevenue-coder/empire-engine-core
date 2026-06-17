@@ -77,6 +77,7 @@ from bots.seo_agent import run_loop as seo_run_loop
 from bots.backlinks_agent import run_loop as backlinks_run_loop
 from bots.traffic_specialist import run_loop as traffic_specialist_run_loop, register_traffic_specialist_routes
 from bots.affiliate_recruiter import run_loop as affiliate_recruiter_run_loop, register_affiliate_recruiter_routes
+from bots.email_pulse_monitor import run_loop as email_pulse_run_loop
 from empire_console import SovereignConsole, register_console_routes
 from empire_orchestrator import StormOrchestrator, register_storm_routes
 from empire_ai_router import AIRouter

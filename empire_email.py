@@ -149,6 +149,39 @@ def _email_shell(
 </body></html>"""
 
 
+def _build_lead_nurture_shell(
+    body_html:          str,
+    unsubscribe_link:   str,
+    postal_address:     str,
+    sender_name:        str,
+    tracking_pixel_url: str = "",
+) -> str:
+    """CAN-SPAM compliant email shell for lead nurture (warehouse/industrial prospects)."""
+    pixel = f'<img src="{tracking_pixel_url}" width="1" height="1" alt="" style="display:none;" />' if tracking_pixel_url else ""
+    return f"""<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"></head>
+<body style="margin:0;padding:0;background:#0a0a0a;font-family:-apple-system,system-ui,'Helvetica Neue',sans-serif;">
+{pixel}
+<table cellpadding="0" cellspacing="0" border="0" width="100%" style="background:#0a0a0a;">
+<tr><td align="center" style="padding:32px 16px;">
+  <table cellpadding="0" cellspacing="0" border="0" width="600" style="max-width:600px;background:#0a0a0a;color:#e4e4e7;">
+    <tr><td style="padding-bottom:18px;border-bottom:1px solid #27272a;">
+      <div style="font-size:11px;color:#71717a;letter-spacing:.18em;text-transform:uppercase;">Empire AI · Predictive Revenue</div>
+      <div style="font-size:9px;color:#52525b;letter-spacing:.14em;text-transform:uppercase;margin-top:4px;">Paid commercial notice · {sender_name}</div>
+    </td></tr>
+    <tr><td style="padding:24px 0;">{body_html}</td></tr>
+    <tr><td style="padding-top:24px;border-top:1px solid #27272a;font-size:11px;color:#71717a;line-height:1.7;">
+      You are receiving this because Empire AI identified your facility as part of our predictive lead generation network for industrial and logistics operators.
+      We are not affiliated with any government agency, your current service providers, or any insurance carrier.
+      <strong style="color:#a1a1aa;">{postal_address}</strong>.<br><br>
+      <a href="{unsubscribe_link}" style="color:#10b981;text-decoration:underline;">Unsubscribe</a> · One click · Effective immediately
+    </td></tr>
+  </table>
+</td></tr>
+</table>
+</body></html>"""
+
+
 def _build_b2b_shell(
     body_html:          str,
     unsubscribe_link:   str,
@@ -292,6 +325,120 @@ def _build_b2b_email(
     return subject, html_body
 
 
+def _build_lead_nurture_email(
+    step: int,
+    facility: str,
+    city: str,
+    state: str,
+    unsubscribe_link: str,
+    postal_address: str,
+    sender_name: str,
+    tracking_pixel_url: str = "",
+    click_tracking_url: str = "",
+) -> tuple[str, str]:
+    """Returns (subject, html_body) for lead nurture sequence (warehouse/industrial).
+    Step 0-3. Focuses on B2B lead generation partnership for facility operators."""
+    location = f"{city}, {state}" if city and state else (city or state or facility)
+    cta_btn = (
+        f'<table cellpadding="0" cellspacing="0" border="0" style="margin:22px 0;">'
+        f'<tr><td align="center" style="background:#44E5B8;border-radius:6px;padding:14px 32px;">'
+        f'<a href="{click_tracking_url}" style="color:#0A1A2F;font-size:14px;font-weight:700;text-decoration:none;font-family:-apple-system,system-ui,sans-serif;letter-spacing:-0.01em;">Learn More →</a>'
+        f'</td></tr></table>'
+    ) if click_tracking_url else ""
+
+    if step == 0:
+        subject = f"Qualified leads for {facility}"
+        body = f"""
+          <div style="font-size:22px;font-weight:600;color:#f8fafd;letter-spacing:-0.02em;line-height:1.3;margin-bottom:16px;">
+            B2B lead program for <span style="color:#44E5B8;">{facility}</span>
+          </div>
+          <p style="font-size:14px;line-height:1.7;color:#a1a1aa;margin:0 0 14px;">
+            Hello, we identified {facility} in {location} as an established logistics
+            and distribution operator. Empire AI operates a predictive lead generation
+            network that sources qualified, verified prospects for industrial service providers.
+          </p>
+          <p style="font-size:14px;line-height:1.7;color:#a1a1aa;margin:0 0 14px;">
+            We deliver pre-qualified leads that match your operational profile — no upfront
+            cost. Our model is simple: we only earn a success fee (3%) when a lead converts
+            into a closed deal. No retainer, no monthly minimum.
+          </p>
+          <div style="margin:24px 0;padding:18px 20px;background:#15263F;border-left:3px solid #44E5B8;font-size:13px;color:#c8d4e4;line-height:1.7;">
+            <strong style="color:#f8fafd;">How it works:</strong> We find businesses actively
+            seeking logistics and distribution services in your area → verify their contact
+            information → deliver the lead to you. You only pay when you close.
+            <strong style="color:#f8fafd;">3% success fee on closed deals.</strong>
+          </div>
+          {cta_btn}
+          <p style="font-size:14px;line-height:1.7;color:#a1a1aa;margin:14px 0 0;">
+            Interested in seeing a sample lead for {location}?
+            Reply to this email and we'll send one over within 24 hours.
+          </p>
+        """
+    elif step == 1:
+        subject = f"Following up · {facility} lead generation"
+        body = f"""
+          <div style="font-size:22px;font-weight:600;color:#f8fafd;letter-spacing:-0.02em;line-height:1.3;margin-bottom:16px;">
+            How we source leads for <span style="color:#5AC8FA;">{location}</span>
+          </div>
+          <p style="font-size:14px;line-height:1.7;color:#a1a1aa;margin:0 0 14px;">
+            We wanted to share more detail on our lead generation process for industrial
+            and logistics operators in your area.
+          </p>
+          <ul style="font-size:14px;line-height:1.8;color:#a1a1aa;margin:0 0 14px;padding-left:20px;">
+            <li>Active prospect discovery via business listings and supply-chain data</li>
+            <li>Contact verification (phone + email) for every lead delivered</li>
+            <li>Buy-intent scoring to prioritize high-potential prospects</li>
+            <li>3% success fee paid only on closed deals — no upfront cost</li>
+          </ul>
+          {cta_btn}
+          <p style="font-size:14px;line-height:1.7;color:#a1a1aa;margin:14px 0 0;">
+            If lead volume is a constraint for your sales team, we can help.
+            Reply to this email to discuss.
+          </p>
+        """
+    elif step == 2:
+        subject = f"{facility} · what operators are saying"
+        body = f"""
+          <div style="font-size:22px;font-weight:600;color:#f8fafd;letter-spacing:-0.02em;line-height:1.3;margin-bottom:16px;">
+            Results from our network
+          </div>
+          <p style="font-size:14px;line-height:1.7;color:#a1a1aa;margin:0 0 14px;">
+            Operators in our network report that the leads we deliver convert at a higher
+            rate than cold outreach because every prospect has been pre-scored for buy
+            intent and contact information is verified before delivery.
+          </p>
+          <p style="font-size:14px;line-height:1.7;color:#a1a1aa;margin:0 0 14px;">
+            Our model aligns incentives: we only get paid when you close a deal.
+            This means we are motivated to send you high-quality, actionable leads.
+          </p>
+          {cta_btn}
+          <p style="font-size:14px;line-height:1.7;color:#a1a1aa;margin:14px 0 0;">
+            We can start sending leads tailored to {facility} within 48 hours of confirming
+            interest. Reply to this email to set up a test.
+          </p>
+        """
+    else:  # step 3 — last touch
+        subject = f"Last note from us · {facility}"
+        body = f"""
+          <div style="font-size:22px;font-weight:600;color:#f8fafd;letter-spacing:-0.02em;line-height:1.3;margin-bottom:16px;">
+            Stepping back
+          </div>
+          <p style="font-size:14px;line-height:1.7;color:#a1a1aa;margin:0 0 14px;">
+            This is our last note about our lead generation program for logistics and
+            distribution operators. We don't believe in being persistent past what is useful.
+          </p>
+          <p style="font-size:14px;line-height:1.7;color:#a1a1aa;margin:0 0 14px;">
+            If you would like to explore receiving qualified leads for {facility} in
+            {location}, simply reply to this email. Otherwise, no further messages on
+            this topic. You remain on our list only for future relevant opportunities,
+            unless you unsubscribe below.
+          </p>
+          {cta_btn}
+        """
+    html_body = _build_lead_nurture_shell(body, unsubscribe_link=unsubscribe_link, postal_address=postal_address, sender_name=sender_name, tracking_pixel_url=tracking_pixel_url)
+    return subject, html_body
+
+
 def _build_email(
     step: int,
     target_short: str,
@@ -312,6 +459,22 @@ def _build_email(
             step=step,
             company=company,
             sub_niche=sub_niche,
+            unsubscribe_link=unsubscribe_link,
+            postal_address=postal_address,
+            sender_name=sender_name,
+            tracking_pixel_url=tracking_pixel_url,
+            click_tracking_url=click_tracking_url,
+        )
+
+    if sequence_type == "lead_nurture":
+        facility = meta.get("warehouse_name", target_short) if meta else target_short
+        city = meta.get("city", "") if meta else ""
+        state = meta.get("state", "") if meta else ""
+        return _build_lead_nurture_email(
+            step=step,
+            facility=facility,
+            city=city,
+            state=state,
             unsubscribe_link=unsubscribe_link,
             postal_address=postal_address,
             sender_name=sender_name,
@@ -526,6 +689,7 @@ class EmailSequenceEngine:
             res = db.table("email_sequences").select("*") \
                 .eq("status", "active") \
                 .lte("next_send_at", now_iso) \
+                .order("next_send_at") \
                 .limit(self.max_per_minute).execute()
             rows = res.data or []
         except Exception as e:
@@ -551,7 +715,7 @@ class EmailSequenceEngine:
             tracking_pixel = self._build_tracking_pixel_url(
                 email=email, step=step, sequence_id=seq_id, sequence_type=seq_type,
             )
-            ref_label = "b2b" if seq_type == "b2b_outreach" else "storm"
+            ref_label = "b2b" if seq_type == "b2b_outreach" else ("nurture" if seq_type == "lead_nurture" else "storm")
             landing = "/demo" if ref_label == "storm" else "/pricing"
             click_tracking = self._build_click_tracking_url(
                 email=email, step=step, sequence_id=seq_id, sequence_type=seq_type,
@@ -897,7 +1061,12 @@ def register_email_routes(
             if recipient:
                 reason = event_type.split(".", 1)[-1]
                 await engine.mark_bounce(recipient, reason=f"{reason} · {data.get('bounce_type','')}")
+        elif event_type == "email.suppressed":
+            # Resend suppresses emails due to unsubscribe, hard bounce, or spam complaint
+            if recipient:
+                await engine.unsubscribe(recipient, reason=f"suppressed · {data.get('suppression_reason','')}")
         elif event_type == "email.unsubscribed":
+            # Legacy — Resend doesn't send this, but keep for forward-compat
             if recipient:
                 await engine.unsubscribe(recipient, reason="provider unsubscribe")
 
@@ -1017,7 +1186,14 @@ def register_email_routes(
                     skipped += 1
             return {"ok": True, "enrolled": enrolled, "skipped": skipped, "total_seen": len(rows)}
 
-    log.info("[email] Routes registered · /email/{unsubscribe,track/open,track/click} · /api/v1/email/{enroll,bulk-enroll,bulk-enroll-b2b,stats,tracking,webhook}")
+    # ── Startup: dispatch loop ────────────────────────────────────
+    # This runs the background dispatcher loop that checks for due emails
+    # and sends them. Started as a FastAPI startup event.
+    @app.on_event("startup")
+    async def _start_email_dispatcher():
+        asyncio.create_task(engine.dispatcher_loop())
+
+    log.info("[email] Routes registered · /email/{unsubscribe,track/open,track/click} · /api/v1/email/{enroll,bulk-enroll,bulk-enroll-b2b,stats,tracking,webhook} · dispatcher_loop wired to startup")
 
 
 def _unsub_page(message: str, *, error: bool = False) -> str:
