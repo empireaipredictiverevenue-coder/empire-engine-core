@@ -44,6 +44,10 @@ from supabase import create_client
 
 # In-memory store. Persisted to the carrier_claims table on every write.
 _CLAIMS: dict = {}
+# Lazy-load flag — _load_from_db queries Supabase synchronously, so we
+# defer it to first request rather than blocking the event loop at import
+# time (which prevents uvicorn from binding).
+_CLAIMS_LOADED: bool = False
 
 
 def _db():
@@ -70,9 +74,17 @@ def _load_from_db():
         pass
 
 
-def register_mock_carrier_routes(app, *, require_auth, get_db=None):
-    # load on startup
+def _ensure_claims_loaded():
+    """Lazy-load claims from DB on first request."""
+    global _CLAIMS_LOADED
+    if _CLAIMS_LOADED:
+        return
+    _CLAIMS_LOADED = True
     _load_from_db()
+
+
+def register_mock_carrier_routes(app, *, require_auth, get_db=None):
+    # Claims loaded lazily on first request — not at import time.
 
     @app.get("/api/v1/carrier/claims")
     async def carrier_list_claims(
@@ -80,6 +92,7 @@ def register_mock_carrier_routes(app, *, require_auth, get_db=None):
         limit: int = 100,
         auth: bool = Depends(require_auth),
     ):
+        _ensure_claims_loaded()
         rows = list(_CLAIMS.values())
         if status and status != "all":
             rows = [r for r in rows if r.get("status") == status]
@@ -88,6 +101,7 @@ def register_mock_carrier_routes(app, *, require_auth, get_db=None):
 
     @app.get("/api/v1/carrier/claims/{claim_id}")
     async def carrier_get_claim(claim_id: str, auth: bool = Depends(require_auth)):
+        _ensure_claims_loaded()
         c = _CLAIMS.get(claim_id)
         if not c:
             raise HTTPException(404, "claim not found")
@@ -99,6 +113,7 @@ def register_mock_carrier_routes(app, *, require_auth, get_db=None):
         auth: bool = Depends(require_auth),
     ):
         """Submit a new claim for a dispatch. Body: {dispatch_id, loss_description, asset_value}"""
+        _ensure_claims_loaded()
         try:
             body = await request.json()
         except Exception:
@@ -129,6 +144,7 @@ def register_mock_carrier_routes(app, *, require_auth, get_db=None):
     ):
         """Mark a claim as settled. Triggers the fee_events chain.
         Body: {settled_amount} (defaults to the asset_value)."""
+        _ensure_claims_loaded()
         c = _CLAIMS.get(claim_id)
         if not c:
             raise HTTPException(404, "claim not found")
@@ -143,28 +159,18 @@ def register_mock_carrier_routes(app, *, require_auth, get_db=None):
         c["settled_amount"] = settled_amount
         c["settled_at"] = datetime.now(timezone.utc).isoformat()
         _persist(c)
-        # Now write the fee_events row via the hub's existing
-        # claim-settled path. We POST to ourselves.
+        # Write fee_events row directly (not a self-POST) for throughput.
         try:
-            import httpx
+            from datetime import datetime as _dt, timezone as _tz
             db = _db()
-            # Resolve contractor + lead from the dispatch
             dispatch = db.table("dispatches").select("contractor_id,lead_id").eq("id", c["dispatch_id"]).limit(1).execute()
             contractor_id = None
             lead_id = None
             if dispatch.data:
                 contractor_id = dispatch.data[0].get("contractor_id")
                 lead_id = dispatch.data[0].get("lead_id")
-            hub_token = os.environ.get("HUB_TOKEN", "Jaykub20*")
-            hub_url = os.environ.get("HUB_URL", "http://127.0.0.1:8000")
-            # Direct DB insert instead of POSTing back to the hub — same
-            # outcome (fee_events row written), but no second HTTP round-trip
-            # that can time out under load. The /api/v1/fee/claim-settled
-            # endpoint is still the right path for a real carrier webhook;
-            # the mock carrier bypasses it for throughput.
-            from datetime import datetime as _dt, timezone as _tz
             fee_event = {
-                "id": str(__import__("uuid").uuid4()),
+                "id": str(uuid.uuid4()),
                 "claim_id": f"carrier-{c['id']}",
                 "claim_amount": settled_amount,
                 "fee_amount": round(settled_amount * 0.03, 2),
@@ -181,12 +187,12 @@ def register_mock_carrier_routes(app, *, require_auth, get_db=None):
                 fee_event["dispatch_id"] = c["dispatch_id"]
             try:
                 db2 = create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_SERVICE_KEY"])
+                # fee_events table has no dispatch_id column — remove it if present
+                fee_event.pop("dispatch_id", None)
                 db2.table("fee_events").insert(fee_event).execute()
                 return {"claim": c, "fee_event": fee_event, "fee_path_status": 200}
             except Exception as e:
                 return {"claim": c, "fee_event": fee_event, "error": str(e)}
-            fee_event = r.json() if r.status_code == 200 else None
-            return {"claim": c, "fee_event": fee_event, "fee_path_status": r.status_code}
         except Exception as e:
             return {"claim": c, "fee_event": None, "error": str(e)}
 
@@ -195,9 +201,8 @@ def register_mock_carrier_routes(app, *, require_auth, get_db=None):
         n: int = 10,
         auth: bool = Depends(require_auth),
     ):
-        """Seed N random open claims for real dispatches. Useful for
-        exercising the chain. Each claim gets a random asset_value
-        in the $50K-$500K range."""
+        """Seed N random open claims for real dispatches."""
+        _ensure_claims_loaded()
         db = _db()
         dispatches = db.table("dispatches").select("id").limit(50).execute()
         if not dispatches.data:
@@ -231,6 +236,7 @@ def register_mock_carrier_routes(app, *, require_auth, get_db=None):
 
     @app.get("/api/v1/carrier/stats")
     async def carrier_stats(auth: bool = Depends(require_auth)):
+        _ensure_claims_loaded()
         rows = list(_CLAIMS.values())
         from collections import Counter
         c = Counter(r.get("status") for r in rows)

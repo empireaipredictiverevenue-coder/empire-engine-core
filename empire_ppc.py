@@ -523,35 +523,55 @@ def ppc_page() -> str:
     }
     .ppc-faq-item:first-child { padding-top: 0; }
     .ppc-faq-q {
-      font-weight: 500;
-      font-size: 14px;
-      color: var(--empire-white);
-      margin-bottom: 8px;
-      cursor: pointer;
       display: flex;
       justify-content: space-between;
       align-items: center;
+      width: 100%;
+      padding: 0;
+      cursor: pointer;
+      border: none;
+      background: none;
+      font: inherit;
+      text-align: left;
+      color: var(--empire-white);
+      font-weight: 500;
+      font-size: 14px;
+      margin-bottom: 8px;
       user-select: none;
+      -webkit-appearance: none;
+      appearance: none;
     }
-    .ppc-faq-q::after {
-      content: '+';
-      font-family: var(--font-mono);
-      font-size: 16px;
+    .ppc-faq-q:hover { color: var(--signal-teal); }
+    .ppc-faq-q[aria-expanded="true"] { color: var(--signal-teal); }
+    .ppc-faq-chevron {
+      flex-shrink: 0;
+      margin-left: 12px;
+      width: 18px;
+      height: 18px;
+      transition: transform 0.25s ease;
+      color: var(--empire-fog);
+      pointer-events: none;
+    }
+    .ppc-faq-q[aria-expanded="true"] .ppc-faq-chevron {
+      transform: rotate(180deg);
       color: var(--signal-teal);
-      transition: transform 0.2s;
-    }
-    .ppc-faq-q.open::after {
-      content: '−';
     }
     .ppc-faq-a {
       font-size: 13px;
       color: var(--empire-mist);
       line-height: 1.7;
-      display: none;
+      overflow: hidden;
+      max-height: 0;
+      opacity: 0;
+      transition: max-height 0.3s ease, opacity 0.25s ease, padding 0.15s ease;
+    }
+    .ppc-faq-a[aria-hidden="false"] {
+      max-height: 300px;
+      opacity: 1;
     }
     .ppc-faq-a.open {
-      display: block;
-      animation: empire-fade-up 0.3s var(--ease-out-empire) both;
+      max-height: 300px;
+      opacity: 1;
     }
 
     /* ── CTA BAR ────────────────────────────────────────────────────── */
@@ -655,8 +675,13 @@ def ppc_page() -> str:
     faq_rows = ""
     for i, faq in enumerate(_FAQ):
         faq_rows += f"""<div class="ppc-faq-item">
-          <div class="ppc-faq-q" onclick="this.classList.toggle('open');this.nextElementSibling.classList.toggle('open')">{faq["q"]}</div>
-          <div class="ppc-faq-a">{faq["a"]}</div>
+          <button class="ppc-faq-q" onclick="togglePpcFaq(this)" type="button" id="ppc-faq-trigger-{i}" aria-controls="ppc-faq-answer-{i}" aria-expanded="false">
+            <span>{faq["q"]}</span>
+            <svg class="ppc-faq-chevron" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7l5 5 5-5"/></svg>
+          </button>
+          <div class="ppc-faq-a" id="ppc-faq-answer-{i}" role="region" aria-labelledby="ppc-faq-trigger-{i}" aria-hidden="true">
+            {faq["a"]}
+          </div>
         </div>"""
 
     # ── Niche options for the form select ────────────────────────────
@@ -879,14 +904,20 @@ def ppc_page() -> str:
 
 <script>
 (function() {{
-  // ── FAQ toggle (delegated) ──
-  document.querySelectorAll('.ppc-faq-q').forEach(function(el) {{
-    el.addEventListener('click', function() {{
-      this.classList.toggle('open');
-      var answer = this.nextElementSibling;
-      if (answer) answer.classList.toggle('open');
-    }});
-  }});
+  // ── FAQ toggle with ARIA support ──
+  window.togglePpcFaq = function(btn) {{
+    var isExpanded = btn.getAttribute('aria-expanded') === 'true';
+    var answer = document.getElementById(btn.getAttribute('aria-controls'));
+    if (!answer) return;
+    
+    btn.setAttribute('aria-expanded', !isExpanded);
+    answer.setAttribute('aria-hidden', isExpanded);
+    if (!isExpanded) {{
+      answer.classList.add('open');
+    }} else {{
+      answer.classList.remove('open');
+    }}
+  }};
 }})();
 
 // ── Form submission handler ──

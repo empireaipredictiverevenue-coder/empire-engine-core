@@ -1,0 +1,157 @@
+# ═══════════════════════════════════════════════════════════════════════════
+# EMPIRE AI V49 · WHITE-LABEL SUITE ORCHESTRATION
+# ═══════════════════════════════════════════════════════════════════════════
+# Full-service orchestration: hub, suite gateway, synthetic brain, and
+# per-partner branded containers.
+#
+# Usage:
+#   docker compose up -d                     # start all core services
+#   docker compose up -d partner_acme        # start a specific partner
+#   docker compose run --rm cli provision --name "Acme" --tier enterprise
+#   docker compose logs -f hub
+#
+# Partner containers inherit the hub image with per-partner env vars for
+# branding, tier limits, and revenue splits.
+# ═══════════════════════════════════════════════════════════════════════════
+
+services:
+  # ── Core Hub (internal) ───────────────────────────────────────────────
+  hub:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: empire-hub
+    ports:
+      - "8000:8000"
+    env_file:
+      - /root/.env
+    environment:
+      - CONTAINER_MODE=hub
+      - HUB_PORT=8000
+      - PARTNER_ID=empire_official
+      - PARTNER_NAME=Empire AI
+    volumes:
+      - /root/.env:/root/.env:ro
+      - empire_data:/app/data
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:8000/api/hub/diagnostics"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    restart: unless-stopped
+    networks:
+      - empire-net
+
+  # ── Suite Gateway (port 8040) ─────────────────────────────────────────
+  suite-gateway:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: empire-suite-gateway
+    ports:
+      - "8040:8040"
+    env_file:
+      - /root/.env
+    environment:
+      - CONTAINER_MODE=suite
+      - SUITE_PORT=8040
+    command: ["python3", "-m", "uvicorn", "suite_core:standalone_app", "--host", "0.0.0.0", "--port", "8040"]
+    volumes:
+      - empire_data:/app/data
+    restart: unless-stopped
+    networks:
+      - empire-net
+
+  # ── Synthetic Brain (port 8005) ───────────────────────────────────────
+  synthetic-brain:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: empire-synthetic-brain
+    ports:
+      - "8005:8005"
+    env_file:
+      - /root/.env
+    environment:
+      - CONTAINER_MODE=brain
+      - SYNTHETIC_BRAIN_PORT=8005
+    command: ["python3", "-m", "uvicorn", "synthetic_brain:app", "--host", "0.0.0.0", "--port", "8005"]
+    volumes:
+      - empire_data:/app/data
+    restart: unless-stopped
+    networks:
+      - empire-net
+
+  # ── White-Label Provisioner CLI ───────────────────────────────────────
+  # Run: docker compose run --rm cli --help
+  cli:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: empire-cli
+    entrypoint: ["python3", "empire_white_label.py"]
+    profiles:
+      - cli
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /root/.env:/root/.env:ro
+    networks:
+      - empire-net
+
+# ═══════════════════════════════════════════════════════════════════════════
+# PARTNER CONTAINERS — Examples
+# ═══════════════════════════════════════════════════════════════════════════
+# Each partner gets their own branded hub container. The provisioner agent
+# creates these dynamically. Examples below show the format.
+#
+#   docker compose up -d partner_acme
+# ═══════════════════════════════════════════════════════════════════════════
+
+  # partner_starter:
+  #   image: empireai/hub:latest
+  #   container_name: partner-acme-restoration
+  #   ports:
+  #     - "8001:8000"
+  #   env_file:
+  #     - /root/partners/acme/.env
+  #   environment:
+  #     - PARTNER_ID=acme_restoration
+  #     - PARTNER_NAME=Acme Restoration Pros
+  #     - BRAND_PRIMARY_COLOR=#00AAFF
+  #     - BRAND_LOGO_URL=https://acme.com/logo.png
+  #     - TIER=growth
+  #     - HUB_PORT=8000
+  #   volumes:
+  #     - partner_acme_data:/app/data
+  #   restart: unless-stopped
+  #   networks:
+  #     - empire-net
+
+  # partner_enterprise:
+  #   image: empireai/hub:latest
+  #   container_name: partner-enterprise-roofing
+  #   ports:
+  #     - "8002:8000"
+  #   env_file:
+  #     - /root/partners/enterprise_roofing/.env
+  #   environment:
+  #     - PARTNER_ID=enterprise_roofing
+  #     - PARTNER_NAME=Enterprise Roofing Network
+  #     - BRAND_PRIMARY_COLOR=#FF6600
+  #     - BRAND_CUSTOM_DOMAIN=leads.enterprise-roofing.com
+  #     - TIER=enterprise
+  #   volumes:
+  #     - partner_enterprise_data:/app/data
+  #   restart: unless-stopped
+  #   networks:
+  #     - empire-net
+
+volumes:
+  empire_data:
+  partner_acme_data:
+  partner_enterprise_data:
+
+networks:
+  empire-net:
+    driver: bridge

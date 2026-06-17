@@ -92,6 +92,22 @@ PRODUCT_CATALOG = {
             "CONTRACTOR_EXCHANGE_ENTERPRISE": {"price": 999,  "checks": 10000,"features": ["unlimited", "API", "custom workflow"]},
         },
     },
+    "hexstrike": {
+        "name": "HexStrike AI",
+        "tiers": {
+            "HEXSTRIKE_STARTER":    {"price": 99,   "checks": 100, "features": ["container scanning", "API probing", "monthly reports"]},
+            "HEXSTRIKE_GROWTH":     {"price": 249,  "checks": 500, "features": ["all scan types", "secrets detection", "weekly schedule", "pipeline checks"]},
+            "HEXSTRIKE_ENTERPRISE": {"price": 499,  "checks": 0,   "features": ["unlimited scans", "custom targets", "SLA", "priority alerts", "dedicated support"]},
+        },
+    },
+    "analyzer": {
+        "name": "Analyzer Agent",
+        "tiers": {
+            "ANALYZER_LITE":       {"price": 49,   "checks": 100, "features": ["email registration check", "phone number validation"]},
+            "ANALYZER_GROWTH":     {"price": 149,  "checks": 500, "features": ["email + phone + username search", "Google account intel", "social presence", "monthly reports"]},
+            "ANALYZER_ENTERPRISE": {"price": 399,  "checks": 0,   "features": ["unlimited operations", "all tools", "Shodan device scanning", "deep OSINT", "priority support"]},
+        },
+    },
 }
 
 # ── Upsell paths — tier → recommended_next_tier ──────────────────────────────
@@ -107,9 +123,12 @@ UPSELL_PATHS = {
     "MARKET_EYE_STARTER":          "MARKET_EYE_GROWTH",
     "MARKET_EYE_GROWTH":           "MARKET_EYE_ENTERPRISE",
     "CONTENT_PULSE_STARTER":       "CONTENT_PULSE_GROWTH",
-    "CONTENT_PULSE_GROWTH":        "CONTENT_PULSE_ENTERPRISE",
-    "CONTRACTOR_EXCHANGE_STARTER": "CONTRACTOR_EXCHANGE_GROWTH",
-    "CONTRACTOR_EXCHANGE_GROWTH":  "CONTRACTOR_EXCHANGE_ENTERPRISE",
+    "CONTENT_PULSE_GROWTH":        "CONTENT_PULSE_ENTERPRISE",    "CONTRACTOR_EXCHANGE_STARTER":           "CONTRACTOR_EXCHANGE_GROWTH",
+    "CONTRACTOR_EXCHANGE_GROWTH":            "CONTRACTOR_EXCHANGE_ENTERPRISE",
+    "HEXSTRIKE_STARTER":                     "HEXSTRIKE_GROWTH",
+    "HEXSTRIKE_GROWTH":                      "HEXSTRIKE_ENTERPRISE",
+    "ANALYZER_LITE":                         "ANALYZER_GROWTH",
+    "ANALYZER_GROWTH":                       "ANALYZER_ENTERPRISE",
 }
 
 UPGRADE_MONTHLY_SAVINGS = {
@@ -117,8 +136,8 @@ UPGRADE_MONTHLY_SAVINGS = {
     "COMPLIANT_STARTER→GROWTH":   300,
     "STRIKE_STARTER→GROWTH":      150,
     "FORECAST_LITE→PRO":          300,
-    "CONTENT_PULSE_STARTER→GROWTH": 150,
-    "CONTRACTOR_EXCHANGE_STARTER→GROWTH": 300,
+    "CONTENT_PULSE_STARTER→GROWTH": 150,    "CONTRACTOR_EXCHANGE_STARTER→GROWTH":   300,
+    "ANALYZER_LITE→GROWTH":                 100,
 }
 
 # ── Trial config per product ─────────────────────────────────────────────────
@@ -131,6 +150,8 @@ TRIAL_CONFIG = {
     "market_eye":           {"days": 7,  "checks": 25, "trial_tier": "MARKET_EYE_STARTER"},
     "content_pulse":        {"days": 7,  "checks": 25, "trial_tier": "CONTENT_PULSE_STARTER"},
     "contractor_exchange":  {"days": 14, "checks": 50, "trial_tier": "CONTRACTOR_EXCHANGE_STARTER"},
+    "hexstrike":            {"days": 7,  "checks": 5,  "trial_tier": "HEXSTRIKE_STARTER"},
+    "analyzer":             {"days": 7,  "checks": 10, "trial_tier": "ANALYZER_LITE"},
 }
 
 # ── Pydantic models ─────────────────────────────────────────────────────────

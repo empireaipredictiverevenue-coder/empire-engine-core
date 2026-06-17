@@ -21,3 +21,7 @@ redis>=5.0
 # work reliably. The mission-control tests are pure unit tests (fully mocked),
 # so pytest is the only test dep we need.
 pytest>=8.0
+
+# ── Observability ──
+# Langfuse — LLM observability, tracing, cost tracking
+langfuse>=4.0

@@ -188,18 +188,16 @@ def refresh_health_snapshot() -> Dict:
 
 
 governor = AGIGovernor()
-# Run a single decision at import time to log the current strategy. In test
-# mode (conftest.py sets EMPIRE_TESTING=1) skip the live Supabase/Ollama query
-# so the module is importable without external services — otherwise the
-# import would raise and tests using `from empire_agi_governor import ...`
-# would silently skip via setUp's self.skipTest().
+# Import-time note: the first strategy decision is deferred to first use
+# (lazy) because direct_strategy() queries Supabase synchronously, which
+# blocks the event loop and prevents uvicorn from binding. The hub calls
+# governor.direct_strategy() explicitly in its startup handler.
+#
+# In test mode (EMPIRE_TESTING=1) skip everything.
 if os.environ.get("EMPIRE_TESTING") == "1":
-    print(f"[AGI] Current Strategy: TEST_MODE (EMPIRE_TESTING=1, skipping direct_strategy)")
+    print(f"[AGI] Current Strategy: TEST_MODE (EMPIRE_TESTING=1, strategy deferred)")
 else:
-    try:
-        print(f"[AGI] Current Strategy: {governor.direct_strategy()}")
-    except Exception as _e:
-        print(f"[AGI] Current Strategy: <unavailable at import time: {_e}>")
+    print(f"[AGI] Governor initialized. Strategy decision deferred to first use.")
 
 
 def get_local_brain(task_type):

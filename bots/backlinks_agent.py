@@ -625,10 +625,15 @@ async def run_loop(interval_hours: float = None):
             sb = _get_sb()
             sb.table("agent_registry").upsert({
                 "agent_name": "backlinks_agent",
+                "role_name": "backlinks_specialist",
                 "status": "ACTIVE",
                 "last_ping": datetime.now(timezone.utc).isoformat(),
                 "enabled": True,
-                "capabilities": ["backlinks", "broken_link_detection", "opportunity_intel", "link_authority"],
+                "capabilities": [
+                    "analyze_backlinks", "track_rankings", "audit_onpage",
+                    "broken_link_detection", "opportunity_intel", "link_authority",
+                ],
+                "task_types": ["backlinks.scan", "backlinks.broken_check", "backlinks.opportunities"],
             }, on_conflict="agent_name").execute()
         except Exception:
             pass

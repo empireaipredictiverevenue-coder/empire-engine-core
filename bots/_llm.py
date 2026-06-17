@@ -18,9 +18,12 @@ Usage:
 
 import os
 import json
+import time
 import logging
 
 import httpx
+
+from observability.tracing import TraceContext
 
 log = logging.getLogger("empire.llm")
 
@@ -40,29 +43,51 @@ async def llm_json(
     Returns parsed dict, or {"_error": str} on failure.
     """
     chosen = model or OLLAMA_MODEL
-    try:
-        async with httpx.AsyncClient(timeout=90.0) as client:
-            r = await client.post(
-                f"{OLLAMA_URL.rstrip('/')}/api/chat",
-                json={
-                    "model": chosen,
-                    "messages": [
-                        {"role": "system", "content": system},
-                        {"role": "user", "content": prompt},
-                    ],
-                    "stream": False,
-                    "format": "json",
-                    "options": {"temperature": temperature, "num_predict": max_tokens},
-                },
-            )
-            r.raise_for_status()
-            raw = r.json().get("message", {}).get("content", "{}")
-            clean = raw.strip()
-            if "```json" in clean:
-                clean = clean.split("```json")[1].split("```")[0].strip()
-            elif "```" in clean:
-                clean = clean.split("```")[1].split("```")[0].strip()
-            return json.loads(clean)
-    except Exception as e:
-        log.error(f"[llm] Ollama call failed: {e}")
-        return {"_error": str(e)}
+    start = time.time()
+    async with TraceContext(
+        name="bot.llm_json",
+        model=chosen,
+        input=prompt[:2000],
+        system=system,
+        task="bot.llm",
+        metadata={"temperature": temperature},
+        tags=["provider:ollama", f"model:{chosen}", "source:bots._llm"],
+    ) as ctx:
+        try:
+            async with httpx.AsyncClient(timeout=90.0) as client:
+                r = await client.post(
+                    f"{OLLAMA_URL.rstrip('/')}/api/chat",
+                    json={
+                        "model": chosen,
+                        "messages": [
+                            {"role": "system", "content": system},
+                            {"role": "user", "content": prompt},
+                        ],
+                        "stream": False,
+                        "format": "json",
+                        "options": {"temperature": temperature, "num_predict": max_tokens},
+                    },
+                )
+                r.raise_for_status()
+                data = r.json()
+                raw = data.get("message", {}).get("content", "{}")
+                elapsed = int((time.time() - start) * 1000)
+                tokens_in = data.get("prompt_eval_count", 0)
+                tokens_out = data.get("eval_count", 0)
+                ctx.set_output(
+                    output=raw,
+                    tokens_in=tokens_in,
+                    tokens_out=tokens_out,
+                    latency_ms=elapsed,
+                )
+                clean = raw.strip()
+                if "```json" in clean:
+                    clean = clean.split("```json")[1].split("```")[0].strip()
+                elif "```" in clean:
+                    clean = clean.split("```")[1].split("```")[0].strip()
+                return json.loads(clean)
+        except Exception as e:
+            elapsed = int((time.time() - start) * 1000)
+            log.error(f"[llm] Ollama call failed: {e}")
+            ctx.set_output(error=str(e), latency_ms=elapsed)
+            return {"_error": str(e)}

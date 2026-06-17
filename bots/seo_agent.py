@@ -868,10 +868,16 @@ async def run_loop(interval_hours: float = None):
             sb = _get_sb()
             sb.table("agent_registry").upsert({
                 "agent_name": "seo_agent",
+                "role_name": "seo_specialist",
                 "status": "ACTIVE",
                 "last_ping": datetime.now(timezone.utc).isoformat(),
                 "enabled": True,
-                "capabilities": ["seo", "content", "keyword_research", "audit", "research", "content_generation", "landing_page", "backlinks"],
+                "capabilities": [
+                    "manage_seo", "track_rankings", "analyze_backlinks",
+                    "optimize_content", "audit_onpage", "keyword_research",
+                    "content_generation", "landing_page",
+                ],
+                "task_types": ["seo.audit", "seo.optimize", "seo.report", "seo.content"],
             }, on_conflict="agent_name").execute()
         except Exception:
             pass

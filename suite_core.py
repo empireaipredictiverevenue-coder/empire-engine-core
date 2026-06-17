@@ -54,8 +54,10 @@ VALID_TIERS = {"ROUTER_SaaS", "DATA_ENTERPRISE", "SPY_DATA", "ALL_ACCESS",
                 "FORECAST_LITE", "FORECAST_PRO", "FORECAST_ENTERPRISE",
                 "MARKET_EYE_STARTER", "MARKET_EYE_GROWTH", "MARKET_EYE_ENTERPRISE",
                 "CONTENT_PULSE_STARTER", "CONTENT_PULSE_GROWTH", "CONTENT_PULSE_ENTERPRISE",
-                "CONTRACTOR_EXCHANGE_STARTER", "CONTRACTOR_EXCHANGE_GROWTH", "CONTRACTOR_EXCHANGE_ENTERPRISE"}
-VALID_PRODUCTS = {"inbound_router", "data_vault", "buyer_spy", "seo_optimizer", "lead_score", "compliant", "strike_campaigns", "forecast", "market_eye", "content_pulse", "contractor_exchange"}
+                "CONTRACTOR_EXCHANGE_STARTER", "CONTRACTOR_EXCHANGE_GROWTH", "CONTRACTOR_EXCHANGE_ENTERPRISE",
+                "HEXSTRIKE_STARTER", "HEXSTRIKE_GROWTH", "HEXSTRIKE_ENTERPRISE",
+                "ANALYZER_LITE", "ANALYZER_GROWTH", "ANALYZER_ENTERPRISE"}
+VALID_PRODUCTS = {"inbound_router", "data_vault", "buyer_spy", "seo_optimizer", "lead_score", "compliant", "strike_campaigns", "forecast", "market_eye", "content_pulse", "contractor_exchange", "hexstrike", "analyzer"}
 VALID_STATUSES = {"ACTIVE", "PAST_DUE", "CANCELED", "TRIALING"}
 
 
@@ -296,6 +298,7 @@ class SuiteSubscriptionEngine:
             "inbound_router_enabled": 0,
             "data_retention_enabled": 0,
             "buyer_spy_enabled": 0,
+            "hexstrike_enabled": 0,
             "inbound_router_max_calls": 0,
             "data_retention_days": 90,
             "buyer_spy_analyze_per_day": 100,
@@ -308,6 +311,11 @@ class SuiteSubscriptionEngine:
             "seo_keywords_per_month": 0,
             "seo_content_pieces_per_month": 0,
         }
+        if "HEXSTRIKE" in tier:
+            flags["hexstrike_enabled"] = 1
+        if "ANALYZER" in tier:
+            flags["analyzer_enabled"] = 1
+            flags["hexstrike_enabled"] = 1
         if tier == "ROUTER_SaaS":
             flags["inbound_router_enabled"] = 1
         elif tier == "DATA_ENTERPRISE":
@@ -360,18 +368,20 @@ class SuiteSubscriptionEngine:
             now = datetime.now(timezone.utc).isoformat(timespec="seconds")
             conn.execute(
                 """INSERT INTO product_feature_flags
-                   (customer_account_id,
-                    inbound_router_enabled, data_retention_enabled, buyer_spy_enabled,
+                   (customer_account_id,                       inbound_router_enabled, data_retention_enabled, buyer_spy_enabled,
+                    hexstrike_enabled, analyzer_enabled,
                     inbound_router_max_calls, data_retention_days, buyer_spy_analyze_per_day,
                     seo_audits_enabled, seo_keyword_tracking_enabled, seo_content_generation_enabled,
                     seo_research_pipeline_enabled, seo_landing_pages_enabled,
                     seo_audits_per_month, seo_keywords_per_month, seo_content_pieces_per_month,
                     created_at, updated_at)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                    ON CONFLICT(customer_account_id) DO UPDATE SET
                      inbound_router_enabled        = COALESCE(EXCLUDED.inbound_router_enabled, product_feature_flags.inbound_router_enabled),
                      data_retention_enabled        = COALESCE(EXCLUDED.data_retention_enabled, product_feature_flags.data_retention_enabled),
                      buyer_spy_enabled             = COALESCE(EXCLUDED.buyer_spy_enabled, product_feature_flags.buyer_spy_enabled),
+                     hexstrike_enabled               = COALESCE(EXCLUDED.hexstrike_enabled, product_feature_flags.hexstrike_enabled),
+                     analyzer_enabled                 = COALESCE(EXCLUDED.analyzer_enabled, product_feature_flags.analyzer_enabled),
                      inbound_router_max_calls      = COALESCE(EXCLUDED.inbound_router_max_calls, product_feature_flags.inbound_router_max_calls),
                      data_retention_days           = COALESCE(EXCLUDED.data_retention_days, product_feature_flags.data_retention_days),
                      buyer_spy_analyze_per_day     = COALESCE(EXCLUDED.buyer_spy_analyze_per_day, product_feature_flags.buyer_spy_analyze_per_day),
@@ -389,6 +399,8 @@ class SuiteSubscriptionEngine:
                     flags.get("inbound_router_enabled", 0),
                     flags.get("data_retention_enabled", 0),
                     flags.get("buyer_spy_enabled", 0),
+                    flags.get("hexstrike_enabled", 0),
+                    flags.get("analyzer_enabled", 0),
                     flags.get("inbound_router_max_calls", 0),
                     flags.get("data_retention_days", 90),
                     flags.get("buyer_spy_analyze_per_day", 100),
@@ -472,6 +484,8 @@ class SuiteGuard:
         "market_eye":             "market_eye_enabled",
         "content_pulse":          "content_pulse_enabled",
         "contractor_exchange":     "contractor_exchange_enabled",
+        "hexstrike":               "hexstrike_enabled",
+        "analyzer":                "analyzer_enabled",
     }
 
     def __init__(

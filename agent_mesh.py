@@ -88,6 +88,17 @@ AGENT_DISPLAY = {
     AGENT_SWARM_WORKER: "Swarm Worker",
 }
 
+# ── Mesh agent → Fleet role mapping ─────────────────────────────────
+MESH_AGENT_ROLES = {
+    AGENT_SCOUT:        "mesh_scout",
+    AGENT_OUTREACH:     "mesh_outreach",
+    AGENT_COPYWRITER:   "mesh_studio_copy",
+    AGENT_RENDER:       "mesh_studio_render",
+    AGENT_DISPATCHER:   "mesh_dispatcher",
+    AGENT_QUALITY:      "quality_analyst",
+    AGENT_SWARM_WORKER: "swarm_worker",
+}
+
 
 class AgentMesh:
     """Kanban task queue orchestrator. Manages task lifecycle and agent coordination."""
@@ -237,14 +248,21 @@ class AgentMesh:
         try:
             caps = AGENT_CAPABILITIES.get(agent_name, [])
             task_types = AGENT_TASK_MAP.get(agent_name, [])
-            self.db.table("agent_registry").upsert({
+            role_name = MESH_AGENT_ROLES.get(agent_name)
+            payload = {
                 "agent_name": agent_name,
+                "role_name": role_name,
                 "status": status,
                 "last_ping": datetime.now(timezone.utc).isoformat(),
                 "enabled": agent_name in self._agents_enabled,
-                "capabilities": json.dumps(caps),
+                "capabilities": caps,
                 "task_types": task_types,
-            }, on_conflict="agent_name").execute()
+            }
+            if role_name:
+                payload["role_name"] = role_name
+            self.db.table("agent_registry").upsert(
+                payload, on_conflict="agent_name"
+            ).execute()
             return True
         except Exception as e:
             log.error(f"[hermes] heartbeat error ({agent_name}): {e}")

@@ -150,6 +150,7 @@ class VoiceStreamingAgent:
             sb = _get_sb()
             sb.table("agent_registry").upsert({
                 "agent_name": "voice_streaming_agent",
+                "role_name": "voice_streaming_agent",
                 "status": "ACTIVE",
                 "last_ping": datetime.now(timezone.utc).isoformat(),
                 "enabled": True,

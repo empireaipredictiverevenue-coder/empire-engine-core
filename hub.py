@@ -49,6 +49,7 @@ from empire_command_spa import command_spa_page
 from empire_voice import VoiceRouter, register_voice_routes
 from empire_sms import SMSEngine, register_sms_routes
 from empire_contractors import register_contractor_routes
+from empire_contractor_priority import register_priority_routes
 from empire_qc_api import register_qc_routes
 from empire_hermes_api import register_hermes_routes
 from empire_wiki_viewer import register_wiki_routes
@@ -102,6 +103,7 @@ from empire_mission_control import (
     register_mission_control_routes,
 )
 from empire_pulse import PulseEngine, pulse_view_page
+from empire_outreach_view import outreach_view_page
 from empire_data_bridge import register_bridge_routes as register_data_bridge_routes, start_bridge_processor, init_bridge_db
 from empire_bridge import BridgeEngine, register_bridge_routes as register_bridge_engine_routes
 from empire_voice_control import VoiceController
@@ -109,6 +111,39 @@ from empire_brain_personality import BrainPersonality
 from empire_strike_packs import StrikePackCatalog, SubscriptionEngine, DeliveryFilter, register_strike_pack_routes
 from empire_carrier_portfolio import PortfolioManager, StormMatcher, StormReportEngine, register_carrier_routes
 from empire_native_ads import NativeAdsNetwork, register_native_ads_routes
+from agent_mesh import AgentMesh, register_mesh_routes
+from empire_publisher_portal import register_publisher_routes
+from empire_advertiser_portal import register_advertiser_routes
+from empire_contractor_portal import register_contractor_portal_routes
+from empire_enrichment_engine import (
+    DeepEnricher,
+    QualityEngine,
+    PipelineOrchestrator,
+    register_enrichment_routes,
+)
+from empire_agent_fleet import AgentFleet, register_fleet_routes
+from empire_business_growth_agent import register_growth_routes
+from empire_executive_agent import register_executive_routes
+from empire_ai_hacking_agent import register_hacking_routes
+from empire_sdr_agent import register_sdr_routes
+from empire_compliance_monitor import register_compliance_routes
+from empire_closing_agent import register_closing_routes
+from empire_growth_ops import register_growth_ops_routes
+from empire_competitor_intel import register_competitor_intel_routes
+from empire_media_lab import register_media_lab_routes
+from empire_reconnaissance import register_recon_routes
+from empire_white_label import register_white_label_routes
+from empire_hexstrike_ai import HexStrike, register_hexstrike_routes
+from empire_idle_asset_detector import (
+    IdleAssetDetector, IdleAssetEnricher, IdleAssetMultiScorer,
+    IdleAssetOutreach, IdleAssetPipeline,
+    register_idle_asset_routes, set_pipeline,
+)
+from empire_gas_station_waste import (
+    GasStationDetector, GasStationEnricher, GasStationMultiScorer,
+    GasStationOutreach, GasStationPipeline,
+    register_gas_station_routes, set_pipeline as set_gas_pipeline,
+)
 
 # Empire AI Suite — 3-Product Monetization Gateway
 from suite_core import (
@@ -130,6 +165,8 @@ from products.forecast import Forecast, ForecastRoutes
 from products.market_eye import MarketEyeEngine, MarketEyeRoutes
 from products.content_pulse import ContentPulse, ContentPulseRoutes
 from products.contractor_exchange import ContractorExchange, ContractorExchangeRoutes
+from products.hexstrike import HexStrikeProduct, HexStrikeProductRoutes
+from products.analyzer import AnalyzerEngine, AnalyzerRoutes
 from products.sales_funnel import SalesFunnelEngine, SalesFunnelRoutes
 from products.product_email_dispatcher import ProductEmailDispatcher
 from products.trial_conversion import TrialConversionEngine
@@ -147,10 +184,15 @@ from empire_psychology_mind_map import register_psychology_routes
 from empire_self_awareness import register_self_awareness_routes
 from empire_business_planner import register_business_planner_routes
 from empire_agent_os import AgentKernel, register_agent_os_routes
+from observability.langfuse_client import get_langfuse, shutdown as langfuse_shutdown
 
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("empire.hub")
+
+import time as _boot_time
+_BOOT_START = _boot_time.time()
+log.info(f"[boot] process start at {_BOOT_START:.3f}")
 
 
 # ─────────────────────────────────────────────────────────────────────
@@ -167,6 +209,8 @@ VONAGE_API_SECRET = os.environ.get("VONAGE_API_SECRET", "")
 VONAGE_APPLICATION_ID = os.environ.get("VONAGE_APPLICATION_ID", "")
 VONAGE_NUMBER = os.environ.get("VONAGE_NUMBER", "")
 RESEND_API_KEY = os.environ.get("RESEND_API_KEY", "")
+RESEND_DAILY_QUOTA = int(os.environ.get("RESEND_DAILY_QUOTA", "100"))
+RESEND_QUOTA_CRITICAL_PCT = float(os.environ.get("RESEND_QUOTA_CRITICAL_PCT", "0.4"))
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
 NTFY_TOPIC = os.environ.get("NTFY_TOPIC", "")
 NTFY_TOKEN = os.environ.get("NTFY_TOKEN", "")
@@ -201,11 +245,94 @@ app.add_middleware(
 
 
 # ─────────────────────────────────────────────────────────────────────
+# RESEND QUOTA MANAGER — priority-tiered daily counter with midnight reset
+# ─────────────────────────────────────────────────────────────────────
+class ResendQuotaManager:
+    """In-memory daily email quota tracker with priority tiers.
+
+    CRITICAL tier (40% of quota by default): dispatch emails, auth
+    magic links — revenue-generating, must always send.
+
+    MARKETING tier (60%): email sequences, product onboarding,
+    outreach, win-backs — important but deferrable.
+
+    Resets at midnight UTC. Thread-safe via asyncio lock.
+    """
+
+    def __init__(self, daily_limit: int = 100, critical_pct: float = 0.4):
+        self.daily_limit = daily_limit
+        self.critical_limit = int(daily_limit * critical_pct)
+        self.marketing_limit = daily_limit - self.critical_limit
+        self.critical_sent = 0
+        self.marketing_sent = 0
+        self._lock = asyncio.Lock()
+        self._reset_day = datetime.now(timezone.utc).date()
+
+    async def _check_reset(self):
+        today = datetime.now(timezone.utc).date()
+        if today != self._reset_day:
+            was_crit = self.critical_sent
+            was_mkt = self.marketing_sent
+            self.critical_sent = 0
+            self.marketing_sent = 0
+            self._reset_day = today
+            log.info(
+                f"[resend-quota] midnight reset · yesterday: "
+                f"{was_crit} critical + {was_mkt} marketing"
+            )
+
+    async def can_send(self, priority: str = "marketing") -> bool:
+        async with self._lock:
+            await self._check_reset()
+            if priority == "critical":
+                return self.critical_sent < self.critical_limit
+            return self.marketing_sent < self.marketing_limit
+
+    async def record_sent(self, priority: str = "marketing"):
+        async with self._lock:
+            await self._check_reset()
+            if priority == "critical":
+                self.critical_sent += 1
+            else:
+                self.marketing_sent += 1
+
+    def snapshot(self) -> dict:
+        return {
+            "daily_limit":        self.daily_limit,
+            "critical_limit":     self.critical_limit,
+            "marketing_limit":    self.marketing_limit,
+            "critical_sent":      self.critical_sent,
+            "marketing_sent":     self.marketing_sent,
+            "critical_remaining": max(0, self.critical_limit - self.critical_sent),
+            "marketing_remaining": max(0, self.marketing_limit - self.marketing_sent),
+            "total_sent":         self.critical_sent + self.marketing_sent,
+            "reset_day":          str(self._reset_day),
+        }
+
+
+_quota_manager = ResendQuotaManager(
+    daily_limit=RESEND_DAILY_QUOTA,
+    critical_pct=RESEND_QUOTA_CRITICAL_PCT,
+)
+
+
+# ─────────────────────────────────────────────────────────────────────
 # RESEND SEND HELPER
 # ─────────────────────────────────────────────────────────────────────
-async def _send_email(to, subject, html):
+async def _send_email(to, subject, html, priority: str = "marketing"):
     if not RESEND_API_KEY:
         return {"ok": False, "error": "RESEND_API_KEY missing"}
+
+    # ── Quota gate: reject before hitting Resend if tier exhausted ──
+    if not await _quota_manager.can_send(priority):
+        tier = priority.upper()
+        return {
+            "ok": False,
+            "error": f"daily {tier} email quota exhausted",
+            "quota_exceeded": True,
+            "quota_tier": priority,
+        }
+
     from_addr = os.environ.get("FROM_ADDRESS", "noreply@empire-ai.co.uk")
     from_name = os.environ.get("FROM_NAME", "Empire AI Operations")
     try:
@@ -216,9 +343,17 @@ async def _send_email(to, subject, html):
                 json={"from": f"{from_name} <{from_addr}>", "to": [to], "subject": subject, "html": html},
             )
             data = r.json() if r.headers.get("content-type", "").startswith("application/json") else {}
-            return {"ok": r.status_code < 300, "id": data.get("id"), "raw": data}
+            ok = r.status_code < 300
+            if ok:
+                await _quota_manager.record_sent(priority)
+            return {"ok": ok, "id": data.get("id"), "raw": data}
     except Exception as e:
         return {"ok": False, "error": str(e)}
+
+
+# ── Critical-tier email sender (dispatch, auth magic links) ──
+import functools as _functools
+_send_email_critical = _functools.partial(_send_email, priority="critical")
 
 
 # ─────────────────────────────────────────────────────────────────────
@@ -243,18 +378,33 @@ async def _on_sms_yes_reply(phone: str, body: str, sequence: dict):
     """
     try:
         db = get_db()
-        # Find the lead — try enriched_leads first (has radar_target_id), then radar_targets
+        # Find the lead — try enriched_leads first (by radar_target_id or direct fallback), then radar_targets
         lead = None
-        r = db.table("enriched_leads").select("id, radar_target_id, address, city, state, warehouse_name").eq("phone", phone).limit(1).execute()
-        if r.data and r.data[0].get("radar_target_id"):
-            rtid = r.data[0]["radar_target_id"]
-            r2 = db.table("radar_targets").select("*").eq("id", rtid).limit(1).execute()
-            if r2.data:
-                lead = r2.data[0]
+        enriched_lead_row = None
+        r = db.table("enriched_leads").select("id, radar_target_id, address, city, state, warehouse_name, phone, email, meta").eq("phone", phone).limit(1).execute()
+        if r.data:
+            enriched_lead_row = r.data[0]
+            if enriched_lead_row.get("radar_target_id"):
+                rtid = enriched_lead_row["radar_target_id"]
+                r2 = db.table("radar_targets").select("*").eq("id", rtid).limit(1).execute()
+                if r2.data:
+                    lead = r2.data[0]
         if not lead:
             r = db.table("radar_targets").select("*").eq("phone", phone).limit(1).execute()
             if r.data:
                 lead = r.data[0]
+        # Fallback: use enriched_lead directly when no radar_target match
+        if not lead and enriched_lead_row:
+            # Extract city from meta if the city column is None
+            city = enriched_lead_row.get("city") or ""
+            if not city:
+                meta = enriched_lead_row.get("meta") or {}
+                if isinstance(meta, dict):
+                    raw = meta.get("raw", {}) or {}
+                    city = raw.get("addr:city", "") or raw.get("city", "") or ""
+            enriched_lead_row["city"] = city or ""
+            lead = enriched_lead_row
+            log.info(f"[sms\u2192dispatch] using enriched_lead fallback for {phone}")
 
         if not lead:
             log.info(f"[sms\u2192dispatch] no lead found for YES reply from {phone}")
@@ -273,17 +423,26 @@ async def _on_sms_yes_reply(phone: str, body: str, sequence: dict):
             log.info(f"[sms\u2192dispatch] no contractors matched for {phone} ({lead.get('city', '?')})")
             return
 
-        # Fan out dispatch
+        # Fan out dispatch — use critical email tier so dispatch
+        # always goes out even when marketing quota is exhausted
         result = await matcher.dispatch_to_matched(
             matched=matched,
             lead=lead,
             urgency=9,
             sign_token=_hub_sign_token,
-            send_email=_send_email,
+            send_email=_send_email_critical,
             public_base_url=PUBLIC_BASE_URL,
             broadcaster=live_broadcaster,
         )
-        log.info(f"[sms\u2192dispatch] dispatched {result.get('dispatched', 0)} contractors for {phone}")
+        email_sent = result.get("email_sent", 0)
+        sms_sent = result.get("sms_sent", 0)
+        dispatched = result.get("dispatched", 0)
+        log.info(
+            f"[sms\u2192dispatch] {dispatched} dispatched · "
+            f"{email_sent} emailed · {sms_sent} SMS'd · for {phone}"
+        )
+        if result.get("email_errors"):
+            log.warning(f"[sms\u2192dispatch] email errors: {result['email_errors']}")
     except Exception as e:
         log.warning(f"[sms\u2192dispatch] error for {phone}: {e}")
 
@@ -320,7 +479,7 @@ payout_engine = PayoutEngine(
 
 auth_engine = AuthEngine(
     get_db=get_db,
-    send_email=_send_email,
+    send_email=_send_email_critical,
     sign_token=_hub_sign_token,
     verify_token=_hub_verify_token,
     public_base_url=PUBLIC_BASE_URL,
@@ -465,6 +624,9 @@ if _os.path.isdir(_STATIC_DIR):
 # ── Public contractor landing page + chat widget ───────────────────────
 register_contractor_routes(app)
 
+# ── Contractor Priority Dispatch — $99/mo Solana checkout ──────────────
+register_priority_routes(app, public_base_url=PUBLIC_BASE_URL, get_db=get_db)
+
 # ── Shared chat handler (contractors + customer-service) ───────────────
 # Both endpoints use the same rate-limit logic and synthetic_brain /ask
 # call. Only the system prompt and error messages differ.
@@ -561,12 +723,6 @@ async def _chat_handler(
     total = sum(len(b) for b in _CHAT_RATE_LIMITS.values())
     if total > 500:
         cutoff = now - _CHAT_WINDOW_SEC
-        for ep, bkt in list(_CHAT_RATE_LIMITS.items()):
-            stale = [sid for sid, ts in bkt.items() if all(t < cutoff for t in ts)]
-            for sid in stale:
-                del bkt[sid]
-            if not bkt:
-                del _CHAT_RATE_LIMITS[ep]
         removed = 0
         for ep, bkt in list(_CHAT_RATE_LIMITS.items()):
             stale = [sid for sid, ts in bkt.items() if all(t < cutoff for t in ts)]
@@ -738,7 +894,14 @@ register_sms_routes(app, sms_engine, require_auth=require_auth)
 register_contractor_routes(app, require_auth=require_auth, get_db=get_db, sign_token=_hub_sign_token, verify_token=_hub_verify_token, send_email=_send_email, public_base_url=PUBLIC_BASE_URL, broadcaster=live_broadcaster)
 register_attribution_routes(app, require_auth=require_auth, get_db=get_db)
 register_email_routes(app, email_engine, require_auth=require_auth)
-register_matching_routes(app, matcher=matcher, require_auth=require_auth, sign_token=_hub_sign_token, verify_token=_hub_verify_token, send_email=_send_email)
+
+# ── Email Quota Endpoint — operator visibility into Resend quota ──
+@app.get("/api/v1/email/quota")
+async def email_quota(auth: bool = Depends(require_auth)):
+    """Return current Resend email quota: tier usage, remaining, reset day."""
+    return JSONResponse(_quota_manager.snapshot())
+
+register_matching_routes(app, matcher=matcher, require_auth=require_auth, sign_token=_hub_sign_token, verify_token=_hub_verify_token, send_email=_send_email_critical)
 register_playbook_routes(app, require_auth=require_auth, get_db=get_db)
 register_payout_routes(app, engine=payout_engine, require_auth=require_auth, require_owner=require_owner)
 register_fee_routes(app, require_auth=require_auth, get_db=get_db)
@@ -755,6 +918,37 @@ register_loop_routes(app, require_auth=require_auth, get_db=get_db)
 register_psychology_routes(app, require_auth=require_auth)
 register_self_awareness_routes(app, require_auth=require_auth, get_db=get_db)
 register_business_planner_routes(app, require_auth=require_auth)
+
+# ── Business Growth Agent — growth funnel analysis + auto actions ──
+register_growth_routes(app, get_db=get_db, require_auth=require_auth)
+
+# ── Executive Agent — high-ticket enterprise sales ─────────────
+register_executive_routes(app, get_db=get_db, require_auth=require_auth)
+
+# ── AI Hacking Agent — aggressive marketing automation ─────────
+register_hacking_routes(app, get_db=get_db, require_auth=require_auth)
+
+# ── SDR Agent — outbound prospecting + meeting booking ─────────
+register_sdr_routes(app, get_db=get_db, require_auth=require_auth)
+
+# ── Compliance Monitor — TCPA/DNC/CCPA enforcement ────────────
+register_compliance_routes(app, get_db=get_db, require_auth=require_auth)
+
+# ── Closing Agent — deal pipeline, payment collection, onboarding ─
+register_closing_routes(app, get_db=get_db, require_auth=require_auth)
+
+# ── White Label Manager — reseller tiers, container provisioning ─
+register_white_label_routes(app, get_db=get_db, require_auth=require_auth)
+
+# ── HexStrike AI — internal security agent ────────────────────
+register_hexstrike_routes(app, get_db=get_db, require_auth=require_auth)
+
+# ── Growth Ops Directorate — hacking, intel, media, recon ──
+register_growth_ops_routes(app, get_db=get_db, require_auth=require_auth)
+register_competitor_intel_routes(app, get_db=get_db, require_auth=require_auth)
+register_media_lab_routes(app, get_db=get_db, require_auth=require_auth)
+register_recon_routes(app, get_db=get_db, require_auth=require_auth)
+
 # Agentic OS Kernel — instantiated here because it's needed by route registration below
 agent_os_kernel = AgentKernel()
 register_agent_os_routes(app, kernel=agent_os_kernel, require_auth=require_auth, get_db=get_db)
@@ -844,6 +1038,167 @@ register_native_ads_routes(
     require_auth=require_auth,
     public_base_url=PUBLIC_BASE_URL,
 )
+
+# ── Publisher Portal — self-serve signup, embed code, earnings dashboard ──
+register_publisher_routes(
+    app,
+    sign_token=_hub_sign_token,
+    verify_token=_hub_verify_token,
+    send_email=_send_email,
+    public_base_url=PUBLIC_BASE_URL,
+)
+
+# ── Advertiser Portal — self-serve campaign creation + budget management ──
+register_advertiser_routes(
+    app,
+    sign_token=_hub_sign_token,
+    verify_token=_hub_verify_token,
+    send_email=_send_email,
+    public_base_url=PUBLIC_BASE_URL,
+)
+
+# ── Contractor Portal — self-service dashboard + dispatch history + profile management ──
+register_contractor_portal_routes(
+    app,
+    sign_token=_hub_sign_token,
+    verify_token=_hub_verify_token,
+    send_email=_send_email,
+    public_base_url=PUBLIC_BASE_URL,
+)
+
+# ── Agent Fleet — role-based agent management ──────────────────
+fleet = AgentFleet(get_db=get_db)
+register_fleet_routes(app, fleet=fleet, require_auth=require_auth)
+
+# ── Agent Mesh — Hermes Protocol task queue + agent orchestration ──
+mesh = AgentMesh(get_db=get_db)
+register_mesh_routes(app, mesh=mesh, require_auth=require_auth)
+
+# ── Idle Asset Pipeline — full end-to-end: discovery → enrichment → scoring → outreach ──
+idle_asset_detector = IdleAssetDetector(get_db=get_db)
+idle_asset_enricher = IdleAssetEnricher(router=ai_router)
+idle_asset_scorer = IdleAssetMultiScorer()
+idle_asset_outreach = IdleAssetOutreach(
+    email_engine=email_engine,
+    sms_engine=sms_engine,
+    get_db=get_db,
+    public_base_url=PUBLIC_BASE_URL,
+)
+idle_asset_pipeline = IdleAssetPipeline(
+    detector=idle_asset_detector,
+    enricher=idle_asset_enricher,
+    scorer=idle_asset_scorer,
+    outreach=idle_asset_outreach,
+    get_db=get_db,
+    interval_hours=6,
+    max_outreach_per_tick=15,
+)
+set_pipeline(idle_asset_pipeline)
+register_idle_asset_routes(
+    app,
+    detector=idle_asset_detector,
+    require_auth=require_auth,
+    pipeline=idle_asset_pipeline,
+)
+
+# ── Gas Station Waste Pipeline ─ full end-to-end: discovery → enrichment → scoring → outreach ──
+gas_station_detector = GasStationDetector(get_db=get_db)
+gas_station_enricher = GasStationEnricher(router=ai_router)
+gas_station_scorer = GasStationMultiScorer()
+gas_station_outreach = GasStationOutreach(
+    email_engine=email_engine,
+    sms_engine=sms_engine,
+    get_db=get_db,
+    public_base_url=PUBLIC_BASE_URL,
+)
+gas_station_pipeline = GasStationPipeline(
+    detector=gas_station_detector,
+    enricher=gas_station_enricher,
+    scorer=gas_station_scorer,
+    outreach=gas_station_outreach,
+    get_db=get_db,
+    interval_hours=6,
+    max_outreach_per_tick=15,
+)
+set_gas_pipeline(gas_station_pipeline)
+register_gas_station_routes(
+    app,
+    detector=gas_station_detector,
+    require_auth=require_auth,
+    pipeline=gas_station_pipeline,
+)
+
+# ── Enrichment Engine — deep LLM enrichment + quality tracking + pipeline orchestration ──
+enrichment_enricher = DeepEnricher(router=ai_router)
+enrichment_quality = QualityEngine(get_db=get_db)
+enrichment_orchestrator = PipelineOrchestrator(get_db=get_db, enricher=enrichment_enricher)
+register_enrichment_routes(
+    app,
+    enricher=enrichment_enricher,
+    quality=enrichment_quality,
+    orchestrator=enrichment_orchestrator,
+    require_auth=require_auth,
+)
+
+# ── Outreach Template Stats — A/B test analysis grouped by template_variant ──
+@app.get("/api/v1/outreach/template-stats")
+async def outreach_template_stats(auth: bool = Depends(require_auth)):
+    """Return outreach stats grouped by template_variant across all pipelines.
+
+    Queries idle_asset_outreach and gas_station_outreach tables.
+    Returns per-variant: total, email_sent, sms_sent, replied, converted,
+    reply_rate, conversion_rate.
+    """
+    db = get_db()
+    variants: dict = {}
+
+    # ── Query both outreach tables ─────────────────────────────
+    for table in ["idle_asset_outreach", "gas_station_outreach"]:
+        try:
+            r = db.table(table).select("template_variant,channel,status").execute()
+            for row in (r.data or []):
+                v = (row.get("template_variant") or "unknown").strip().lower()
+                if not v or v == "unknown":
+                    continue
+                ch = (row.get("channel") or "").strip().lower()
+                st = (row.get("status") or "").strip().lower()
+
+                if v not in variants:
+                    variants[v] = {
+                        "template_variant": v,
+                        "total": 0,
+                        "email_sent": 0,
+                        "sms_sent": 0,
+                        "replied": 0,
+                        "converted": 0,
+                    }
+
+                variants[v]["total"] += 1
+                if ch == "email":
+                    variants[v]["email_sent"] += 1
+                elif ch == "sms":
+                    variants[v]["sms_sent"] += 1
+                if st in ("replied", "yes", "responded"):
+                    variants[v]["replied"] += 1
+                if st in ("converted", "closed", "settled"):
+                    variants[v]["converted"] += 1
+        except Exception as e:
+            log.debug(f"[template-stats] {table} query failed: {e}")
+
+    # ── Compute rates ──────────────────────────────────────────
+    result_variants = []
+    for v in sorted(variants.keys()):
+        d = variants[v]
+        total = max(d["total"], 1)
+        d["reply_rate"] = round(d["replied"] / total, 4)
+        d["conversion_rate"] = round(d["converted"] / total, 4)
+        result_variants.append(d)
+
+    return {
+        "variants": result_variants,
+        "total_variants": len(result_variants),
+        "total_outreach": sum(v["total"] for v in result_variants),
+    }
 
 # ── Traffic Specialist — autonomous traffic orchestration ─────────
 register_traffic_specialist_routes(app, require_auth=require_auth)
@@ -950,7 +1305,23 @@ suite_contractor_exchange = ContractorExchange(
 )
 ContractorExchangeRoutes(suite_contractor_exchange, require_auth=require_auth).register(app)
 
-# Product 14: Sales Funnel — one-time purchases, trials, upsells, renewals
+# Product 14: HexStrike AI — security scanning as a product
+suite_hexstrike = HexStrikeProduct(
+    get_db=get_db,
+    guard=lambda a, f: suite_guard.check_access(a, f),
+    log_usage=lambda a, p, e, q=1, u="count", m=None: suite_guard.log_usage(a, p, e, q, u, m),
+)
+HexStrikeProductRoutes(suite_hexstrike, require_auth=require_auth).register(app)
+
+# Product 15: Analyzer Agent — OSINT & reconnaissance as a product
+suite_analyzer = AnalyzerEngine(
+    get_db=get_db,
+    guard=lambda a, f: suite_guard.check_access(a, f),
+    log_usage=lambda a, p, e, q=1, u="count", m=None: suite_guard.log_usage(a, p, e, q, u, m),
+)
+AnalyzerRoutes(suite_analyzer, require_auth=require_auth).register(app)
+
+# Product 16: Sales Funnel — one-time purchases, trials, upsells, renewals
 # Wire email dispatcher for automated product email sequences
 suite_email_dispatcher = ProductEmailDispatcher(
     send_email=_send_email,
@@ -1173,10 +1544,10 @@ async def win_back_variants_assign(request: Request, auth: bool = Depends(requir
         return JSONResponse({"ok": False, "error": str(e)[:200]}, status_code=500)
 
 
-# Product 15: Command Center Pro — aggregated product health dashboard
+# Product 16: Command Center Pro — aggregated product health dashboard
 @app.get("/api/v6/suite/ccp/health")
 async def ccp_health(auth: bool = Depends(require_auth)):
-    """Aggregated health snapshot of all 15 Suite products for the Command Center Pro SPA tab."""
+    """Aggregated health snapshot of all 16 Suite products for the Command Center Pro SPA tab."""
     db = get_db()
     products = []
     total_mrr = 0.0
@@ -1720,6 +2091,12 @@ async def closer_score(request: Request, auth: bool = Depends(require_auth)):
 async def view_pulse():
     """Standalone pulse insight page — no sidebar, no chrome."""
     return HTMLResponse(pulse_view_page())
+
+
+@app.get("/view/outreach", response_class=HTMLResponse)
+async def view_outreach():
+    """Standalone outreach performance page — template A/B test stats."""
+    return HTMLResponse(outreach_view_page())
 
 
 @app.get("/api/pulse/summary")
@@ -2374,13 +2751,25 @@ async def _si_evolution_loop():
 # ─────────────────────────────────────────────────────────────────────
 @app.on_event("startup")
 async def startup():
-    log.info("Empire V49 · Starting up")
+    _st = _boot_time.time()
+    log.info(f"[boot] startup handler begin ({_st - _BOOT_START:.1f}s since process start)")
+
+    # Langfuse Observability — lazy-init (gracefully degrades if not configured)
+    get_langfuse()
+
     # Suite Core — init local SQLite tables (product_subscriptions, etc.)
     _init_suite_db_sqlite()
+    _t1 = _boot_time.time()
+    log.info(f"[boot] _init_suite_db_sqlite: {_t1 - _st:.2f}s")
 
     # Data Bridge Engine — init DB + start background processor
     init_bridge_db()
+    _t2 = _boot_time.time()
+    log.info(f"[boot] init_bridge_db: {_t2 - _t1:.2f}s")
     start_bridge_processor(get_db)
+    _t3 = _boot_time.time()
+    log.info(f"[boot] start_bridge_processor: {_t3 - _t2:.2f}s")
+
     asyncio.create_task(brain_learning.nightly_tune_loop())
     asyncio.create_task(sms_engine.dispatcher_loop())
     asyncio.create_task(email_engine.dispatcher_loop())
@@ -2402,21 +2791,35 @@ async def startup():
     ))
     # Niche Terrain background scan — discovers new communities + learns habits every 30 min
     asyncio.create_task(_niche_terrain_scan_loop())
+    # HexStrike AI security scan every 15 minutes (testing)
+    asyncio.create_task(_hexstrike_scheduler_loop())
     # Market Eye background monitoring — scrape eligible competitors every hour
     asyncio.create_task(suite_market_eye.monitoring_loop())
     # Product Email Dispatcher — renewal reminders, reactivation, churn prevention
     asyncio.create_task(suite_email_dispatcher.monitoring_loop())
     # Trial Conversion — auto-convert expired trials to paid every hour
     asyncio.create_task(suite_trial_conversion.monitoring_loop())
+    # Agent Fleet — seed roles + monitor heartbeats every 60s
+    asyncio.create_task(fleet.start_fleet_loop(interval_seconds=60))
+    # Agent Mesh — boot the Hermes protocol task queue + agent heartbeat loop
+    asyncio.create_task(mesh.mesh_loop())
+    # Idle Asset Detector — logistics compound discovery every 6 hours
+    asyncio.create_task(idle_asset_detector.run_loop())
+    # Gas Station Waste Detector — station discovery + enrichment + outreach every 6h
+    asyncio.create_task(gas_station_detector.run_loop())
     # Agentic OS — boot the kernel (registers built-in agents and starts scheduling)
     asyncio.create_task(_agent_os_boot())
 
+    _t_end = _boot_time.time()
+    log.info(f"[boot] background tasks created: {_t_end - _t3:.2f}s")
+    log.info(f"[boot] startup handler complete: {_t_end - _st:.2f}s (total: {_t_end - _BOOT_START:.1f}s)")
     log.info("Empire V49 · Operational")
 
 
 @app.on_event("shutdown")
 async def shutdown():
     log.info("Empire V49 · Shutting down")
+    langfuse_shutdown()
 
 
 
@@ -2809,6 +3212,82 @@ async def _pulse_refresh_loop():
         except Exception as e:
             log.debug(f"[pulse] refresh loop error: {e}")
         await asyncio.sleep(pulse_engine.refresh_interval_sec)
+
+
+# ── HexStrike AI Security Scheduler ─ every 15 minutes (testing) ────────────────────────────────
+_HEXSTRIKE_SCAN_INTERVAL = 900  # 15 minutes (testing — revert to 21600 after validation)
+
+
+async def _hexstrike_scheduler_loop():
+    """Background loop: every N seconds, run full hexstrike security scan and notify via ntfy."""
+    await asyncio.sleep(300)  # let hub finish booting first
+    while True:
+        try:
+            hs = HexStrike(get_db=get_db)
+            result = await hs.scan_full()
+            critical = result.get('critical_count', 0)
+            high = result.get('high_count', 0)
+            total = result.get('findings_count', 0)
+
+            log.info(
+                f'[hexstrike.scheduler] full scan complete: '
+                f'{total} findings ({critical} critical, {high} high)'
+            )
+
+            # Broadcast via live broadcaster
+            if total > 0:
+                try:
+                    live_broadcaster.broadcast({
+                        'type': 'hexstrike_scan',
+                        'status': 'completed',
+                        'findings': total,
+                        'critical': critical,
+                        'high': high,
+                        'scan_id': result.get('scan_id', ''),
+                    })
+                except Exception as e:
+                    log.debug(f'[hexstrike.scheduler] broadcast error: {e}')
+
+            # Send ntfy alert if critical findings detected
+            if critical > 0:
+                msg = (
+                    f'[HexStrike CRITICAL] {critical} critical findings '
+                    f'({high} high) in scheduled security scan. '
+                    f'Run: {result.get("scan_id", "unknown")[:12]}. '
+                    f'Check /command#/hexstrike for details.'
+                )
+                try:
+                    async with _httpx.AsyncClient(timeout=10.0) as client:
+                        headers = {'Title': 'HexStrike Security Alert', 'Priority': '5', 'Tags': 'warning'}
+                        if NTFY_TOKEN:
+                            headers['Authorization'] = f'Bearer {NTFY_TOKEN}'
+                        await client.post(
+                            f'https://ntfy.sh/{NTFY_TOPIC}',
+                            headers=headers,
+                            content=msg,
+                        )
+                        log.warning(f'[hexstrike.scheduler] ntfy alert sent: {critical} critical')
+                except Exception as e:
+                    log.debug(f'[hexstrike.scheduler] ntfy error: {e}')
+
+            elif high > 0:
+                try:
+                    async with _httpx.AsyncClient(timeout=10.0) as client:
+                        headers = {'Title': 'HexStrike Findings', 'Priority': '3', 'Tags': 'warning'}
+                        if NTFY_TOKEN:
+                            headers['Authorization'] = f'Bearer {NTFY_TOKEN}'
+                        await client.post(
+                            f'https://ntfy.sh/{NTFY_TOPIC}',
+                            headers=headers,
+                            content=f'[HexStrike] {high} high-severity findings in scheduled scan.',
+                        )
+                except Exception:
+                    pass
+
+        except Exception as e:
+            log.warning(f'[hexstrike.scheduler] scan error: {e}')
+
+        await asyncio.sleep(_HEXSTRIKE_SCAN_INTERVAL)
 
 
 # ─── /api/v1/compliance/stats: Compliance dashboard data ──────────────────
@@ -4690,8 +5169,77 @@ async def sms_niche_stats(auth: bool = Depends(require_auth)):
     return JSONResponse({"niches": niches, "total": sum(b["total"] for b in buckets.values())})
 
 
+
+
+# ─────────────────────────────────────────────────────────────────────
+# HUB HEALTH DIAGNOSTICS — deploy validation + crash debugging
+# ─────────────────────────────────────────────────────────────────────
+@app.get("/api/hub/diagnostics")
+async def hub_diagnostics():
+    """Return hub health diagnostics: status, database, port status.
+    No auth required — usable as a cold-start smoke test."""
+    import subprocess as _sp
+    db_ok = False
+    try:
+        _db = get_db()
+        _db.table("agent_registry").select("count", count="exact").limit(1).execute()
+        db_ok = True
+    except Exception:
+        db_ok = False
+
+    # Check key ports via ss
+    ports = {}
+    for p in [8000, 8005, 8010, 8020, 8030, 8040, 8045, 9222, 11434]:
+        try:
+            r = _sp.run(["ss", "-tlnp", f"sport = :{p}"], capture_output=True, text=True, timeout=3)
+            line = r.stdout.strip()
+            has_listener = bool(line and "State" not in line)
+            ports[str(p)] = "occupied" if has_listener else "free"
+        except Exception:
+            ports[str(p)] = "unknown"
+
+    return JSONResponse({
+        "status": "ok",
+        "app": "Empire AI V49 Hub",
+        "version": "49.0.0",
+        "database": "connected" if db_ok else "error",
+        "ports": ports,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "diagnostics_cmds": {
+            "validate": "./validate_hub_deploy.sh --quick",
+            "restart": "./hub_safe_restart.sh",
+            "ports": "./check_ports.sh",
+        },
+    })
+
+
+log.info(f"[boot] module imports complete: {_boot_time.time() - _BOOT_START:.1f}s (total)")
+
+
 if __name__ == "__main__":
+    import signal
+    import sys as _sys_hub
+    
+    def _hub_graceful_shutdown(signum, frame):
+        """Handle SIGTERM/SIGINT: close DB, flush logs, exit cleanly.
+        Prevents port-8000 zombies by ensuring the process releases
+        the port before PM2 sends SIGKILL."""
+        log.info("[hub] graceful shutdown signal received — closing connections")
+        global _supabase_client
+        if _supabase_client is not None:
+            _supabase_client = None
+            log.info("[hub] Supabase client closed")
+        log.info("[hub] shutdown complete")
+        _sys_hub.exit(0)
+    
+    signal.signal(signal.SIGTERM, _hub_graceful_shutdown)
+    signal.signal(signal.SIGINT, _hub_graceful_shutdown)
+    
+    _t_uvicorn = _boot_time.time()
     import uvicorn
+    log.info(f"[boot] uvicorn imported: {_boot_time.time() - _t_uvicorn:.1f}s (total: {_boot_time.time() - _BOOT_START:.1f}s)")
+    _t_run = _boot_time.time()
+    log.info(f"[boot] calling uvicorn.run at {_boot_time.time() - _BOOT_START:.1f}s")
     uvicorn.run(app, host="0.0.0.0", port=8000)
 
 

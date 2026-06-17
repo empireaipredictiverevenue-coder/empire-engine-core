@@ -59,6 +59,7 @@ def scrape_angi():
 def heartbeat(leads):
     sb.table("agent_registry").upsert({
         "agent_name": "angi",
+        "role_name": "b2b_lead_scraper",
         "status": "ACTIVE",
         "leads_today": leads,
         "last_ping": datetime.now(timezone.utc).isoformat(),

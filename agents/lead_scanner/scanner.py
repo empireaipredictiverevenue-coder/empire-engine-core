@@ -18,6 +18,7 @@ Usage:
 import os
 import sys
 import json
+import re
 import uuid
 import logging
 import argparse
@@ -38,6 +39,128 @@ from supabase import create_client
 
 log = logging.getLogger("empire.lead_scanner")
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(name)s] %(message)s")
+
+
+# ── ADDRESS PARSING ───────────────────────────────────────────────────
+
+# Regex to extract 2-letter state + ZIP from the end of a string.
+_STATE_ZIP_RE = re.compile(
+    r"\b(?P<state>[A-Z]{2})\s+(?P<zip>\d{5}(?:-\d{4})?)\s*$",
+    re.ASCII,
+)
+
+# Common street suffixes and directionals to filter out of city candidates.
+_STREET_WORDS = {
+    "st", "ave", "rd", "blvd", "dr", "ln", "ct", "pl", "way",
+    "n", "s", "e", "w", "ne", "nw", "se", "sw",
+    "north", "south", "east", "west",
+    "street", "avenue", "road", "boulevard", "drive", "lane", "court", "place",
+    "northeast", "northwest", "southeast", "southwest",
+    "pky", "parkway", "hwy", "highway", "trl", "trail",
+    "cir", "circle", "sq", "square", "ter", "terrace",
+    "bnd", "bend", "byp", "bypass", "xing", "crossing",
+}
+
+# Lat/lng coordinate pattern: two comma-separated floats
+_LAT_LNG_RE = re.compile(
+    r"^-?\d+\.\d+,\s*-?\d+\.\d+$"
+)
+
+
+def _parse_address(addr: str, existing_city: str = None, existing_state: str = None,
+                   raw: dict = None) -> tuple:
+    """
+    Parse city and state from an address string.
+
+    Resolution order:
+      1. Already-provided city/state (from structured data)
+      2. raw.city / raw.state (Google Places structured fields)
+      3. Comma-separated address (ends with "..., ST ZIP, USA")
+      4. Regex extraction from the end of a no-comma address ("...Fort Worth TX 76106")
+      5. Fallback: None
+
+    Returns (city, state) where either can be None.
+    """
+    # 1) Already have it
+    if existing_city and existing_state:
+        return existing_city, existing_state
+
+    # 2) Google Places structured data in meta.raw
+    if raw:
+        rc = raw.get("city")
+        rs = raw.get("state")
+        if rc and rs:
+            return rc, rs
+
+    if not addr or not isinstance(addr, str):
+        return existing_city, existing_state
+
+    addr = addr.strip()
+    if not addr:
+        return existing_city, existing_state
+
+    # 3) Lat/lng — skip, no city/state in coordinates
+    if _LAT_LNG_RE.match(addr.replace(" ", "")):
+        return existing_city, existing_state
+
+    # 4) Comma-separated: "<street>, <city>, <ST> <zip>, <country>"
+    parts = [p.strip() for p in addr.split(",") if p.strip()]
+    if len(parts) >= 2:
+        city = existing_city
+        state = existing_state
+
+        # Determine which part has "ST ZIP" and which has the city
+        # Structure depends on whether the country is present
+        if parts[-1] in ("USA", "US", "United States"):
+            # parts[-2] = "TX 76106" or "TX 78218, USA"
+            st_part = parts[-2]
+            city_part_idx = -3
+        else:
+            # parts[-1] = "TX 76106" or "TX 78218"
+            st_part = parts[-1]
+            city_part_idx = -2
+
+        if not state and st_part:
+            st_tokens = st_part.split()
+            if st_tokens and len(st_tokens[0]) == 2 and st_tokens[0].isupper():
+                state = st_tokens[0]
+
+        if not city and len(parts) >= abs(city_part_idx):
+            city = parts[city_part_idx].strip()
+
+        return city, state
+
+    # 5) No commas: extract state+ZIP from the end, then backtrack for city
+    # Patterns like "400 East Industrial Avenue Fort Worth TX 76106"
+    m = _STATE_ZIP_RE.search(addr)
+    if m:
+        state = m.group("state") if not existing_state else existing_state
+        # Everything before the state is "<street> <city>" or just "<city>"
+        before = addr[:m.start("state")].strip().rstrip(",")
+        # Split into tokens and find the city: take the last 1-3 tokens
+        # that aren't street suffixes, directions, or numbers.
+        tokens = before.split()
+        city_tokens = []
+        for t in reversed(tokens):
+            t_clean = t.strip(",.")
+            # Stop at numbers, street words, or single letters
+            if t_clean.isdigit():
+                break
+            if t_clean.lower() in _STREET_WORDS:
+                break
+            if len(t_clean) == 1 and t_clean.isalpha():
+                break
+            city_tokens.insert(0, t_clean)
+            # Reasonable city name is 1-3 words
+            if len(city_tokens) >= 3:
+                break
+
+        if city_tokens and not existing_city:
+            city = " ".join(city_tokens)
+
+        return city if not existing_city else existing_city, state
+
+    return existing_city, existing_state
 
 
 def _sb():
@@ -165,42 +288,15 @@ def run() -> dict:
 
     for rt in candidates:
         try:
-            # best-effort city/state extraction from address if missing.
-            # Real-world addresses from Google Places are comma-separated:
-            #   "<street>, <city>, <ST> <zip>, <country>"
-            # Empire-pipeline rows sometimes have just a business name in
-            # the address column — those can't be parsed, leave blank.
-            city = rt.get("city")
-            state = rt.get("state")
+            # Parse city/state from the address using the new robust parser
             meta = rt.get("meta") or {}
             raw = meta.get("raw") or {}
-
-            # prefer Google Places structured data if available
-            if not city and raw.get("city"):
-                city = raw.get("city")
-            if not state and raw.get("state"):
-                state = raw.get("state")
-
-            # fall back to parsing the comma-separated address
-            if (not city or not state) and rt.get("address"):
-                addr = (rt.get("address") or "").strip()
-                # The address is comma-separated. Split on commas.
-                parts = [p.strip() for p in addr.split(",") if p.strip()]
-                if len(parts) >= 2:
-                    # Try: parts[-1] = country, parts[-2] = "ST zip", parts[-3] = city
-                    if not state and len(parts) >= 2:
-                        # second-to-last usually has "<ST> <zip>" or just "<ST>"
-                        st_zip = parts[-2] if not (len(parts) >= 3 and parts[-1] in ("USA", "US", "United States")) else parts[-2]
-                        # extract the 2-letter state
-                        st_tokens = st_zip.split()
-                        if st_tokens and len(st_tokens[0]) == 2 and st_tokens[0].isupper():
-                            state = st_tokens[0]
-                    if not city and len(parts) >= 3:
-                        # If last part is a country, city is parts[-3]; else parts[-2]
-                        if parts[-1] in ("USA", "US", "United States"):
-                            city = parts[-3] if len(parts) >= 3 else None
-                        else:
-                            city = parts[-2]
+            city, state = _parse_address(
+                rt.get("address"),
+                existing_city=rt.get("city"),
+                existing_state=rt.get("state"),
+                raw=raw,
+            )
 
             # phone fallback: top-level first, then meta.raw.phone
             phone = rt.get("phone") or raw.get("phone")

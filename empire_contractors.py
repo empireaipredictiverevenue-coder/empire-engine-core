@@ -248,6 +248,9 @@ def contractors_page() -> str:
         <a class="co-btn co-btn-primary" href="#onboard">Self-onboard (90 seconds)</a>
         <a class="co-btn co-btn-secondary" href="/demo">Watch the 2-min demo</a>
       </div>
+      <p style="margin-top:20px;font-size:14px;color:#94A3B8;">
+        Want leads first? <a href="/contractors/priority" style="color:#4FD1C5;font-weight:600;">Priority Dispatch</a> — $99/mo, first-look window, $50K+ claim routing.
+      </p>
     </section>
 
     <section class="co-section">

@@ -3,7 +3,7 @@ EMPIRE V49 · AI ROUTER
 =======================
 Provider-agnostic LLM dispatcher. Local Ollama first.
 Routes by task type to the best-fit model.
-Logs every call to ai_call_log + brain_training_log.
+Logs every call to ai_call_log + brain_training_log + Langfuse traces.
 """
 import os
 import json
@@ -12,6 +12,8 @@ import logging
 import asyncio
 from typing import Dict, Any, Optional, Callable
 import httpx
+
+from observability.tracing import TraceContext
 
 log = logging.getLogger("empire.ai.router")
 
@@ -51,7 +53,8 @@ class AIRouter:
     ) -> str:
         chosen = self._model_for_task(task, model)
         result = await self._call_ollama(prompt=prompt, model=chosen, system=system,
-                                          temperature=temperature, max_tokens=max_tokens, format=None)
+                                          temperature=temperature, max_tokens=max_tokens,
+                                          format=None, task=task)
         await self._log_call(task=task, prompt=prompt, system=system, output=result.get("text", ""),
                              model=chosen, tokens_in=result.get("tokens_in", 0),
                              tokens_out=result.get("tokens_out", 0), latency_ms=result.get("latency_ms", 0),
@@ -68,7 +71,8 @@ class AIRouter:
         raw = ""
         for attempt in range(retries + 1):
             result = await self._call_ollama(prompt=prompt, model=chosen, system=system,
-                                              temperature=temperature, max_tokens=max_tokens, format="json")
+                                              temperature=temperature, max_tokens=max_tokens,
+                                              format="json", task=task)
             raw = result.get("text", "") or ""
             try:
                 clean = raw.strip()
@@ -97,33 +101,55 @@ class AIRouter:
     async def _call_ollama(
         self, prompt: str, model: str, system: Optional[str],
         temperature: float, max_tokens: int, format: Optional[str] = None,
+        task: str = "general",
     ) -> Dict:
-        async with self._sem:
-            payload = {
-                "model": model,
-                "prompt": prompt,
-                "stream": False,
-                "options": {"temperature": temperature, "num_predict": max_tokens},
-            }
-            if system:
-                payload["system"] = system
-            if format == "json":
-                payload["format"] = "json"
-            start = time.time()
-            try:
-                async with httpx.AsyncClient(timeout=TIMEOUT_SEC) as client:
-                    r = await client.post(f"{OLLAMA_URL}/api/generate", json=payload)
-                    r.raise_for_status()
-                    data = r.json()
-                    return {
-                        "text": data.get("response", ""),
-                        "tokens_in": data.get("prompt_eval_count", 0),
-                        "tokens_out": data.get("eval_count", 0),
-                        "latency_ms": int((time.time() - start) * 1000),
-                    }
-            except Exception as e:
-                log.error(f"[router] Ollama call failed ({model}): {e}")
-                return {"text": "", "tokens_in": 0, "tokens_out": 0, "latency_ms": 0, "error": str(e)}
+        payload = {
+            "model": model,
+            "prompt": prompt,
+            "stream": False,
+            "options": {"temperature": temperature, "num_predict": max_tokens},
+        }
+        if system:
+            payload["system"] = system
+        if format == "json":
+            payload["format"] = "json"
+        start = time.time()
+
+        # Langfuse trace wraps the entire call
+        async with TraceContext(
+                name=f"ollama.{task}",
+                model=model,
+                input=prompt[:3000],
+                system=system,
+                task=task,
+                metadata={"format": format, "temperature": temperature},
+                tags=["provider:ollama", f"model:{model}", f"task:{task}"],
+            ) as ctx:
+                # Semaphore inside the trace for accurate HTTP latency
+                async with self._sem:
+                    try:
+                        async with httpx.AsyncClient(timeout=TIMEOUT_SEC) as client:
+                            r = await client.post(f"{OLLAMA_URL}/api/generate", json=payload)
+                            r.raise_for_status()
+                            data = r.json()
+                            result = {
+                                "text": data.get("response", ""),
+                                "tokens_in": data.get("prompt_eval_count", 0),
+                                "tokens_out": data.get("eval_count", 0),
+                                "latency_ms": int((time.time() - start) * 1000),
+                            }
+                            ctx.set_output(
+                                output=result["text"],
+                                tokens_in=result["tokens_in"],
+                                tokens_out=result["tokens_out"],
+                                latency_ms=result["latency_ms"],
+                            )
+                            return result
+                    except Exception as e:
+                        log.error(f"[router] Ollama call failed ({model}): {e}")
+                        result = {"text": "", "tokens_in": 0, "tokens_out": 0, "latency_ms": 0, "error": str(e)}
+                        ctx.set_output(error=str(e))
+                        return result
 
     async def _log_call(
         self, task: str, prompt: str, system: Optional[str], output: str,

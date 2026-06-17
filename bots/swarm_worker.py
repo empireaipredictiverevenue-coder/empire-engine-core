@@ -157,6 +157,7 @@ class SwarmOrchestrationNode:
         try:
             sb.table("agent_registry").upsert({
                 "agent_name": "swarm_worker",
+                "role_name": "mesh_studio_render",
                 "status": "ACTIVE",
                 "last_ping": datetime.now(timezone.utc).isoformat(),
                 "enabled": True,

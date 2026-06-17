@@ -1,5 +1,5 @@
 To: partners@statefarm.com
-From: phil@empire-ai.co.uk
+From: philliplivesley@empire-ai.co.uk
 Subject: Partner API inquiry: settled-claim event notifications for predictive storm response
 Carrier: State Farm
 Status: DRAFT — review before sending

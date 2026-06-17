@@ -1639,6 +1639,7 @@ const NAV_GROUPS = [
       { id: 'leads',         label: 'Leads',          sub: 'Inbound leads · pipeline · intake' },
       { id: 'kanban',        label: 'Kanban',         sub: 'Agent task queue · pipeline stages' },
       { id: 'sms-performance', label: 'SMS Performance', sub: 'Niche breakdown · sequence stats' },
+      { id: 'fleet', label: 'Fleet', sub: 'Agent roles · hierarchy · findings' },
     ]
   },
   {
@@ -1687,7 +1688,6 @@ const NAV_GROUPS = [
       { id: 'operators',     label: 'Operators',      sub: 'Roster · roles · invites' },
       { id: 'audit',         label: 'Audit',          sub: 'Operator action history' },
       { id: 'governor',      label: 'Governor',       sub: 'AGI governor · weight control · guardrails' },
-      { id: 'sniper-fleet',  label: 'Sniper Fleet',   sub: 'Active agents · lane status · targeting' },
       { id: 'health-monitor',label: 'Health Monitor', sub: 'Agent mesh · system health · overseer' },
       { id: 'bridge',         label: 'Bridge',         sub: 'Voice-first interface · full-screen' },
       { id: 'network', label: 'Network',  sub: 'Members · referrals · growth' },
@@ -5215,108 +5215,7 @@ function HealthMonitor() {
 }
 
 // ── SNIPER FLEET ─────────────────────────────────────────────────────
-function SniperFleet() {
-  const [agents, setAgents] = useState(null);
-  const [err, setErr] = useState(null);
-  const [busy, setBusy] = useState(null);
 
-  const reload = useCallback(async () => {
-    try {
-      const r = await apiFetch('/api/agents/status').then(x => x.json());
-      setAgents(r.agents || []);
-      setErr(null);
-    } catch (e) {
-      if (e.message !== 'Unauthorized') setErr(e.message);
-    }
-  }, []);
-
-  useEffect(() => {
-    reload();
-    const t = setInterval(reload, 10000);
-    return () => clearInterval(t);
-  }, [reload]);
-
-  const doToggle = async (id) => {
-    const a = agents.find(x => x.id === id);
-    const label = a?.enabled ? 'disable' : 'enable';
-    if (!confirm(`${label.charAt(0).toUpperCase() + label.slice(1)} ${a?.name || id} agent?`)) return;
-    setBusy(id);
-    try {
-      await apiFetch(`/api/agents/${id}/toggle`, { method: 'POST' });
-      await reload();
-    } catch (e) { alert('Failed: ' + e.message); }
-    setBusy(null);
-  };
-
-  if (err) return html`<div class="stub"><div class="stub-title">Could not load Sniper Fleet</div><div class="stub-body">${err}</div></div>`;
-
-  const activeCount = (agents || []).filter(a => a.status === 'ACTIVE').length;
-  const idleCount = (agents || []).filter(a => a.status === 'IDLE').length;
-  const offlineCount = (agents || []).filter(a => a.status === 'OFFLINE').length;
-
-  return html`
-    <div>
-      <div class="section-h">
-        <div>
-          <div class="section-title">Sniper Fleet</div>
-          <div class="section-sub">Active agents · lane status · targeting</div>
-        </div>
-        <div class="section-sub">Auto-refresh · 10s</div>
-      </div>
-      <div class="sf-summary">
-        <span class="sf-summary-tag">Active: <strong style=${{color: 'var(--signal-teal)'}}>${activeCount}</strong></span>
-        <span class="sf-summary-tag">Idle: <strong style=${{color: 'var(--status-amber)'}}>${idleCount}</strong></span>
-        <span class="sf-summary-tag">Offline: <strong style=${{color: 'var(--empire-mist)'}}>${offlineCount}</strong></span>
-      </div>
-      ${activeCount + idleCount + offlineCount > 0 ? html`<div class="chart-panel">
-        <div class="chart-panel-h">
-          <div class="chart-panel-title">Agent Status</div>
-          <div class="chart-panel-tag">${activeCount + idleCount + offlineCount} total agents</div>
-        </div>
-        ${(() => {
-          const sd = [];
-          if (activeCount > 0) sd.push({label: 'Active', value: activeCount, color: 'var(--signal-teal)'});
-          if (idleCount > 0) sd.push({label: 'Idle', value: idleCount, color: 'var(--status-amber)'});
-          if (offlineCount > 0) sd.push({label: 'Offline', value: offlineCount, color: 'var(--empire-mist)'});
-          return html`<${DonutChart} data=${sd} size=${108} strokeWidth=${22} />`;
-        })()}
-      </div>` : ''}
-      ${!agents
-        ? html`<div class="stub"><div class="stub-body">Loading agent status…</div></div>`
-        : html`
-      <div class="sf-grid">
-        ${agents.length === 0
-          ? html`<div class="stub" style=${{gridColumn: '1 / -1'}}><div class="stub-body">No agents found.</div></div>`
-          : agents.map(a => {
-            const statusCls = a.status || 'OFFLINE';
-            const ping = a.last_ping
-              ? ((new Date() - new Date(a.last_ping)) / 1000 < 120 ? 'now' : (a.last_ping || '').slice(11,19))
-              : '—';
-            return html`
-            <div class="sf-card" key=${a.id}>
-              <div class="sf-card-top">
-                <div class="sf-card-info">
-                  <div class="sf-card-name">${a.name || a.id}</div>
-                  <div class="sf-card-type">${a.type || '—'}</div>
-                </div>
-                <span class=${'sf-bdg ' + statusCls}>
-                  <span class="sf-bdg-dot"></span>${statusCls}
-                </span>
-              </div>
-              <div class="sf-leads">${a.leads_today ?? 0}<div class="sf-leads-lbl">leads today</div></div>
-              <div class="sf-card-meta">
-                <span>Last ping: ${ping}</span>
-                <button class=${'sf-toggle ' + (a.enabled ? 'on' : 'off')} disabled=${busy === a.id} onClick=${() => doToggle(a.id)}>
-                  ${busy === a.id ? '…' : (a.enabled ? 'ON' : 'OFF')}
-                </button>
-              </div>
-            </div>
-          `})}
-      </div>
-      `}
-    </div>
-  `;
-}
 
 // ── STUB SECTION (other tabs) ────────────────────────────────────────
 
@@ -9591,7 +9490,7 @@ function App() {
             active.id === 'swarm-gate'    ? html`<${SwarmGate} />` :
             active.id === 'operators'     ? html`<${Operators} />` :
             active.id === 'governor'      ? html`<${Governor} />` :
-            active.id === 'sniper-fleet'  ? html`<${SniperFleet} />` :
+            active.id === 'fleet'  ? html`<${SniperFleet} />` :
             active.id === 'command-center' ? html`<${CommandCenter} />` :
             active.id === 'trial-pipeline' ? html`<${TrialPipeline} />` :
             active.id === 'health-monitor' ? html`<${HealthMonitor} />` :
@@ -9618,6 +9517,182 @@ function App() {
       </main>
     </div>
   `;
+}
+
+
+
+// ── SNIPER FLEET — Watcher Findings Dashboard ──────────────────────
+function SniperFleet() {
+  const [findings, setFindings] = useState(null);
+  const [stats, setStats] = useState(null);
+  const [acknowledging, setAcknowledging] = useState({});
+  const [fixing, setFixing] = useState({});
+  const [loading, setLoading] = useState(true);
+  const [showAllFindings, setShowAllFindings] = useState(true);
+
+  const fetchData = useCallback(async () => {
+    try {
+      const [findingsRes, statsRes] = await Promise.all([
+        apiFetch('/api/v1/fleet/watcher-findings?limit=30'),
+        apiFetch('/api/v1/fleet/watcher-stats?days=7'),
+      ]);
+      const fd = await findingsRes.json();
+      const st = await statsRes.json();
+      setFindings(fd);
+      setStats(st);
+    } catch (e) {
+      console.error('Fleet fetch error:', e);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { fetchData(); const iv = setInterval(fetchData, 15000); return () => clearInterval(iv); }, [fetchData]);
+
+  async function acknowledgeFinding(id) {
+    setAcknowledging(prev => ({ ...prev, [id]: true }));
+    try { await apiFetch(`/api/v1/fleet/watcher-findings/${id}/acknowledge`, { method: 'PATCH' }); await fetchData(); }
+    catch (e) { console.error(e); } finally { setAcknowledging(prev => ({ ...prev, [id]: false })); }
+  }
+
+  async function fixFinding(id) {
+    setFixing(prev => ({ ...prev, [id]: true }));
+    try { await apiFetch(`/api/v1/fleet/watcher-findings/${id}/fix`, { method: 'PATCH' }); await fetchData(); }
+    catch (e) { console.error(e); } finally { setFixing(prev => ({ ...prev, [id]: false })); }
+  }
+
+  function ago(iso) {
+    if (!iso) return '\u2014';
+    const diff = Date.now() - new Date(iso).getTime();
+    const s = Math.floor(diff / 1000);
+    if (s < 60) return `${s}s ago`;
+    const m = Math.floor(s / 60);
+    if (m < 60) return `${m}m ago`;
+    const h = Math.floor(m / 60);
+    if (h < 24) return `${h}h ago`;
+    return `${Math.floor(h / 24)}d ago`;
+  }
+
+  if (loading) return html`<div class="stub"><div class="stub-body">Loading fleet findings\u2026</div></div>`;
+
+  const findingList = findings?.findings || [];
+  const s = stats || {};
+  const filteredFindings = showAllFindings ? findingList : findingList.filter(f => !f.auto_healed);
+
+  return html`
+    <div>
+      <div class="section-h">
+        <div>
+          <div class="section-title">Agent <em>Fleet</em></div>
+          <div class="section-sub">Watcher findings \u00b7 acknowledge \u00b7 fix tracking</div>
+        </div>
+        <div class="sec-actions">
+          <button class="btn" onClick=${() => fetchData()} disabled=${loading}>${loading ? 'REFRESHING\u2026' : 'REFRESH'}</button>
+        </div>
+      </div>
+
+      ${/* Filter Toggle */ ''}
+      <div class="ld-filter" style={{marginBottom:'16px'}}>
+        <span class="ld-filter-tag">Filter:</span>
+        <button class="ld-filter-btn ${showAllFindings ? 'active' : ''}" onClick=${() => setShowAllFindings(true)}>All findings</button>
+        <button class="ld-filter-btn ${!showAllFindings ? 'active' : ''}" onClick=${() => setShowAllFindings(false)}>Unresolved only</button>
+      </div>
+
+      ${/* Watcher Findings Stats */ ''}
+      <div class="pulse-grid">
+        <div class="stat-card">
+          <div class="stat-label">Total Findings</div>
+          <div class="stat-value ${s.total > 0 ? 'teal' : 'dim'}">${s.total || 0}</div>
+          <div class="stat-meta">${s.lookback_days || 7}d lookback</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Critical</div>
+          <div class="stat-value" style=${{color: s.critical > 0 ? 'var(--status-red)' : 'var(--empire-mist)'}}>${s.critical || 0}</div>
+          <div class="stat-meta">\u25cf ${s.warning || 0} warnings</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Acknowledged</div>
+          <div class="stat-value" style=${{color: s.acknowledged > 0 ? 'var(--strike-cyan)' : 'var(--empire-mist)'}}>${s.acknowledged || 0}</div>
+          <div class="stat-meta">${s.unacknowledged || 0} unacknowledged</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Fixed</div>
+          <div class="stat-value" style=${{color: s.fixed > 0 ? 'var(--signal-teal)' : 'var(--empire-mist)'}}>${s.fixed || 0}</div>
+          <div class="stat-meta">${s.unfixed || 0} unfixed</div>
+        </div>
+      </div>
+
+      ${/* Error Rate Trend */ ''}
+      ${s.daily_counts && s.daily_counts.length > 0 ? html`
+        <div class="af-panel" style=${{marginTop:'0'}}>
+          <div class="af-h">
+            <div class="af-title">Error Rate <em>Trend</em></div>
+            <div class="af-tag">daily findings \u00b7 ${s.daily_counts.length} days</div>
+          </div>
+          <div style=${{display:'flex',flexDirection:'column',gap:'6px'}}>
+            ${s.daily_counts.map(d => {
+              const maxVal = Math.max(...s.daily_counts.map(x => x.total), 1);
+              const pct = (d.total / maxVal) * 100;
+              return html`
+                <div class="rv-bar-row" key=${d.date}>
+                  <span class="rv-bar-label" style=${{minWidth:'80px'}}><span class="rv-bar-lane" style=${{fontSize:'11px'}}>${d.date}</span></span>
+                  <div class="rv-bar-track">
+                    <div class="rv-bar-fill" style=${{width:pct+'%',background:d.critical>0?'var(--status-red)':'var(--status-amber)'}}></div>
+                  </div>
+                  <span class="rv-bar-val">${d.total}</span>
+                  <span class="rv-bar-meta" style=${{color:d.critical>0?'var(--status-red)':'var(--empire-fog)'}}>${d.critical>0?d.critical+' crit':d.warning+' warn'}</span>
+                </div>`;
+            })}
+          </div>
+        </div>` : null}
+
+      ${/* Findings Table with Ack/Fix Toggles */ ''}
+      <div class="af-panel" style=${{marginTop:'20px'}}>
+        <div class="af-h">
+          <div class="af-title">Watcher <em>Findings</em></div>
+          <div class="af-tag">${filteredFindings.length} shown \u00b7 ${s.unacknowledged||0} unacknowledged \u00b7 ${s.unfixed||0} unfixed</div>
+        </div>
+        ${filteredFindings.length === 0 ? html`
+          <div class="af-empty">${findings?.error ? 'Watcher findings table not available: '+findings.error : 'No watcher findings. The fleet is healthy.'}</div>
+        ` : html`
+          <table class="tbl">
+            <thead><tr>
+              <th>Time</th><th>Severity</th><th>Type</th><th>Agent</th><th>Title</th><th>Status</th><th>Actions</th>
+            </tr></thead>
+            <tbody>
+              ${filteredFindings.map(f => {
+                const isCritical = f.severity === 'critical';
+                const isAcked = f.acknowledged;
+                const isFixed = f.fixed;
+                return html`
+                  <tr key=${f.id} style=${{background:isCritical&&!isFixed?'rgba(255,68,68,0.03)':'transparent'}}>
+                    <td class="tbl-mono" style=${{fontSize:'10px',color:'var(--empire-fog)'}}>${f.created_at?new Date(f.created_at).toLocaleString():''}</td>
+                    <td><span class="bdg ${isCritical?'active':'pending'}" style=${{color:isCritical?'var(--status-red)':'var(--status-amber)',borderColor:isCritical?'rgba(255,68,68,0.3)':'rgba(255,184,0,0.3)'}}>${f.severity||'warning'}</span></td>
+                    <td class="tbl-mono" style=${{fontSize:'10px'}}>${f.finding_type||'\u2014'}</td>
+                    <td class="tbl-mono" style=${{fontSize:'10px',color:'var(--strike-cyan)'}}>${f.agent_name||'\u2014'}</td>
+                    <td style=${{maxWidth:'280px',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}} title=${f.title||''}>${(f.title||f.message||'').substring(0,80)}</td>
+                    <td>${isFixed?html`<span class="bdg complete" style=${{color:'var(--signal-teal)',borderColor:'rgba(68,229,184,0.2)'}}>FIXED</span>`:isAcked?html`<span class="bdg replied" style=${{color:'var(--strike-cyan)'}}>ACKED</span>`:html`<span class="bdg pending">OPEN</span>`}</td>
+                    <td><div style=${{display:'flex',gap:'4px'}}>
+                      ${!isAcked?html`<button class="tbl-action" disabled=${acknowledging[f.id]} onClick=${()=>acknowledgeFinding(f.id)}>${acknowledging[f.id]?'\u2026':'Ack'}</button>`:null}
+                      ${!isFixed?html`<button class="tbl-action go" disabled=${fixing[f.id]} onClick=${()=>fixFinding(f.id)}>${fixing[f.id]?'\u2026':'Fix'}</button>`:null}
+                    </div></td>
+                  </tr>`;})}
+            </tbody>
+          </table>`}
+      </div>
+
+      ${/* Findings by Type */ ''}
+      ${s.by_type&&Object.keys(s.by_type).length>0?html`
+      <div class="af-panel" style=${{marginTop:'20px'}}>
+        <div class="af-h"><div class="af-title">Findings by <em>Type</em></div><div class="af-tag">${Object.keys(s.by_type).length} types</div></div>
+        <div style=${{display:'flex',gap:'8px',flexWrap:'wrap'}}>
+          ${Object.entries(s.by_type).map(([type,count])=>html`
+            <div class="sf-bdg ACTIVE" style=${{fontSize:'10px',padding:'5px 12px'}} key=${type}>
+              <span class="sf-bdg-dot"></span> ${type.replace(/_/g,' ')}: <strong>${count}</strong>
+            </div>`)}
+        </div>
+      </div>`:null}
+    </div>`;
 }
 
 function CommandCenter() {

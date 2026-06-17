@@ -311,7 +311,10 @@ class ContractorMatcher:
             return {"ok": False, "error": f"DB unavailable: {e}"}
 
         dispatch_ids = []
-        sent = 0
+        db_dispatched = 0
+        email_sent = 0
+        sms_sent = 0
+        email_errors: list[str] = []
 
         for entry in matched:
             contractor = entry["contractor"]
@@ -350,6 +353,7 @@ class ContractorMatcher:
                     "meta":            dispatch_meta,
                 }).execute()
                 dispatch_ids.append(ins.data[0]["id"] if ins.data else None)
+                db_dispatched += 1
             except Exception as e:
                 log.error(f"[matching] dispatch insert failed: {e}")
                 continue
@@ -363,14 +367,26 @@ class ContractorMatcher:
                 score=score,
             )
             try:
-                await send_email(
+                result = await send_email(
                     to=contractor["email"],
                     subject=f"⚡ New strike · {lead.get('city', 'Empire')} · urgency {urgency}/10",
                     html=html,
                 )
-                sent += 1
+                if isinstance(result, dict) and result.get("ok"):
+                    email_sent += 1
+                else:
+                    err_msg = result.get("error", "unknown") if isinstance(result, dict) else str(result)
+                    if isinstance(result, dict) and result.get("quota_exceeded"):
+                        email_errors.append(f"{contractor.get('email','?')}: quota_exceeded ({result.get('quota_tier','?')})")
+                    else:
+                        email_errors.append(f"{contractor.get('email','?')}: {str(err_msg)[:80]}")
+                    log.warning(f"[matching] dispatch email failed for {contractor.get('email')}: {err_msg}")
             except Exception as e:
-                log.error(f"[matching] dispatch email failed for {contractor.get('email')}: {e}")
+                email_errors.append(f"{contractor.get('email','?')}: {str(e)[:80]}")
+                log.warning(f"[matching] dispatch email failed for {contractor.get('email')}: {e}")
+                # ── Email failed but dispatch is already created ──
+                # SMS delivery below still fires. The contractor still
+                # gets the lead via SMS even if email is down.
 
             # SMS notification: contractors miss emails. Push the lead
             # details as an SMS so the contractor has two channels.
@@ -419,6 +435,7 @@ class ContractorMatcher:
                             "message_uuid":  sms_result.get("message_uuid"),
                             "delivered":     True,
                         }).execute()
+                        sms_sent += 1
             except Exception as e:
                 log.warning(f"[matching] dispatch SMS failed for {contractor.get('phone')}: {e}")
 
@@ -432,7 +449,7 @@ class ContractorMatcher:
         except Exception:
             pass
 
-        self.stats["dispatches_sent"] += sent
+        self.stats["dispatches_sent"] += db_dispatched
 
         # Broadcast to operator dashboard
         if broadcaster:
@@ -451,10 +468,13 @@ class ContractorMatcher:
                 pass
 
         return {
-            "ok":            True,
-            "dispatched":    sent,
-            "dispatch_ids":  dispatch_ids,
-            "top_score":     round(matched[0]["score"], 3) if matched else 0,
+            "ok":              True,
+            "dispatched":      db_dispatched,
+            "email_sent":      email_sent,
+            "sms_sent":        sms_sent,
+            "email_errors":    email_errors if email_errors else None,
+            "dispatch_ids":    dispatch_ids,
+            "top_score":       round(matched[0]["score"], 3) if matched else 0,
         }
 
     # ── PUBLIC: TRUST SCORE UPDATE FROM OUTCOMES ─────────────────────────

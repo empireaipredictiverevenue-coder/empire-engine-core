@@ -1244,10 +1244,12 @@ class RevenueBrain:
         try:
             sb.table("agent_registry").upsert({
                 "agent_name": "revenue.brain",
+                "role_name": "predictive_revenue",
                 "status": "ACTIVE",
                 "last_ping": datetime.now(timezone.utc).isoformat(),
                 "enabled": True,
-                "capabilities": json.dumps(["revenue", "learning", "adaptation", "si"]),
+                "capabilities": json.dumps(["forecast_revenue", "detect_anomalies", "model_pipeline"]),
+                "task_types": json.dumps(["revenue.forecast", "revenue.anomaly"]),
             }, on_conflict="agent_name").execute()
         except Exception:
             pass
