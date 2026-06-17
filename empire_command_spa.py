@@ -1797,6 +1797,7 @@ function Closer() {
   const [err, setErr] = useState(null);
   const [usdcData, setUsdcData] = useState(null);
   const [usdcErr, setUsdcErr] = useState(null);
+  const [cryptoStats, setCryptoStats] = useState(null);
 
   useEffect(() => {
     let stop = false;
@@ -2071,6 +2072,16 @@ function SwarmGate() {
     } catch (eu) {
       setUsdcErr(eu.message || 'USDC fetch error');
       setUsdcData(null);
+
+    // Fetch crypto payment stats (for activation_failed panel)
+    try {
+      const cs = await apiFetch('/api/v1/crypto/stats');
+      if (cs.ok) {
+        setCryptoStats(await cs.json());
+      }
+    } catch (_) {
+      /* non-critical */
+    }
     }
 
     } catch (e) {
@@ -2814,6 +2825,14 @@ function ProductsPanel() {
   const [subAcct, setSubAcct] = useState('');
   const [subBusy, setSubBusy] = useState(false);
   const [subMsg, setSubMsg] = useState(null);
+  // Crypto USDC payment state
+  const [cryptoProduct, setCryptoProduct] = useState(null); // {tier, name, price}
+  const [cryptoEmail, setCryptoEmail] = useState('');
+  const [cryptoAcct, setCryptoAcct] = useState('');
+  const [cryptoResult, setCryptoResult] = useState(null); // API response with memo, wallet, etc.
+  const [cryptoBusy, setCryptoBusy] = useState(false);
+  const [cryptoError, setCryptoError] = useState(null);
+  const pollInterval = useRef(null);  // cleared when modal closes
 
   useEffect(() => {
     fetch('/api/v1/products/catalog').then(r=>r.json()).then(d => {
@@ -2839,6 +2858,46 @@ function ProductsPanel() {
     setSubBusy(false);
   }
 
+  async function doCryptoPay(product) {
+    const email = cryptoEmail.trim();
+    const acct = cryptoAcct.trim() || email;
+    if (!email || !email.includes('@')) return setCryptoError('Please enter a valid email address');
+    setCryptoBusy(true);
+    setCryptoError(null);
+    setCryptoResult(null);
+    try {
+      const r = await fetch('/api/v1/crypto/pay', {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({ customer_email: email, customer_account_id: acct, tier_level: product.tier })
+      });
+      const j = await r.json();
+      if (j.ok) {
+        setCryptoResult(j);
+        // Start polling (clear any previous interval first)
+        const pid = j.payment_id;
+        if (pollInterval.current) clearInterval(pollInterval.current);
+        pollInterval.current = setInterval(async () => {
+          try {
+            const sr = await fetch('/api/v1/crypto/pay/' + pid);
+            const sd = await sr.json();
+            if (sd.status === 'completed' || sd.status === 'activation_pending') {
+              setCryptoResult(prev => ({...prev, status: sd.status}));
+              if (sd.status === 'completed') clearInterval(pollInterval.current);
+            }
+            if (sd.status === 'expired' || sd.status === 'activation_failed') {
+              setCryptoResult(prev => ({...prev, status: sd.status}));
+              clearInterval(pollInterval.current);
+            }
+          } catch(_) {}
+        }, 10000);
+      } else {
+        setCryptoError(j.error || 'Failed to create payment request');
+      }
+    } catch(e) { setCryptoError('Network error: ' + (e?.message || String(e))); }
+    setCryptoBusy(false);
+  }
+
   return html\`
     <div style=\${{padding:'0 24px',color:'var(--foreground)'}}>
       <h3 style=\${{fontFamily:'var(--font-mono)',fontWeight:300,fontSize:'24px',margin:'12 0 8 0',color:'var(--strike-cyan)'}}>Suite Products</h3>
@@ -2856,7 +2915,10 @@ function ProductsPanel() {
             onClick=\${() => { setSubTier({tier:p.tier, name:p.display_name, price:p.monthly_price_usd}); setSubAcct(''); setSubMsg(null); }}
             onmouseover=\${e => {e.target.style.background='var(--signal-teal)';e.target.style.color='var(--empire-black)'}}
             onmouseout=\${e => {e.target.style.background='transparent';e.target.style.color='var(--signal-teal)'}}>Subscribe</button>
-        </div>
+          <button style=${{marginLeft:'8px',padding:'6px 10px',border:'1px solid var(--strike-cyan)',background:'transparent',color:'var(--strike-cyan)',borderRadius:'4px',cursor:'pointer',fontFamily:'var(--font-mono)',fontSize:'10px',textTransform:'uppercase',letterSpacing:'0.1em'}}
+            onClick=${{() => {{ setCryptoProduct({{tier:p.tier, name:p.display_name, price:p.monthly_price_usd}}); setCryptoEmail(''); setCryptoAcct(''); setCryptoResult(null); setCryptoError(null); }}}}
+            onmouseover=${{e => {{e.target.style.background='var(--strike-cyan)';e.target.style.color='var(--empire-black)'}}}}
+            onmouseout=${{e => {{e.target.style.background='transparent';e.target.style.color='var(--strike-cyan)'}}}}>USDC</button>
       \`) : html\`<div style=\${{fontSize:'11px',color:'var(--foreground-muted)',padding:'12px'}}>Loading products…</div>\`}
       \${!packs ? null : html\`
         <h3 style=\${{fontFamily:'var(--font-mono)',fontWeight:300,fontSize:'24px',margin:'24 0 8 0',color:'var(--strike-cyan)'}}>Strike Packs</h3>
@@ -2897,6 +2959,70 @@ function ProductsPanel() {
       </div>
     \`}
   \`;
+
+    <!-- Crypto USDC Pay modal overlay -->
+    ${!cryptoProduct ? null : html`
+      <div style=${{position:'fixed',inset:0,background:'rgba(0,0,0,0.6)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:9999}} onClick=${{e => {{if(e.target===e.currentTarget) { if (pollInterval.current) { clearInterval(pollInterval.current); pollInterval.current = null; } setCryptoProduct(null); }}}}}>
+        <div style=${{background:'var(--empire-surface)',border:'1px solid var(--empire-border)',borderRadius:'12px',padding:'24px',maxWidth:'480px',width:'90%',color:'var(--foreground)',maxHeight:'90vh',overflowY:'auto'}}>
+          <div style=${{fontSize:'16px',fontWeight:600,margin:'0 0 4 0'}}>Pay with USDC for ${cryptoProduct.name || cryptoProduct.tier}</div>
+          <div style=${{fontSize:'12px',color:'var(--foreground-muted)',margin:'0 0 16 0'}}>
+            ${cryptoProduct.tier} &middot; $${cryptoProduct.price?.toFixed(2) ?? '—'}/mo
+          </div>
+          ${!cryptoResult ? html`
+            <!-- Step 1: Email + Account form -->
+            <input style=${{width:'100%',padding:'10px 12px',margin:'0 0 10 0',background:'var(--empire-black)',border:'1px solid var(--empire-border)',borderRadius:'6px',color:'var(--foreground)',fontSize:'13px',fontFamily:'var(--font-mono)',outline:'none',boxSizing:'border-box'}}
+              placeholder="Your email address"
+              value=${{cryptoEmail}}
+              onInput=${{e => setCryptoEmail(e.target.value)}}
+              disabled=${{cryptoBusy}} />
+            <input style=${{width:'100%',padding:'10px 12px',margin:'0 0 10 0',background:'var(--empire-black)',border:'1px solid var(--empire-border)',borderRadius:'6px',color:'var(--foreground)',fontSize:'13px',fontFamily:'var(--font-mono)',outline:'none',boxSizing:'border-box'}}
+              placeholder="Account ID (optional, defaults to email)"
+              value=${{cryptoAcct}}
+              onInput=${{e => setCryptoAcct(e.target.value)}}
+              disabled=${{cryptoBusy}} />
+            ${!cryptoError ? null : html`<div style=${{fontSize:'11px',color:'var(--signal-orange)',margin:'0 0 10 0'}}>${cryptoError}</div>`}
+            <div style=${{display:'flex',gap:'8px',justifyContent:'flex-end'}}>
+              <button style=${{padding:'8px 20px',background:'transparent',border:'1px solid var(--empire-border)',color:'var(--foreground-muted)',borderRadius:'6px',cursor:'pointer',fontSize:'11px',fontFamily:'var(--font-mono)',textTransform:'uppercase'}}
+                onClick=${{() => {{ if (pollInterval.current) {{ clearInterval(pollInterval.current); pollInterval.current = null; }} setCryptoProduct(null); }}}} disabled=${{cryptoBusy}}>Cancel</button>
+              <button style=${{padding:'8px 20px',background:'var(--strike-cyan)',border:'none',color:'var(--empire-black)',borderRadius:'6px',cursor:'pointer',fontSize:'11px',fontFamily:'var(--font-mono)',textTransform:'uppercase',fontWeight:600}}
+                onClick=${{() => doCryptoPay(cryptoProduct)}} disabled=${{cryptoBusy}}>${cryptoBusy ? 'Creating…' : 'Create Payment'}</button>
+            </div>
+          ` : html`
+            <!-- Step 2: Payment details with memo -->
+            <div style=${{marginBottom:'14px'}}>
+              <div style=${{fontFamily:'var(--font-mono)',fontSize:'10px',color:'var(--empire-mist)',letterSpacing:'0.14em',textTransform:'uppercase',marginBottom:'4px'}}>Amount</div>
+              <div style=${{fontFamily:'var(--font-mono)',fontSize:'22px',color:'var(--signal-teal)',fontWeight:600}}>$${cryptoResult.amount_usdc.toFixed(2)} USDC</div>
+            </div>
+            <div style=${{marginBottom:'14px'}}>
+              <div style=${{fontFamily:'var(--font-mono)',fontSize:'10px',color:'var(--empire-mist)',letterSpacing:'0.14em',textTransform:'uppercase',marginBottom:'4px'}}>Vault Wallet</div>
+              <div style=${{fontFamily:'var(--font-mono)',fontSize:'11px',color:'var(--foreground)',wordBreak:'break-all',background:'var(--empire-black)',padding:'10px 12px',border:'1px solid var(--empire-border)',borderRadius:'6px'}}>${cryptoResult.vault_wallet}</div>
+            </div>
+            <div style=${{marginBottom:'14px'}}>
+              <div style=${{fontFamily:'var(--font-mono)',fontSize:'10px',color:'#FFB800',letterSpacing:'0.18em',textTransform:'uppercase',marginBottom:'4px',fontWeight:600}}>Memo (include in transaction)</div>
+              <div style=${{fontFamily:'var(--font-mono)',fontSize:'16px',color:'#FFB800',wordBreak:'break-all',background:'var(--empire-black)',padding:'12px 14px',border:'2px solid #FFB800',borderRadius:'6px',textAlign:'center',letterSpacing:'0.12em'}}>${cryptoResult.memo}</div>
+            </div>
+            <div style=${{fontSize:'11px',color:'var(--foreground-muted)',lineHeight:'1.6',marginBottom:'14px'}}>
+              Send exactly <strong style=${{color:'var(--signal-teal)'}}>$${cryptoResult.amount_usdc.toFixed(2)} USDC</strong> on Solana to the wallet above.
+              <strong style=${{color:'#FFB800'}}>Include the memo</strong> to identify your payment.
+            </div>
+            ${(cryptoResult.status === 'activation_pending' || cryptoResult.status === 'completed') ? html`
+              <div style=${{fontSize:'13px',color: cryptoResult.status === 'completed' ? 'var(--signal-teal)' : 'var(--status-amber)',padding:'10px 12px',background:'var(--empire-black)',borderRadius:'6px',marginBottom:'14px',textAlign:'center'}}>
+                ${cryptoResult.status === 'completed' ? 'Payment confirmed! Subscription active.' : 'Payment received! Activating subscription...'}
+              </div>
+            ` : cryptoResult.status === 'activation_failed' ? html`
+              <div style=${{fontSize:'13px',color:'var(--status-red)',padding:'10px 12px',background:'var(--empire-black)',borderRadius:'6px',marginBottom:'14px',textAlign:'center'}}>
+                Payment received but activation failed. Our team has been notified.
+              </div>
+            ` : null}
+            <div style=${{display:'flex',gap:'8px',justifyContent:'flex-end'}}>
+              <a href=${{'/crypto/pay/' + cryptoResult.payment_id}} target="_blank" style=${{padding:'8px 20px',background:'transparent',border:'1px solid var(--empire-border)',color:'var(--foreground-muted)',borderRadius:'6px',cursor:'pointer',fontSize:'11px',fontFamily:'var(--font-mono)',textTransform:'uppercase',textDecoration:'none'}}>Status Page</a>
+              <button style=${{padding:'8px 20px',background:'transparent',border:'1px solid var(--empire-border)',color:'var(--foreground-muted)',borderRadius:'6px',cursor:'pointer',fontSize:'11px',fontFamily:'var(--font-mono)',textTransform:'uppercase'}}
+                onClick=${{() => {{ if (pollInterval.current) {{ clearInterval(pollInterval.current); pollInterval.current = null; }} setCryptoProduct(null); }}}}>Close</button>
+            </div>
+          `}
+        </div>
+      </div>
+    `}
 }
 
 function stripMeta(e) {
@@ -6090,6 +6216,42 @@ function Revenue({ events, wsConnected }) {
               </tbody>
             </table>
             <div style="font-family:var(--font-mono);font-size:9px;color:var(--empire-fog);margin-top:10px;text-align:right;letter-spacing:.04em">Source: Solana (empire_revenue_ledger) · 60s refresh</div>
+
+      <!-- Activation Failed Payments (Crypto) -->
+      ${cryptoStats && cryptoStats.activation_failed && cryptoStats.activation_failed.length > 0 ? html`
+      <div class="rv-usdc-panel" style="margin-top:0">
+        <div class="chart-panel-h" style="margin-bottom:0;padding-bottom:0;border-bottom:none">
+          <span class="chart-panel-title">Activation Failed Payments</span>
+          <span class="chart-panel-tag" style="color:var(--status-red)">needs operator review</span>
+        </div>
+        <table class="tbl" style="margin-top:12px">
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Customer</th>
+              <th>Tier</th>
+              <th class="tbl-num">Amount</th>
+              <th>Error</th>
+              <th class="tbl-mono">TX</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${cryptoStats.activation_failed.map(f => html`
+              <tr key=${f.id}>
+                <td class="tbl-mono" style="color:var(--empire-fog)">${f.failed_at ? new Date(f.failed_at).toLocaleString() : ''}</td>
+                <td>${f.email}</td>
+                <td class="tbl-mono" style="color:var(--status-red)">${f.tier}</td>
+                <td class="tbl-num tbl-mono" style="color:var(--status-red)">$${f.amount.toFixed(2)}</td>
+                <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title=${f.notes}>${f.notes || ''}</td>
+                <td class="tbl-mono" style="color:var(--empire-fog);font-size:9px" title=${f.tx}>${f.tx || ''}</td>
+              </tr>
+            `)}
+          </tbody>
+        </table>
+        <div style="font-family:var(--font-mono);font-size:9px;color:var(--empire-fog);margin-top:10px;text-align:right;letter-spacing:.04em">Source: crypto_payment_requests &middot; refresh on page load</div>
+      </div>
+      ` : ''}
+
           `;
         })()}
       </div>

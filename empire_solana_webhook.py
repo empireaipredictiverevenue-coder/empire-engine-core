@@ -54,6 +54,7 @@ def register_solana_webhook_routes(
     vault_wallet: str,
     get_db,
     broadcaster=None,
+    crypto_payment_engine=None,
 ):
     """
     Wire the Helius webhook endpoint and a health-check GET route.
@@ -63,7 +64,8 @@ def register_solana_webhook_routes(
         vault_wallet:  The vault wallet address to filter incoming USDC for
         get_db:        Callable returning a Supabase client
         broadcaster:   Optional LiveBroadcaster for real-time dashboards
-        require_auth:  Optional auth dependency for GET status route
+        crypto_payment_engine: Optional CryptoPaymentEngine for self-hosted
+                               USDC checkout → subscription activation
     """
 
     # Resolve the USDC mint from env var (allows devnet testing)
@@ -186,20 +188,54 @@ def register_solana_webhook_routes(
                         },
                     }, on_conflict="transaction_signature").execute()
 
-                # Process through payout engine
+                # ── Route each vault match to the correct engine ────
+                # Crypto engine claims subscription payments (by memo).
+                # Payout engine handles settlement fee splits.
+                # They are mutually exclusive: if crypto claims it,
+                # we skip the payout engine for that transfer.
                 for match in vault_matches:
-                    try:
-                        await payout_engine.on_settlement_detected(
-                            amount_usdc=match["amount"],
-                            tx_signature=tx_sig,
-                            memo=match.get("memo", ""),
-                        )
-                    except Exception as e:
-                        log.error(
-                            f"[solana-webhook] payout_engine failed for "
-                            f"{tx_sig[:16]}...: {e}"
-                        )
-                        errors += 1
+                    # Try crypto matching first
+                    claimed_by_crypto = False
+                    if crypto_payment_engine:
+                        try:
+                            pmt = await crypto_payment_engine.match_payment(
+                                sender_address=match["from"],
+                                amount_usdc=match["amount"],
+                                tx_signature=tx_sig,
+                                memo=match.get("memo", ""),
+                            )
+                            if pmt.get("claimed"):
+                                claimed_by_crypto = True
+                                log.info(
+                                    f"[solana-webhook] crypto claimed: "
+                                    f"{pmt.get('payment_id', '?')[:8]}... · "
+                                    f"${match['amount']:.2f} USDC"
+                                )
+                            elif pmt.get("matched"):
+                                log.info(
+                                    f"[solana-webhook] crypto matched: "
+                                    f"{pmt.get('payment_id', '?')[:8]}... · "
+                                    f"${match['amount']:.2f} USDC"
+                                )
+                        except Exception as e:
+                            log.warning(
+                                f"[solana-webhook] crypto match error: {e}"
+                            )
+
+                    # Only route to payout engine if crypto didn't claim it
+                    if not claimed_by_crypto:
+                        try:
+                            await payout_engine.on_settlement_detected(
+                                amount_usdc=match["amount"],
+                                tx_signature=tx_sig,
+                                memo=match.get("memo", ""),
+                            )
+                        except Exception as e:
+                            log.error(
+                                f"[solana-webhook] payout_engine failed for "
+                                f"{tx_sig[:16]}...: {e}"
+                            )
+                            errors += 1
 
                 processed += len(vault_matches)
 
@@ -240,12 +276,14 @@ def register_solana_webhook_routes(
         """Return webhook configuration status for operator review."""
         has_secret = bool(os.environ.get("HELIUS_WEBHOOK_SECRET", ""))
         vault = vault_wallet or "(not configured)"
+        crypto_enabled = crypto_payment_engine is not None
         return {
             "webhook": "/api/v1/webhooks/solana",
             "vault_wallet": vault[:8] + "..." if len(vault) > 20 else vault,
             "usdc_mint": USDC_MINT,
             "helius_secret_configured": has_secret,
             "payout_engine_enabled": getattr(payout_engine, "execution_enabled", False),
+            "crypto_payment_engine": crypto_enabled,
         }
 
     log.info("[solana-webhook] Routes registered · /api/v1/webhooks/{solana, solana/status}")
