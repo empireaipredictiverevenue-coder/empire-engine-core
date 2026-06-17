@@ -27,9 +27,11 @@ class DataVault:
         self,
         guard: Optional[Callable] = None,     # SuiteGuard.check_access
         log_usage: Optional[Callable] = None,  # SuiteGuard.log_usage
+        get_db: Optional[Callable] = None,     # Supabase client for feature_flags lookup
     ):
         self.guard = guard
         self.log_usage = log_usage
+        self._get_db = get_db
         self.stats = {"stored": 0, "retrieved": 0, "purged": 0, "errors": 0}
         # In-memory store (in production, uses Supabase or S3)
         self._store: dict[str, list[dict]] = {}
@@ -40,9 +42,33 @@ class DataVault:
         return self.guard(account_id, "data_vault")
 
     def _get_retention_days(self, account_id: str) -> int:
-        """Return the retention period for an account. Default 90 days."""
+        """Return the retention period for an account from Supabase. Default 90 days."""
         if not self.guard:
             return 90
+        # Use Supabase when available (hub.py path), fallback to SQLite
+        if self._get_db:
+            try:
+                db = self._get_db()
+                r = db.table("product_feature_flags") \
+                    .select("data_retention_days,meta") \
+                    .eq("customer_account_id", account_id) \
+                    .limit(1) \
+                    .execute()
+                if r.data:
+                    row = r.data[0]
+                    # Check column first
+                    if row.get("data_retention_days"):
+                        return int(row["data_retention_days"])
+                    # Fallback to meta JSONB
+                    meta = row.get("meta") or {}
+                    if isinstance(meta, str):
+                        import json as _j
+                        meta = _j.loads(meta)
+                    if meta.get("data_retention_days"):
+                        return int(meta["data_retention_days"])
+            except Exception:
+                pass
+        # SQLite fallback (standalone deployments without get_db)
         try:
             import sqlite3
             conn = sqlite3.connect(str(__import__("pathlib").Path(__file__).resolve().parent.parent / "data" / "storm_alerts.sqlite"))

@@ -263,7 +263,7 @@ async def test_payouts_signing_path(keypair_path: str, dest_pubkey: str):
     class MockEngine:
         def __init__(self):
             self.signing_key = base58_key
-            self.rpc_url = "https://api.devnet.solana.com"
+            self.    rpc_url = os.environ.get("SOLANA_RPC_URL", "http://localhost:8899")
 
     engine = MockEngine()
 
@@ -404,8 +404,9 @@ async def test_devnet_sol_transfer(keypair_path: str, dest_pubkey: str):
     print(f"  Vault:   {pk}")
     print(f"  Dest:    {dest}")
 
-    # Check balance
-    client = Client("https://api.devnet.solana.com", timeout=30)
+    # Check balance (use local validator if available, else devnet)
+    rpc = os.environ.get("SOLANA_RPC_URL", "http://localhost:8899")
+    client = Client(rpc, timeout=30)
     bal = await asyncio.to_thread(client.get_balance, pk)
     lamports = bal.value
     sol = lamports / 1_000_000_000
@@ -416,8 +417,9 @@ async def test_devnet_sol_transfer(keypair_path: str, dest_pubkey: str):
         print(f"  Run: solana airdrop 0.5 {pk} --url devnet")
         return {"ok": False, "error": "insufficient SOL"}
 
-    # Build transfer: 1 lamport (minimum) + 5000 gas
-    amount = 1  # 1 lamport = 0.000000001 SOL
+    # Build transfer: rent-exempt minimum + gas
+    # 1,000,000 lamports = 0.001 SOL (covers rent exemption for new account)
+    amount = 1_000_000
     ix = transfer(TransferParams(
         from_pubkey=pk,
         to_pubkey=dest,

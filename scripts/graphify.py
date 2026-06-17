@@ -316,6 +316,7 @@ def main():
     import argparse
     parser = argparse.ArgumentParser(description="Empire V49 Architecture Graph")
     parser.add_argument("--json", action="store_true", help="Output raw JSON")
+    parser.add_argument("--compact", action="store_true", help="Output one-line summary (shorthand for --format compact)")
     parser.add_argument("--format", choices=["text", "compact", "json"], default="text",
                         help="Output format (default: text)")
     parser.add_argument("--section", type=str, default=None,
@@ -327,11 +328,14 @@ def main():
 
     graph = build_graph()
 
+    # --compact is shorthand for --format compact
+    effective_format = "compact" if args.compact else args.format
+
     if args.section:
         output = format_section(graph, args.section)
-    elif args.json or args.format == "json":
+    elif args.json or effective_format == "json":
         output = json.dumps(graph, indent=2, default=str)
-    elif args.format == "compact":
+    elif effective_format == "compact":
         output = format_compact(graph)
     else:
         output = format_text(graph)

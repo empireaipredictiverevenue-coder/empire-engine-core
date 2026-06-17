@@ -5,16 +5,18 @@ Cross-platform ad orchestration — PPC, SEO, social, display, retargeting.
 Trend detection, budget optimization, and organic channel management.
 
 Data sources (priority order):
-  1. call_logs  (real call-level data when available)
-  2. buyers     (real buyer/partner data)
-  3. contractors (organic/network data)
-  4. _PLATFORMS (static benchmarks as last resort)
+  1. Google Ads API / Meta Ads API  (real-time ad platform data)
+  2. call_logs  (real call-level data when available)
+  3. buyers     (real buyer/partner data)
+  4. contractors (organic/network data)
+  5. _PLATFORMS (static benchmarks as last resort)
 
 Wire-up in hub.py:
     from empire_traffic_ads_agent import register_traffic_ads_routes
     register_traffic_ads_routes(app, require_auth=require_auth, get_db=get_db)
 """
 
+import asyncio
 import logging
 from datetime import datetime, timezone, timedelta
 from typing import Optional, Callable
@@ -332,9 +334,44 @@ class TrafficAdsAgent:
             "icon": "📊",
         })
 
+    # ── External Ad Platform APIs ──────────────────────────────────────
+
+    async def _fetch_external_platforms(self) -> list[dict]:
+        """
+        Fetch live campaign data from Google Ads and Meta Ads APIs.
+        Returns a list of platform dicts, or empty list if not configured.
+        """
+        platforms = []
+
+        # ── Google Ads ────────────────────────────────────────────
+        try:
+            from bots.google_ads_connector import get_google_ads_connector
+            gads = get_google_ads_connector()
+            if gads.configured:
+                gads_data = await gads.get_campaign_performance()
+                if gads_data:
+                    platforms.extend(gads_data)
+                    log.info(f"[traffic-ads] Google Ads: {len(gads_data)} campaigns")
+        except Exception as e:
+            log.debug(f"[traffic-ads] Google Ads connector: {e}")
+
+        # ── Meta Ads ──────────────────────────────────────────────
+        try:
+            from bots.meta_ads_connector import get_meta_ads_connector
+            meta = get_meta_ads_connector()
+            if meta.configured:
+                meta_data = await meta.get_campaign_performance()
+                if meta_data:
+                    platforms.extend(meta_data)
+                    log.info(f"[traffic-ads] Meta Ads: {len(meta_data)} campaigns")
+        except Exception as e:
+            log.debug(f"[traffic-ads] Meta Ads connector: {e}")
+
+        return platforms
+
     # ── Public Methods ────────────────────────────────────────────────────
 
-    def platforms_overview(self) -> dict:
+    async def platforms_overview(self) -> dict:
         """Return performance snapshot for each channel, sourced from call_logs."""
         channel_data = self._query_call_logs(days=30)
         platforms = []
@@ -373,7 +410,59 @@ class TrafficAdsAgent:
             totals["budget_total"] += cost + revenue * 0.3
             totals["budget_spent"] += cost
 
-        # If no real data, fall back to buyers table
+        # Try external ad platforms first (Google Ads, Meta Ads API)
+        external = await self._fetch_external_platforms()
+        if external:
+            # Merge external platforms with any call_logs data — reset totals
+            platforms = list(external)
+            totals = {"impressions": 0, "clicks": 0, "conversions": 0, "budget_total": 0, "budget_spent": 0}
+
+            # Add call_logs-based channels alongside
+            for row in channel_data:
+                ch = row.get("channel", "")
+                if not ch:
+                    continue
+                platform = self._channel_to_platform(ch)
+                conv_count = int(row.get("qualified", 0) or 0)
+                total_count = int(row.get("count", 0) or 0)
+                revenue = float(row.get("revenue", 0) or 0)
+                cost = float(row.get("cost", 0) or 0)
+                platforms.append({
+                    **platform,
+                    "budget_monthly": round(cost + revenue * 0.3, 2),
+                    "budget_spent": round(cost, 2),
+                    "impressions": total_count * 85,
+                    "clicks": total_count * 12,
+                    "conversions": conv_count,
+                    "total_calls": total_count,
+                    "revenue": round(revenue, 2),
+                    "cost_per_call": round(cost / max(total_count, 1), 2),
+                    "revenue_per_call": round(revenue / max(conv_count, 1), 2),
+                    "status": "active",
+                })
+                totals["impressions"] += total_count * 85
+                totals["clicks"] += total_count * 12
+                totals["conversions"] += conv_count
+                totals["budget_total"] += cost + revenue * 0.3
+                totals["budget_spent"] += cost
+
+            # Compute totals from external platforms
+            for p in external:
+                totals["impressions"] += p.get("impressions", 0)
+                totals["clicks"] += p.get("clicks", 0)
+                totals["conversions"] += p.get("conversions", 0)
+                totals["budget_total"] += p.get("budget_monthly", 0)
+                totals["budget_spent"] += p.get("budget_spent", 0)
+
+            return {
+                "platforms": platforms,
+                "total": totals,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "sources": ["google_ads_api", "meta_ads_api"] if external else ["call_logs"],
+            }
+
+        # No external data — fall through to existing cascade
+        # (call_logs data already built above)
         if not platforms:
             buyer_platforms = self._query_buyers_as_platforms()
             if buyer_platforms:
@@ -436,28 +525,9 @@ class TrafficAdsAgent:
                 "status": "active",
             })
 
-        if not campaigns:
-            # Fall back to buyers table
-            buyer_platforms = self._query_buyers_as_platforms()
-            for bp in buyer_platforms:
-                rev = bp.get("revenue", 0)
-                cost = bp.get("budget_spent", 0)
-                campaigns.append({
-                    "platform_id": bp["id"],
-                    "platform_name": bp["name"],
-                    "icon": bp["icon"],
-                    "type": bp["type"],
-                    "budget": bp["budget_monthly"],
-                    "spend": cost,
-                    "budget_remaining": round(bp["budget_monthly"] - cost, 2),
-                    "budget_utilization_pct": round(cost / max(bp["budget_monthly"], 1) * 100, 1),
-                    "impressions": bp["impressions"],
-                    "clicks": bp["clicks"],
-                    "conversions": bp["conversions"],
-                    "cpa": bp["cost_per_call"],
-                    "roas": round(rev / max(cost, 1), 2) if cost > 0 else None,
-                    "status": bp["status"],
-                })
+        # Note: External ad platform campaigns (Google Ads, Meta Ads)
+        # are fetched by the async platforms_overview() method.
+        # campaigns() uses DB data + fallbacks only.
         if not campaigns:
             # Ultimate fallback to static benchmarks
             for p in _PLATFORMS:
@@ -690,9 +760,9 @@ class TrafficAdsAgent:
             "timestamp": datetime.now(timezone.utc).isoformat(),
         }
 
-    def ads_summary(self) -> dict:
+    async def ads_summary(self) -> dict:
         """Consolidated traffic and ads intelligence summary sourced from real DB."""
-        platforms = self.platforms_overview()
+        platforms = await self.platforms_overview()
         trends = self.trend_detection()
         budget = self.budget_optimization()
         organic = self.organic_channels()
@@ -718,9 +788,9 @@ class TrafficAdsAgent:
             "timestamp": datetime.now(timezone.utc).isoformat(),
         }
 
-    def narrative(self) -> dict:
+    async def narrative(self) -> dict:
         """Return an ad intelligence narrative."""
-        summary = self.ads_summary()
+        summary = await self.ads_summary()
         c = summary["consolidated"]
         top_platform = max(
             [p for p in summary["platforms"]["platforms"] if p["roas"] is not None],
@@ -769,7 +839,7 @@ def register_traffic_ads_routes(app, require_auth=None, get_db=None):
 
     @app.get("/api/traffic-ads/platforms")
     async def traffic_ads_platforms(auth=Depends(require_auth) if require_auth else None):
-        return agent.platforms_overview()
+        return await agent.platforms_overview()
 
     @app.get("/api/traffic-ads/campaigns")
     async def traffic_ads_campaigns(auth=Depends(require_auth) if require_auth else None):
@@ -789,10 +859,10 @@ def register_traffic_ads_routes(app, require_auth=None, get_db=None):
 
     @app.get("/api/traffic-ads/summary")
     async def traffic_ads_summary(auth=Depends(require_auth) if require_auth else None):
-        return agent.ads_summary()
+        return await agent.ads_summary()
 
     @app.get("/api/traffic-ads/narrative")
     async def traffic_ads_narrative(auth=Depends(require_auth) if require_auth else None):
-        return agent.narrative()
+        return await agent.narrative()
 
     log.info("[traffic-ads] routes registered: /api/traffic-ads/{platforms,campaigns,trends,budget,organic,summary,narrative}")
