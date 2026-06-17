@@ -2745,7 +2745,7 @@ async def _si_evolution_loop():
         try:
             now = _t.time()
             if now - last_evolve >= evolve_every:
-                events = si_strategy.evolve()
+                events = await si_strategy.evolve()
                 last_evolve = now
                 if events:
                     log.info(f"[si.strategy] evolution tick: {len(events)} events")
@@ -3920,7 +3920,7 @@ async def si_adaptive_view(auth: bool = Depends(require_auth)):
 async def si_evolve_force(niche: str = "", auth: bool = Depends(require_auth)):
     """Force a strategy evolution tick. Optional ?niche= to evolve one niche only."""
     try:
-        events = si_strategy.evolve(niche=niche or None)
+        events = await si_strategy.evolve(niche=niche or None)
         return JSONResponse({
             "ok": True,
             "events": events,

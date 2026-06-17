@@ -215,7 +215,7 @@ class StrategyEvolution:
                 pass
 
     # ── EVOLVE ────────────────────────────────────────────────────────────
-    def evolve(self, niche: Optional[str] = None) -> list[dict]:
+    async def evolve(self, niche: Optional[str] = None) -> list[dict]:
         """
         Run one evolution cycle. For each niche with enough data:
         1. Find the best-performing strategy
@@ -233,7 +233,8 @@ class StrategyEvolution:
         try:
             import httpx
             base = os.environ.get("PUBLIC_BASE_URL", "http://localhost:8000")
-            r = httpx.get(f"{base}/api/dream/si-feed", timeout=5.0)
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                r = await client.get(f"{base}/api/dream/si-feed")
             if r.status_code == 200:
                 data = r.json()
                 if data.get("risk_flags") and not data.get("stale"):
