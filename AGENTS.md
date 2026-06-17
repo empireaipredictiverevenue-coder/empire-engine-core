@@ -6,17 +6,16 @@ write back when you're done.
 
 ## The Locked Directive
 `/root/empire-v49/STARTING_POINT.md` is the source of truth for the business.
-**Do not read past this paragraph without reading it.**
+**Do not read past this paragraph without reading it.** Success metric, in order:
 
-Empire AI is an **Autonomous Revenue Engine** — multi-niche, multi-product.
-Success metrics, in order:
+  1. Splash live at empire-ai.co.uk
+  2. 1 real lead in Supabase
+  3. 1 real contractor recruited
+  4. 1 real fee earned
 
-  1. Splash live at empire-ai.co.uk  …………… ✅
-  2. 1 real lead in Supabase  …………………… 🔄
-  3. 1 real contractor recruited  …………… ⬜
-  4. 1 real fee earned  ………………………… ⬜
-
-The lock is in STARTING_POINT.md, not here. Don't build outside the lane.
+Until those are hit, anything not on that path is parking-lot work. If you're
+about to build a SaaS billing layer, predictive AGI module, or cinematic
+dashboard, stop. The lock is in STARTING_POINT.md, not here.
 
 ## Who Is Working
 The fleet is bigger than the two agents. Last enumerated 2026-06-13
@@ -74,7 +73,12 @@ The fleet is bigger than the two agents. Last enumerated 2026-06-13
     strike pipeline, predictive revenue modules, AGI calibration. Email:
     empireaipredictiverevenue@proton.me (git audit only; not a chat).
 
-### Cron-driven agents (6 entries, NOT counted as "live services")
+### Cron-driven agents (15 entries, NOT counted as "live services")
+Last refreshed 2026-06-17 by default profile. NOTE: the actual crontab
+has more entries than the AGENTS.md doc tracks (drift). Run
+`crontab -l | grep -v '^#' | awk '{print $6}'` to see all cron targets.
+
+#### Fleet-owned (per AGENTS.md v1)
   - `empire_brain.py` — every hour at :00, → `logs/bridge.log`.
   - `automate_empire.sh` — every hour at :30, → `logs/agents.log`. The
     predictive-revenue coder's main cron tick.
@@ -85,7 +89,54 @@ The fleet is bigger than the two agents. Last enumerated 2026-06-13
     → `logs/storm_scraper.log`.
   - `bots/backlinks_agent.py` — every 12h at :30, → `logs/backlinks.log`.
     Backlinks monitoring (scan, broken detection, opportunities).
-    Standalone: `python3 -m bots.backlinks_agent`.
+    NOTE: this cron entry was removed at some point and is no longer
+    scheduled. Agent still works standalone via
+    `python3 -m bots.backlinks_agent`. To re-enable: add
+    `30 */12 * * * cd /root/empire-v49 && /usr/bin/python3 -m bots.backlinks_agent >> logs/backlinks.log 2>&1`
+    to crontab.
+
+#### Storm chain (storm lead pipeline + monitoring)
+  - `agents/lead_scanner/cron.sh` — every 30min, → `logs/agent_lead_scanner.log`.
+    Scans radar_targets → enriched_leads.
+  - `agents/lead_enricher/cron.sh` — every 30min (5,35), → `logs/agent_lead_enricher.log`.
+    Enriches with score, asset_value, buy_signal.
+  - `agents/lead_converter/cron.sh` — every 15min (10,25,40,55),
+    → `logs/agent_lead_converter.log`. SMS outreach to qualified leads.
+  - `agents/dispatch/cron.sh` — every 30min, → `logs/agent_dispatch.log`.
+    Routes confirmed leads to contractors.
+  - `agents/prospector/cron.sh` — every 6h on :05, → `logs/agent_prospector.log`.
+    New contractor acquisition (Google Places).
+  - `agents/prospector_bridge/cron.sh` — every hour at :15,
+    → `logs/agent_prospector_bridge.log`. Moves prospects → contractors.
+  - `agents/contractor_outreach/cron.sh` — every 4h on :00,
+    → `logs/agent_contractor_outreach.log`. Re-engagement + winback sequences.
+  - `agents/retarget/cron.sh` — every 6h on :07, → `logs/agent_retarget.log`.
+    Re-targeting dormant leads.
+  - `agents/warp_scout/cron.sh` — every 6h on :50, → `logs/agent_warp_scout.log`.
+    Forward-looking market expansion scanner.
+  - `agents/fee_watcher/cron.sh` — every 6h on :55, → `logs/agent_fee_watcher.log`.
+    Polls for settled-claim events. **Disabled** (see comments).
+  - `agents_ab_monitor.py` — every 6h on :52, → `logs/agent_ab_monitor.log`.
+    A/B reply-rate comparison log.
+
+#### Operator-owned (default profile)
+  - `agents_resend_monitor.py` — every 6h on :57,
+    → `logs/agent_resend_monitor.log`. Polls api.resend.com for the
+    sending domain's DNS health. Logs to agent_activity, fires a
+    Telegram alert to operator chat (808657420) on any status != 'verified'.
+    Catches silent email failures (DKIM/SPF/Tracking CNAME drift).
+    Added 2026-06-17 after resend upgrade revealed partially_failed domain.
+
+#### Pipeline-side (live in /opt/empire-pipeline/, not empire-v49 repo)
+  - `storm_url_refresh_cron.sh` — every 6h on :15, → `logs/storm_url_refresh.log`.
+    Reads `prospects.website`, appends to fresh_urls.txt for storm pipeline.
+  - `run_fresh.sh` — every 6h on :25, → `logs/pipeline_fresh.log`.
+    Storm pipeline run on the fresh URLs from above.
+
+#### Unmonitored (in crontab but not logging or producing signal)
+  - `/tmp/money_digest.py` — daily 06:30, → `logs/money_digest.log`. Daily ops digest.
+  - `/tmp/retry_carrier_sends.py` — every 30min, → `/tmp/retry_carrier_sends.log`.
+    Carrier API retry queue.
 
 If you're a new service and don't see yourself above: edit this file
 and add a row. The fleet changes often; this list drifts. Regenerate
