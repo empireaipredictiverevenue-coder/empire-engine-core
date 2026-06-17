@@ -83,6 +83,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Callable, Optional
 import urllib.parse as _urlparse
 
+import httpx
 from fastapi import FastAPI, Request, HTTPException, Depends, Query
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 
@@ -686,12 +687,27 @@ class EmailSequenceEngine:
         try:
             db = self.get_db()
             now_iso = datetime.now(timezone.utc).isoformat()
-            res = db.table("email_sequences").select("*") \
-                .eq("status", "active") \
-                .lte("next_send_at", now_iso) \
-                .order("next_send_at") \
-                .limit(self.max_per_minute).execute()
-            rows = res.data or []
+            # Retry once on Postgrest disconnect (Server disconnected errors)
+            rows = []
+            for attempt in range(2):
+                try:
+                    res = db.table("email_sequences").select("*") \
+                        .eq("status", "active") \
+                        .lte("next_send_at", now_iso) \
+                        .order("next_send_at") \
+                        .limit(self.max_per_minute).execute()
+                    rows = res.data or []
+                    break
+                except httpx.RemoteProtocolError as e:
+                    if attempt == 0:
+                        log.warning(f"[email] query disconnect (retrying): {e}")
+                        await asyncio.sleep(2)
+                    else:
+                        log.error(f"[email] query failed after retry: {e}")
+                        return 0
+                except Exception as e:
+                    log.error(f"[email] query failed: {e}")
+                    return 0
         except Exception as e:
             log.error(f"[email] query failed: {e}")
             return 0
@@ -736,6 +752,12 @@ class EmailSequenceEngine:
 
             result = await self.send_email(to=email, subject=subject, html=html)
 
+            # Retry once on Resend 429 rate limit
+            if isinstance(result, dict) and not result.get("ok") and "429" in str(result):
+                log.warning(f"[email] Resend 429 on {email} step {step} — retrying in 5s")
+                await asyncio.sleep(5)
+                result = await self.send_email(to=email, subject=subject, html=html)
+
             try:
                 db = self.get_db()
                 db.table("email_log").insert({
@@ -771,7 +793,7 @@ class EmailSequenceEngine:
                 except Exception as e:
                     log.error(f"[email] state update failed: {e}")
 
-            await asyncio.sleep(60 / max(1, self.max_per_minute))
+            await asyncio.sleep(1)  # 1s between sends; Resend allows 5/s
 
         return sent
 
