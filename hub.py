@@ -50,6 +50,7 @@ from empire_voice import VoiceRouter, register_voice_routes
 from empire_sms import SMSEngine, register_sms_routes
 from empire_contractors import register_contractor_routes
 from empire_contractor_priority import register_priority_routes
+from empire_storm_landing import register_storm_landing_routes, STORM_METROS
 from empire_qc_api import register_qc_routes
 from empire_hermes_api import register_hermes_routes
 from empire_wiki_viewer import register_wiki_routes
@@ -59,6 +60,7 @@ from empire_matching import ContractorMatcher, register_matching_routes
 from empire_playbook import register_playbook_routes
 from empire_payouts import PayoutEngine, register_payout_routes
 from empire_solana_webhook import register_solana_webhook_routes
+from empire_crypto_payments import CryptoPaymentEngine, register_crypto_payment_routes
 from empire_fee import register_fee_routes
 from empire_fee_operator import register_operator_mark_settled
 from empire_abtest import register_ab_test_routes
@@ -151,7 +153,6 @@ from suite_core import (
     SuiteSubscriptionEngine,
     SuiteGuard,
     register_suite_routes,
-    _init_suite_db as _init_suite_db_sqlite,
 )
 from products.inbound_router import InboundRouter, InboundRouterRoutes
 from products.data_vault import DataVault, DataVaultRoutes
@@ -185,6 +186,7 @@ from empire_psychology_mind_map import register_psychology_routes
 from empire_self_awareness import register_self_awareness_routes
 from empire_business_planner import register_business_planner_routes
 from empire_agent_os import AgentKernel, register_agent_os_routes
+from empire_task_audit import TaskAuditReporter, register_task_audit_routes
 from observability.langfuse_client import get_langfuse, shutdown as langfuse_shutdown
 
 
@@ -893,6 +895,7 @@ register_voice_routes(
 )
 register_sms_routes(app, sms_engine, require_auth=require_auth)
 register_contractor_routes(app, require_auth=require_auth, get_db=get_db, sign_token=_hub_sign_token, verify_token=_hub_verify_token, send_email=_send_email, public_base_url=PUBLIC_BASE_URL, broadcaster=live_broadcaster)
+register_storm_landing_routes(app, get_db=get_db)  # /storm + /storm/{slug} — SEO pages for storm lead-gen
 register_attribution_routes(app, require_auth=require_auth, get_db=get_db)
 register_email_routes(app, email_engine, require_auth=require_auth)
 
@@ -905,13 +908,6 @@ async def email_quota(auth: bool = Depends(require_auth)):
 register_matching_routes(app, matcher=matcher, require_auth=require_auth, sign_token=_hub_sign_token, verify_token=_hub_verify_token, send_email=_send_email_critical)
 register_playbook_routes(app, require_auth=require_auth, get_db=get_db)
 register_payout_routes(app, engine=payout_engine, require_auth=require_auth, require_owner=require_owner)
-register_solana_webhook_routes(
-    app,
-    payout_engine=payout_engine,
-    vault_wallet=os.environ.get("EMPIRE_VAULT_WALLET", ""),
-    get_db=get_db,
-    broadcaster=live_broadcaster,
-)
 register_fee_routes(app, require_auth=require_auth, get_db=get_db)
 register_operator_mark_settled(app, require_auth=require_auth, get_db=get_db)
 register_ab_test_routes(app, require_auth=require_auth, get_db=get_db)
@@ -1082,6 +1078,10 @@ register_fleet_routes(app, fleet=fleet, require_auth=require_auth)
 mesh = AgentMesh(get_db=get_db)
 register_mesh_routes(app, mesh=mesh, require_auth=require_auth)
 
+# ── Task Audit Reporter — agent task completion reports ─────────────
+task_audit = TaskAuditReporter(get_db=get_db)
+register_task_audit_routes(app, reporter=task_audit, require_auth=require_auth)
+
 # ── Idle Asset Pipeline — full end-to-end: discovery → enrichment → scoring → outreach ──
 idle_asset_detector = IdleAssetDetector(get_db=get_db)
 idle_asset_enricher = IdleAssetEnricher(router=ai_router)
@@ -1216,7 +1216,33 @@ register_affiliate_recruiter_routes(app, require_auth=require_auth)
 
 # ── Suite Gateway — 3-Product Monetization ───────────────────────────
 suite_subscriptions = SuiteSubscriptionEngine(get_db=get_db)
-suite_guard = SuiteGuard(subscriptions=suite_subscriptions)
+suite_guard = SuiteGuard(subscriptions=suite_subscriptions, get_db=get_db)
+
+# Crypto payment engine — wired to suite subscriptions so crypto
+# purchases activate through the proper SuiteSubscriptionEngine path.
+crypto_payment_engine = CryptoPaymentEngine(
+    get_db=get_db,
+    vault_wallet=os.environ.get("EMPIRE_VAULT_WALLET", ""),
+    subscription_engine=suite_subscriptions,
+    guard=suite_guard,
+    broadcaster=live_broadcaster,
+)
+
+register_solana_webhook_routes(
+    app,
+    payout_engine=payout_engine,
+    vault_wallet=os.environ.get("EMPIRE_VAULT_WALLET", ""),
+    get_db=get_db,
+    broadcaster=live_broadcaster,
+    crypto_payment_engine=crypto_payment_engine,
+)
+register_crypto_payment_routes(
+    app,
+    engine=crypto_payment_engine,
+    require_auth=require_auth,
+    public_base_url=PUBLIC_BASE_URL,
+)
+
 register_suite_routes(
     app,
     require_auth=require_auth,
@@ -1233,6 +1259,7 @@ InboundRouterRoutes(suite_inbound_router, require_auth=require_auth).register(ap
 suite_data_vault = DataVault(
     guard=lambda a, f: suite_guard.check_access(a, f),
     log_usage=lambda a, p, e, q=1, u="count", m=None: suite_guard.log_usage(a, p, e, q, u, m),
+    get_db=get_db,
 )
 DataVaultRoutes(suite_data_vault, require_auth=require_auth).register(app)
 # Product 3: Buyer Spy AI
@@ -2754,74 +2781,30 @@ async def _si_evolution_loop():
         await asyncio.sleep(30)
 
 
-# ─────────────────────────────────────────────────────────────────────
-# STARTUP / SHUTDOWN
-# ─────────────────────────────────────────────────────────────────────
-@app.on_event("startup")
-async def startup():
-    _st = _boot_time.time()
-    log.info(f"[boot] startup handler begin ({_st - _BOOT_START:.1f}s since process start)")
 
-    # Langfuse Observability — lazy-init (gracefully degrades if not configured)
-    get_langfuse()
 
-    # Suite Core — init local SQLite tables (product_subscriptions, etc.)
-    _init_suite_db_sqlite()
-    _t1 = _boot_time.time()
-    log.info(f"[boot] _init_suite_db_sqlite: {_t1 - _st:.2f}s")
+async def _deferred_background_tasks():
+    """Create all background loops after a 1.0s sleep.
 
-    # Data Bridge Engine — init DB + start background processor
-    init_bridge_db()
-    _t2 = _boot_time.time()
-    log.info(f"[boot] init_bridge_db: {_t2 - _t1:.2f}s")
-    start_bridge_processor(get_db)
-    _t3 = _boot_time.time()
-    log.info(f"[boot] start_bridge_processor: {_t3 - _t2:.2f}s")
+    The delay gives uvicorn time to create the server socket and begin
+    serving before any background task potentially starves the event loop.
+    Without this, a tight while-True loop (missing await asyncio.sleep)
+    permanently blocks uvicorn from binding.  See hub.py commit msg.
+    """
+    await asyncio.sleep(1.0)
 
-    asyncio.create_task(brain_learning.nightly_tune_loop())
-    asyncio.create_task(sms_engine.dispatcher_loop())
-    asyncio.create_task(email_engine.dispatcher_loop())
-    asyncio.create_task(storm_orchestrator.poll_loop())
-    asyncio.create_task(dream_loop.run())
-    asyncio.create_task(hourly_digest.run())
-    asyncio.create_task(seo_run_loop())
-    asyncio.create_task(backlinks_run_loop())
-    asyncio.create_task(traffic_specialist_run_loop())
-    asyncio.create_task(affiliate_recruiter_run_loop())
-    asyncio.create_task(_si_evolution_loop())
-    # Swarm Gate auto-pilot — scan storm forecasts + fire parallel video ads every 30 min
-    asyncio.create_task(_swarm_autopilot_loop())
-    # Pulse materialized view refresh — keeps pulse_rollup_hourly fresh every 5 min
-    asyncio.create_task(_pulse_refresh_loop())
-    # Mission Control broadcasts every 5s — drives the top status bar in the SPA
-    asyncio.create_task(mission_control_broadcast_loop(
-        broadcaster=live_broadcaster, get_db=get_db, interval=5.0,
-    ))
-    # Niche Terrain background scan — discovers new communities + learns habits every 30 min
-    asyncio.create_task(_niche_terrain_scan_loop())
-    # HexStrike AI security scan every 15 minutes (testing)
-    asyncio.create_task(_hexstrike_scheduler_loop())
-    # Market Eye background monitoring — scrape eligible competitors every hour
-    asyncio.create_task(suite_market_eye.monitoring_loop())
-    # Product Email Dispatcher — renewal reminders, reactivation, churn prevention
-    asyncio.create_task(suite_email_dispatcher.monitoring_loop())
-    # Trial Conversion — auto-convert expired trials to paid every hour
-    asyncio.create_task(suite_trial_conversion.monitoring_loop())
-    # Agent Fleet — seed roles + monitor heartbeats every 60s
-    asyncio.create_task(fleet.start_fleet_loop(interval_seconds=60))
-    # Agent Mesh — boot the Hermes protocol task queue + agent heartbeat loop
-    asyncio.create_task(mesh.mesh_loop())
-    # Idle Asset Detector — logistics compound discovery every 6 hours
-    asyncio.create_task(idle_asset_detector.run_loop())
-    # Gas Station Waste Detector — station discovery + enrichment + outreach every 6h
-    asyncio.create_task(gas_station_detector.run_loop())
-    # Agentic OS — boot the kernel (registers built-in agents and starts scheduling)
-    asyncio.create_task(_agent_os_boot())
+    # Defer all background tasks so uvicorn binds the socket first.
+    # Event-loop starvation: if any background loop enters a tight
+    # while-True without yielding (missing await asyncio.sleep),
+    # it permanently blocks uvicorn from creating the server socket.
+    # By deferring with a 1.0s sleep, uvicorn gets a clean window
+    # to bind before any background task consumes the loop.
+    asyncio.create_task(_deferred_background_tasks())
 
     _t_end = _boot_time.time()
-    log.info(f"[boot] background tasks created: {_t_end - _t3:.2f}s")
     log.info(f"[boot] startup handler complete: {_t_end - _st:.2f}s (total: {_t_end - _BOOT_START:.1f}s)")
     log.info("Empire V49 · Operational")
+
 
 
 @app.on_event("shutdown")
@@ -5248,6 +5231,82 @@ if __name__ == "__main__":
     log.info(f"[boot] uvicorn imported: {_boot_time.time() - _t_uvicorn:.1f}s (total: {_boot_time.time() - _BOOT_START:.1f}s)")
     _t_run = _boot_time.time()
     log.info(f"[boot] calling uvicorn.run at {_boot_time.time() - _BOOT_START:.1f}s")
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    # Port: env override for hosts where the default :8000 is occupied (e.g. a
+    # local solana-test-validator on dev machines). Production sets HUB_PORT in
+    # /root/.env. Falls back to 8000 for back-compat.
+    import os as _os_hub
+    _hub_port = int(_os_hub.environ.get("HUB_PORT", "8000"))
+    log.info(f"[boot] binding uvicorn to 0.0.0.0:{_hub_port}")
+
+    # === v5 hub boot fix ===
+    # v4 progress: socket binds, accept() works, but requests hang. The
+    # problem: uvicorn's lifespan is calling our @app.on_event("startup")
+    # which schedules 22 background tasks. The lifespan startup await's
+    # our handler to return, but our handler creates tasks and returns
+    # immediately. The 22 tasks run on the same loop. Then uvicorn enters
+    # main_loop which calls accept() and dispatches to handlers. The 22
+    # background tasks are still competing for loop time, and at least one
+    # of them starves request handling.
+    #
+    # Fix: run app startup in a SEPARATE THREAD with its own event loop,
+    # so uvicorn's main thread is dedicated to accept() + request handling
+    # and never shares loop time with the background agents.
+    import socket as _socket
+    import asyncio as _aio
+    import threading as _threading
+
+    # 1. Pre-bind socket synchronously so the port is held even if uvicorn
+    #    is delayed.
+    _sock = _socket.socket(_socket.AF_INET, _socket.SOCK_STREAM)
+    _sock.setsockopt(_socket.SOL_SOCKET, _socket.SO_REUSEADDR, 1)
+    try:
+        _sock.bind(("0.0.0.0", _hub_port))
+    except OSError as e:
+        log.error(f"[boot] could not bind 0.0.0.0:{_hub_port}: {e}")
+        raise
+    _sock.listen(128)
+    log.info(f"[boot] socket pre-bound on 0.0.0.0:{_hub_port} synchronously")
+
+    # 2. Run our app's startup handler in a background thread with its
+    #    own event loop. uvicorn will see lifespan="on" and try to call
+    #    the same handler too; we set lifespan="off" to disable uvicorn's
+    #    invocation and run our startup manually here.
+    def _run_app_startup_in_thread():
+        # docstring removed to avoid escape issues
+        loop = _aio.new_event_loop()
+        _aio.set_event_loop(loop)
+        try:
+            # Iterate FastAPI's registered startup handlers and invoke each
+            for handler in app.router.on_startup:
+                log.info(f"[boot-bg] running startup handler: {handler.__name__}")
+                try:
+                    loop.run_until_complete(handler())
+                except Exception as e:
+                    log.error(f"[boot-bg] startup handler {handler.__name__} failed: {e}")
+            log.info("[boot-bg] all startup handlers done; loop idling")
+            loop.run_forever()
+        finally:
+            loop.close()
+
+    _startup_thread = _threading.Thread(target=_run_app_startup_in_thread, daemon=True)
+    _startup_thread.start()
+    log.info("[boot] app startup running in background thread")
+
+    # 3. Run uvicorn with lifespan="off" so it doesn't try to call our
+    #    startup handler again. The background thread handles all app init.
+    config = uvicorn.Config(
+        app,
+        log_level="info",
+        access_log=False,
+        loop="asyncio",
+        http="h11",
+        lifespan="off",
+    )
+    server = uvicorn.Server(config)
+    log.info(f"[boot] starting uvicorn.Server.serve() with pre-bound socket + background startup thread")
+    try:
+        server.run(sockets=[_sock])
+    finally:
+        _sock.close()
 
 
