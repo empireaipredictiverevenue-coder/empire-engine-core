@@ -36,11 +36,13 @@ log = logging.getLogger("empire.space")
 
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 CLAUDE_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
+MINIMAX_API_KEY = os.environ.get("MINIMAX_API_KEY", "")
 OLLAMA_URL = os.environ.get("OLLAMA_URL", "http://localhost:11434")
 
 # Model selection (overridable via env)
 GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.0-flash")
 CLAUDE_MODEL = os.environ.get("CLAUDE_MODEL", "claude-sonnet-4-20250514")
+MINIMAX_MODEL = os.environ.get("MINIMAX_MODEL", "minimax/MiniMax-M3")
 OLLAMA_MODEL = os.environ.get("AI_MODEL_SPACE", "qwen2.5-coder:14b")
 
 # ── Provider Results ───────────────────────────────────────────────────
@@ -94,6 +96,15 @@ def _build_model_list() -> list:
             },
         })
 
+    if MINIMAX_API_KEY:
+        model_list.append({
+            "model_name": "minimax",
+            "litellm_params": {
+                "model": MINIMAX_MODEL,
+                "api_key": MINIMAX_API_KEY,
+            },
+        })
+
     # Ollama always available locally
     model_list.append({
         "model_name": "ollama",
@@ -107,17 +118,22 @@ def _build_model_list() -> list:
 
 
 def _build_fallbacks() -> list:
-    """Build fallback chain: Gemini → Claude → Ollama.
+    """Build fallback chain: Gemini → Claude → MiniMax → Ollama.
 
     Only includes providers whose API keys are configured.
     """
     fallbacks = []
     if GEMINI_API_KEY and CLAUDE_API_KEY:
         fallbacks.append({"gemini": ["claude"]})
-    if CLAUDE_API_KEY:
+    if CLAUDE_API_KEY and MINIMAX_API_KEY:
+        fallbacks.append({"claude": ["minimax"]})
+    elif GEMINI_API_KEY and MINIMAX_API_KEY:
+        fallbacks.append({"gemini": ["minimax"]})
+    if MINIMAX_API_KEY:
+        fallbacks.append({"minimax": ["ollama"]})
+    elif CLAUDE_API_KEY:
         fallbacks.append({"claude": ["ollama"]})
     elif GEMINI_API_KEY:
-        # If no Claude key, fall back from Gemini directly to Ollama
         fallbacks.append({"gemini": ["ollama"]})
     return fallbacks
 
@@ -167,7 +183,7 @@ class _LiteLLMEngine:
 
         # Determine starting model based on preference
         # Router fallbacks handle missing API keys gracefully
-        model_name = prefer if prefer in ("gemini", "claude", "ollama") else "gemini"
+        model_name = prefer if prefer in ("gemini", "claude", "minimax", "ollama") else "gemini"
 
         messages = []
         if system:
