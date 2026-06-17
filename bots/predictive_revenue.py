@@ -13,6 +13,7 @@ import os
 import sys
 import json
 import logging
+import asyncio
 from datetime import datetime, timezone, timedelta
 from collections import defaultdict
 from typing import Optional
@@ -1093,7 +1094,7 @@ def feed_si_evolution() -> dict:
             })
 
         # Run evolution cycle if enough data
-        evolved = si_instance.evolve()
+        evolved = asyncio.run(si_instance.evolve())
         if evolved:
             log.info(f"[revenue] SI evolution: {len(evolved)} events")
 
