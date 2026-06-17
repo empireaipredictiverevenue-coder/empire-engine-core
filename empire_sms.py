@@ -645,15 +645,30 @@ class SMSSequenceEngine:
                 # Sequence complete
                 self._mark_complete(row, last_step=step)
             else:
-                # Schedule next touch
+                # Schedule next touch. Also log the rendered body in
+                # meta so future autoresearch cycles can match historical
+                # outcomes to specific body content. Without this, the
+                # autoresearch scorer has no body to match against and
+                # falls back to a 2% baseline. With it, we get real
+                # per-body reply-rate data.
                 delay = STEP_DELAYS.get(next_step, timedelta(hours=24))
                 next_send = datetime.now(timezone.utc) + delay
                 try:
                     db = self.get_db()
+                    existing_meta = row.get("meta") or {}
+                    # Add the rendered body to a per-step log so we can
+                    # train autoresearch scorers on real data later.
+                    body_history = dict(existing_meta.get("body_history") or {})
+                    body_history[str(step)] = body[:280]
                     db.table("sms_sequences").update({
                         "current_step": next_step,
                         "last_sent_at": datetime.now(timezone.utc).isoformat(),
                         "next_send_at": next_send.isoformat(),
+                        "meta": {
+                            **existing_meta,
+                            "body_history": body_history,
+                            "last_body_step": step,
+                        },
                     }).eq("id", row["id"]).execute()
                 except Exception as e:
                     log.error(f"[sms] state update failed: {e}")
