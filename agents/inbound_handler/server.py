@@ -299,6 +299,73 @@ async def inbound_email(request: Request):
             "msg_id": followup_msg_id}
 
 
+def _record_sms_reply_in_outreach_log(sb, from_number_e164: str, text: str, intent: str) -> bool:
+    """Find the most recent SENT outreach_log row for this phone and
+    record the reply. Idempotent: if response_received_at is already set
+    on the latest row, skip. Returns True if a row was updated.
+
+    Phone normalization mirrors agents/dispatch/dispatcher.py:_normalize_phone
+    so the lookup matches what's stored in enriched_leads.phone.
+    """
+    if not from_number_e164:
+        return False
+    digits = "".join(c for c in from_number_e164 if c.isdigit())
+    if not digits:
+        return False
+    if len(digits) == 10:
+        norm = "+1" + digits
+    elif len(digits) == 11 and digits.startswith("1"):
+        norm = "+" + digits
+    else:
+        norm = "+" + digits
+    now_iso = datetime.now(timezone.utc).isoformat()
+    try:
+        # 1) Resolve to a lead_id via enriched_leads.phone
+        lead_r = sb.table("enriched_leads").select("id,phone").eq("phone", norm).limit(1).execute()
+        lead_id = (lead_r.data or [{}])[0].get("id") if lead_r.data else None
+
+        # 2) Find the most recent SENT outreach_log row for this lead
+        #    (or phone if we have a sequence but no lead)
+        if lead_id:
+            row_r = (sb.table("outreach_log")
+                       .select("id,response_received_at,sent_at")
+                       .eq("enriched_lead_id", lead_id)
+                       .not_.is_("sent_at", "null")
+                       .is_("response_received_at", "null")
+                       .order("sent_at", desc=True)
+                       .limit(1).execute())
+        else:
+            # No lead — fall back to matching by meta->phone when stored there
+            row_r = (sb.table("outreach_log")
+                       .select("id,response_received_at,sent_at,meta")
+                       .not_.is_("sent_at", "null")
+                       .is_("response_received_at", "null")
+                       .order("sent_at", desc=True)
+                       .limit(50).execute())
+            row_r.data = [r for r in (row_r.data or [])
+                          if norm in str((r.get("meta") or {}).get("phone", ""))]
+            row_r.data = row_r.data[:1]
+
+        if not row_r.data:
+            return False
+
+        row = row_r.data[0]
+        sb.table("outreach_log").update({
+            "response_received_at": now_iso,
+            "response_text": text[:1000],
+            "meta": {
+                **(row.get("meta") or {}),
+                "reply_intent": intent,
+                "reply_recorded_at": now_iso,
+                "reply_recorded_by": "inbound_handler",
+            },
+        }).eq("id", row["id"]).execute()
+        return True
+    except Exception as e:
+        print(f"outreach_log reply-record failed: {e}")
+        return False
+
+
 @app.post("/api/v1/inbound/sms")
 async def inbound_sms(request: Request):
     """Vonage inbound SMS webhook. Called when a contractor or lead
@@ -327,6 +394,10 @@ async def inbound_sms(request: Request):
         }).execute()
     except Exception as e:
         print(f"inbox_messages sms insert failed: {e}")
+
+    # NEW: record the reply on the matching outreach_log row so the
+    # predictive endpoint + dispatcher + downstream agents see it.
+    _record_sms_reply_in_outreach_log(sb, from_number, text, intent)
 
     # SMS auto-reply is risky (TCPA + cost). Only auto-reply for STOP and
     # interested, and only with a short message. For all other intents

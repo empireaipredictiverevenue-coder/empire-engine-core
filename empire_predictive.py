@@ -86,13 +86,26 @@ def register_predictive_routes(app, *, require_auth, get_db=None):
 
             # ── 2. Ground-truth organic reply rate from outreach_log ──
             #    (was: sms_sequences.status = 'replied' — that's seed data)
-            outreach = (db.table("outreach_log")
+            # Paginate: supabase default page size is 1000, and we have
+            # 9000+ sent rows in 30d. Walk pages until exhausted.
+            outreach_rows = []
+            page_size = 1000
+            offset = 0
+            while True:
+                page = (db.table("outreach_log")
                           .select("sequence, response_received_at, sent_at")
-                          .gte("created_at", cutoff)
+                          .gte("sent_at", cutoff)
                           .not_.is_("sent_at", "null")
-                          .limit(20000)
+                          .order("sent_at", desc=True)
+                          .range(offset, offset + page_size - 1)
                           .execute())
-            outreach_rows = outreach.data or []
+                rows = page.data or []
+                if not rows:
+                    break
+                outreach_rows.extend(rows)
+                if len(rows) < page_size:
+                    break
+                offset += page_size
 
             seq_sent = defaultdict(int)
             seq_replied = defaultdict(int)
