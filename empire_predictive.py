@@ -244,3 +244,116 @@ def register_predictive_routes(app, *, require_auth, get_db=None):
             }
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"predictive_revenue_error: {e}")
+
+
+# =================================================================
+# ORGANIC SIGNAL PROGRESS
+# =================================================================
+# Exposes ground-truth reply rate across multiple windows (1d/7d/30d/90d)
+# plus progress to the 10-reply confidence gate that gates
+# /predictive/revenue projections.
+#
+# This is the "are we earning trust yet?" view. As the inbound
+# SMS/email channel records replies (commit fda96ae), this view
+# populates. Once 10 organic replies accumulate, the predictive
+# endpoint flips from low_confidence=true to a real dollar projection.
+# =================================================================
+
+ORGANIC_CONFIDENCE_GATE = 10
+def register_organic_signal_routes(app, *, require_auth, get_db=None):
+    def _db():
+        if get_db is not None:
+            return get_db()
+        return create_client(os.environ['SUPABASE_URL'], os.environ['SUPABASE_SERVICE_KEY'])
+
+    @app.get('/api/v1/signal/organic')
+    async def organic_signal(
+        windows_days: str = '1,7,30,90',
+        auth: bool = Depends(require_auth),
+    ):
+        try:
+            db = _db()
+            now = datetime.now(timezone.utc)
+            try:
+                days_list = [int(x.strip()) for x in windows_days.split(',') if x.strip()]
+            except Exception:
+                days_list = [1, 7, 30, 90]
+            days_list = sorted(set(days_list)) or [1, 7, 30, 90]
+
+            windows_out = []
+            for d in days_list:
+                cutoff = (now - timedelta(days=d)).isoformat()
+                sent_count = 0
+                replied_count = 0
+                page_size = 1000
+                offset = 0
+                while True:
+                    page = (db.table('outreach_log')
+                              .select('id, response_received_at')
+                              .gte('sent_at', cutoff)
+                              .not_.is_('sent_at', 'null')
+                              .order('sent_at', desc=True)
+                              .range(offset, offset + page_size - 1)
+                              .execute())
+                    rows = page.data or []
+                    if not rows:
+                        break
+                    sent_count += len(rows)
+                    for r in rows:
+                        if r.get('response_received_at'):
+                            replied_count += 1
+                    if len(rows) < page_size:
+                        break
+                    offset += page_size
+                rate = round(100 * replied_count / sent_count, 2) if sent_count else 0.0
+                windows_out.append({'days': d, 'sent': sent_count, 'replied': replied_count, 'rate_pct': rate})
+
+            best_replies = max((w['replied'] for w in windows_out), default=0)
+            gate_met = best_replies >= ORGANIC_CONFIDENCE_GATE
+            replies_to_gate = max(0, ORGANIC_CONFIDENCE_GATE - best_replies)
+
+            recent = (db.table('outreach_log')
+                        .select('response_received_at, sequence, response_text')
+                        .not_.is_('response_received_at', 'null')
+                        .order('response_received_at', desc=True)
+                        .limit(5).execute())
+            recent_out = []
+            for r in (recent.data or []):
+                recent_out.append({
+                    'at': r.get('response_received_at'),
+                    'sequence': r.get('sequence'),
+                    'response_text': (r.get('response_text') or '')[:120],
+                })
+
+            cnt_r = db.table('outreach_log').select('id', count='exact').not_.is_('response_received_at', 'null').limit(1).execute()
+            total_all_time = cnt_r.count or 0
+
+            first_r = (db.table('outreach_log')
+                        .select('response_received_at')
+                        .not_.is_('response_received_at', 'null')
+                        .order('response_received_at', desc=False)
+                        .limit(1).execute())
+            last_r = (db.table('outreach_log')
+                        .select('response_received_at')
+                        .not_.is_('response_received_at', 'null')
+                        .order('response_received_at', desc=True)
+                        .limit(1).execute())
+            first_at = (first_r.data or [{}])[0].get('response_received_at') if first_r.data else None
+            last_at = (last_r.data or [{}])[0].get('response_received_at') if last_r.data else None
+
+            return {
+                'generated_at': now.isoformat(),
+                'windows': windows_out,
+                'confidence_gate': {
+                    'threshold': ORGANIC_CONFIDENCE_GATE,
+                    'best_window_replies': best_replies,
+                    'gate_met': gate_met,
+                    'replies_to_gate': replies_to_gate,
+                },
+                'most_recent_replies': recent_out,
+                'first_reply_at': first_at,
+                'last_reply_at': last_at,
+                'total_replies_all_time': total_all_time,
+            }
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f'organic_signal_error: {e}')

@@ -320,6 +320,65 @@ def _render_top_targets(targets: list[dict]) -> str:
     return "".join(rows)
 
 
+def _build_storm_index_meta(get_db):
+    """SEO meta HTML for the /storm index page (lists all metros)."""
+    base = os.environ.get("PUBLIC_BASE_URL", "https://empire-ai.co.uk").rstrip("/")
+    page_url = base + "/storm"
+    title = "Storm Damage Leads by Metro | Empire AI"
+    description = "Pre-screened storm-damage leads, routed to licensed contractors in " + str(len(STORM_METROS)) + " major US metros. Live storm data updates every 6 hours. 3% on settled claims only."
+    image_url = base + "/static/og-default.png"
+    tags = []
+    tags.append('<meta name="description" content="' + html.escape(description) + '">')
+    tags.append('<meta property="og:title" content="' + html.escape(title) + '">')
+    tags.append('<meta property="og:description" content="' + html.escape(description) + '">')
+    tags.append('<meta property="og:type" content="website">')
+    tags.append('<meta property="og:url" content="' + page_url + '">')
+    tags.append('<meta property="og:image" content="' + image_url + '">')
+    tags.append('<meta name="twitter:card" content="summary_large_image">')
+    tags.append('<meta name="twitter:title" content="' + html.escape(title) + '">')
+    tags.append('<meta name="twitter:description" content="' + html.escape(description) + '">')
+    tags.append('<meta name="twitter:image" content="' + image_url + '">')
+    tags.append('<link rel="canonical" href="' + page_url + '">')
+    return chr(10).join(tags)
+
+
+def _build_storm_meta(city, state, slug, stats):
+    """SEO meta HTML for a storm landing page.
+
+    Returns the meta tags (description + Open Graph + Twitter card +
+    canonical) so shared links render with a proper preview on
+    iMessage / Slack / Twitter / Facebook. Image is a placeholder
+    until per-city OG art is generated (future task).
+    """
+    city_full = _metro_to_human(city, state)
+    n_active = stats.get("active_targets", 0)
+    n_all = stats.get("all_time_leads", 0)
+    base = os.environ.get("PUBLIC_BASE_URL", "https://empire-ai.co.uk").rstrip("/")
+    page_url = base + "/storm/" + slug
+    description = (
+        "Pre-screened storm-damage leads in "
+        + city_full
+        + ". "
+        + str(n_active)
+        + " active storm targets right now. Routed to one licensed contractor per metro. 3% on settled claims only."
+    )
+    title = "Storm Damage Leads in " + city_full + " | Empire AI"
+    image_url = base + "/static/og-default.png"
+    tags = []
+    tags.append('<meta name="description" content="' + html.escape(description) + '">')
+    tags.append('<meta property="og:title" content="' + html.escape(title) + '">')
+    tags.append('<meta property="og:description" content="' + html.escape(description) + '">')
+    tags.append('<meta property="og:type" content="website">')
+    tags.append('<meta property="og:url" content="' + page_url + '">')
+    tags.append('<meta property="og:image" content="' + image_url + '">')
+    tags.append('<meta name="twitter:card" content="summary_large_image">')
+    tags.append('<meta name="twitter:title" content="' + html.escape(title) + '">')
+    tags.append('<meta name="twitter:description" content="' + html.escape(description) + '">')
+    tags.append('<meta name="twitter:image" content="' + image_url + '">')
+    tags.append('<link rel="canonical" href="' + page_url + '">')
+    return chr(10).join(tags)
+
+
 def storm_landing_page(city: str, state: str, slug: str, get_db) -> str:
     """Render the SEO landing page for a single metro."""
     stats = _fetch_storm_stats(get_db, city, state)
@@ -330,6 +389,7 @@ def storm_landing_page(city: str, state: str, slug: str, get_db) -> str:
     head = empire_head(
         title=f"Storm Damage Leads in {city_full} · Pre-Screened · Empire AI",
         extra=_page_css(),
+        meta_html=_build_storm_meta(city, state, slug, stats),
     )
     return f"""<!DOCTYPE html>
 <html lang="en">
@@ -524,6 +584,7 @@ def storm_index_page(get_db) -> str:
     head = empire_head(
         title="Storm Damage Leads · Pre-Screened by Metro · Empire AI",
         extra=_page_css(),
+        meta_html=_build_storm_index_meta(get_db),
     )
     city_links = ""
     for slug, city, state in STORM_METROS:
@@ -597,6 +658,7 @@ def register_storm_landing_routes(app, get_db: Optional[Callable] = None) -> Non
     # Sitemap + robots.txt — SEO discoverability.
     async def _sitemap_xml():
         from fastapi.responses import Response
+        from datetime import datetime, timezone
         base = os.environ.get('PUBLIC_BASE_URL', 'https://empire-ai.co.uk').rstrip('/')
         urls = [base + '/']
         urls.append(base + '/storm')
@@ -604,11 +666,43 @@ def register_storm_landing_routes(app, get_db: Optional[Callable] = None) -> Non
             urls.append(base + '/storm/' + slug)
         for path in ('/pricing', '/contractors', '/support'):
             urls.append(base + path)
+
+        # Pull lastmod for /storm and per-city pages from supabase.
+        # For static pages, use today's date as lastmod.
+        today_iso = datetime.now(timezone.utc).strftime('%Y-%m-%d')
+        per_city_lastmod = {}
+        global_lastmod = today_iso
+        try:
+            sb_local = create_client(os.environ['SUPABASE_URL'], os.environ['SUPABASE_SERVICE_KEY'])
+            # Global lastmod = most recent radar_target across the system
+            r = sb_local.table('radar_targets').select('created_at').order('created_at', desc=True).limit(1).execute()
+            if r.data:
+                global_lastmod = (r.data[0].get('created_at') or '')[:10] or today_iso
+            # Per-city lastmod: query aggregated, group by city+state
+            # Use a simple approach: most recent target per city via multiple queries
+            for slug, city, state in STORM_METROS:
+                rc = sb_local.table('radar_targets').select('created_at').eq('city', city).eq('state', state).order('created_at', desc=True).limit(1).execute()
+                if rc.data:
+                    per_city_lastmod[slug] = (rc.data[0].get('created_at') or '')[:10] or today_iso
+        except Exception:
+            # If supabase is down, sitemap still serves; lastmod falls back to today
+            pass
+
+        # Build the URL -> lastmod lookup
+        lastmod = {}
+        lastmod[base + '/'] = today_iso
+        lastmod[base + '/storm'] = global_lastmod
+        for slug, _, _ in STORM_METROS:
+            lastmod[base + '/storm/' + slug] = per_city_lastmod.get(slug, today_iso)
+        for path in ('/pricing', '/contractors', '/support'):
+            lastmod[base + path] = today_iso
+
         parts = ['<?xml version="1.0" encoding="UTF-8"?>']
         parts.append('<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">')
         for u in urls:
             parts.append('  <url>')
             parts.append('    <loc>' + u + '</loc>')
+            parts.append('    <lastmod>' + lastmod.get(u, today_iso) + '</lastmod>')
             parts.append('    <changefreq>weekly</changefreq>')
             parts.append('  </url>')
         parts.append('</urlset>')
@@ -629,6 +723,36 @@ def register_storm_landing_routes(app, get_db: Optional[Callable] = None) -> Non
         return Response(content=body, media_type='text/plain')
 
     app.add_api_route('/sitemap.xml', _sitemap_xml, methods=['GET'])
+
+    # Sitemap status endpoint — public metadata for operators.
+    async def _sitemap_status():
+        from fastapi.responses import JSONResponse
+        from datetime import datetime, timezone
+        base = os.environ.get('PUBLIC_BASE_URL', 'https://empire-ai.co.uk').rstrip('/')
+        sitemap_url = base + '/sitemap.xml'
+        # Count URLs in sitemap
+        url_count = 1 + 1 + len(STORM_METROS) + 3  # /, /storm, metros, /pricing+/contractors+/support
+        today_iso = datetime.now(timezone.utc).strftime('%Y-%m-%d')
+        lastmod_per_url = {}
+        try:
+            sb_local = create_client(os.environ['SUPABASE_URL'], os.environ['SUPABASE_SERVICE_KEY'])
+            r = sb_local.table('radar_targets').select('created_at').order('created_at', desc=True).limit(1).execute()
+            if r.data:
+                lastmod_per_url['/storm'] = (r.data[0].get('created_at') or '')[:10] or today_iso
+                lastmod_per_url['/'] = (r.data[0].get('created_at') or '')[:10] or today_iso
+                lastmod_per_url['global'] = (r.data[0].get('created_at') or '')[:10] or today_iso
+        except Exception:
+            pass
+        return JSONResponse({
+            'sitemap_url': sitemap_url,
+            'url_count': url_count,
+            'metros': len(STORM_METROS),
+            'lastmod_global': lastmod_per_url.get('global', today_iso),
+            'note': 'Submit the sitemap_url once in Google Search Console for indexing. Sitemap auto-updates as radar_targets change.',
+        })
+
+    app.add_api_route('/api/v1/sitemap/status', _sitemap_status, methods=['GET'])
+
     app.add_api_route('/robots.txt', _robots_txt, methods=['GET'])
 
     log.info(f"[storm_landing] routes registered: /storm, /storm/{{slug}} ({len(STORM_METROS)} metros), /sitemap.xml, /robots.txt")
