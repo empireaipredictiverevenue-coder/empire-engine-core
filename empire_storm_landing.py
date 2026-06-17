@@ -363,7 +363,7 @@ def _build_storm_meta(city, state, slug, stats):
         + " active storm targets right now. Routed to one licensed contractor per metro. 3% on settled claims only."
     )
     title = "Storm Damage Leads in " + city_full + " | Empire AI"
-    image_url = base + "/static/og-default.png"
+    image_url = base + "/static/og-" + slug + ".png"
     tags = []
     tags.append('<meta name="description" content="' + html.escape(description) + '">')
     tags.append('<meta property="og:title" content="' + html.escape(title) + '">')
