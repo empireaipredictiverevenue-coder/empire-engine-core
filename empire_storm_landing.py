@@ -592,4 +592,43 @@ def register_storm_landing_routes(app, get_db: Optional[Callable] = None) -> Non
     app.add_api_route("/storm", _render_index, methods=["GET"], response_class=HTMLResponse)
     app.add_api_route("/storm/", _render_index, methods=["GET"], response_class=HTMLResponse)
     app.add_api_route("/storm/{slug}", _render_metro, methods=["GET"], response_class=HTMLResponse)
-    log.info(f"[storm_landing] routes registered: /storm, /storm/{{slug}} ({len(STORM_METROS)} metros)")
+    
+
+    # Sitemap + robots.txt — SEO discoverability.
+    async def _sitemap_xml():
+        from fastapi.responses import Response
+        base = os.environ.get('PUBLIC_BASE_URL', 'https://empire-ai.co.uk').rstrip('/')
+        urls = [base + '/']
+        urls.append(base + '/storm')
+        for slug, _, _ in STORM_METROS:
+            urls.append(base + '/storm/' + slug)
+        for path in ('/pricing', '/contractors', '/support'):
+            urls.append(base + path)
+        parts = ['<?xml version="1.0" encoding="UTF-8"?>']
+        parts.append('<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">')
+        for u in urls:
+            parts.append('  <url>')
+            parts.append('    <loc>' + u + '</loc>')
+            parts.append('    <changefreq>weekly</changefreq>')
+            parts.append('  </url>')
+        parts.append('</urlset>')
+        xml = chr(10).join(parts)
+        return Response(content=xml, media_type='application/xml')
+
+    async def _robots_txt():
+        from fastapi.responses import Response
+        base = os.environ.get('PUBLIC_BASE_URL', 'https://empire-ai.co.uk').rstrip('/')
+        body = chr(10).join([
+            'User-agent: *',
+            'Allow: /',
+            'Disallow: /api/',
+            'Disallow: /command',
+            'Sitemap: ' + base + '/sitemap.xml',
+            ''
+        ])
+        return Response(content=body, media_type='text/plain')
+
+    app.add_api_route('/sitemap.xml', _sitemap_xml, methods=['GET'])
+    app.add_api_route('/robots.txt', _robots_txt, methods=['GET'])
+
+    log.info(f"[storm_landing] routes registered: /storm, /storm/{{slug}} ({len(STORM_METROS)} metros), /sitemap.xml, /robots.txt")
