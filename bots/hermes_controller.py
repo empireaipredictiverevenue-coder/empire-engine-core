@@ -29,6 +29,30 @@ import asyncio
 from datetime import datetime, timezone, timedelta
 from typing import Dict, Any, List, Optional, TYPE_CHECKING
 
+# Space reasoner — multi-provider deep reasoning for GodMode decisions
+try:
+    from bots.space_providers import SpaceReasoner
+    _HAS_SPACE = True
+except ImportError:
+    _HAS_SPACE = False
+    SpaceReasoner = None
+
+# Chatwoot — omnichannel messaging
+_HAS_CHATWOOT = False
+try:
+    from bots.chatwoot_client import get_chatwoot as _get_chatwoot
+    _HAS_CHATWOOT = True
+except ImportError:
+    _get_chatwoot = None
+
+# Langfuse tracing
+_HAS_TRACING = False
+try:
+    from observability.tracing import TraceContext
+    _HAS_TRACING = True
+except ImportError:
+    TraceContext = None
+
 if TYPE_CHECKING:
     # Forward reference for the Supabase client type. We use TYPE_CHECKING
     # so mypy/IDEs see the proper type for the `sb` parameter without
@@ -55,9 +79,17 @@ SUPABASE_KEY = os.environ.get("SUPABASE_SERVICE_KEY", "")
 OLLAMA_URL   = os.environ.get("OLLAMA_URL", "http://localhost:11434")
 INTERVAL     = int(os.environ.get("HERMES_CTL_INTERVAL_SEC", "60"))
 MAX_LOOKBACK = int(os.environ.get("HERMES_CTL_LOOKBACK_MIN", "10"))
-
-AGENT_NAME   = "hermes.controller"
+AGENT_NAME = "hermes_controller"
 AGENT_STATUS = "ACTIVE"
+
+# Space reasoning — enabled by default, opt-out via env
+SPACE_REASONING_ENABLED = os.environ.get("HERMES_SPACE_REASONING", "true").lower() == "true"
+
+# Chatwoot — omnichannel messaging enabled via env
+CHATWOOT_ENABLED = os.environ.get("CHATWOOT_ENABLED", "false").lower() == "true"
+
+# Langfuse tracing for Hermes decisions
+HERMES_TRACING_ENABLED = os.environ.get("HERMES_TRACING_ENABLED", "true").lower() == "true"
 
 # Pipeline stage progression
 PIPELINE_NEXT: Dict[str, Optional[str]] = {
@@ -181,8 +213,11 @@ class GodModeController:
         last_failure: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """
-        Feed completed tasks + queue state to the local LLM.
+        Feed completed tasks + queue state to the LLM.
         Returns a structured action: {action, target_ticket, params, reasoning}.
+
+        Uses Space Reasoner (Gemini → Claude → Ollama) when available and enabled,
+        with local Ollama fallback. The self-correction loop still applies.
 
         If last_failure is provided (from the self-correction loop), the LLM
         is explicitly told what failed so it can adjust its decision.
@@ -226,31 +261,92 @@ class GodModeController:
             f"{correction_block}"
         )
 
+        # Try Space Reasoner first (multi-provider: Gemini → Claude → Ollama)
+        if SPACE_REASONING_ENABLED:
+            if not _HAS_SPACE:
+                log.warning("[controller] space reasoner not available (bots.space_providers missing) — falling back to Ollama")
+            else:
+                space_result = await self._space_think(system, prompt)
+                if space_result.get("ok"):
+                    log.info(f"[controller] space decision via {space_result.get('provider', '?')}")
+                    return space_result["data"]
+                log.info(f"[controller] space reasoner failed ({space_result.get('error')}), falling back to Ollama")
+
         return await self._ollama_chat_json(system, prompt)
 
-    async def _ollama_chat_json(self, system: str, prompt: str) -> Dict[str, Any]:
-        """Direct Ollama chat for GodMode decision-making."""
-        import httpx
-        try:
-            async with httpx.AsyncClient(timeout=60.0) as client:
-                r = await client.post(
-                    f"{OLLAMA_URL}/api/chat",
-                    json={
-                        "model": "llama3.2:3b",
-                        "messages": [
-                            {"role": "system", "content": system},
-                            {"role": "user", "content": prompt},
-                        ],
-                        "stream": False,
-                        "format": "json",
-                    },
+    async def _space_think(self, system: str, prompt: str) -> Dict[str, Any]:
+        """Query Space Reasoner for deep reasoning, traced to Langfuse."""
+        async def _do() -> Dict[str, Any]:
+            try:
+                reasoner = SpaceReasoner()
+                result = await reasoner.reason_json(
+                    prompt=prompt,
+                    system=system,
+                    max_tokens=2048,
                 )
-                r.raise_for_status()
-                data = r.json()
-                return json.loads(data["message"]["content"])
-        except Exception as e:
-            log.error(f"[controller] LLM call failed: {e}")
-            return {"action": "ignore", "reasoning": f"LLM error: {e}"}
+                if result.get("ok"):
+                    return {"ok": True, "data": result["data"], "provider": result.get("provider")}
+                return {"ok": False, "error": result.get("error", "unknown")}
+            except Exception as e:
+                return {"ok": False, "error": str(e)[:200]}
+
+        if HERMES_TRACING_ENABLED and _HAS_TRACING:
+            async with TraceContext(
+                name="hermes.space_think",
+                model="multi-provider",
+                input=prompt[:2000],
+                system=system,
+                task="controller.space_reasoning",
+                tags=["provider:space", "task:godmode"],
+            ) as ctx:
+                result = await _do()
+                ctx.set_output(
+                    output=json.dumps(result)[:3000],
+                )
+                return result
+        return await _do()
+
+    async def _ollama_chat_json(self, system: str, prompt: str) -> Dict[str, Any]:
+        """Direct Ollama chat for GodMode decision-making, traced to Langfuse."""
+        import httpx
+
+        async def _do() -> Dict[str, Any]:
+            try:
+                async with httpx.AsyncClient(timeout=60.0) as client:
+                    r = await client.post(
+                        f"{OLLAMA_URL}/api/chat",
+                        json={
+                            "model": "llama3.2:3b",
+                            "messages": [
+                                {"role": "system", "content": system},
+                                {"role": "user", "content": prompt},
+                            ],
+                            "stream": False,
+                            "format": "json",
+                        },
+                    )
+                    r.raise_for_status()
+                    data = r.json()
+                    return json.loads(data["message"]["content"])
+            except Exception as e:
+                log.error(f"[controller] LLM call failed: {e}")
+                return {"action": "ignore", "reasoning": f"LLM error: {e}"}
+
+        if HERMES_TRACING_ENABLED and _HAS_TRACING:
+            async with TraceContext(
+                name="hermes.ollama_decision",
+                model="llama3.2:3b",
+                input=prompt[:2000],
+                system=system,
+                task="controller.ollama_reasoning",
+                tags=["provider:ollama", "task:godmode"],
+            ) as ctx:
+                result = await _do()
+                ctx.set_output(
+                    output=json.dumps(result)[:3000],
+                )
+                return result
+        return await _do()
 
     # ── 4. EXECUTE THE ACTION ────────────────────────────────────────
     async def execute_action(self, action: Dict[str, Any]) -> Dict[str, Any]:
@@ -404,6 +500,65 @@ class GodModeController:
             return True
         return False
 
+    # ── Chatwoot Webhook (notify conversations) ────────────────────
+    _chatwoot_conv_id: Optional[int] = None  # reuse across cycles
+
+    async def _notify_chatwoot(self, result: Dict[str, Any]) -> None:
+        """Send significant Hermes decisions to a single Chatwoot conversation.
+
+        Reuses a cached conversation_id across cycles to avoid flooding the
+        inbox with a new conversation every 60s.
+        """
+        if not CHATWOOT_ENABLED or not _HAS_CHATWOOT:
+            return
+        try:
+            cw = _get_chatwoot()
+            if not cw:
+                return
+            action = result.get("action", "?")
+            target = result.get("target", "—")
+            if action in ("ignore", "nothing_to_do"):
+                return
+
+            msg = (
+                f"Hermes Controller — {action}\n"
+                f"Target: {target}\n"
+                f"Attempts: {result.get('attempts', '?')}\n"
+                f"Stats: {json.dumps(result.get('stats', {}))}"
+            )
+
+            # Reuse cached conversation if we already have one
+            if self._chatwoot_conv_id:
+                send_res = await cw.send_message(
+                    conversation_id=self._chatwoot_conv_id,
+                    content=msg,
+                )
+                if send_res.get("ok"):
+                    log.debug(f"[controller] Chatwoot msg sent to conv {self._chatwoot_conv_id}")
+                    return
+                # Conversation may have been resolved — reset cache
+                self._chatwoot_conv_id = None
+
+            # No cached conversation — create one
+            inboxes_res = await cw.list_inboxes()
+            if not inboxes_res.get("ok"):
+                return
+            inboxes = inboxes_res.get("inboxes", [])
+            if not inboxes:
+                log.debug("[controller] no Chatwoot inboxes found")
+                return
+
+            conv_res = await cw.notify(
+                inbox_id=inboxes[0].get("id"),
+                contact_name="Hermes Controller",
+                message=msg,
+            )
+            if conv_res.get("ok"):
+                self._chatwoot_conv_id = conv_res.get("conversation_id")
+                log.debug(f"[controller] Chatwoot conv {self._chatwoot_conv_id} created")
+        except Exception as e:
+            log.debug(f"[controller] Chatwoot notify failed: {e}")
+
     # ── GOD MODE MAIN LOOP ───────────────────────────────────────────
     async def run_god_cycle(self) -> Dict[str, Any]:
         """One GodMode orchestration cycle with self-correction."""
@@ -465,6 +620,7 @@ async def heartbeat():
     try:
         _sb.table("agent_registry").upsert({
             "agent_name": AGENT_NAME,
+            "role_name": "hermes_controller",
             "status": AGENT_STATUS,
             "last_ping": datetime.now(timezone.utc).isoformat(),
             "enabled": True,
@@ -498,6 +654,9 @@ async def run_loop():
             act = result.get("action", "?")
             if act not in ("ignore", "nothing_to_do"):
                 log.info(f"[controller] cycle: {act} | target={result.get('target','—')} | attempts={result.get('attempts','?')}")
+                # Notify Chatwoot on real actions
+                if CHATWOOT_ENABLED and _HAS_CHATWOOT:
+                    await controller._notify_chatwoot(result)
         except Exception as e:
             log.error(f"[controller] cycle error: {e}")
         await asyncio.sleep(INTERVAL)

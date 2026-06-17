@@ -1,0 +1,17 @@
+{
+  "current_test": "quick question on roofing leads",
+  "history": [
+    {
+      "subject": "quick question",
+      "sent_count": 1000,
+      "open_count": 420,
+      "open_rate_pct": 42.0
+    },
+    {
+      "subject": "roofing scale plan",
+      "sent_count": 1000,
+      "open_count": 190,
+      "open_rate_pct": 19.0
+    }
+  ]
+}

@@ -1,0 +1,4 @@
+# autoresearch local artifacts
+integrations/autoresearch/.venv/
+integrations/autoresearch/results.tsv
+integrations/autoresearch/__pycache__/

@@ -1,5 +1,5 @@
 To: partners@farmers.com
-From: phil@empire-ai.co.uk
+From: philliplivesley@empire-ai.co.uk
 Subject: Partner inquiry: settled-claim event notifications for predictive contractor routing
 Carrier: Farmers
 Status: DRAFT — review before sending

@@ -25,8 +25,8 @@ from dotenv import load_dotenv
 load_dotenv(REPO.parent / ".env")
 from supabase import create_client
 
-# Placeholder email filter
-_PLACEHOLDER_RE = re.compile(r"(user@domain|logo@|noreply|wix|sentry)", re.I)
+# Shared email validator — single source of truth (replaces inline _is_valid_email)
+from bots.email_validator import is_valid_email, describe_rejection
 
 def _sb():
     url = os.getenv("SUPABASE_URL", "")
@@ -34,14 +34,6 @@ def _sb():
     if not url or not key:
         raise RuntimeError("SUPABASE_URL and SUPABASE_SERVICE_KEY must be set")
     return create_client(url, key)
-
-def _is_valid_email(email: str) -> bool:
-    if not email or not email.strip():
-        return False
-    email = email.strip().lower()
-    if _PLACEHOLDER_RE.search(email):
-        return False
-    return bool(re.match(r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$", email))
 
 def show_status(sb):
     """Show current B2B email enrollment stats."""
@@ -95,9 +87,13 @@ def main():
     r = query.limit(args.max).execute()
     all_leads = r.data or []
 
-    # Filter to valid emails only
-    leads = [l for l in all_leads if _is_valid_email(l.get("email", ""))]
+    # Filter to valid emails only (using shared validator)
+    leads = [l for l in all_leads if is_valid_email(l.get("email", ""), strict=True)]
     filtered = len(all_leads) - len(leads)
+    if filtered:
+        # Log a sample of rejected emails for visibility
+        rejected = [l.get("email","")[:40] for l in all_leads if not is_valid_email(l.get("email",""), strict=True)]
+        print(f"  Rejected ({filtered}): {rejected[:5]}")
 
     print(f"B2B leads with email: {len(all_leads)} ({filtered} filtered as placeholders)")
     print(f"Valid leads:          {len(leads)}")

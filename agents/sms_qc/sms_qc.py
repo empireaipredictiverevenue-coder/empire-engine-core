@@ -41,6 +41,7 @@ import json
 import uuid
 import logging
 import asyncio
+import subprocess
 import argparse
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
@@ -91,12 +92,15 @@ def _sb():
 async def _telegram_send(text: str) -> bool:
     """Send a Telegram message via hermes CLI. Best-effort: if hermes
     isn't on PATH, we just log and return False (the event is still
-    in qc_events)."""
-    import subprocess
+    in qc_events).
+
+    Runs subprocess in a thread to avoid stalling the event loop."""
     try:
-        result = subprocess.run(
-            ["/usr/local/bin/hermes", "send", "--to", "telegram", text],
-            capture_output=True, text=True, timeout=15,
+        result = await asyncio.to_thread(
+            lambda: subprocess.run(
+                ["/usr/local/bin/hermes", "send", "--to", "telegram", text],
+                capture_output=True, text=True, timeout=15,
+            )
         )
         return result.returncode == 0
     except Exception as e:

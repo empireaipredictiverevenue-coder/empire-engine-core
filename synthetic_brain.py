@@ -17,6 +17,9 @@ from fastapi.security.api_key import APIKeyHeader
 from pydantic import BaseModel, Field, ValidationError
 from kokoro_onnx import Kokoro
 
+from observability.tracing import TraceContext
+from observability.langfuse_client import get_langfuse as _get_langfuse
+
 log = logging.getLogger("synthetic_brain")
 
 # scipy is used for resampling Kokoro's native 24kHz output down to Vonage's
@@ -436,11 +439,14 @@ class LocalBrainContext:
         (no JSON constraint). The response is returned as {"response": text}.
         When a schema is provided, the LLM returns structured JSON matching
         that schema.
+
+        All calls are traced to Langfuse for observability.
         """
+        model = os.environ.get("OLLAMA_MODEL", "llama3.2:3b")
         conn = http.client.HTTPConnection("localhost", 11434)
         headers = {"Content-Type": "application/json"}
         payload: Dict[str, Any] = {
-            "model": os.environ.get("OLLAMA_MODEL", "llama3.2:3b"),
+            "model": model,
             "messages": [
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt}
@@ -452,18 +458,67 @@ class LocalBrainContext:
         if format_schema is not None:
             payload["format"] = format_schema
 
+        # Langfuse tracing (synchronous, so we create traces manually)
+        import time as _t
+        _start = _t.time()
+        _lf = None
+        _generation = None
+        try:
+            _lf = _get_langfuse()
+            if _lf:
+                _trace = _lf.trace(
+                    name="synthetic_brain.ask_local_llm",
+                    metadata={
+                        "input_preview": user_prompt[:200],
+                        "has_schema": format_schema is not None,
+                    },
+                    tags=["provider:ollama", f"model:{model}", "source:synthetic_brain"],
+                )
+                _generation = _trace.generation(
+                    name="ask_local_llm",
+                    model=model,
+                    input=user_prompt[:3000],
+                    model_parameters={"system_set": bool(system_prompt)},
+                )
+        except Exception:
+            pass
+
         try:
             conn.request("POST", "/api/chat", json.dumps(payload), headers)
             response = conn.getresponse()
             raw = response.read().decode()
             res_data = json.loads(raw)
             content = res_data["message"]["content"]
+
+            # Record trace
+            if _generation:
+                try:
+                    elapsed = int((_t.time() - _start) * 1000)
+                    _generation.end(
+                        output=content[:5000],
+                        usage={
+                            "prompt_tokens": res_data.get("prompt_eval_count", 0),
+                            "completion_tokens": res_data.get("eval_count", 0),
+                        },
+                        metadata={"latency_ms": elapsed},
+                    )
+                except Exception:
+                    pass
+
             # If a schema was provided, parse content as JSON; otherwise
             # return the plain text response.
             if format_schema is not None:
                 return json.loads(content)
             return {"response": content}
         except Exception as e:
+            if _generation:
+                try:
+                    _generation.end(
+                        level="ERROR",
+                        status_message=f"Connection failed: {str(e)[:200]}",
+                    )
+                except Exception:
+                    pass
             return {"error": f"LLM Connection failed: {str(e)}"}
         finally:
             conn.close()

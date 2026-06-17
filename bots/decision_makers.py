@@ -61,6 +61,103 @@ NAME_TITLE_PATTERNS = [
     re.compile(r"(owner|founder|president|ceo|principal)\s*[:\-]?\s*([A-Z][a-z]+ [A-Z][a-z]+)", re.I),
 ]
 
+# Words that look like names but aren't. Anything in this set is
+# rejected as a "name" match. Cities/states/generic English.
+_NAME_STOPWORDS = {
+    # cities we already search
+    "wichita", "dallas", "houston", "austin", "san antonio", "oklahoma city",
+    "tulsa", "kansas city", "denver", "phoenix", "atlanta", "chicago",
+    "nashville", "charlotte", "tampa", "new orleans", "st louis",
+    # states
+    "texas", "kansas", "oklahoma", "colorado", "missouri", "arizona",
+    "georgia", "illinois", "tennessee", "north carolina", "florida",
+    "louisiana", "kentucky", "alabama", "mississippi", "nebraska",
+    # generic / common false positives from real websites
+    "and", "of", "the", "this", "that", "from", "with", "for",
+    "contact", "about", "team", "staff", "service", "services",
+    "call", "click", "learn", "more", "read", "see", "view",
+    "home", "page", "site", "company", "business", "office",
+    "native", "response", "look", "can", "our", "your", "their",
+    "first", "last", "next", "best", "top", "all", "any",
+    "colorado", "california", "wyoming", "nevada", "oregon",
+    "new", "old", "north", "south", "east", "west",
+    "monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday",
+    "january", "february", "march", "april", "may", "june", "july",
+    "august", "september", "october", "november", "december",
+    # placeholder / example names
+    "john doe", "jane doe", "your name",
+    "co", "inc", "llc", "ltd", "corp",
+    # second-batch false positives observed on real contractor sites
+    "standing", "together", "needing", "roof", "personally", "calls",
+    "lays", "his", "her", "him", "them", "we", "us", "i", "me",
+    "most", "trusted", "reliable", "professional", "quality", "expert",
+    "free", "estimate", "quotes", "licensed", "insured", "bonded",
+    # third-batch false positives
+    "qualified", "supervises", "every", "ial", "set", "out",
+    "ensuring", "ensures", "committed", "dedicated", "passionate",
+    "years", "experience", "team", "ready", "help", "today",
+    "need", "want", "make", "get", "go", "let", "ask",
+    # fourth-batch: marketing verbs / adverbs that aren't names
+    "drives", "started", "starting", "informed", "allows", "allow",
+    "bringing", "brings", "loved", "trust", "trusted", "rely",
+    "relying", "dependable", "depend", "growing", "built", "building",
+    "based", "operated", "operates", "serving", "served", "serves",
+    "reaches", "reached", "covering", "covers", "covered", "cover",
+    "founded", "founds", "established", "establishes", "delivers",
+    "delivered", "providing", "provides", "provided", "offering",
+    "offers", "offered", "creates", "created", "create", "building",
+    "gained", "gains", "known", "shows", "showed", "shown", "show",
+    "comes", "came", "come", "goes", "went", "gone", "goes",
+    "tells", "told", "telling", "says", "said", "saying",
+    "looks", "looked", "looking", "sees", "saw", "seen",
+    "finds", "found", "finding", "keeps", "kept", "keeping",
+    "takes", "took", "taken", "taking", "gives", "gave", "given",
+    "works", "worked", "working", "plays", "played", "playing",
+    "runs", "ran", "running", "moves", "moved", "moving",
+    "lives", "lived", "living", "grows", "grew", "grown", "growing",
+    "stands", "stood", "standing", "sits", "sat", "sitting",
+    "speaks", "spoke", "spoken", "speaking", "talks", "talked", "talking",
+    "writes", "wrote", "written", "writing", "reads", "read", "reading",
+    "tries", "tried", "trying", "wants", "wanted", "wanting",
+    "needs", "needed", "needing", "helps", "helped", "helping",
+    "starts", "started", "starting", "stops", "stopped", "stopping",
+    "ends", "ended", "ending", "leaves", "left", "leaving",
+    "sends", "sent", "sending", "calls", "called", "calling",
+    "meets", "met", "meeting", "joins", "joined", "joining",
+    "feels", "felt", "feeling", "seems", "seemed", "seeming",
+    "becomes", "became", "becoming", "remains", "remained", "remaining",
+    "appears", "appeared", "appearing", "happens", "happened", "happening",
+    "begins", "began", "begun", "beginning", "continues", "continued",
+    "decides", "decided", "deciding", "expects", "expected", "expecting",
+    "includes", "included", "including", "requires", "required", "requiring",
+    # adjectives that show up in marketing copy
+    "best", "top", "leading", "premier", "premium", "elite", "expert",
+    "quality", "professional", "certified", "licensed", "insured",
+    "affordable", "reliable", "trusted", "dependable", "honest",
+    "experienced", "knowledgeable", "skilled", "qualified",
+    "ultimate", "aware", "customer", "client", "customers", "clients",
+    "goal", "goals", "mission", "vision", "values", "principles",
+    "story", "stories", "journey", "experience", "experiences",
+    "owner", "owners", "founder", "founders",  # titles, not names
+}
+
+
+def _looks_like_real_name(s: str) -> bool:
+    """Filter false-positive "names" from the regex output."""
+    if not s:
+        return False
+    parts = s.lower().split()
+    if len(parts) != 2:
+        return False
+    for p in parts:
+        if p in _NAME_STOPWORDS or len(p) < 3:
+            return False
+        # real names don't have all-caps or all-consonants
+        if not any(c in "aeiou" for c in p):
+            return False
+    return True
+
+
 async def _scrape_public_site(client, url):
     if not url: return None, None
     if not url.startswith("http"): url = "https://" + url
@@ -75,8 +172,15 @@ async def _scrape_public_site(client, url):
                 m = pat.search(text)
                 if m:
                     g = m.groups()
-                    if looks_like_decision_maker(g[0]): return g[1], g[0]
-                    else: return g[0], g[1]
+                    candidate_name, candidate_title = g[0], g[1]
+                    # Identify which group is the name vs the title
+                    if looks_like_decision_maker(candidate_name):
+                        name, title = candidate_title, candidate_name
+                    else:
+                        name, title = candidate_name, candidate_title
+                    # Final filter: must look like a real human name
+                    if _looks_like_real_name(name):
+                        return name, title
         except Exception:
             continue
     return None, None
@@ -122,6 +226,8 @@ if __name__ == "__main__":
     if len(sys.argv) > 2 and sys.argv[1] == "csv":
         ingest_csv(sys.argv[2])
     elif len(sys.argv) > 1 and sys.argv[1] == "web":
-        asyncio.run(enrich_from_websites())
+        # one-shot batch run: takes a limit arg, defaults to 100
+        lim = int(sys.argv[2]) if len(sys.argv) > 2 else 100
+        asyncio.run(enrich_from_websites(limit=lim))
     else:
         show_contactable("Wichita")

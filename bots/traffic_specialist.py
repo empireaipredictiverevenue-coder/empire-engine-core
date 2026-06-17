@@ -864,20 +864,27 @@ async def run_loop(interval_minutes: int = 30):
     log.info(f"[traffic_specialist] Bot ONLINE · interval={interval_minutes}m")
     specialist = get_traffic_specialist()
 
-    # Heartbeat to agent registry
+    # Heartbeat to agent registry — register as Traffic Director role
     async def heartbeat():
         try:
             sb = _get_sb()
             sb.table("agent_registry").upsert({
                 "agent_name": "traffic_specialist",
+                "role_name": "traffic_director",
                 "status": "ACTIVE",
                 "last_ping": datetime.now(timezone.utc).isoformat(),
                 "enabled": True,
                 "capabilities": [
-                    "traffic_generation", "budget_optimization",
-                    "channel_orchestration", "native_ads",
-                    "affiliate_management", "seo_coordination",
-                    "content_distribution", "traffic_intelligence",
+                    "allocate_budget", "set_traffic_strategy", "monitor_all_channels",
+                    "generate_traffic_report", "optimize_channel_mix",
+                    "manage_native_ads", "manage_affiliates", "manage_seo",
+                    "manage_email", "manage_sms", "traffic_generation",
+                    "budget_optimization", "channel_orchestration",
+                ],
+                "task_types": [
+                    "traffic.allocate", "traffic.report", "traffic.optimize",
+                    "native.optimize", "affiliate.recruit", "seo.audit",
+                    "email.optimize", "sms.optimize",
                 ],
             }, on_conflict="agent_name").execute()
         except Exception:

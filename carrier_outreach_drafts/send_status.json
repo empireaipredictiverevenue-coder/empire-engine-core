@@ -1,0 +1,43 @@
+{
+  "sent_at": "2026-06-16T20:14:44.403181+00:00",
+  "total": 5,
+  "success": 0,
+  "failed": 5,
+  "results": [
+    {
+      "carrier": "State Farm",
+      "to": "partners@statefarm.com",
+      "ok": false,
+      "id": null,
+      "error": null
+    },
+    {
+      "carrier": "Allstate",
+      "to": "vendorpartners@allstate.com",
+      "ok": false,
+      "id": null,
+      "error": null
+    },
+    {
+      "carrier": "USAA",
+      "to": "partnerships@usaa.com",
+      "ok": false,
+      "id": null,
+      "error": null
+    },
+    {
+      "carrier": "Liberty Mutual",
+      "to": "partners@libertymutual.com",
+      "ok": false,
+      "id": null,
+      "error": null
+    },
+    {
+      "carrier": "Farmers",
+      "to": "partners@farmers.com",
+      "ok": false,
+      "id": null,
+      "error": null
+    }
+  ]
+}

@@ -3,6 +3,7 @@ from datetime import datetime, timezone
 from dotenv import load_dotenv
 import httpx
 from supabase import create_client
+import json
 
 load_dotenv("/root/.env")
 sb = create_client(os.getenv("SUPABASE_URL"), os.getenv("SUPABASE_SERVICE_KEY"))
@@ -114,10 +115,14 @@ def save_forecasts(forecasts):
 def heartbeat(count):
     try:
         sb.table("agent_registry").upsert({
-            "agent_name": "predictor", "status": "ACTIVE",
+            "agent_name": "predictor",
+            "role_name": "storm_predictor",
+            "status": "ACTIVE",
             "leads_today": count,
             "last_ping": datetime.now(timezone.utc).isoformat(),
-            "enabled": True
+            "enabled": True,
+            "capabilities": json.dumps(["storm_scan", "geo_analyze", "find_targets"]),
+            "task_types": json.dumps(["scout.storm_scan", "scout.find_roofs"]),
         }, on_conflict="agent_name").execute()
     except Exception as e:
         print(f"[PREDICT] heartbeat error: {e}")

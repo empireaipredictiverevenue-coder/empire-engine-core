@@ -225,10 +225,12 @@ def run():
     try:
         _sb.table("agent_registry").upsert({
             "agent_name": "agi.revenue",
+            "role_name": "agi_revenue",
             "status": "ACTIVE",
             "last_ping": datetime.now(timezone.utc).isoformat(),
             "enabled": True,
             "capabilities": json.dumps(["agi", "revenue", "optimizer", "tuning"]),
+            "task_types": json.dumps(["revenue.agi_tune", "revenue.calibrate"]),
         }, on_conflict="agent_name").execute()
     except Exception:
         pass

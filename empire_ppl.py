@@ -396,21 +396,53 @@ def ppl_page() -> str:
       border-bottom: 1px solid var(--empire-divider);
       padding: 18px 0;
     }
+    .ppl-faq-item:first-child { padding-top: 0; }
     .ppl-faq-q {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      width: 100%;
+      padding: 0;
+      cursor: pointer;
+      border: none;
+      background: none;
+      font: inherit;
+      text-align: left;
+      color: var(--empire-white);
       font-weight: 500;
       font-size: 14px;
-      color: var(--empire-white);
       margin-bottom: 8px;
-      cursor: pointer;
+      user-select: none;
+      -webkit-appearance: none;
+      appearance: none;
+    }
+    .ppl-faq-q:hover { color: var(--signal-teal); }
+    .ppl-faq-q[aria-expanded="true"] { color: var(--signal-teal); }
+    .ppl-faq-chevron {
+      flex-shrink: 0;
+      margin-left: 12px;
+      width: 18px;
+      height: 18px;
+      transition: transform 0.25s ease;
+      color: var(--empire-fog);
+      pointer-events: none;
+    }
+    .ppl-faq-q[aria-expanded="true"] .ppl-faq-chevron {
+      transform: rotate(180deg);
+      color: var(--signal-teal);
     }
     .ppl-faq-a {
       font-size: 13px;
       color: var(--empire-mist);
       line-height: 1.7;
-      display: none;
+      overflow: hidden;
+      max-height: 0;
+      opacity: 0;
+      transition: max-height 0.3s ease, opacity 0.25s ease, padding 0.15s ease;
     }
     .ppl-faq-a.open {
-      display: block;
+      max-height: 300px;
+      opacity: 1;
     }
     .ppl-foot {
       margin-top: 64px;
@@ -451,11 +483,16 @@ def ppl_page() -> str:
     </div>"""
 
     faq_rows = ""
-    for faq in _PPL_FAQ:
+    for i, faq in enumerate(_PPL_FAQ):
         faq_rows += f"""
     <div class="ppl-faq-item">
-      <div class="ppl-faq-q" onclick="this.classList.toggle('open');this.nextElementSibling.classList.toggle('open')">{faq['q']}</div>
-      <div class="ppl-faq-a">{faq['a']}</div>
+      <button class="ppl-faq-q" onclick="togglePplFaq(this)" type="button" id="ppl-faq-trigger-{i}" aria-controls="ppl-faq-answer-{i}" aria-expanded="false">
+        <span>{faq['q']}</span>
+        <svg class="ppl-faq-chevron" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7l5 5 5-5"/></svg>
+      </button>
+      <div class="ppl-faq-a" id="ppl-faq-answer-{i}" role="region" aria-labelledby="ppl-faq-trigger-{i}" aria-hidden="true">
+        {faq['a']}
+      </div>
     </div>"""
 
     steps_html = ""
@@ -554,13 +591,20 @@ def ppl_page() -> str:
 
 <script>
 (function() {{
-  document.querySelectorAll('.ppl-faq-q').forEach(function(el) {{
-    el.addEventListener('click', function() {{
-      this.classList.toggle('open');
-      var a = this.nextElementSibling;
-      if (a) a.classList.toggle('open');
-    }});
-  }});
+  // ── FAQ toggle with ARIA support ──
+  window.togglePplFaq = function(btn) {{
+    var isExpanded = btn.getAttribute('aria-expanded') === 'true';
+    var answer = document.getElementById(btn.getAttribute('aria-controls'));
+    if (!answer) return;
+    
+    btn.setAttribute('aria-expanded', !isExpanded);
+    answer.setAttribute('aria-hidden', isExpanded);
+    if (!isExpanded) {{
+      answer.classList.add('open');
+    }} else {{
+      answer.classList.remove('open');
+    }}
+  }};
 }})();
 </script>
 

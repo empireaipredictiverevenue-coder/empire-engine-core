@@ -260,6 +260,10 @@ class PainPointLibrary:
         self._catalog: Dict[str, Dict[str, Dict]] = {}
         # Outcome tracking: (niche, pp_id) -> {attempts, successes, last_success_ts}
         self._outcomes: Dict[tuple, Dict] = {}
+        # Lazy-load flag — _load_db_from_db queries Supabase synchronously,
+        # so we defer it to first use to avoid blocking the event loop at
+        # module-import time (which prevents uvicorn from binding).
+        self._db_loaded: bool = False
         self._init_catalog()
 
     def _init_catalog(self):
@@ -268,13 +272,13 @@ class PainPointLibrary:
             self._catalog[niche] = {}
             for pp in points:
                 self._catalog[niche][pp["id"]] = dict(pp)
-        # Load any stored weights from DB
-        self._load_from_db()
+        # DB weights are loaded lazily — see _ensure_db_loaded().
 
-    def _load_from_db(self):
-        """Load persisted pain point weights from pain_points_pool table."""
-        if not self.get_db:
+    def _ensure_db_loaded(self):
+        """Lazy-load persisted weights from pain_points_pool on first use."""
+        if self._db_loaded or not self.get_db:
             return
+        self._db_loaded = True
         try:
             db = self.get_db()
             rows = db.table("pain_points_pool").select("*").execute()
@@ -317,6 +321,7 @@ class PainPointLibrary:
     # ── GET PAIN POINTS FOR NICHE ───────────────────────────────────
     def get_pain_points(self, niche: str) -> List[Dict]:
         """Return pain points for a niche, sorted by weight (highest first)."""
+        self._ensure_db_loaded()
         if niche in self._catalog:
             points = list(self._catalog[niche].values())
         else:
@@ -326,6 +331,7 @@ class PainPointLibrary:
     # ── GET TOP PAIN POINT ──────────────────────────────────────────
     def get_top_pain_point(self, niche: str) -> Optional[Dict]:
         """Return the single highest-weight pain point for a niche."""
+        self._ensure_db_loaded()
         points = self.get_pain_points(niche)
         return points[0] if points else None
 
@@ -335,6 +341,7 @@ class PainPointLibrary:
         Inject the top 1-2 pain point hooks into a closer call script.
         Inserts after the greeting/opener, before the call-to-action.
         """
+        self._ensure_db_loaded()
         top = self.get_pain_points(niche)[:max_points]
         if not top:
             return base_script
@@ -355,6 +362,7 @@ class PainPointLibrary:
     # ── GET PAIN POINTS FOR SCRIPT ──────────────────────────────────
     def get_script_pain_points(self, niche: str, max_points: int = 2) -> List[str]:
         """Return top pain point IDs to use in a script (for logging)."""
+        self._ensure_db_loaded()
         return [p["id"] for p in self.get_pain_points(niche)[:max_points]]
 
     # ── RECORD OUTCOME ─────────────────────────────────────────────
@@ -364,6 +372,7 @@ class PainPointLibrary:
         Adjusts weights using exponential moving average.
         Auto-creates entries for unseen pain points so the system learns from new niches.
         """
+        self._ensure_db_loaded()
         if not pain_point_ids:
             return
 
@@ -405,6 +414,7 @@ class PainPointLibrary:
     # ── SNAPSHOT ────────────────────────────────────────────────────
     def snapshot(self) -> Dict:
         """Return full pain point library state for the SPA / analytics."""
+        self._ensure_db_loaded()
         by_niche = {}
         for niche, points in self._catalog.items():
             entries = []
@@ -442,6 +452,7 @@ class PainPointLibrary:
         Return pain point weights as genome traits for SI Strategy Evolution.
         Keys are prefixed with 'pp_' to distinguish from other genome traits.
         """
+        self._ensure_db_loaded()
         points = self.get_pain_points(niche)
         traits = {}
         for pp in points:
@@ -451,6 +462,7 @@ class PainPointLibrary:
     # ── EXPORT ──────────────────────────────────────────────────────
     def export_csv(self) -> str:
         """Export pain points data as CSV string."""
+        self._ensure_db_loaded()
         import csv, io
         output = io.StringIO()
         writer = csv.writer(output)
@@ -470,6 +482,7 @@ class PainPointLibrary:
 
     def export_excel_data(self) -> List[Dict]:
         """Export pain points data as list of dicts for Excel generation."""
+        self._ensure_db_loaded()
         rows = []
         for niche, points in self._catalog.items():
             for pp_id, pp in points.items():

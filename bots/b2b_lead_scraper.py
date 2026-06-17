@@ -3,7 +3,8 @@ EMPIRE V49 · B2B LEAD SCRAPER
 ==============================
 Dedicated lead discovery agent for 6 lanes:
   - Lane 29: Managed IT         (sub_niche="Managed IT")
-  - Lane 30: Merchant Services  (sub_niche="Merchant Services")
+  - Lane 30: Merchant Services  (sub_niche="Merchant Services") — expanded to cover B2B processing,
+                                 high-risk, POS/retail, convenience stores, cash discount programs
   - Lane 31: HR & Staffing      (sub_niche="HR & Staffing")
   - Lane 36: Commercial Roofing (sub_niche="Commercial Roofing")
   - Lane 37: Commercial Solar   (sub_niche="Commercial Solar")
@@ -31,6 +32,9 @@ import logging
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
+
+# Shared email validator — single source of truth for email quality
+from bots.email_validator import is_valid_email, describe_rejection
 
 REPO = Path(__file__).resolve().parent.parent
 if str(REPO) not in sys.path:
@@ -84,8 +88,25 @@ B2B_NICHES = {
             "payment processing company",
             "payment gateway",
             "point of sale provider",
+            # B2B professional services (lowest churn — law firms, dentists, accountants)
+            "quickbooks payment integration",
+            "payment processing for law firms",
+            "medical billing services",
+            # High-risk merchant accounts (Alt-Pay moat)
+            "high risk merchant account",
+            "cbd payment processing",
+            # Retail / POS (volume play)
+            "pos system for retail stores",
+            # Convenience stores / petro (multi-product, high volume)
+            "point of sale for convenience stores",
+            # Cash discount / dual pricing (Alt-Pay differentiator)
+            "cash discount program",
+            "interchange plus pricing",
         ],
-        "website_keywords": ["merchant services", "payment processing", "credit card processing", "pos"],
+        "website_keywords": ["merchant services", "payment processing", "credit card processing", "pos",
+                             "quickbooks payment", "b2b payment", "level 3 processing",
+                             "cash discount", "dual pricing", "interchange plus",
+                             "high risk merchant", "payment gateway integration", "paymentech"],
     },
     "HR & Staffing": {
         "queries": [
@@ -511,7 +532,10 @@ def _classify_sub_niche(name: str, website: str, place_types: List[str]) -> Opti
 
     # Merchant Services keywords
     ms_kw = ["merchant services", "payment processing", "credit card processing",
-             "payment gateway", "merchant service", "payment solutions", "paymentech"]
+             "payment gateway", "merchant service", "payment solutions", "paymentech",
+             "quickbooks payment", "b2b payment", "level 3 processing",
+             "cash discount", "dual pricing", "interchange plus",
+             "high risk merchant", "payment gateway integration", "pos system"]
     for kw in ms_kw:
         if kw in combined:
             return "Merchant Services"
@@ -691,6 +715,16 @@ async def _search_sub_niche(
         stats["qualified"] += 1
         phone = place.get("phone") or website_data.get("phone") or ""
         email = website_data.get("email") or ""
+
+        # ── EMAIL VALIDATION GATE ───────────────────────────────────
+        # Block garbage emails (image files, placeholders, etc.) before
+        # they enter the pipeline. Gmail spam filters penalize sending
+        # to addresses like shadow@2x.png or you@community.com.
+        if email and not is_valid_email(email, strict=True):
+            reason = describe_rejection(email) or "unknown"
+            log.info(f"[b2b] ✗ BLOCKED garbage email for {c['name'][:40]}: {email} ({reason})")
+            email = ""  # clear the email — don't block the whole lead, just don't mail it
+
         urgency = max(1, min(10, round(score / 10)))
 
         batch.append({

@@ -86,12 +86,15 @@ WIRE-UP IN hub.py
 """
 
 import json
+import time as _console_time
 import logging
 from datetime import datetime, timezone, timedelta
 from typing import Callable, Optional
 
 import httpx
 from fastapi import FastAPI, Request, Depends, HTTPException, Query
+
+from observability.tracing import TraceContext
 
 
 log = logging.getLogger("empire.console")
@@ -332,27 +335,47 @@ class SovereignConsole:
         user_prompt = f'Operator command: "{command}"'
 
         try:
-            async with httpx.AsyncClient(timeout=20) as c:
-                r = await c.post(
-                    "https://api.anthropic.com/v1/messages",
-                    headers={
-                        "x-api-key":         self.anthropic_key,
-                        "anthropic-version": "2023-06-01",
-                        "Content-Type":      "application/json",
-                    },
-                    json={
-                        "model":      self.model,
-                        "max_tokens": 400,
-                        "system":     system_prompt,
-                        "messages":   [{"role": "user", "content": user_prompt}],
-                    },
-                )
-                if r.status_code != 200:
-                    log.warning(f"[console] Claude HTTP {r.status_code}: {r.text[:200]}")
-                    self.stats["router_errors"] += 1
-                    return {"ok": False, "error": f"router error · HTTP {r.status_code}"}
-                body = r.json()
-                text = body.get("content", [{}])[0].get("text", "")
+            _start = _console_time.time()
+            async with TraceContext(
+                name="console.claude_parse",
+                model=self.model,
+                input=user_prompt[:2000],
+                system=system_prompt[:500],
+                task="console.parse",
+                tags=["provider:anthropic", f"model:{self.model}", "source:empire_console"],
+            ) as ctx:
+                async with httpx.AsyncClient(timeout=20) as c:
+                    r = await c.post(
+                        "https://api.anthropic.com/v1/messages",
+                        headers={
+                            "x-api-key":         self.anthropic_key,
+                            "anthropic-version": "2023-06-01",
+                            "Content-Type":      "application/json",
+                        },
+                        json={
+                            "model":      self.model,
+                            "max_tokens": 400,
+                            "system":     system_prompt,
+                            "messages":   [{"role": "user", "content": user_prompt}],
+                        },
+                    )
+                    if r.status_code != 200:
+                        log.warning(f"[console] Claude HTTP {r.status_code}: {r.text[:200]}")
+                        self.stats["router_errors"] += 1
+                        ctx.set_output(error=f"HTTP {r.status_code}: {r.text[:200]}")
+                        return {"ok": False, "error": f"router error · HTTP {r.status_code}"}
+                    body = r.json()
+                    text = body.get("content", [{}])[0].get("text", "")
+                    elapsed = int((_console_time.time() - _start) * 1000)
+                    # Estimate tokens: ~4 chars per token for Claude
+                    tokens_in = body.get("usage", {}).get("input_tokens", 0)
+                    tokens_out = body.get("usage", {}).get("output_tokens", 0)
+                    ctx.set_output(
+                        output=text[:1000],
+                        tokens_in=tokens_in,
+                        tokens_out=tokens_out,
+                        latency_ms=elapsed,
+                    )
 
             # Parse the JSON
             import re

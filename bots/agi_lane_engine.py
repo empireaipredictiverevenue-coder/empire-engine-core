@@ -56,7 +56,7 @@ OLLAMA_URL   = os.environ.get("OLLAMA_URL", "http://localhost:11434")
 INTERVAL     = int(os.environ.get("AGI_LANE_INTERVAL_SEC", "60"))
 MAX_LANES    = 36
 
-AGENT_NAME   = "agi.lane.engine"
+AGENT_NAME   = "agi_lane_engine"
 AGENT_STATUS = "ACTIVE"
 
 if not SUPABASE_URL or not SUPABASE_KEY:
@@ -586,6 +586,7 @@ async def heartbeat():
     try:
         _sb.table("agent_registry").upsert({
             "agent_name": AGENT_NAME,
+            "role_name": "agi_lane_engine",
             "status": AGENT_STATUS,
             "last_ping": datetime.now(timezone.utc).isoformat(),
             "enabled": True,

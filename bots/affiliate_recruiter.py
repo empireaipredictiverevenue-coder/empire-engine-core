@@ -787,14 +787,17 @@ async def run_loop(interval_minutes: int = 60):
             sb = _get_sb()
             sb.table("agent_registry").upsert({
                 "agent_name": "affiliate_recruiter",
+                "role_name": "affiliate_specialist",
                 "status": "ACTIVE",
                 "last_ping": datetime.now(timezone.utc).isoformat(),
                 "enabled": True,
                 "capabilities": [
-                    "affiliate_recruitment", "affiliate_enrollment",
+                    "manage_affiliates", "recruit_partners",
+                    "track_affiliate_performance", "affiliate_enrollment",
                     "affiliate_outreach", "referral_link_management",
                     "affiliate_nurture",
                 ],
+                "task_types": ["affiliate.recruit", "affiliate.report", "affiliate.optimize"],
             }, on_conflict="agent_name").execute()
         except Exception:
             pass
