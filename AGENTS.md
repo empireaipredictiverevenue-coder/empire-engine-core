@@ -246,3 +246,11 @@ durable, queryable, multi-agent queue.
   4. Don't touch the other agent's claimed tasks unless invited.
 
 — end AGENTS.md —
+
+  - `agents_seo_weekly.py` — Monday 09:00 UTC,
+    → `logs/agent_seo_weekly.log`. Weekly Telegram digest covering
+    organic reply signal (1d/7d/30d + 10-reply confidence gate),
+    sitemap status, weekly outreach volume, settled fees, and
+    Resend domain health. Logs to agent_activity; silent on
+    success, sends the digest anyway so Phil has a weekly snapshot
+    even when nothing is broken.
