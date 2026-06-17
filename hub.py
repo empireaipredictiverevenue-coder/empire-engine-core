@@ -2789,7 +2789,7 @@ async def _deferred_background_tasks():
     The delay gives uvicorn time to create the server socket and begin
     serving before any background task potentially starves the event loop.
     Without this, a tight while-True loop (missing await asyncio.sleep)
-    permanently blocks uvicorn from binding.  See hub.py commit msg.
+    permanently blocks uvicorn from binding.
     """
     await asyncio.sleep(1.0)
 
