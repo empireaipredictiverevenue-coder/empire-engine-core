@@ -11,14 +11,13 @@ Sub_niches (mirrors mesh_orchestrator.LANES 16-20):
   19  Class Action
   20  Mass Tort  (Apex Mass Tort Group, the canonical buyer)
 
-Dedup guard (stronger than the previous seeder):
-  - Match on buyer_name alone, NOT (niche, buyer_name). The
-    previous seeder created duplicate rows when an agent
-    re-ran it with a slightly different niche label, because
-    the (niche, buyer_name) lookup returned 0 rows even though
-    a row with the same buyer_name existed.
-  - If an active row with the same buyer_name exists, UPDATE
-    it in place with the current config.
+Dedup guard:
+  - Match on (buyer_name, niche) to respect the DB's unique
+    constraint and prevent cross-niche collisions (e.g. Apex Mass
+    Tort Group previously had rows in both "Legal" and "Mass Tort
+    Legal" niches).
+  - If an active row with the same (buyer_name, niche) exists,
+    UPDATE it in place with the current config.
   - If no active row exists but an INACTIVE one does (e.g. from
     a previous run that was deactivated), reactivate it and
     update the config.
@@ -138,16 +137,23 @@ def _buyer_payload(sub_niche: str, cfg: dict) -> dict:
     }
 
 
-def _find_existing(sb, buyer_name: str) -> dict | None:
+def _find_existing(sb, buyer_name: str, niche: str = "Legal") -> dict | None:
     """
-    Strong dedup: find by buyer_name alone. Prefers the active row;
+    Strong dedup: find by buyer_name + niche. Prefers the active row;
     falls back to the newest inactive row only if no active row exists.
+
+    Filters by niche to prevent cross-niche collisions — e.g. Apex Mass
+    Tort Group previously had rows in both "Legal" and "Mass Tort Legal"
+    niches. Without the niche filter, the seeder would find the wrong
+    row and try to update it with niche="Legal", violating the
+    (buyer_name, niche) unique constraint.
     """
-    # First try: active row with this buyer_name
+    # First try: active row with this buyer_name + niche
     res = (
         sb.table("buyers")
         .select("id, is_active")
         .eq("buyer_name", buyer_name)
+        .eq("niche", niche)
         .eq("is_active", True)
         .order("created_at", desc=True)
         .limit(1)
@@ -155,11 +161,12 @@ def _find_existing(sb, buyer_name: str) -> dict | None:
     )
     if res.data:
         return res.data[0]
-    # Fallback: newest row (any status) so we can reactivate it
+    # Fallback: newest row with this buyer_name + niche (any status)
     res = (
         sb.table("buyers")
         .select("id, is_active")
         .eq("buyer_name", buyer_name)
+        .eq("niche", niche)
         .order("created_at", desc=True)
         .limit(1)
         .execute()
