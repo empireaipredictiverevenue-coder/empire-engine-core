@@ -58,6 +58,7 @@ from empire_email import EmailEngine, register_email_routes
 from empire_matching import ContractorMatcher, register_matching_routes
 from empire_playbook import register_playbook_routes
 from empire_payouts import PayoutEngine, register_payout_routes
+from empire_solana_webhook import register_solana_webhook_routes
 from empire_fee import register_fee_routes
 from empire_fee_operator import register_operator_mark_settled
 from empire_abtest import register_ab_test_routes
@@ -904,6 +905,13 @@ async def email_quota(auth: bool = Depends(require_auth)):
 register_matching_routes(app, matcher=matcher, require_auth=require_auth, sign_token=_hub_sign_token, verify_token=_hub_verify_token, send_email=_send_email_critical)
 register_playbook_routes(app, require_auth=require_auth, get_db=get_db)
 register_payout_routes(app, engine=payout_engine, require_auth=require_auth, require_owner=require_owner)
+register_solana_webhook_routes(
+    app,
+    payout_engine=payout_engine,
+    vault_wallet=os.environ.get("EMPIRE_VAULT_WALLET", ""),
+    get_db=get_db,
+    broadcaster=live_broadcaster,
+)
 register_fee_routes(app, require_auth=require_auth, get_db=get_db)
 register_operator_mark_settled(app, require_auth=require_auth, get_db=get_db)
 register_ab_test_routes(app, require_auth=require_auth, get_db=get_db)
