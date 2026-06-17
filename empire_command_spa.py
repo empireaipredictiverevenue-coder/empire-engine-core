@@ -3514,12 +3514,27 @@ function Predicted() {
   const seq = data.by_sequence_type || [];
   const metros = (data.by_metro || []).slice(0, 10);
   const niches = data.by_niche || [];
+  const lowConf = data.low_confidence === true;
 
   return html`
     <div>
       <div class="section-h"><div><div class="section-title">Predicted Revenue</div><div class="section-sub">Projected fees by segment · ${data.window_days}-day window</div></div><div class="sec-actions"><button class="tbl-action go" onClick=${reload}>↻ Refresh</button></div></div>
+      ${lowConf ? html`
+        <div style=${{background: 'rgba(255,180,0,.08)', border: '1px solid rgba(255,180,0,.35)', borderRadius: '4px', padding: '14px 18px', marginBottom: '20px'}}>
+          <div style=${{fontFamily: 'var(--font-mono, ui-monospace)', fontSize: '10px', color: 'rgba(255,180,0,.9)', letterSpacing: '.22em', textTransform: 'uppercase', marginBottom: '6px'}}>Pending signal</div>
+          <div style=${{fontSize: '13px', color: 'var(--empire-mist)', lineHeight: '1.6'}}>
+            ${data.low_confidence_reason || "Insufficient organic reply data to project fees."}
+            <br /><br />
+            <strong>Sent in window:</strong> ${data.total_sent_in_window || 0} ·
+            <strong>Replied:</strong> ${data.total_replied_in_window || 0} ·
+            <strong>Active sequences:</strong> ${data.total_active_sequences || 0}
+            <br />
+            Projections will populate as organic replies arrive (24-72h reply window).
+          </div>
+        </div>
+      ` : ''}
       <div class="fee-stats">
-        <div class="fee-stat"><div class="fee-stat-label">Projected total</div><div class="fee-stat-value teal">${fmtUsd(data.total_projected_fees_usd)}</div></div>
+        <div class="fee-stat"><div class="fee-stat-label">Projected total</div><div class="fee-stat-value teal">${lowConf ? '—' : fmtUsd(data.total_projected_fees_usd)}</div></div>
         <div class="fee-stat"><div class="fee-stat-label">Active sequences</div><div class="fee-stat-value">${data.total_active_sequences.toLocaleString()}</div></div>
         <div class="fee-stat"><div class="fee-stat-label">Blended reply rate</div><div class="fee-stat-value">${data.blended_reply_rate_pct}%</div></div>
         <div class="fee-stat"><div class="fee-stat-label">Avg claim (real)</div><div class="fee-stat-value dim">${fmtUsd(data.avg_claim_usd)}</div></div>
@@ -3528,13 +3543,15 @@ function Predicted() {
         <div class="panel-head">By sequence type</div>
         ${seq.length === 0 ? html`<div class="tbl-empty">No active sequences.</div>` : html`
           <table class="tbl"><thead><tr>
-            <th>Sequence</th><th class="tbl-num">Active</th><th class="tbl-num">Reply rate</th><th class="tbl-num">Projected fees</th>
+            <th>Sequence</th><th class="tbl-num">Active</th><th class="tbl-num">Sent (window)</th><th class="tbl-num">Replied</th><th class="tbl-num">Reply rate</th><th class="tbl-num">Projected fees</th>
           </tr></thead><tbody>
             ${seq.map(s => html`<tr key=${s.sequence_type}>
               <td><strong>${s.sequence_type}</strong></td>
               <td class="tbl-num">${s.active_sequences}</td>
+              <td class="tbl-num">${s.sent_in_window || 0}</td>
+              <td class="tbl-num">${s.replied_in_window || 0}</td>
               <td class="tbl-num">${s.reply_rate_pct}%</td>
-              <td class="tbl-num"><strong>${fmtUsd(s.projected_fees_usd)}</strong></td>
+              <td class="tbl-num"><strong>${lowConf ? '—' : fmtUsd(s.projected_fees_usd)}</strong></td>
             </tr>`)}
           </tbody></table>`}
       </div>
@@ -3555,9 +3572,11 @@ function Predicted() {
       <div class="panel" style=${{marginTop: '16px'}}>
         <div class="panel-head">How this is computed</div>
         <div class="panel-body" style=${{fontSize: '12px', color: 'var(--empire-mist)', lineHeight: '1.6'}}>
-          <p>Projected fees = active sequences × historical reply rate × avg claim size × 3%</p>
-          <p>Reply rate is computed over the last ${data.window_days} days. Avg claim is the all-time average from fee_events. As more fee_events arrive, the projection narrows.</p>
-          <p style=${{marginTop: '8px'}}><strong>Note:</strong> today's 875 sends haven't replied yet (24-72h reply window). Current reply rate is dominated by historical seed data. The projection will revise as organic replies come in.</p>
+          <p>Projected fees = active sequences × reply rate × avg claim size × 3%</p>
+          <p>Reply rate is computed from <code style=${{fontFamily: 'var(--font-mono, ui-monospace)', fontSize: '11px', background: 'rgba(255,255,255,.04)', padding: '1px 5px', borderRadius: '2px'}}>outreach_log.response_received_at</code> over the last ${data.window_days} days — organic ground truth, not seed data.</p>
+          <p>Avg claim (${fmtUsd(data.avg_claim_usd)}) is the all-time average from <code style=${{fontFamily: 'var(--font-mono, ui-monospace)', fontSize: '11px', background: 'rgba(255,255,255,.04)', padding: '1px 5px', borderRadius: '2px'}}>fee_events</code>. As more fee_events arrive, this narrows.</p>
+          <p style=${{marginTop: '8px'}}><strong>Confidence:</strong> ${lowConf ? 'low — projections zeroed until ≥10 organic replies accumulate. The raw reply rate is shown for transparency.' : 'sufficient signal for projection.'}</p>
+          ${data._data_source_note ? html`<p style=${{marginTop: '6px', fontStyle: 'italic', opacity: '0.8'}}>${data._data_source_note}</p>` : ''}
         </div>
       </div>
     </div>
