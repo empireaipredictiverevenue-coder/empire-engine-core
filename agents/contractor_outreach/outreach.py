@@ -32,6 +32,7 @@ except ImportError:
     pass
 
 from supabase import create_client
+from agents.event_emitter import emit_agent_event
 
 log = logging.getLogger("empire.contractor_outreach")
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(name)s] %(message)s")
@@ -169,16 +170,11 @@ def _render_voice_preview(contractor: dict) -> str:
 
 
 def _log_activity(sb, agent_name, run_id, started_at, status, **kwargs):
-    finished_at = datetime.now(timezone.utc).isoformat()
-    sb.table("agent_activity").insert({
-        "agent_name": agent_name,
-        "run_id": str(run_id),
-        "started_at": started_at.isoformat(),
-        "finished_at": finished_at,
-        "status": status,
+    return emit_agent_event(
+        sb=sb, agent_name=agent_name, run_id=run_id,
+        started_at=started_at, status=status,
         **kwargs,
-    }).execute()
-    return finished_at
+    )
 
 
 def _update_config(sb, agent_name, status, finished_at):

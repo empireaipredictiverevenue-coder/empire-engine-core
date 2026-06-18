@@ -45,6 +45,7 @@ except ImportError:
     pass
 
 from supabase import create_client
+from agents.event_emitter import emit_agent_event
 from empire_si_core import SyntheticIntelligence, beta_posterior, get_si_core
 
 log = logging.getLogger("empire.lead_enricher")
@@ -247,21 +248,13 @@ def _read_config(sb, default_max=100, default_threshold=0.35):
 def _log_activity(sb, agent_name, run_id, started_at, status,
                   rows_seen=0, rows_processed=0, rows_blocked=0, rows_errored=0,
                   error=None, summary=None):
-    finished_at = datetime.now(timezone.utc).isoformat()
-    sb.table("agent_activity").insert({
-        "agent_name": agent_name,
-        "run_id": str(run_id),
-        "started_at": started_at.isoformat(),
-        "finished_at": finished_at,
-        "status": status,
-        "rows_seen": rows_seen,
-        "rows_processed": rows_processed,
-        "rows_blocked": rows_blocked,
-        "rows_errored": rows_errored,
-        "error": error,
-        "summary": summary,
-    }).execute()
-    return finished_at
+    return emit_agent_event(
+        sb=sb, agent_name=agent_name, run_id=run_id,
+        started_at=started_at, status=status,
+        rows_seen=rows_seen, rows_processed=rows_processed,
+        rows_blocked=rows_blocked, rows_errored=rows_errored,
+        error=error, summary=summary,
+    )
 
 
 def _update_config(sb, agent_name, status, finished_at):

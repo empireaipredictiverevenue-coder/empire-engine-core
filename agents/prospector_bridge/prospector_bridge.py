@@ -59,6 +59,7 @@ except ImportError:
     pass
 
 from supabase import create_client
+from agents.event_emitter import emit_agent_event
 
 log = logging.getLogger("empire.prospector_bridge")
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(name)s] %(message)s")
@@ -121,16 +122,12 @@ def _log_activity(
     started_at: datetime,
     status: str,
     **kwargs: Any,
-) -> None:
-    finished_at: str = datetime.now(timezone.utc).isoformat()
-    sb.table("agent_activity").insert({
-        "agent_name":   agent_name,
-        "run_id":       str(run_id),
-        "started_at":   started_at.isoformat(),
-        "finished_at":  finished_at,
-        "status":       status,
+) -> str:
+    return emit_agent_event(
+        sb=sb, agent_name=agent_name, run_id=run_id,
+        started_at=started_at, status=status,
         **kwargs,
-    }).execute()
+    )
 
 
 def _update_config(
