@@ -209,12 +209,37 @@ def score_body(body: str, metro: str = "Houston", sequence_type: str = "contract
 
 
 def write_result(row: dict, path: str = "results.tsv"):
-    """Append a result row to results.tsv. Adds body_similarity column."""
+    """Append a result row to results.tsv. Adds body_similarity column.
+    Backwards-compatible: if existing TSV has the old schema (no
+    body_similarity), header is rewritten to the new schema on the
+    next run. Old rows remain parseable because we use column-ARITHMETIC
+    in get_previous_best, not index-based reads.
+    """
     import csv
     fields = ["timestamp", "body", "length", "spam_score", "tcpa_score",
               "length_penalty", "reply_rate", "body_similarity", "weighted",
               "kept", "note"]
     file_exists = os.path.exists(path)
+    # Check if the existing header has the new schema
+    needs_header_rewrite = False
+    if file_exists:
+        try:
+            with open(path) as f:
+                first_line = f.readline().strip().split("\t")
+            if "body_similarity" not in first_line:
+                needs_header_rewrite = True
+        except Exception:
+            pass
+    if needs_header_rewrite:
+        # rewrite header to new schema (don't touch old rows; train.py
+        # is already updated to handle both formats via len() check)
+        with open(path) as f:
+            content = f.read()
+        lines = content.splitlines()
+        if lines:
+            lines[0] = "\t".join(fields)
+            with open(path, "w") as f:
+                f.write("\n".join(lines) + "\n")
     with open(path, "a", newline="") as f:
         w = csv.DictWriter(f, fieldnames=fields, delimiter="\t")
         if not file_exists:

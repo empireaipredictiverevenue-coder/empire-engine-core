@@ -42,6 +42,8 @@ if not os.path.exists(TSV):
     sys.exit(0)
 
 # parse kept=yes rows (newest first by timestamp)
+# Backwards-compatible: old schema has 10 columns, new schema has 11+.
+# weighted lives at index 7 (old) or 8 (new). kept at 8 (old) or 9 (new).
 kept = []
 with open(TSV) as f:
     for line in f:
@@ -51,7 +53,14 @@ with open(TSV) as f:
         parts = line.split("\t")
         if len(parts) < 9:
             continue
-        if "yes" in parts:
+        # detect schema
+        if len(parts) == 10:
+            kept_idx = 8
+        elif len(parts) >= 11:
+            kept_idx = 9
+        else:
+            continue
+        if "yes" in parts[kept_idx]:
             kept.append(parts)
 
 if not kept:
@@ -61,12 +70,18 @@ if not kept:
 # use the LAST kept=yes (most recent accepted improvement)
 last = kept[-1]
 
+# detect schema for weighted index
+if len(last) == 10:
+    weighted_idx = 7
+else:
+    weighted_idx = 8
+
 # format: depends on label
 try:
     if LABEL == "contractor_recruit":
         body = last[1]
-        weighted = float(last[7])
-        note = last[9] if len(last) > 9 else ""
+        weighted = float(last[weighted_idx])
+        note = last[weighted_idx + 2] if len(last) > weighted_idx + 2 else ""
         msg = (
             f"🤖 *Autoresearch · {LABEL}*\n"
             f"weighted: *{weighted:.2f}* · note: {note}\n\n"
@@ -75,7 +90,7 @@ try:
         )
     elif LABEL == "storm_strike":
         body = last[1]
-        weighted = float(last[7])
+        weighted = float(last[weighted_idx])
         msg = (
             f"🤖 *Autoresearch · {LABEL}*\n"
             f"weighted: *{weighted:.2f}*\n\n"
@@ -85,7 +100,7 @@ try:
     elif LABEL == "buyer":
         subject = last[1]
         body = last[2]
-        weighted = float(last[7])
+        weighted = float(last[weighted_idx])
         msg = (
             f"🤖 *Autoresearch · {LABEL}*\n"
             f"weighted: *{weighted:.2f}*\n\n"
@@ -95,7 +110,7 @@ try:
         )
     elif LABEL == "email_subject":
         subject = last[1]
-        weighted = float(last[7])
+        weighted = float(last[weighted_idx])
         msg = (
             f"🤖 *Autoresearch · {LABEL}*\n"
             f"weighted: *{weighted:.2f}*\n\n"
