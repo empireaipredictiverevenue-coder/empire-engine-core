@@ -31,6 +31,8 @@ from .base import BaseSkill, SkillInput, SkillOutput, SkillMetrics
 log = logging.getLogger("trading.skills")
 
 
+from .strategy_backtest import StrategyBacktester
+
 # ═════════════════════════════════════════════════════════════════════════
 # CONFIGURATION
 # ═════════════════════════════════════════════════════════════════════════
@@ -206,54 +208,22 @@ class IndicatorsCalculateSkill(BaseSkill):
         return bool(input.params.get("symbol"))
 
     async def execute(self, input: SkillInput) -> SkillOutput:
+        _started = time.time()
         symbol = input.params["symbol"]
         timeframe = input.params.get("timeframe", "1h")
         indicators = input.params.get("indicators", ["RSI", "MACD", "MA"])
 
-        results = {}
-        for ind in indicators:
-            ind_upper = ind.upper()
+        # Delegate to real indicator calculations
+        from .indicators import calculate_indicators
 
-            if ind_upper == "RSI":
-                results["RSI"] = {
-                    "value": "calculating",
-                    "signal": "neutral",
-                    "overbought": 70,
-                    "oversold": 30,
-                }
-            elif ind_upper == "MACD":
-                results["MACD"] = {
-                    "macd": "pending",
-                    "signal": "pending",
-                    "histogram": "pending",
-                    "signal_text": "cross_pending",
-                }
-            elif ind_upper == "MA":
-                ma_type = input.params.get("ma_type", "EMA")
-                periods = input.params.get("ma_periods", [9, 21, 50, 200])
-                results["MA"] = {
-                    "type": ma_type,
-                    "periods": {str(p): "calculating" for p in periods},
-                }
-            elif ind_upper == "BB":
-                results["BB"] = {
-                    "upper": "pending",
-                    "middle": "pending",
-                    "lower": "pending",
-                    "bandwidth": "pending",
-                }
-            elif ind_upper == "VWAP":
-                results["VWAP"] = {"value": "pending", "position": "above"}
-            elif ind_upper == "STOCHASTIC":
-                results["STOCHASTIC"] = {
-                    "k": "pending",
-                    "d": "pending",
-                    "signal": "neutral",
-                }
-            elif ind_upper == "OBV":
-                results["OBV"] = {"value": "pending", "trend": "neutral"}
+        results = calculate_indicators(
+            prices=input.params.get("prices"),
+            volumes=input.params.get("volumes"),
+            indicators=indicators,
+            market_prices=input.params.get("market_prices"),
+        )
 
-        elapsed = int(time.time() * 1000) % 1000
+        elapsed_ms = int((time.time() - _started) * 1000)
         return SkillOutput(
             success=True,
             data={
@@ -262,7 +232,7 @@ class IndicatorsCalculateSkill(BaseSkill):
                 "indicators": results,
                 "calculated_at": datetime.now(timezone.utc).isoformat(),
             },
-            metrics=SkillMetrics(duration_ms=elapsed, api_calls=0),
+            metrics=SkillMetrics(duration_ms=elapsed_ms, api_calls=0),
         )
 
 
@@ -652,66 +622,91 @@ class MemeSniperSkill(BaseSkill):
 # ═════════════════════════════════════════════════════════════════════════
 
 class StrategyBacktestSkill(BaseSkill):
-    """Backtest a trading strategy against historical data."""
+    """Backtest a trading strategy against historical data.
+
+    Uses the real StrategyBacktester (walk-forward simulation) instead
+    of random number simulation. Delegates to StrategyRunner.evaluate_strategy
+    for the core walk-forward loop, then computes Information Coefficient,
+    rolling metrics, and a formatted report.
+    """
     name = "trading.strategy.backtest"
-    version = "1.0.0"
-    description = "Backtest strategy — win rate, max drawdown, Sharpe ratio, trades"
+    version = "2.0.0"
+    description = "Backtest strategy — real walk-forward simulation, Sharpe, drawdown, IC, rolling metrics"
     tags = ["domain:trading", "mode:analysis"]
-    timeout_seconds = 30.0
+    timeout_seconds = 60.0
 
     async def validate(self, input: SkillInput) -> bool:
         return bool(input.params.get("strategy_name"))
 
     async def execute(self, input: SkillInput) -> SkillOutput:
-        strategy = input.params["strategy_name"]
+        strategy_name = input.params["strategy_name"]
         symbol = input.params.get("symbol", "BTC/USD")
-        timeframe = input.params.get("timeframe", "1d")
-        lookback = input.params.get("lookback_days", 90)
+        prices = input.params.get("prices")
+        generate_report = input.params.get("generate_report", True)
 
-        seed_bytes = hashlib.md5(f"{strategy}:{symbol}".encode()).digest()
-        import random
-        random.seed(seed_bytes)
-        win_rate = round(0.45 + random.random() * 0.3, 3)
-        total_trades = lookback // (1 if timeframe == "1d" else 24)
-        winning = int(total_trades * win_rate)
-        losing = total_trades - winning
+        from .strategy import StrategyRegistry, register_builtin_strategies
 
-        returns = [round(random.gauss(0.02, 0.05), 4) for _ in range(total_trades)]
-        cumulative = sum(returns)
-        max_dd = round(min(returns) if returns else 0, 3)
+        _started = time.time()
 
-        mean_return = sum(returns) / len(returns) if returns else 0
-        std_return = (
-            (sum((r - mean_return) ** 2 for r in returns) / len(returns)) ** 0.5
-            if returns else 1
+        # Build registry and backtester
+        registry = StrategyRegistry()
+        register_builtin_strategies(registry)
+        backtester = StrategyBacktester(registry, skill_context=input.context)
+
+        # If no price history provided, generate synthetic data for demo
+        if not prices or len(prices) < 30:
+            prices = _generate_synthetic_prices(200)
+
+        # Run real backtest
+        params_override = _extract_strategy_params(input.params)
+
+        result = await backtester.run_backtest(
+            strategy_name=strategy_name,
+            symbol=symbol,
+            price_history=prices,
+            parameters=params_override if params_override else None,
         )
-        sharpe = round((mean_return / max(std_return, 0.001)) * (252 ** 0.5), 2)
 
+        data = result.to_dict()
+
+        # Optionally generate a formatted text report
+        if generate_report:
+            report = backtester.generate_report(result)
+            data["report"] = report
+
+        elapsed_ms = int((time.time() - _started) * 1000)
         return SkillOutput(
             success=True,
-            data={
-                "strategy": strategy,
-                "symbol": symbol,
-                "timeframe": timeframe,
-                "lookback_days": lookback,
-                "total_trades": total_trades,
-                "winning_trades": winning,
-                "losing_trades": losing,
-                "win_rate": win_rate,
-                "total_return_pct": round(cumulative * 100, 2),
-                "max_drawdown_pct": abs(round(max_dd * 100, 2)),
-                "sharpe_ratio": sharpe,
-                "avg_win_pct": (
-                    round(abs(sum(r for r in returns if r > 0) / max(winning, 1)) * 100, 2)
-                    if winning else 0
-                ),
-                "avg_loss_pct": (
-                    round(abs(sum(r for r in returns if r < 0) / max(losing, 1)) * 100, 2)
-                    if losing else 0
-                ),
-                "note": "Simulated backtest results. Real backtesting requires historical market data API.",
-            },
+            data=data,
+            metrics=SkillMetrics(duration_ms=elapsed_ms, api_calls=0),
         )
+
+
+_SKIP_PARAMS = frozenset({
+    "strategy_name", "symbol", "prices", "generate_report",
+    "timeframe", "lookback_days",
+})
+
+
+def _extract_strategy_params(params: dict) -> dict:
+    """Extract only strategy parameters, filtering out skill-level params."""
+    return {k: v for k, v in params.items() if k not in _SKIP_PARAMS}
+
+
+def _generate_synthetic_prices(n: int) -> list[float]:
+    """Generate a synthetic price series for demo backtesting.
+
+    Uses a local random instance to avoid contaminating the global state.
+    """
+    import random
+    rng = random.Random(42)
+    price = 100.0
+    prices = [price]
+    for _ in range(n - 1):
+        change = rng.gauss(0.0005, 0.02)
+        price *= (1.0 + change)
+        prices.append(price)
+    return prices
 
 
 # ═════════════════════════════════════════════════════════════════════════
@@ -936,6 +931,20 @@ TRADING_SKILL_CLASSES = [
     SwapExecuteSkill,
     BrainAdviseSkill,
 ]
+
+# AI analysis skills (imported separately to avoid hard dependency on OpenAI)
+try:
+    from .ai_analysis import AI_SKILL_CLASSES
+    TRADING_SKILL_CLASSES.extend(AI_SKILL_CLASSES)
+except ImportError:
+    pass
+
+# Portfolio risk management
+try:
+    from .risk_management import PortfolioRiskSkill
+    TRADING_SKILL_CLASSES.append(PortfolioRiskSkill)
+except ImportError:
+    pass
 
 
 def register_trading_skills(registry) -> None:
