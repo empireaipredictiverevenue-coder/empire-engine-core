@@ -2893,10 +2893,12 @@ async def _deferred_background_tasks():
         name="mission-control-broadcast",
     )
 
+    # Storm Orchestrator — live NWS alert poll loop (every 300s)
+    asyncio.create_task(storm_orchestrator.poll_loop(), name="storm-orchestrator")
     # Brain learning: nightly urgency floor auto-tuning
     asyncio.create_task(brain_learning.nightly_tune_loop(), name="brain-learning")
 
-    log.info("[boot] Background loops scheduled: DreamLoop, HourlyDigest, SEO, Backlinks, Traffic, Affiliates, Bounty, EmailPulse, MissionControl")
+    log.info("[boot] Background loops scheduled: DreamLoop, HourlyDigest, SEO, Backlinks, Traffic, Affiliates, Bounty, EmailPulse, MissionControl, StormOrchestrator")
     log.info("Empire V49 · Operational")
 
 
