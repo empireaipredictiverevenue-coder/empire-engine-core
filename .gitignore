@@ -65,3 +65,4 @@ notes/.obsidian/
 integrations/autoresearch/.venv/
 integrations/autoresearch/results.tsv
 integrations/autoresearch/__pycache__/
+solana-meme-sniper/target/
