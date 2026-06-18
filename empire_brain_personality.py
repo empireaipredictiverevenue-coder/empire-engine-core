@@ -356,6 +356,14 @@ class BrainPersonality:
         profile = self.personality_for_niche(niche, operator_id=operator_id)
         return profile.get("go_fallback", "NO_GO")
 
+    def thinking_level_for_niche(self, niche: str,
+                                   operator_id: Optional[str] = None) -> Optional[str]:
+        """Return the configured thinking level for a niche.
+        Returns None if not explicitly set (BrainDecider will use default auto-selection).
+        """
+        profile = self.personality_for_niche(niche, operator_id=operator_id)
+        return profile.get("thinking_level")
+
     # ── MUTATION: SET GLOBAL PERSONALITY ───────────────────────────────
     async def set_personality(
         self,

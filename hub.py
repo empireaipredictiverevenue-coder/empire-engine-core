@@ -46,6 +46,7 @@ from empire_ppl import ppl_page
 from empire_live import LiveBroadcaster, register_live_routes
 from empire_command_deck import command_deck_page
 from empire_command_spa import command_spa_page
+from empire_fleet_dashboard import fleet_dashboard_page
 from empire_voice import VoiceRouter, register_voice_routes
 from empire_sms import SMSEngine, register_sms_routes
 from empire_contractors import register_contractor_routes
@@ -75,12 +76,14 @@ from empire_token_proxy import TokenProxy, get_token_proxy
 from empire_event_bus import bus as event_bus, register_event_bus_routes
 from empire_dream import DreamLoop, set_dream_loop, get_latest_wisdom
 from empire_hourly_digest import HourlyDigestLoop
+from empire_skills_init import skills_framework, build_brain_context
 from bots.seo_agent import run_loop as seo_run_loop
 from bots.backlinks_agent import run_loop as backlinks_run_loop
 from bots.traffic_specialist import run_loop as traffic_specialist_run_loop, register_traffic_specialist_routes
 from bots.affiliate_recruiter import run_loop as affiliate_recruiter_run_loop, register_affiliate_recruiter_routes
 from bots.bounty_tracker import run_loop as bounty_tracker_run_loop, register_bounty_tracker_routes
 from bots.email_pulse_monitor import run_loop as email_pulse_run_loop
+from bots.stop_loss_routes import register_stop_loss_routes
 from empire_console import SovereignConsole, register_console_routes
 from empire_orchestrator import StormOrchestrator, register_storm_routes
 from empire_ai_router import AIRouter
@@ -538,6 +541,14 @@ brain_decider = BrainDecider(router=ai_router)
 brain_personality = BrainPersonality(get_db=get_db)
 brain_decider.personality = brain_personality
 
+# Skills Framework — brain vault + skill registry + harness manager
+skills_framework.init(
+    brain_decider=brain_decider,
+    brain_memory=brain_memory,
+    brain_learning=brain_learning,
+    brain_personality=brain_personality,
+)
+
 # Agentic features layer
 email_drafter = EmailDrafter(router=ai_router, get_db=get_db)
 email_drafter.personality = brain_personality  # Phase 9.5: personality-aware email drafting
@@ -868,6 +879,10 @@ async def demo():
     return HTMLResponse(demo_page())
 
 
+@app.get("/fleet", response_class=HTMLResponse)
+async def fleet_dashboard():
+    return HTMLResponse(fleet_dashboard_page())
+
 @app.get("/command", response_class=HTMLResponse)
 async def command_deck():
     # Auth happens client-side: the SPA reads localStorage.hub_token,
@@ -981,6 +996,10 @@ register_switchboard_routes(app, require_auth=require_auth)
 register_partner_routes(app, require_auth=require_auth)
 register_data_bridge_routes(app, get_db=get_db, require_auth=require_auth)
 register_event_bus_routes(app, require_auth=require_auth)
+
+# Skills Framework routes — skill registry, harness management, vault access, fidelity
+skills_framework.wire_routes(app, require_auth=require_auth)
+
 register_bridge_engine_routes(
     app, bridge_engine,
     require_auth=require_auth,
@@ -1233,6 +1252,9 @@ register_affiliate_recruiter_routes(app, require_auth=require_auth)
 
 # ── Bounty Tracker — auto-earn referral bounties on first fee_event ──
 register_bounty_tracker_routes(app, require_auth=require_auth)
+
+# ── Stop Loss Bot — manage trading positions + monitor stop losses ──
+register_stop_loss_routes(app, require_auth=require_auth)
 
 # ── Suite Gateway — 3-Product Monetization ───────────────────────────
 suite_subscriptions = SuiteSubscriptionEngine(get_db=get_db)
@@ -2145,7 +2167,7 @@ async def brain_chat(request: Request, auth: bool = Depends(require_auth)):
 @app.post("/api/v1/closer/run")
 async def closer_run(request: Request, auth: bool = Depends(require_auth)):
     """Run the full AGI-brained closer pipeline on a lead.
-    Body: {lead: {name, phone, email, ...}, alert_summary?: {event, severity, ...}, niche?: "..."}
+    Body: {lead: {name, phone, email, ...}, alert_summary?: {event, severity, ...}, niche?: "...", thinking_level?: "low"|"medium"|"max"}
     """
     try:
         body = await request.json() if request.headers.get("content-type", "").startswith("application/json") else {}
@@ -2155,13 +2177,14 @@ async def closer_run(request: Request, auth: bool = Depends(require_auth)):
     lead = body.get("lead") or body
     alert_summary = body.get("alert_summary")
     niche = body.get("niche")
+    thinking_level = body.get("thinking_level")
 
     if not isinstance(lead, dict):
         raise HTTPException(400, "lead must be a dict")
     if not lead.get("name") and not lead.get("warehouse_name"):
         raise HTTPException(400, "lead must have name or warehouse_name")
 
-    result = await ai_closer.close(lead, alert_summary=alert_summary, niche=niche)
+    result = await ai_closer.close(lead, alert_summary=alert_summary, niche=niche, thinking_level=thinking_level)
     return JSONResponse(result)
 
 
@@ -2174,7 +2197,7 @@ async def closer_stats(auth: bool = Depends(require_auth)):
 @app.post("/api/v1/closer/score")
 async def closer_score(request: Request, auth: bool = Depends(require_auth)):
     """Score a lead through brain + strategy without placing a call.
-    Body: {lead: {name, phone, ...}, alert_summary?: {...}, niche?: "..."}
+    Body: {lead: {name, phone, ...}, alert_summary?: {...}, niche?: "...", thinking_level?: "low"|"medium"|"max"}
     """
     try:
         body = await request.json() if request.headers.get("content-type", "").startswith("application/json") else {}
@@ -2184,11 +2207,12 @@ async def closer_score(request: Request, auth: bool = Depends(require_auth)):
     lead = body.get("lead") or body
     alert_summary = body.get("alert_summary")
     niche = body.get("niche")
+    thinking_level = body.get("thinking_level")
 
     if not isinstance(lead, dict):
         raise HTTPException(400, "lead must be a dict")
 
-    result = await ai_closer_score_only(ai_closer, lead, alert_summary=alert_summary, niche=niche)
+    result = await ai_closer_score_only(ai_closer, lead, alert_summary=alert_summary, niche=niche, thinking_level=thinking_level)
     return JSONResponse(result)
 
 

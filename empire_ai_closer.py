@@ -1274,6 +1274,7 @@ class AICloser:
         lead: Dict,
         alert_summary: Optional[Dict] = None,
         niche: Optional[str] = None,
+        thinking_level: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Run the full AI closer pipeline on a lead.
@@ -1313,6 +1314,8 @@ class AICloser:
                 "urgency": "Normal",
                 "area": f"{city}, {state}".strip(", "),
             }
+            # Pass thinking_level through (None = let BrainDecider handle resolution)
+            # BrainDecider.resolve_thinking_level() checks explicit > personality-niche > asset value
             decision = await self.brain_decider.decide(
                 target={
                     "warehouse_name": name,
@@ -1324,6 +1327,7 @@ class AICloser:
                     "raw_tags": lead.get("type_tags") or {"types": ["commercial"]},
                 },
                 alert_summary=alert_ctx,
+                thinking_level=thinking_level,
             )
             # Normalize decision keys
             decision["decision"] = (decision.get("decision") or "NO_GO").upper()
@@ -2141,16 +2145,20 @@ async def ai_closer_score_only(
     lead: Dict,
     alert_summary: Optional[Dict] = None,
     niche: Optional[str] = None,
+    thinking_level: Optional[str] = None,
 ) -> Dict:
     """
     Score a lead through brain + strategy selection without placing a call.
     Useful for pre-qualification (e.g. in the SPA pipeline view).
+
+    thinking_level: "low" | "medium" | "max" — controls cognitive depth.
+    Auto-selected based on asset value if not provided.
     """
     name = lead.get("warehouse_name") or lead.get("name") or "Unknown"
     if not niche:
         niche = closer._infer_niche(lead, alert_summary)
 
-    # Brain score
+    # Brain score — pass thinking_level through (None = let BrainDecider resolve)
     if not closer.brain_decider:
         decision = {"decision": "GO", "confidence": 0.5, "reasoning": "brain unavailable"}
     else:
@@ -2171,6 +2179,7 @@ async def ai_closer_score_only(
                 "raw_tags": lead.get("type_tags") or {"types": ["commercial"]},
             },
             alert_summary=alert_ctx,
+            thinking_level=thinking_level,
         )
         decision["decision"] = (decision.get("decision") or "NO_GO").upper()
         try:

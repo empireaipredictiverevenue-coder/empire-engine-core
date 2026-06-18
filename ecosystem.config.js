@@ -343,5 +343,30 @@ module.exports = {
       log_date_format: 'YYYY-MM-DD HH:mm:ss Z',
     },
 
+    // ── Stop Loss Bot (position monitoring + stop loss execution) ───────
+    {
+      name: 'stop-loss-bot',
+      script: '/root/empire-v49/bots/stop_loss_bot.py',
+      cwd: '/root/empire-v49',
+      interpreter: 'python3',
+      exec_mode: 'fork',
+      instances: 1,
+      env: {
+        PYTHONUNBUFFERED: '1',
+        STOPLOSS_INTERVAL_SEC: '15',
+      },
+      listen_timeout: 15000,
+      kill_timeout: 10000,
+      max_restarts: 10,
+      min_uptime: 10000,
+      restart_delay: 3000,
+      max_memory_restart: '200M',
+      error_file: '/root/.pm2/logs/stop-loss-bot-error.log',
+      out_file: '/root/.pm2/logs/stop-loss-bot-out.log',
+      pid_file: '/root/.pm2/pids/stop-loss-bot.pid',
+      merge_logs: true,
+      log_date_format: 'YYYY-MM-DD HH:mm:ss Z',
+    },
+
   ],
 };
