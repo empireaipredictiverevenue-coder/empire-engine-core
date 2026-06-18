@@ -1,0 +1,46 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.env
+.venv/
+venv/
+env/
+
+# Distribution
+dist/
+build/
+*.egg-info/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# SQLite databases (user data)
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+logs/
+*.log
+
+# PM2
+.pm2/
+
+# Migration artifacts
+*.migrated
+
+# Testing
+.coverage
+htmlcov/
+.pytest_cache/

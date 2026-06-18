@@ -1,33 +1,33 @@
 """
-EMPIRE V49 · STOP LOSS ROUTES
-===============================
-REST API routes for managing stop loss positions on the hub.
+PREDICITIVE TRADING BOT · STOP LOSS ROUTES
+=============================================
+REST API routes for managing stop loss positions.
 
 Routes:
-  POST   /api/v1/stoploss/add       — Add a position to monitor
-  GET    /api/v1/stoploss/list      — List all positions
-  POST   /api/v1/stoploss/cancel    — Cancel/remove a position
-  GET    /api/v1/stoploss/status    — Bot health and stats
+  POST   /api/v1/stoploss/add              — Add a position to monitor
+  GET    /api/v1/stoploss/list             — List all positions
+  POST   /api/v1/stoploss/cancel           — Cancel/remove a position
+  DELETE /api/v1/stoploss/remove/{pid}     — Hard-delete a position entirely
+  GET    /api/v1/stoploss/status           — Bot health and stats
 
-Wired from hub.py via:
-  from bots.stop_loss_routes import register_stop_loss_routes
-  register_stop_loss_routes(app, require_auth=require_auth)
+Usage:
+  from stoploss_routes import register_stop_loss_routes
+  register_stop_loss_routes(app)
 """
 
 import logging
 from typing import Optional
 
-from fastapi import Depends, HTTPException, Query
+from fastapi import Depends, HTTPException
 
-
-log = logging.getLogger("empire.stop_loss.routes")
+log = logging.getLogger("trading.stop_loss.routes")
 
 
 def register_stop_loss_routes(app, require_auth=None):
     """Register stop loss management endpoints on the FastAPI app."""
 
     # Lazy import to avoid circular deps at module level
-    from bots.stop_loss_bot import get_bot
+    from stoploss_bot import get_bot
 
     @app.post("/api/v1/stoploss/add")
     async def stoploss_add(
@@ -59,7 +59,9 @@ def register_stop_loss_routes(app, require_auth=None):
             raise HTTPException(400, f"Invalid field value: {e}")
 
         if stop_loss_percent <= 0 or stop_loss_percent >= 1:
-            raise HTTPException(400, "stop_loss_percent must be between 0 and 1 (e.g. 0.05 for 5%)")
+            raise HTTPException(
+                400, "stop_loss_percent must be between 0 and 1 (e.g. 0.05 for 5%)"
+            )
         if entry_price <= 0:
             raise HTTPException(400, "entry_price must be positive")
         if amount <= 0:
@@ -74,7 +76,9 @@ def register_stop_loss_routes(app, require_auth=None):
             trailing=bool(body.get("trailing", False)),
             label=str(body.get("label", "")),
             slippage_bps=int(body.get("slippage_bps", 100)),
-            take_profit_percent=float(body["take_profit_percent"]) if body.get("take_profit_percent") else None,
+            take_profit_percent=float(body["take_profit_percent"])
+            if body.get("take_profit_percent")
+            else None,
         )
         return result
 
