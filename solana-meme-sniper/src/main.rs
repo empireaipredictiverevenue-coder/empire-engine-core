@@ -14,6 +14,11 @@
 //!     --buy-amount 0.05 \
 //!     --jito-tip 0.005
 
+// Allow dead code for future-use fields, constants, and methods.
+// The project is under active development — not all subsystems are
+// wired yet. Remove this once all code paths are exercised.
+#![allow(dead_code)]
+
 mod sniper;
 mod security;
 mod jito;
@@ -391,8 +396,13 @@ async fn main() -> Result<()> {
     let snipe_count = state.snipe_count.clone();
     let error_count = state.error_count.clone();
     let brain_url = args.brain_url.clone();
+    let cw_rpc = state.rpc_client.clone();
+    let cw_pubkey = state.sniper_wallet.pubkey();
     tokio::spawn(async move {
-        let worker = ConfigWorker::new(brain_url, config_lock, snipe_count, error_count);
+        let worker = ConfigWorker::new(
+            brain_url, config_lock, snipe_count, error_count,
+            cw_rpc, cw_pubkey,
+        );
         worker.run().await;
     });
     info!("🧠 ConfigWorker: spawned — polling brain bridge");

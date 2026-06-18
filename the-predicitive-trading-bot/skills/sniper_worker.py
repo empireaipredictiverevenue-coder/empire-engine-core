@@ -31,7 +31,9 @@ Configuration per user (from sniper_configs table):
 """
 
 import os
+import re
 import json
+import math
 import time
 import asyncio
 import base64
@@ -40,6 +42,7 @@ from datetime import datetime, timezone
 from typing import Optional, Any, Callable, Awaitable
 
 import httpx
+import websockets
 
 log = logging.getLogger("trading.sniper_worker")
 
@@ -54,8 +57,342 @@ JUPITER_QUOTE_API = "https://quote-api.jup.ag/v6/quote"
 JUPITER_SWAP_API = "https://quote-api.jup.ag/v6/swap"
 WSOL_MINT = "So11111111111111111111111111111111111111112"
 
+# ── DEX Program IDs for WebSocket log monitoring ──────────────────────
+# Raydium AMM
+RAYDIUM_PROGRAM = "675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8"
+# PumpFun
+PUMPFUN_PROGRAM = "6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P"
+# Meteora DLMM
+METEORA_PROGRAM = "LBUZKhRxPF3XUp3B63Gk53K112N215m5y2pT4rSpR1T"
+
+# ── Jito MEV Protection Configuration ──────────────────────────────
+# Block Engine endpoint for submitting bundles (replace with your regional endpoint)
+JITO_BUNDLE_ENDPOINT = os.environ.get(
+    "JITO_BUNDLE_ENDPOINT",
+    "https://mainnet.block-engine.jito.wtf/api/v1/bundles",
+)
+# Jito tip accounts (any will work — rotated periodically by Jito)
+JITO_TIP_ACCOUNTS = [
+    "Cw8PF4NQqW3tP3EpsJCiMGmFQSsWSCjYmKVB5cRXBbbi",
+    "HFqU5x63VTqvQss8hp11i4wVV8bD44PvwucfZ2bU7gRe",
+    "ADaUMid9yfUytqMBgopwjb2DTLSokTSzL1zt6iGPaS49",
+    "DfXygSm4jCyNCybVYYK6DwvWqjKee8pbDmJGcLWNDXjh",
+]
+# Default Jito tip in SOL (dynamically scaled by _compute_jito_tip)
+JITO_DEFAULT_TIP_SOL = float(os.environ.get("JITO_DEFAULT_TIP_SOL", "0.005"))
+JITO_MAX_TIP_SOL = float(os.environ.get("JITO_MAX_TIP_SOL", "0.02"))
+
+# Log patterns that indicate a new pool/token creation
+_RE_INIT_PATTERN = re.compile(r"Instruction:\s*(Initialize2|initialize2|create|Create|initialize_pool|InitializePool)")
+
 # Event callback type: async Callable(user_hash, event_dict) -> None
 EventCallback = Callable[[str, dict], Awaitable[None]]
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# HELIUS WEBSOCKET STREAM DETECTOR
+# ═══════════════════════════════════════════════════════════════════════════
+
+class HeliusStreamDetector:
+    """WebSocket-based token detector using Helius logsSubscribe.
+
+    Subscribes to logs from major Solana DEX programs (Raydium, PumpFun, Meteora)
+    and detects new pool/token creations in <1 second — vs 5s polling with RPC.
+
+    When a relevant log pattern is found (e.g. "Instruction: Initialize2"), it
+    fetches the full transaction via RPC to extract the token mint address, then
+    pushes the detection onto an asyncio.Queue for the engine to process.
+
+    Reconnects automatically with exponential backoff on WebSocket drops.
+    """
+
+    def __init__(
+        self,
+        ws_url: str,
+        token_queue: asyncio.Queue,
+        http_client: httpx.AsyncClient,
+    ):
+        self._ws_url = ws_url
+        self._queue = token_queue
+        self._http = http_client
+        self._running = False
+        self._task: Optional[asyncio.Task] = None
+        # Dedup by signature so we don't double-report the same launch
+        self._known_sigs: set[str] = set()
+        self._connection_errors = 0
+        self._tokens_detected = 0
+
+    async def start(self) -> None:
+        """Start the WebSocket detector background task."""
+        if self._running:
+            return
+        self._running = True
+        self._task = asyncio.create_task(self._run())
+        log.info("[sniper] HeliusStreamDetector started")
+
+    async def stop(self) -> None:
+        """Stop the WebSocket detector."""
+        self._running = False
+        if self._task and not self._task.done():
+            self._task.cancel()
+            try:
+                await self._task
+            except asyncio.CancelledError:
+                pass
+        log.info("[sniper] HeliusStreamDetector stopped — %d tokens detected", self._tokens_detected)
+
+    async def _run(self) -> None:
+        """Main loop: connect → subscribe → listen → reconnect on failure."""
+        programs = [RAYDIUM_PROGRAM, PUMPFUN_PROGRAM, METEORA_PROGRAM]
+        program_labels = {
+            RAYDIUM_PROGRAM: "raydium",
+            PUMPFUN_PROGRAM: "pumpfun",
+            METEORA_PROGRAM: "meteora",
+        }
+
+        while self._running:
+            try:
+                log.info("[sniper] connecting to Helius WebSocket...")
+                async with websockets.connect(
+                    self._ws_url,
+                    max_size=10 * 1024 * 1024,  # 10 MB
+                    ping_interval=20,
+                    ping_timeout=10,
+                ) as ws:
+                    log.info("[sniper] Helius WebSocket connected")
+                    self._connection_errors = 0
+
+                    # Subscribe to logs for each DEX program
+                    sub_ids = []
+                    for i, prog in enumerate(programs):
+                        sub_req = {
+                            "jsonrpc": "2.0",
+                            "id": i + 1,
+                            "method": "logsSubscribe",
+                            "params": [
+                                {"mentions": [prog]},
+                                {"commitment": "processed"},
+                            ],
+                        }
+                        await ws.send(json.dumps(sub_req))
+                        resp = await ws.recv()
+                        data = json.loads(resp)
+                        sid = data.get("result")
+                        if sid is not None:
+                            sub_ids.append(sid)
+                            label = program_labels.get(prog, prog[:12])
+                            log.info("[sniper] subscribed to %s (sub_id=%s)", label, sid)
+                        else:
+                            log.warning(
+                                "[sniper] subscribe failed for %s: %s",
+                                prog[:12], data.get("error", "unknown"),
+                            )
+
+                    if not sub_ids:
+                        log.warning("[sniper] no subscriptions succeeded — retrying in 10s")
+                        await asyncio.sleep(10)
+                        continue
+
+                    log.info(
+                        "[sniper] listening for new tokens on %d subscriptions...",
+                        len(sub_ids),
+                    )
+
+                    # ── Listen loop ──
+                    while self._running:
+                        try:
+                            raw = await asyncio.wait_for(ws.recv(), timeout=30)
+                        except asyncio.TimeoutError:
+                            # Send a ping to keep connection alive
+                            try:
+                                pong = await ws.ping()
+                                await asyncio.wait_for(pong, timeout=5)
+                            except Exception:
+                                log.debug("[sniper] WS ping failed — reconnecting")
+                                break
+                            continue
+
+                        try:
+                            msg = json.loads(raw)
+                        except json.JSONDecodeError:
+                            continue
+
+                        # Only process subscription notifications
+                        params = msg.get("params", {})
+                        result = params.get("result", {})
+                        value = result.get("value", {})
+                        logs = value.get("logs", [])
+                        signature = value.get("signature", "")
+
+                        if not logs or not signature:
+                            continue
+
+                        # Skip already-seen signatures
+                        if signature in self._known_sigs:
+                            continue
+                        self._known_sigs.add(signature)
+
+                        # Keep known_sigs bounded
+                        if len(self._known_sigs) > 50_000:
+                            self._known_sigs = set(list(self._known_sigs)[-10_000:])
+
+                        # Log content is the subscription message, not the raw value
+                        log_entries = logs if isinstance(logs, list) else []
+
+                        # Check for pool creation / new token patterns in logs
+                        is_new_pool = any(
+                            _RE_INIT_PATTERN.search(entry) for entry in log_entries
+                        )
+                        if not is_new_pool:
+                            continue
+
+                        # Determine which program this is from
+                        source = "unknown"
+                        for prog, label in program_labels.items():
+                            if any(prog[:20] in entry for entry in log_entries):
+                                source = label
+                                break
+
+                        # Fetch transaction details to extract the token mint
+                        token_address = await self._extract_token_from_tx(signature, source)
+                        if token_address:
+                            self._tokens_detected += 1
+                            await self._queue.put({
+                                "address": token_address,
+                                "source": f"helius_ws_{source}",
+                                "chain": "solana",
+                                "detected_at": datetime.now(timezone.utc).isoformat(),
+                                "signature": signature,
+                            })
+                            log.info(
+                                "[sniper] 🟢 WS detected new token: %s (%s) — %d total",
+                                token_address[:16], source, self._tokens_detected,
+                            )
+
+            except websockets.ConnectionClosed as e:
+                self._connection_errors += 1
+                backoff = min(30, 2 ** self._connection_errors)
+                log.warning(
+                    "[sniper] WS disconnected (%s) — reconnecting in %ds (attempt #%d)",
+                    e, backoff, self._connection_errors,
+                )
+                await asyncio.sleep(backoff)
+            except Exception as e:
+                self._connection_errors += 1
+                backoff = min(60, 5 * 2 ** self._connection_errors)
+                log.warning(
+                    "[sniper] WS error: %s — reconnecting in %ds (attempt #%d)",
+                    e, backoff, self._connection_errors,
+                )
+                await asyncio.sleep(backoff)
+
+        log.info("[sniper] HeliusStreamDetector: run loop exited")
+
+    async def _extract_token_from_tx(self, signature: str, source: str) -> Optional[str]:
+        """Fetch a transaction via RPC and extract the token mint address.
+
+        For PumpFun, the token mint is typically the first account in the
+        transaction's inner instructions. For Raydium/Meteora, it's found
+        in the Initialize2 instruction accounts.
+        """
+        try:
+            rpc_url = os.environ.get("SOLANA_RPC_URL", "https://api.mainnet-beta.solana.com")
+            r = await self._http.post(
+                rpc_url,
+                json={
+                    "jsonrpc": "2.0",
+                    "id": 1,
+                    "method": "getTransaction",
+                    "params": [
+                        signature,
+                        {
+                            "encoding": "jsonParsed",
+                            "maxSupportedTransactionVersion": 0,
+                            "commitment": "confirmed",
+                        },
+                    ],
+                },
+                timeout=10,
+            )
+            if r.status_code != 200:
+                return None
+
+            data = r.json()
+            result = data.get("result")
+            if not result:
+                return None
+
+            tx_data = result.get("transaction", {})
+            message = tx_data.get("message", {}) if isinstance(tx_data, dict) else {}
+            account_keys = message.get("accountKeys", [])
+            instructions = message.get("instructions", [])
+            meta = result.get("meta", {}) or {}
+            inner_ixns = meta.get("innerInstructions", []) or []
+
+            # Strategy 1: For PumpFun, the token mint is one of the first
+            # accounts passed to the create instruction. The mint is typically
+            # at index 0 or 1 in the inner instructions' accounts.
+            if source == "pumpfun":
+                # Look for the token mint in the inner instructions
+                for inner_group in inner_ixns:
+                    ixns = inner_group.get("instructions", [])
+                    for ix in ixns:
+                        accounts = ix.get("accounts", [])
+                        if accounts:
+                            # First account is usually the token mint
+                            mint_idx = accounts[0]
+                            if isinstance(mint_idx, int) and mint_idx < len(account_keys):
+                                mint = account_keys[mint_idx].get("pubkey", "")
+                                if mint and len(mint) == 44:
+                                    return mint
+
+            # Strategy 2: For Raydium/Meteora, look at the Initialize2
+            # instruction accounts. The token mint is typically the second
+            # or third account in the top-level instruction.
+            for ix in instructions:
+                accounts = ix.get("accounts", [])
+                if len(accounts) >= 3:
+                    # Token mint is often at index 1 or 2
+                    for idx in (1, 2):
+                        if idx < len(accounts):
+                            acct_idx = accounts[idx]
+                            if isinstance(acct_idx, int) and acct_idx < len(account_keys):
+                                mint = account_keys[acct_idx].get("pubkey", "")
+                                if mint and len(mint) == 44:
+                                    return mint
+
+            # Strategy 3: Parse the preTokenBalances / postTokenBalances
+            # for new token accounts (base mint that wasn't in preBalances)
+            pre_balances = meta.get("preTokenBalances", []) or []
+            post_balances = meta.get("postTokenBalances", []) or []
+            pre_mints = {
+                b.get("mint", "") for b in pre_balances if b.get("mint")
+            }
+            for pb in post_balances:
+                mint = pb.get("mint", "")
+                owner = pb.get("owner", "")
+                # New token mint that's not WSOL and went to a non-owner
+                if (
+                    mint
+                    and mint not in pre_mints
+                    and mint != WSOL_MINT
+                    and len(mint) == 44
+                    and owner
+                ):
+                    return mint
+
+        except Exception as e:
+            log.debug("[sniper] _extract_token_from_tx error: %s", e)
+
+        return None
+
+    @property
+    def status(self) -> dict:
+        return {
+            "running": self._running,
+            "tokens_detected": self._tokens_detected,
+            "connection_errors": self._connection_errors,
+        }
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -74,6 +411,9 @@ class AutoSnipeEngine:
         self._http: Optional[httpx.AsyncClient] = None
         self._last_scan_at: Optional[str] = None
         self._known_tokens: set[str] = set()  # dedup across scans
+        self._token_queue: asyncio.Queue = asyncio.Queue()
+        self._ws_detector: Optional[HeliusStreamDetector] = None
+        self._last_executing_amount: Optional[float] = None  # for Jito tip calc
 
     # ── Lifecycle ─────────────────────────────────────────────────
 
@@ -88,13 +428,39 @@ class AutoSnipeEngine:
             return
         self._running = True
         self._http = httpx.AsyncClient(timeout=15)
+
+        # Start the WebSocket stream detector (primary detection)
+        self._token_queue = asyncio.Queue()
+        ws_url = os.environ.get(
+            "HELIUS_WS_URL",
+            "wss://atlas-mainnet.helius-rpc.com/?api-key=" + os.environ.get("HELIUS_API_KEY", ""),
+        )
+        self._ws_detector = HeliusStreamDetector(
+            ws_url=ws_url,
+            token_queue=self._token_queue,
+            http_client=self._http,
+        )
+        await self._ws_detector.start()
+
         self._task = asyncio.create_task(self._run_loop())
-        log.info("[sniper] engine started — scanning every %.1fs", SCAN_INTERVAL_SEC)
+        log.info(
+            "[sniper] engine started — WebSocket primary / poll backup every %.1fs",
+            SCAN_INTERVAL_SEC,
+        )
 
     async def stop(self) -> None:
         """Stop the auto-snipe engine."""
         self._running = False
         self._api_keys.clear()  # clear decryption key cache
+
+        # Capture WS detector stats before stopping
+        ws_detected = self._ws_detector.tokens_detected if self._ws_detector else 0
+
+        # Stop WebSocket detector first
+        if self._ws_detector:
+            await self._ws_detector.stop()
+            self._ws_detector = None
+
         if self._task and not self._task.done():
             self._task.cancel()
             try:
@@ -104,47 +470,76 @@ class AutoSnipeEngine:
         if self._http:
             await self._http.aclose()
             self._http = None
-        log.info("[sniper] engine stopped — %d scans, %d snipes", self._scan_count, self._snipe_count)
+        log.info(
+            "[sniper] engine stopped — %d WS detections, %d scans, %d snipes",
+            ws_detected,
+            self._scan_count,
+            self._snipe_count,
+        )
+
+        # Clear remaining queue items
+        while not self._token_queue.empty():
+            try:
+                self._token_queue.get_nowait()
+            except asyncio.QueueEmpty:
+                break
 
     async def _run_loop(self) -> None:
-        """Main loop: fetch enabled users → scan for tokens → evaluate → snipe."""
+        """Main loop: fetch enabled users → detect tokens → evaluate → snipe.
+
+        Primary detection: Helium WebSocket logsSubscribe (sub-second).
+        Fallback: RPC polling when queue is empty (covers gaps in WS detection).
+        """
         from .public_api import get_user_store
         store = get_user_store()
+
+        poll_interval = max(SCAN_INTERVAL_SEC, 2.0)  # at least 2s polling
 
         while self._running:
             try:
                 # Get all enabled sniper users
                 users = await store.get_enabled_sniper_users()
                 if not users:
+                    # Even with no users, keep draining the queue
+                    await self._drain_queue(store, users)
                     await asyncio.sleep(SCAN_INTERVAL_SEC)
                     continue
 
-                # Scan for new tokens
+                # ── Primary: drain WebSocket-detected tokens (non-blocking) ──
+                ws_tokens = await self._drain_queue(store, users)
+
+                # ── Fallback: poll RPC if queue is idle (covers gaps) ──
                 tokens = await self._scan_new_tokens()
                 self._scan_count += 1
                 self._last_scan_at = datetime.now(timezone.utc).isoformat()
 
                 if tokens:
-                    log.info("[sniper] scan #%d: %d new tokens found", self._scan_count, len(tokens))
+                    log.info(
+                        "[sniper] scan #%d (WS=%d/poll=%d): evaluating %d users",
+                        self._scan_count, len(ws_tokens), len(tokens), len(users),
+                    )
 
-                # Evaluate each token against each user's config
-                for token_data in tokens:
-                    for user in users:
-                        if not self._running:
-                            break
-                        try:
-                            await self._evaluate_token_for_user(
-                                store, user, token_data
-                            )
-                        except Exception as e:
-                            log.error(
-                                "[sniper] eval error user=%s token=%s: %s",
-                                user.get("api_key_hash", "?")[:12],
-                                token_data.get("address", "?")[:16],
-                                e,
-                            )
+                    for token_data in tokens:
+                        for user in users:
+                            if not self._running:
+                                break
+                            try:
+                                await self._evaluate_token_for_user(
+                                    store, user, token_data
+                                )
+                            except Exception as e:
+                                log.error(
+                                    "[sniper] eval error user=%s token=%s: %s",
+                                    user.get("api_key_hash", "?")[:12],
+                                    token_data.get("address", "?")[:16],
+                                    e,
+                                )
 
-                await asyncio.sleep(SCAN_INTERVAL_SEC)
+                # Dynamic sleep: shorter if WS detector is active, longer if not
+                if self._ws_detector and self._ws_detector.status.get("running"):
+                    await asyncio.sleep(poll_interval)
+                else:
+                    await asyncio.sleep(SCAN_INTERVAL_SEC)
 
             except asyncio.CancelledError:
                 self._running = False
@@ -153,14 +548,50 @@ class AutoSnipeEngine:
                 log.error("[sniper] loop error: %s", e)
                 await asyncio.sleep(SCAN_INTERVAL_SEC * 3)
 
+    async def _drain_queue(self, store, users: list[dict]) -> list[dict]:
+        """Drain all pending WebSocket-detected tokens from the queue.
+
+        Returns the list of drained tokens (for metrics).
+        """
+        drained = []
+        if not users:
+            # Still drain to keep queue empty
+            while not self._token_queue.empty():
+                try:
+                    self._token_queue.get_nowait()
+                except asyncio.QueueEmpty:
+                    break
+            return drained
+
+        while not self._token_queue.empty():
+            try:
+                token_data = self._token_queue.get_nowait()
+                drained.append(token_data)
+                for user in users:
+                    if not self._running:
+                        break
+                    try:
+                        await self._evaluate_token_for_user(
+                            store, user, token_data
+                        )
+                    except Exception as e:
+                        log.error(
+                            "[sniper] eval error user=%s token=%s: %s",
+                            user.get("api_key_hash", "?")[:12],
+                            token_data.get("address", "?")[:16],
+                            e,
+                        )
+            except asyncio.QueueEmpty:
+                break
+        return drained
+
     # ── Token scanning ────────────────────────────────────────────
 
     async def _scan_new_tokens(self) -> list[dict]:
-        """Scan for new meme coin tokens on Solana DEXs.
+        """Polling fallback: scan for new meme coin tokens via RPC.
 
         Uses Helius RPC getProgramAccounts for Raydium pools.
-        Falls back to a simulated scan if Helius is unavailable.
-        In production, use Helius WebSocket logsSubscribe for <1s detection.
+        This is a backup for when the WebSocket detector is unavailable.
         """
         tokens = []
         try:
@@ -470,14 +901,34 @@ class AutoSnipeEngine:
             sig = kp.sign_message(message)
             tx.signatures.append(sig)
 
-            # Send
-            solana_client = SolanaClient(
-                os.environ.get("SOLANA_RPC_URL", "https://api.mainnet-beta.solana.com"),
-                commitment=Commitment("confirmed"),
-            )
+            # ── Jito MEV-protected bundle submission ──────────────
             tx_bytes = bytes(tx)
-            send_resp = solana_client.send_raw_transaction(tx_bytes)
-            tx_sig = str(send_resp.value)
+            self._last_executing_amount = amount_sol
+            bundle_id = await self._send_jito_bundle(
+                signed_swap_tx=tx_bytes,
+                wallet_keypair=kp,
+                wallet_pubkey_str=str(kp.pubkey()),
+            )
+
+            if bundle_id:
+                # Jito bundle accepted — use bundle ID as tx tracking
+                tx_sig = bundle_id
+                log.info(
+                    "[sniper] 🛡️ Jito bundle submitted: %s for %s",
+                    bundle_id[:20], token_address[:16],
+                )
+            else:
+                # Fall back to direct RPC send if Jito unavailable
+                log.warning(
+                    "[sniper] Jito unavailable — falling back to raw RPC send for %s",
+                    token_address[:16],
+                )
+                solana_client = SolanaClient(
+                    os.environ.get("SOLANA_RPC_URL", "https://api.mainnet-beta.solana.com"),
+                    commitment=Commitment("confirmed"),
+                )
+                send_resp = solana_client.send_raw_transaction(tx_bytes)
+                tx_sig = str(send_resp.value)
 
         except Exception as e:
             log.warning("[sniper] transaction signing/sending failed: %s", e)
@@ -520,6 +971,143 @@ class AutoSnipeEngine:
                 "event_id": event_id,
             })
             await store._update_snipe_event_internal(user_hash, event_id, {"status": "tx_failed"})
+
+    # ── Jito MEV-Protected Bundle Submission ─────────────────────
+
+    async def _send_jito_bundle(
+        self,
+        signed_swap_tx: bytes,        # fully-signed VersionedTransaction bytes
+        wallet_keypair,                # solders.keypair.Keypair
+        wallet_pubkey_str: str,        # base58 pubkey
+    ) -> Optional[str]:
+        """Submit the swap transaction as a Jito bundle for MEV protection.
+
+        Constructs a 2-transaction bundle:
+          Tx 1: Swap (already signed, from Jupiter)
+          Tx 2: Jito tip transfer (SOL → Jito tip account)
+
+        The bundle is submitted via Jito Block Engine's sendBundle JSON-RPC.
+        Returns the bundle ID on success, None on failure.
+        """
+        try:
+            # Get the latest blockhash for the tip transaction
+            solana_rpc = os.environ.get(
+                "SOLANA_RPC_URL", "https://api.mainnet-beta.solana.com"
+            )
+            bh_r = await self._http.post(
+                solana_rpc,
+                json={"jsonrpc": "2.0", "id": 1, "method": "getLatestBlockhash", "params": []},
+                timeout=10,
+            )
+            if bh_r.status_code != 200:
+                log.warning("[jito] failed to fetch blockhash: HTTP %d", bh_r.status_code)
+                return None
+            bh_data = bh_r.json()
+            bh_value = bh_data.get("result", {}).get("value", {})
+            blockhash_str = bh_value.get("blockhash", "")
+            if not blockhash_str:
+                log.warning("[jito] blockhash response missing blockhash")
+                return None
+
+            from solders.hash import Hash
+            from solders.transaction import Transaction
+            from solders.system_program import transfer as sol_transfer
+
+            blockhash = Hash.from_string(blockhash_str)
+            wallet_pubkey = wallet_keypair.pubkey()
+
+            # Select a Jito tip account (deterministic — rotate to spread load)
+            import hashlib
+            tip_index = int(hashlib.sha256(wallet_pubkey_str.encode()).hexdigest(), 16) % len(JITO_TIP_ACCOUNTS)
+            tip_account_str = JITO_TIP_ACCOUNTS[tip_index]
+
+            # Compute dynamic tip based on swap amount
+            from solders.pubkey import Pubkey
+            tip_account = Pubkey.from_string(tip_account_str)
+            amount_sol = float(self._last_executing_amount or JITO_DEFAULT_TIP_SOL)
+            tip_lamports = self._compute_jito_tip(amount_sol)
+
+            # Create the tip transfer instruction
+            tip_ix = sol_transfer(
+                from_pubkey=wallet_pubkey,
+                to_pubkey=tip_account,
+                lamports=tip_lamports,
+            )
+
+            # Build and sign the tip transaction
+            tip_tx = Transaction.new_signed_with_payer(
+                instructions=[tip_ix],
+                payer=wallet_pubkey,
+                signing_keypair=wallet_keypair,
+                recent_blockhash=blockhash,
+            )
+
+            # Serialize both transactions to base64
+            from base64 import b64encode
+            swap_b64 = b64encode(signed_swap_tx).decode()
+            tip_b64 = b64encode(bytes(tip_tx)).decode()
+            bundle = [swap_b64, tip_b64]
+
+            # Submit to Jito Block Engine
+            jito_req = {
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "sendBundle",
+                "params": [bundle],
+            }
+            jito_r = await self._http.post(
+                JITO_BUNDLE_ENDPOINT,
+                json=jito_req,
+                timeout=15,
+                headers={"Content-Type": "application/json"},
+            )
+
+            if jito_r.status_code != 200:
+                log.warning(
+                    "[jito] bundle rejected: HTTP %d — %s",
+                    jito_r.status_code, jito_r.text[:200],
+                )
+                return None
+
+            jito_resp = jito_r.json()
+            bundle_id = jito_resp.get("result")
+            if bundle_id:
+                log.info(
+                    "[jito] ✅ bundle submitted: %s — tip=%.6f SOL (%s)",
+                    bundle_id[:20],
+                    tip_lamports / 1e9,
+                    tip_account_str[:12],
+                )
+                return bundle_id
+
+            error = jito_resp.get("error", {})
+            log.warning("[jito] sendBundle RPC error: %s", error.get("message", "unknown"))
+            return None
+
+        except ImportError as e:
+            log.warning("[jito] import error (solders not fully installed?): %s", e)
+            return None
+        except Exception as e:
+            log.warning("[jito] bundle submission failed: %s", e)
+            return None
+
+    def _compute_jito_tip(self, amount_sol: float) -> int:
+        """Compute a dynamic Jito tip based on swap amount.
+
+        Formula:
+          base = JITO_DEFAULT_TIP_SOL
+          For swaps > 0.5 SOL, scale: tip = base * sqrt(amount / 0.5)
+          Always cap at JITO_MAX_TIP_SOL.
+        """
+        base = JITO_DEFAULT_TIP_SOL
+        if amount_sol > 0.5:
+            scaled = base * math.sqrt(amount_sol / 0.5)
+            tip_sol = min(scaled, JITO_MAX_TIP_SOL)
+        else:
+            tip_sol = max(base, 0.001)  # at least 0.001 SOL (1M lamports)
+
+        lamports = int(tip_sol * 1e9)
+        return max(lamports, 1_000)  # absolute floor: 1,000 lamports
 
     # ── Liquidity check ───────────────────────────────────────────
 
@@ -577,8 +1165,12 @@ class AutoSnipeEngine:
 
     @property
     def status(self) -> dict:
+        ws_status = self._ws_detector.status if self._ws_detector else {}
         return {
             "running": self._running,
+            "ws_detector_running": ws_status.get("running", False),
+            "ws_tokens_detected": ws_status.get("tokens_detected", 0),
+            "queue_size": self._token_queue.qsize(),
             "scan_count": self._scan_count,
             "snipe_count": self._snipe_count,
             "last_scan_at": self._last_scan_at,

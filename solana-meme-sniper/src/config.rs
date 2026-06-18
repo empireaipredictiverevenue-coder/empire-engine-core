@@ -17,8 +17,10 @@ use std::time::Duration;
 
 use anyhow::{Context, Result};
 use serde::Deserialize;
+use solana_client::nonblocking::rpc_client::RpcClient;
+use solana_sdk::pubkey::Pubkey;
 use tokio::sync::{Mutex, RwLock};
-use tracing::{debug, error, info, warn};
+use tracing::{debug, info, warn};
 
 // ── Dynamic Config ──────────────────────────────────────────────────────
 
@@ -120,6 +122,10 @@ pub struct ConfigWorker {
     /// Shared snipe + error counters for reporting to the brain.
     snipe_count: Arc<Mutex<u64>>,
     error_count: Arc<Mutex<u64>>,
+    /// RPC client for querying wallet balance.
+    rpc_client: Arc<RpcClient>,
+    /// The primary sniper wallet pubkey whose balance to report.
+    wallet_pubkey: Pubkey,
     /// HTTP client for polling.
     client: reqwest::Client,
 }
@@ -134,6 +140,8 @@ impl ConfigWorker {
         config: Arc<RwLock<DynamicConfig>>,
         snipe_count: Arc<Mutex<u64>>,
         error_count: Arc<Mutex<u64>>,
+        rpc_client: Arc<RpcClient>,
+        wallet_pubkey: Pubkey,
     ) -> Self {
         let client = reqwest::Client::builder()
             .timeout(Duration::from_secs(3))
@@ -146,6 +154,8 @@ impl ConfigWorker {
             config,
             snipe_count,
             error_count,
+            rpc_client,
+            wallet_pubkey,
             client,
         }
     }
@@ -153,7 +163,7 @@ impl ConfigWorker {
     /// Run the polling loop (blocks until cancellation).
     ///
     /// Spawn this via `tokio::spawn(config_worker.run())`.
-    pub async fn run(mut self) {
+    pub async fn run(self) {
         info!(
             "🔄 ConfigWorker: started — polling {} every 5s",
             self.brain_url
@@ -213,9 +223,18 @@ impl ConfigWorker {
         let snipes = *self.snipe_count.lock().await;
         let failures = *self.error_count.lock().await;
 
+        // Fetch the real wallet balance from the RPC
+        let wallet_balance_sol = match self.rpc_client.get_balance(&self.wallet_pubkey).await {
+            Ok(lamports) => lamports as f64 / 1e9,
+            Err(e) => {
+                warn!("ConfigWorker: failed to fetch wallet balance: {e} — using 0");
+                0.0
+            }
+        };
+
         let url = format!(
-            "{}/api/v1/sniper/dynamic-config?wallet_balance_sol=0&snipes_24h={}&failures_24h={}&optimize=true",
-            self.brain_url, snipes, failures,
+            "{}/api/v1/sniper/dynamic-config?wallet_balance_sol={}&snipes_24h={}&failures_24h={}&optimize=true",
+            self.brain_url, wallet_balance_sol, snipes, failures,
         );
 
         let resp = self
