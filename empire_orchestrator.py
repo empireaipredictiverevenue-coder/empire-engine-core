@@ -17,6 +17,7 @@ from empire_state_manager import StateManager
 from empire_cinematic_engine import launch_3d_render
 from empire_lane_controller import LaneController
 from empire_agi_governor import governor as _agi_governor
+from empire_brain_memory import render_few_shot
 
 # Storm event keyword → niche map. Hoisted to module level so it's
 # built once at import, not on every _infer_niche() call. The first
@@ -286,6 +287,8 @@ class StormOrchestrator:
         get_db: Callable,
         email_engine,
         brain=None,
+        brain_memory=None,
+        brain_learning=None,
         drafter=None,
         enricher=None,
         narrator=None,
@@ -301,6 +304,8 @@ class StormOrchestrator:
         self.get_db = get_db
         self.email_engine = email_engine
         self.brain = brain
+        self.brain_memory = brain_memory
+        self.brain_learning = brain_learning
         self.drafter = drafter
         self.enricher = enricher
         self.narrator = narrator
@@ -463,10 +468,48 @@ class StormOrchestrator:
                 self.state.update_strike_status(strike_id, "skipped_rate", extra_meta={"niche": niche})
             return "skipped_rate"
 
-        # Brain gate (real)
+        # Brain gate — retrieval-augmented decision-making
+        #  1. Query brain_memory for similar past leads (few-shot examples)
+        #  2. Look up tuned urgency floor from brain_learning
+        #  3. Pass both as context to brain.decide()
+        #  4. Record the decision in brain_memory for future learning
         if self.brain:
-            decision = await self.brain.decide(target, alert_summary)
+            memory_context = ""
+            if self.brain_memory:
+                try:
+                    similar = await self.brain_memory.retrieve_similar(
+                        address=target.get("address", ""),
+                        city=target.get("city", ""),
+                        severity=alert_summary.get("severity", ""),
+                        asset_value=float(target.get("asset_value", 0) or 0),
+                        urgency_signal=alert_summary.get("event", ""),
+                        k=5,
+                    )
+                    if similar:
+                        memory_context = render_few_shot(similar)
+                        log.info(f"[orchestrator] brain_memory: {len(similar)} similar past leads for {target.get('warehouse_name')}")
+                except Exception as e:
+                    log.debug(f"[orchestrator] brain_memory retrieval failed: {e}")
+
+            decision = await self.brain.decide(target, alert_summary, memory_context=memory_context)
             log.info(f"[orchestrator] brain {decision.get('decision')} ({decision.get('confidence', 0):.2f}) for {target.get('warehouse_name')}: {decision.get('reasoning')}")
+
+            # Record the decision in brain_memory so future decisions can learn from it
+            if self.brain_memory:
+                try:
+                    await self.brain_memory.record_decision(
+                        lead_id=target.get("id"),
+                        decision=decision.get("decision", "NO_GO"),
+                        urgency=decision.get("urgency", alert_summary.get("urgency", 0)),
+                        reasoning=decision.get("reasoning", ""),
+                        address=target.get("address", ""),
+                        city=target.get("city", ""),
+                        severity=alert_summary.get("severity", ""),
+                        asset_value=float(target.get("asset_value", 0) or 0),
+                    )
+                except Exception as e:
+                    log.debug(f"[orchestrator] brain_memory record failed: {e}")
+
             if decision.get("decision") != "GO":
                 if strike_id:
                     self.state.update_strike_status(strike_id, "skipped_brain", extra_meta={"niche": niche})

@@ -85,6 +85,7 @@ WIRE-UP IN hub.py
     # has the Cmd+K bar available. Already wired into the layout below.
 """
 
+import asyncio
 import json
 import time as _console_time
 import logging
@@ -253,6 +254,40 @@ ACTIONS = {
         "destructive": True,
         "min_role": "operator",
     },
+
+    # ───────────────── JARVIS: CONTENT GENERATION ────────────────────────
+    "generate_storm_page": {
+        "description": "Build an SEO-optimized storm damage landing page for any city/state metro. Auto-discovers live radar targets and generates JSON-LD structured data, FAQ, and keyword targeting.",
+        "params": {
+            "city":  {"type": "string", "required": True, "description": "City name, e.g. 'Dallas'"},
+            "state": {"type": "string", "required": True, "description": "Two-letter state code, e.g. 'TX'"},
+        },
+        "destructive": False,
+    },
+    "show_system_status": {
+        "description": "Show the status of all Empire AI systems: agents, services, lanes, revenue, and health checks in a single snapshot.",
+        "params": {},
+        "destructive": False,
+    },
+    "generate_predictive_report": {
+        "description": "Generate a comprehensive predictive revenue report with per-lane forecasts, health alerts, SI evolution status, and AGI calibration analysis.",
+        "params": {
+            "days": {"type": "integer", "required": False, "default": 7, "description": "Number of days to analyze"},
+        },
+        "destructive": False,
+    },
+    "list_generated_pages": {
+        "description": "List all generated storm landing pages with metadata, creation date, and URL.",
+        "params": {},
+        "destructive": False,
+    },
+    "recruit_contractor_affiliates": {
+        "description": "Run the affiliate recruiter bot's contractor pipeline: find active contractors without affiliate links, enroll them, send welcome emails with referral links, and report results.",
+        "params": {
+            "limit": {"type": "integer", "required": False, "default": 20, "description": "Max contractors to enroll this cycle"},
+        },
+        "destructive": False,
+    },
 }
 
 
@@ -270,10 +305,12 @@ class SovereignConsole:
         anthropic_key: str = "",
         get_db:        Callable,
         model:         str = "claude-sonnet-4-6",
+        broadcaster:   Optional[object] = None,
     ):
         self.anthropic_key = anthropic_key
         self.get_db        = get_db
         self.model         = model
+        self.broadcaster   = broadcaster
         self.enabled       = bool(anthropic_key)
         self.stats = {
             "commands_received": 0,
@@ -651,6 +688,207 @@ class SovereignConsole:
                 return {"type": "error", "error": f"invalid status '{status}' — must be new, contacted, qualified, closed, or rejected"}
             return {"type": "action", "delegated_to": "/api/v1/inbound/leads/update",
                     "body": {"lead_id": lead_id, "status": status}}
+
+        # ── JARVIS: GENERATE STORM PAGE ───────────────────────────────────
+        if action_name == "generate_storm_page":
+            city = params.get("city", "").strip()
+            state = params.get("state", "").strip().upper()
+            if not city or not state:
+                return {"type": "error", "error": "city and state are required (e.g. 'Dallas, TX')"}
+            if len(state) != 2 or not state.isalpha():
+                return {"type": "error", "error": f"state must be a 2-letter code, got '{state}'"}
+            # Generate the page using empire_storm_landing
+            from empire_storm_landing import _slugify, storm_landing_page
+            slug = _slugify(city, state)
+            # Render via thread pool to avoid blocking the event loop
+            page_html = await asyncio.to_thread(
+                storm_landing_page, city=city, state=state, slug=slug, get_db=self.get_db
+            )
+            # Log to generated_pages table
+            try:
+                db = self.get_db()
+                db.table("generated_pages").insert({
+                    "slug": slug,
+                    "page_type": "storm_landing",
+                    "city": city,
+                    "state": state,
+                    "url": f"/storm/{slug}",
+                    "html_length": len(page_html),
+                    "status": "active",
+                }).execute()
+            except Exception as log_e:
+                log.debug(f"[console] log generated_page: {log_e}")
+            # Broadcast to live dashboards
+            if hasattr(self, 'broadcaster') and self.broadcaster:
+                try:
+                    asyncio.create_task(self.broadcaster.broadcast({
+                        "type": "page_generated",
+                        "slug": slug,
+                        "city": city,
+                        "state": state,
+                        "page_type": "storm_landing",
+                    }))
+                except Exception:
+                    pass
+            return {
+                "type": "page_generated",
+                "title": f"Storm landing page for {city}, {state}",
+                "slug": slug,
+                "url": f"/storm/{slug}",
+                "city": city,
+                "state": state,
+                "html_size": len(page_html),
+                "message": f"✅ Built storm landing page for {city}, {state} at /storm/{slug}",
+            }
+
+        # ── JARVIS: SHOW SYSTEM STATUS ───────────────────────────────────
+        if action_name == "show_system_status":
+            try:
+                db = self.get_db()
+                status_data = {}
+                # Agent registry status
+                try:
+                    r = db.table("agent_registry").select("agent_name,status,last_ping,role_name") \
+                        .order("agent_name").limit(50).execute()
+                    status_data["agents"] = [
+                        {"name": a.get("agent_name", "?"), "status": a.get("status", "?"),
+                         "role": a.get("role_name", "?"), "last_ping": (a.get("last_ping") or "")[:16]}
+                        for a in (r.data or [])
+                    ]
+                except Exception:
+                    status_data["agents"] = []
+                # Active lanes
+                try:
+                    from mesh_orchestrator import LANES
+                    lane_count = len(LANES)
+                except Exception:
+                    lane_count = 32
+                # Revenue
+                try:
+                    from bots import predictive_revenue
+                    fc = predictive_revenue.per_lane_forecast() or {}
+                    rev_totals = fc.get("totals", {})
+                    rev_health = fc.get("health", {})
+                    status_data["revenue"] = {
+                        "revenue_24h": rev_totals.get("revenue_24h", 0),
+                        "mrr_projected": rev_totals.get("mrr_projected", 0),
+                        "active_buyers": rev_totals.get("active_buyers", 0),
+                        "lanes_active": rev_totals.get("lanes_active", 0),
+                        "health": rev_health.get("status", "unknown"),
+                    }
+                except Exception:
+                    status_data["revenue"] = {}
+                # Storm pages count
+                try:
+                    r = db.table("generated_pages").select("id", count="exact") \
+                        .eq("status", "active").execute()
+                    status_data["storm_pages"] = r.count or 0
+                except Exception:
+                    status_data["storm_pages"] = 0
+                # Bridge sessions
+                try:
+                    r = db.table("bridge_sessions").select("id", count="exact") \
+                        .is_("ended_at", "null").execute()
+                    status_data["active_sessions"] = r.count or 0
+                except Exception:
+                    status_data["active_sessions"] = 0
+
+                return {
+                    "type": "system_status",
+                    "title": "Empire AI System Status",
+                    "status": status_data,
+                    "generated_at": datetime.now(timezone.utc).isoformat(),
+                }
+            except Exception as e:
+                return {"type": "error", "error": f"status fetch failed: {e}"}
+
+        # ── JARVIS: GENERATE PREDICTIVE REPORT ───────────────────────────
+        if action_name == "generate_predictive_report":
+            days = int(params.get("days", 7))
+            try:
+                from bots import predictive_revenue
+                fc = predictive_revenue.comprehensive_forecast() or {}
+                narrative = fc.get("narrative", {})
+                per_lane = fc.get("per_lane", {})
+                health = fc.get("health", {})
+                sms_signal = fc.get("sms_log_signal", {})
+
+                return {
+                    "type": "predictive_report",
+                    "title": f"Predictive Revenue Report · {days}d",
+                    "executive_summary": narrative.get("executive_summary", "No narrative available"),
+                    "totals": per_lane.get("totals", {}),
+                    "health": health,
+                    "sms_signal": {
+                        "global_reply_rate": sms_signal.get("global_reply_rate", 0),
+                        "sent_24h": sms_signal.get("sent_24h", 0),
+                        "replied_24h": sms_signal.get("replied_24h", 0),
+                        "samples": sms_signal.get("samples", 0),
+                    },
+                    "narrative_highlights": narrative.get("lane_highlights", []),
+                    "risks": narrative.get("risks", []),
+                    "advice": narrative.get("actionable_advice", ""),
+                    "generated_at": datetime.now(timezone.utc).isoformat(),
+                }
+            except Exception as e:
+                return {"type": "error", "error": f"report generation failed: {e}"}
+
+        # ── JARVIS: LIST GENERATED PAGES ─────────────────────────────────
+        if action_name == "list_generated_pages":
+            try:
+                db = self.get_db()
+                r = db.table("generated_pages").select("slug,page_type,city,state,url,status,created_at") \
+                    .order("created_at", desc=True).limit(50).execute()
+                pages = [
+                    {
+                        "slug": p.get("slug", ""),
+                        "type": p.get("page_type", ""),
+                        "city": p.get("city", ""),
+                        "state": p.get("state", ""),
+                        "url": p.get("url", ""),
+                        "status": p.get("status", ""),
+                        "created": (p.get("created_at") or "")[:16],
+                    }
+                    for p in (r.data or [])
+                ]
+                return {
+                    "type": "list",
+                    "title": f"Generated Pages ({len(pages)})",
+                    "rows": pages,
+                }
+            except Exception as e:
+                return {"type": "error", "error": f"list failed: {e}"}
+
+        # ── JARVIS: RECRUIT CONTRACTOR AFFILIATES ────────────────────────────
+        if action_name == "recruit_contractor_affiliates":
+            limit = int(params.get("limit", 20))
+            try:
+                from bots.affiliate_recruiter import AffiliateRecruiter
+                recruiter = AffiliateRecruiter()
+                # Run the contractor-specific prospect cycle
+                results = await recruiter.run_cycle()
+                # Get a pipeline snapshot
+                snap = recruiter.snapshot()
+                return {
+                    "type": "list",
+                    "title": f"Contractor Affiliate Recruitment · {results.get('enrolled', 0)} enrolled",
+                    "rows": [
+                        {"label": "Buyers found", "value": results.get("buyers_found", 0)},
+                        {"label": "Contractors found", "value": results.get("contractors_found", 0)},
+                        {"label": "Affiliates enrolled", "value": results.get("enrolled", 0)},
+                        {"label": "Welcome emails sent", "value": results.get("welcomes_sent", 0)},
+                        {"label": "Nurture emails sent", "value": results.get("nurtures_sent", 0)},
+                    ],
+                    "snapshot": {
+                        "total_affiliates": snap.get("pipeline", {}).get("total_affiliates", 0),
+                        "active_affiliates": snap.get("pipeline", {}).get("active_affiliates", 0),
+                        "remaining_buyer_targets": snap.get("pipeline", {}).get("remaining_buyer_targets", 0),
+                    },
+                    "message": f"Cycle complete. {results.get('enrolled', 0)} new affiliates enrolled, {results.get('welcomes_sent', 0)} welcome emails sent.",
+                }
+            except Exception as e:
+                log.warning(f"[console] recruit_contractor_affiliates failed: {e}")
+                return {"type": "error", "error": f"Affiliate recruitment failed: {e}"}
 
         return {"type": "error", "error": f"action handler not implemented: {action_name}"}
 

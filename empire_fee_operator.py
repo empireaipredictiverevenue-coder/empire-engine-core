@@ -28,6 +28,7 @@ meta with the fee_event_id so the operator can trace it back.
 
 Returns: {"ok": true, "fee_event": {...}, "dispatch_id": "<uuid>"}
 """
+import asyncio
 import logging
 import os
 from datetime import datetime, timezone
@@ -138,6 +139,17 @@ def register_operator_mark_settled(
                 log.warning(f"[fee] operator-mark-settled: failed to backfill fee_event_id on dispatch {dispatch_id}: {backfill_err}")
 
             log.info(f"[fee] operator-mark-settled: dispatch={dispatch_id} amount=${claim_amount} fee=${fee} contractor={dispatch.get('contractor_id')} lead={enriched_lead_id}")
+
+            # ── Referral bounty check: if this is the contractor's first fee_event,
+            # automatically mark any pending referral bounties as 'earned' ────
+            if dispatch.get("contractor_id") and inserted_id:
+                try:
+                    from bots.bounty_tracker import check_bounty_eligible
+                    bounty_event = dict(fee_event, id=inserted_id)
+                    asyncio.create_task(check_bounty_eligible(bounty_event, db=db))
+                except Exception as bounty_err:
+                    log.warning(f"[fee] bounty check failed (non-fatal): {bounty_err}")
+
             return {
                 "ok": True,
                 "fee_event": {

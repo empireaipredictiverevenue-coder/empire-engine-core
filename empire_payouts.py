@@ -1242,3 +1242,373 @@ def register_payout_routes(
             raise HTTPException(500, str(e))
 
     log.info("[payouts] Routes registered · /api/v1/payouts/{pending,approve,attribute,cancel,stats,history}")
+
+
+def register_bounty_payout_routes(app: FastAPI, *, require_auth: Callable, payout_engine: Optional[PayoutEngine] = None):
+    """
+    Wire referral bounty payout operator endpoints.
+
+    These manage the `referral_payouts` table (status='payout_requested')
+    where contractors have requested payout of earned referral bounties.
+
+    If payout_engine is provided, approve will attempt a USDC transfer.
+    Otherwise it marks as paid without on-chain transfer.
+    """
+
+    @app.get("/api/v1/bounty-payouts/pending")
+    async def bounty_payouts_pending(auth: bool = Depends(require_auth)):
+        """Return referral_payouts with status='payout_requested', enriched with referrer name."""
+        try:
+            db = payout_engine.get_db() if payout_engine else None
+            if db is None:
+                from supabase import create_client
+                db = create_client(
+                    os.environ.get("SUPABASE_URL", ""),
+                    os.environ.get("SUPABASE_SERVICE_KEY", ""),
+                )
+
+            # Query referral_payouts with status='payout_requested' and join contractor name
+            res = db.table("referral_payouts").select("*") \
+                .eq("status", "payout_requested") \
+                .order("created_at", desc=True).limit(50).execute()
+            rows = res.data or []
+
+            # Enrich with referrer name + wallet from contractors table
+            enriched = []
+            for r in rows:
+                referrer_id = r.get("referrer_contractor_id")
+                referrer_name = None
+                referrer_wallet = None
+                referrer_email = None
+                payout_method = None
+                payout_address = None
+
+                # Get contractor info
+                if referrer_id:
+                    try:
+                        c_res = db.table("contractors").select("name,solana_wallet,email") \
+                            .eq("id", referrer_id).limit(1).execute()
+                        if c_res.data:
+                            referrer_name = c_res.data[0].get("name")
+                            referrer_wallet = c_res.data[0].get("solana_wallet")
+                            referrer_email = c_res.data[0].get("email")
+                    except Exception:
+                        pass
+
+                # Pull payout method from meta
+                meta = r.get("meta") or {}
+                if isinstance(meta, str):
+                    import json as _j
+                    try:
+                        meta = _j.loads(meta)
+                    except Exception:
+                        meta = {}
+                payout_method = meta.get("payout_method") or "usdc_solana"
+                payout_address = meta.get("payout_address") or referrer_wallet or ""
+
+                enriched.append({
+                    "id": r["id"],
+                    "created_at": r.get("created_at"),
+                    "referrer_contractor_id": referrer_id,
+                    "referrer_name": referrer_name,
+                    "referrer_email": referrer_email,
+                    "referrer_wallet": referrer_wallet,
+                    "bounty_amount": float(r.get("bounty_amount", 0) or 0),
+                    "payout_method": payout_method,
+                    "payout_address": payout_address,
+                    "status": r.get("status"),
+                    "contractor_referral_id": r.get("contractor_referral_id"),
+                })
+
+            return {"pending": enriched}
+        except Exception as e:
+            raise HTTPException(500, str(e))
+
+    @app.post("/api/v1/bounty-payouts/approve")
+    async def bounty_payouts_approve(request: Request, auth: bool = Depends(require_auth)):
+        """
+        Approve a referral bounty payout request.
+
+        Body: {"payout_id": "<uuid>", "tx_sig": "<optional-solana-sig>"}
+
+        Marks referral_payouts status as 'paid' and updates the
+        corresponding contractor_referrals bounty_status to 'paid'.
+
+        If payout_engine is configured and no tx_sig is provided, attempts
+        an automatic USDC transfer to the referrer's solana_wallet.
+        """
+        try:
+            body = await request.json()
+        except Exception:
+            raise HTTPException(400, "Invalid JSON")
+
+        payout_id = body.get("payout_id")
+        if not payout_id:
+            raise HTTPException(400, "payout_id required")
+
+        tx_sig = body.get("tx_sig") or ""
+
+        try:
+            db = payout_engine.get_db() if payout_engine else None
+            if db is None:
+                from supabase import create_client
+                db = create_client(
+                    os.environ.get("SUPABASE_URL", ""),
+                    os.environ.get("SUPABASE_SERVICE_KEY", ""),
+                )
+
+            # Fetch the payout row
+            p_res = db.table("referral_payouts").select("*") \
+                .eq("id", payout_id).limit(1).execute()
+            if not p_res.data:
+                raise HTTPException(404, "payout not found")
+
+            payout_row = p_res.data[0]
+            if payout_row.get("status") != "payout_requested":
+                raise HTTPException(400, f"payout status is '{payout_row.get('status')}', expected 'payout_requested'")
+
+            # Attempt USDC transfer if no tx_sig provided and engine is available
+            if not tx_sig and payout_engine and payout_engine.execution_enabled:
+                referrer_id = payout_row.get("referrer_contractor_id")
+                if referrer_id:
+                    c_res = db.table("contractors").select("solana_wallet,name") \
+                        .eq("id", referrer_id).limit(1).execute()
+                    if c_res.data and c_res.data[0].get("solana_wallet"):
+                        wallet = c_res.data[0]["solana_wallet"]
+                        amount = float(payout_row.get("bounty_amount", 0) or 0)
+                        try:
+                            sig = await payout_engine._build_and_send_usdc_transfer(
+                                to_wallet=wallet,
+                                amount_usdc=amount,
+                            )
+                            if sig:
+                                tx_sig = sig
+                        except Exception as e:
+                            log.warning(f"[bounty-payouts] USDC transfer failed: {e} · marking as paid without tx")
+
+            # Update referral_payouts
+            now = datetime.now(timezone.utc).isoformat()
+            update_data = {
+                "status": "paid",
+                "paid_at": now,
+            }
+            if tx_sig:
+                meta = payout_row.get("meta") or {}
+                if isinstance(meta, str):
+                    import json as _j
+                    try:
+                        meta = _j.loads(meta)
+                    except Exception:
+                        meta = {}
+                meta["tx_sig"] = tx_sig
+                update_data["meta"] = meta
+
+            db.table("referral_payouts").update(update_data) \
+                .eq("id", payout_id).execute()
+
+            # Update contractor_referrals bounty_status to paid
+            cr_id = payout_row.get("contractor_referral_id")
+            if cr_id:
+                db.table("contractor_referrals").update({
+                    "bounty_status": "paid",
+                    "bounty_paid_at": now,
+                }).eq("id", cr_id).execute()
+
+            # Ntfy notification
+            if payout_engine and payout_engine.ntfy_topic:
+                try:
+                    import httpx as _hx
+                    headers = {
+                        "Title": f"✅ Bounty Paid · ${float(payout_row.get('bounty_amount', 0)):.2f}",
+                        "Priority": "high",
+                        "Tags": "moneybag",
+                    }
+                    if payout_engine.ntfy_token:
+                        headers["Authorization"] = f"Bearer {payout_engine.ntfy_token}"
+                    async with _hx.AsyncClient(timeout=5) as c:
+                        await c.post(
+                            f"https://ntfy.sh/{payout_engine.ntfy_topic}",
+                            data=(
+                                f"Referral bounty paid.\n"
+                                f"Payout: {payout_id[:8]}...\n"
+                                f"Amount: ${float(payout_row.get('bounty_amount', 0)):.2f}\n"
+                                f"Referrer: {payout_row.get('referrer_contractor_id', '?')[:8]}...\n"
+                                f"Tx: {tx_sig[:20] if tx_sig else 'offline'}..."
+                            ),
+                            headers=headers,
+                        )
+                except Exception:
+                    pass
+
+            log.info(f"[bounty-payouts] Approved payout {payout_id[:8]}... · ${float(payout_row.get('bounty_amount', 0)):.2f} · tx_sig={tx_sig[:20] if tx_sig else 'none'}")
+
+            return {"ok": True, "payout_id": payout_id, "tx_sig": tx_sig or None}
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(500, str(e))
+
+    @app.post("/api/v1/bounty-payouts/reject")
+    async def bounty_payouts_reject(request: Request, auth: bool = Depends(require_auth)):
+        """
+        Reject a referral bounty payout request. Reverts the payout back to
+        'earned' status so the contractor can request again later.
+
+        Body: {"payout_id": "<uuid>", "reason": "optional reason"}
+        """
+        try:
+            body = await request.json()
+        except Exception:
+            raise HTTPException(400, "Invalid JSON")
+
+        payout_id = body.get("payout_id")
+        if not payout_id:
+            raise HTTPException(400, "payout_id required")
+
+        reason = body.get("reason", "Rejected by operator")
+
+        try:
+            db = payout_engine.get_db() if payout_engine else None
+            if db is None:
+                from supabase import create_client
+                db = create_client(
+                    os.environ.get("SUPABASE_URL", ""),
+                    os.environ.get("SUPABASE_SERVICE_KEY", ""),
+                )
+
+            p_res = db.table("referral_payouts").select("*") \
+                .eq("id", payout_id).limit(1).execute()
+            if not p_res.data:
+                raise HTTPException(404, "payout not found")
+
+            payout_row = p_res.data[0]
+            if payout_row.get("status") != "payout_requested":
+                raise HTTPException(400, f"payout status is '{payout_row.get('status')}', expected 'payout_requested'")
+
+            # Mark referral_payouts as cancelled
+            meta = payout_row.get("meta") or {}
+            if isinstance(meta, str):
+                import json as _j
+                try:
+                    meta = _j.loads(meta)
+                except Exception:
+                    meta = {}
+            meta["rejection_reason"] = reason
+
+            db.table("referral_payouts").update({
+                "status": "cancelled",
+                "meta": meta,
+            }).eq("id", payout_id).execute()
+
+            # Revert contractor_referrals bounty_status back to 'earned'
+            cr_id = payout_row.get("contractor_referral_id")
+            if cr_id:
+                db.table("contractor_referrals").update({
+                    "bounty_status": "earned",
+                }).eq("id", cr_id).execute()
+
+            log.info(f"[bounty-payouts] Rejected payout {payout_id[:8]}... · reason: {reason[:80]}")
+
+            return {"ok": True, "payout_id": payout_id}
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(500, str(e))
+
+    @app.get("/api/v1/bounty-payouts/history")
+    async def bounty_payouts_history(
+        limit: int = Query(50, ge=1, le=200),
+        auth: bool = Depends(require_auth),
+    ):
+        """Recent processed bounty payouts (paid or cancelled)."""
+        try:
+            db = payout_engine.get_db() if payout_engine else None
+            if db is None:
+                from supabase import create_client
+                db = create_client(
+                    os.environ.get("SUPABASE_URL", ""),
+                    os.environ.get("SUPABASE_SERVICE_KEY", ""),
+                )
+
+            res = db.table("referral_payouts").select("*") \
+                .in_("status", ["paid", "cancelled"]) \
+                .order("created_at", desc=True).limit(limit).execute()
+            rows = res.data or []
+
+            # Enrich with referrer name
+            enriched = []
+            for r in rows:
+                referrer_id = r.get("referrer_contractor_id")
+                referrer_name = None
+                if referrer_id:
+                    try:
+                        c_res = db.table("contractors").select("name") \
+                            .eq("id", referrer_id).limit(1).execute()
+                        if c_res.data:
+                            referrer_name = c_res.data[0].get("name")
+                    except Exception:
+                        pass
+
+                enriched.append({
+                    "id": r["id"],
+                    "created_at": r.get("created_at"),
+                    "paid_at": r.get("paid_at"),
+                    "referrer_name": referrer_name,
+                    "bounty_amount": float(r.get("bounty_amount", 0) or 0),
+                    "status": r.get("status"),
+                    "meta": r.get("meta"),
+                })
+
+            return {"history": enriched}
+        except Exception as e:
+            raise HTTPException(500, str(e))
+
+    @app.get("/api/v1/bounty-payouts/stats")
+    async def bounty_payouts_stats(auth: bool = Depends(require_auth)):
+        """Bounty payout stats summary."""
+        try:
+            db = payout_engine.get_db() if payout_engine else None
+            if db is None:
+                from supabase import create_client
+                db = create_client(
+                    os.environ.get("SUPABASE_URL", ""),
+                    os.environ.get("SUPABASE_SERVICE_KEY", ""),
+                )
+
+            # Count by status
+            r = db.table("referral_payouts").select("status,bounty_amount").limit(5000).execute()
+            rows = r.data or []
+
+            counts = {}
+            total_amount = 0.0
+            pending_requested = 0
+            pending_amount = 0.0
+            paid_count = 0
+            paid_amount = 0.0
+
+            for row in rows:
+                s = row.get("status", "")
+                amt = float(row.get("bounty_amount", 0) or 0)
+                counts[s] = counts.get(s, 0) + 1
+                total_amount += amt
+                if s == "payout_requested":
+                    pending_requested += 1
+                    pending_amount += amt
+                elif s == "paid":
+                    paid_count += 1
+                    paid_amount += amt
+
+            return {
+                "ok": True,
+                "by_status": counts,
+                "total_payouts": len(rows),
+                "total_amount_usd": round(total_amount, 2),
+                "pending_requested": pending_requested,
+                "pending_amount_usd": round(pending_amount, 2),
+                "paid_count": paid_count,
+                "paid_amount_usd": round(paid_amount, 2),
+            }
+        except Exception as e:
+            raise HTTPException(500, str(e))
+
+    log.info("[bounty-payouts] Routes registered · /api/v1/bounty-payouts/{pending,approve,reject,history,stats}")

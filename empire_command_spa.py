@@ -585,6 +585,8 @@ _SPA_CSS = """
 .rv-usdc-panel{background:var(--empire-surface);border:1px solid var(--empire-border);padding:20px;margin-bottom:20px;margin-top:20px}
 .rv-usdc-panel .tbl thead th{background:var(--empire-elevated)}
 .rv-usdc-panel .stat-value{font-size:22px;line-height:1.2}
+.rv-referral-panel{background:var(--empire-surface);border:1px solid var(--empire-border);padding:20px;margin-bottom:20px;margin-top:20px}
+.rv-referral-panel .tbl thead th{background:var(--empire-elevated)}
 
 .chart-bar:hover{opacity:1 !important;filter:brightness(1.2)}
 .chart-donut{display:flex;align-items:center;gap:16px}
@@ -1908,6 +1910,23 @@ function Closer() {
         </div>
       </div>
     </div>
+  ${profileCtr ? html`
+    <div style="position:fixed;inset:0;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;z-index:9999" onClick=${() => setProfileCtr(null)}>
+      <div style="background:var(--empire-surface);border:1px solid var(--empire-border);padding:28px 32px;max-width:420px;width:90%;position:relative;color:var(--empire-white)" onClick=${e => e.stopPropagation()}>
+        <button style="position:absolute;top:12px;right:16px;background:none;border:none;color:var(--empire-mist);font-size:18px;cursor:pointer;font-family:var(--font-mono)" onClick=${() => setProfileCtr(null)}>✕</button>
+        <div style="font-size:18px;font-weight:500;margin-bottom:4px">${profileCtr.name || 'Contractor'}</div>
+        <div style="font-family:var(--font-mono);font-size:10px;color:var(--empire-mist);margin-bottom:16px">${profileCtr.metro || '—'}</div>
+        <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--empire-divider);font-family:var(--font-mono);font-size:10px">
+          <span style="color:var(--empire-mist)">Trust Score</span>
+          <span style="color:var(--signal-teal);font-weight:600">${profileCtr.trust_score != null ? profileCtr.trust_score.toFixed(1) + ' / 10' : '—'}</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--empire-divider);font-family:var(--font-mono);font-size:10px">
+          <span style="color:var(--empire-mist)">Specialties</span>
+          <span style="color:var(--signal-teal);font-weight:600">${profileCtr.specialties && profileCtr.specialties.length > 0 ? profileCtr.specialties.join(', ') : '—'}</span>
+        </div>
+      </div>
+    </div>
+  ` : ''}
   `;
 }
 
@@ -3355,6 +3374,12 @@ function Payouts() {
   const [stats, setStats] = useState(null);
   const [err, setErr] = useState(null);
   const [busy, setBusy] = useState(null);
+  // Bounty payout state
+  const [bountyPending, setBountyPending] = useState(null);
+  const [bountyHistory, setBountyHistory] = useState(null);
+  const [bountyStats, setBountyStats] = useState(null);
+  const [bountyErr, setBountyErr] = useState(null);
+  const [bountyTab, setBountyTab] = useState('pending');
 
   const reload = async () => {
     try {
@@ -3367,6 +3392,17 @@ function Payouts() {
       setHistory(h.history || (Array.isArray(h) ? h : []));
       setStats(s || {});
     } catch (e) { setErr(e.message); }
+    // Load bounty data
+    try {
+      const [bp, bh, bs] = await Promise.all([
+        apiFetch('/api/v1/bounty-payouts/pending').then(r => r.json()),
+        apiFetch('/api/v1/bounty-payouts/history?limit=20').then(r => r.json()),
+        apiFetch('/api/v1/bounty-payouts/stats').then(r => r.json()),
+      ]);
+      setBountyPending(bp.pending || []);
+      setBountyHistory(bh.history || []);
+      setBountyStats(bs || {});
+    } catch (e) { setBountyErr(e.message); }
   };
   useEffect(() => { reload(); }, []);
 
@@ -3381,47 +3417,120 @@ function Payouts() {
     setBusy(null);
   };
 
+  // Bounty payout actions
+  const bountyAct = async (id, action) => {
+    const label = action === 'approve' ? 'Pay' : 'Reject';
+    if (!confirm(label + ' bounty payout ' + id.slice(0,8) + '?')) return;
+    setBusy('bounty-' + id);
+    try {
+      await apiFetch('/api/v1/bounty-payouts/' + action, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ payout_id: id, reason: 'Approved by operator' }),
+      });
+      await reload();
+    } catch (e) { alert('Failed: ' + e.message); }
+    setBusy(null);
+  };
+
+  const fmtUsd = (n) => '$' + Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
   if (err) return html`<div class="stub"><div class="stub-body">${err}</div></div>`;
   if (!pending) return html`<div class="stub"><div class="stub-body">Loading…</div></div>`;
   const mode = (stats && stats.mode) || 'DRY-RUN';
+
   return html`
     <div>
-      <div class="section-h"><div><div class="section-title">Payouts</div><div class="section-sub">Pending · history · approvals</div></div></div>
-      <div class="sec-meta">Mode: <strong>${mode}</strong> · Pending count: <strong>${pending.length}</strong></div>
-      <div class="panel" style=${{marginBottom: '16px'}}>
-        <div class="panel-head">Pending approval</div>
-        ${pending.length === 0
-          ? html`<div class="tbl-empty">No pending payouts.</div>`
-          : html`<table class="tbl"><thead><tr>
-              <th>Recipient</th><th>Type</th><th class="tbl-num">USDC</th><th>Created</th><th>Actions</th>
-            </tr></thead><tbody>
-            ${pending.map(p => html`<tr key=${p.id}>
-              <td class="tbl-mono">${String(p.recipient_wallet || '').slice(0,16)}…</td>
-              <td>${p.recipient_type || '—'}</td>
-              <td class="tbl-num"><strong>${p.amount_usdc}</strong></td>
-              <td class="tbl-mono">${String(p.created_at || '').slice(0,16).replace('T',' ')}</td>
-              <td>
-                <button class="tbl-action go" disabled=${busy === p.id} onClick=${() => act(p.id, 'approve')}>Approve</button>
-                <button class="tbl-action danger" disabled=${busy === p.id} onClick=${() => act(p.id, 'cancel')}>Cancel</button>
-              </td>
-            </tr>`)}
-          </tbody></table>`}
+      <div class="section-h"><div><div class="section-title">Payouts</div><div class="section-sub">Settlements · bounty referrals</div></div><div class="sec-actions"><button class="tbl-action go" onClick=${reload}>↻ Refresh</button></div></div>
+
+      <div class="pulse-tabs">
+        <button class="pulse-tab ${bountyTab === 'settlement' ? 'active' : ''}" onClick=${() => setBountyTab('settlement')}>Settlement</button>
+        <button class="pulse-tab ${bountyTab !== 'settlement' ? 'active' : ''}" onClick=${() => setBountyTab('pending')}>Bounty Payouts</button>
       </div>
-      <div class="panel">
-        <div class="panel-head">Recent history</div>
-        ${(!history || history.length === 0)
-          ? html`<div class="tbl-empty">No payouts yet.</div>`
-          : html`<table class="tbl"><thead><tr>
-              <th>When</th><th>Recipient</th><th class="tbl-num">USDC</th><th>Status</th>
-            </tr></thead><tbody>
-            ${history.map(p => html`<tr key=${p.id}>
-              <td class="tbl-mono">${String(p.executed_at || p.created_at || '').slice(0,16).replace('T',' ')}</td>
-              <td class="tbl-mono">${String(p.recipient_wallet || '').slice(0,16)}…</td>
-              <td class="tbl-num">${p.amount_usdc}</td>
-              <td>${p.status || '—'}</td>
-            </tr>`)}
-          </tbody></table>`}
-      </div>
+
+      ${bountyTab === 'settlement' ? html`
+        <div class="sec-meta">Mode: <strong>${mode}</strong> · Pending count: <strong>${pending.length}</strong></div>
+        <div class="panel" style=${{marginBottom: '16px'}}>
+          <div class="panel-head">Pending approval</div>
+          ${pending.length === 0
+            ? html`<div class="tbl-empty">No pending payouts.</div>`
+            : html`<table class="tbl"><thead><tr>
+                <th>Recipient</th><th>Type</th><th class="tbl-num">USDC</th><th>Created</th><th>Actions</th>
+              </tr></thead><tbody>
+              ${pending.map(p => html`<tr key=${p.id}>
+                <td class="tbl-mono">${String(p.recipient_wallet || '').slice(0,16)}…</td>
+                <td>${p.recipient_type || '—'}</td>
+                <td class="tbl-num"><strong>${p.amount_usdc}</strong></td>
+                <td class="tbl-mono">${String(p.created_at || '').slice(0,16).replace('T',' ')}</td>
+                <td>
+                  <button class="tbl-action go" disabled=${busy === p.id} onClick=${() => act(p.id, 'approve')}>Approve</button>
+                  <button class="tbl-action danger" disabled=${busy === p.id} onClick=${() => act(p.id, 'cancel')}>Cancel</button>
+                </td>
+              </tr>`)}
+            </tbody></table>`}
+        </div>
+        <div class="panel">
+          <div class="panel-head">Recent history</div>
+          ${(!history || history.length === 0)
+            ? html`<div class="tbl-empty">No payouts yet.</div>`
+            : html`<table class="tbl"><thead><tr>
+                <th>When</th><th>Recipient</th><th class="tbl-num">USDC</th><th>Status</th>
+              </tr></thead><tbody>
+              ${history.map(p => html`<tr key=${p.id}>
+                <td class="tbl-mono">${String(p.executed_at || p.created_at || '').slice(0,16).replace('T',' ')}</td>
+                <td class="tbl-mono">${String(p.recipient_wallet || '').slice(0,16)}…</td>
+                <td class="tbl-num">${p.amount_usdc}</td>
+                <td>${p.status || '—'}</td>
+              </tr>`)}
+            </tbody></table>`}
+        </div>
+      ` : html`
+        ${bountyErr ? html`<div class="sec-meta" style=${{color:'var(--status-red)'}}>Error: ${bountyErr}</div>` : ''}
+        ${bountyStats ? html`
+        <div class="fee-stats">
+          <div class="fee-stat"><div class="fee-stat-label">Pending requests</div><div class="fee-stat-value" style=${{color:'var(--status-amber)'}}>${bountyStats.pending_requested || 0}</div></div>
+          <div class="fee-stat"><div class="fee-stat-label">Pending amount</div><div class="fee-stat-value" style=${{color:'var(--status-amber)'}}>${fmtUsd(bountyStats.pending_amount_usd)}</div></div>
+          <div class="fee-stat"><div class="fee-stat-label">Paid bounties</div><div class="fee-stat-value teal">${bountyStats.paid_count || 0}</div></div>
+          <div class="fee-stat"><div class="fee-stat-label">Total paid</div><div class="fee-stat-value teal">${fmtUsd(bountyStats.paid_amount_usd)}</div></div>
+        </div>
+        ` : ''}
+
+        <div class="panel" style=${{marginBottom: '16px'}}>
+          <div class="panel-head">Pending Bounty Payout Requests</div>
+          ${!bountyPending ? html`<div class="tbl-empty">Loading…</div>` : bountyPending.length === 0
+            ? html`<div class="tbl-empty">No pending bounty payout requests.</div>`
+            : html`<table class="tbl"><thead><tr>
+                <th>Referrer</th><th>Wallet / Email</th><th class="tbl-num">Bounty</th><th>Requested</th><th>Actions</th>
+              </tr></thead><tbody>
+              ${bountyPending.map(p => html`<tr key=${p.id}>
+                <td><strong>${p.referrer_name || 'Unknown'}</strong></td>
+                <td class="tbl-mono" style=${{fontSize:'10px'}}>${p.payout_address ? String(p.payout_address).slice(0,24) + '…' : (p.referrer_email || '')}</td>
+                <td class="tbl-num"><strong style=${{color:'var(--signal-teal)'}}>${fmtUsd(p.bounty_amount)}</strong></td>
+                <td class="tbl-mono">${String(p.created_at || '').slice(0,16).replace('T',' ')}</td>
+                <td>
+                  <button class="tbl-action go" disabled=${busy === 'bounty-' + p.id} onClick=${() => bountyAct(p.id, 'approve')}>Pay</button>
+                  <button class="tbl-action danger" disabled=${busy === 'bounty-' + p.id} onClick=${() => bountyAct(p.id, 'reject')}>Reject</button>
+                </td>
+              </tr>`)}
+            </tbody></table>`}
+        </div>
+
+        <div class="panel">
+          <div class="panel-head">Bounty Payout History</div>
+          ${!bountyHistory ? html`<div class="tbl-empty">Loading…</div>` : bountyHistory.length === 0
+            ? html`<div class="tbl-empty">No bounty history yet.</div>`
+            : html`<table class="tbl"><thead><tr>
+                <th>When</th><th>Referrer</th><th class="tbl-num">Amount</th><th>Status</th>
+              </tr></thead><tbody>
+              ${bountyHistory.map(p => html`<tr key=${p.id}>
+                <td class="tbl-mono">${String(p.paid_at || p.created_at || '').slice(0,16).replace('T',' ')}</td>
+                <td><strong>${p.referrer_name || 'Unknown'}</strong></td>
+                <td class="tbl-num">${fmtUsd(p.bounty_amount)}</td>
+                <td><span class="status-pill status-${p.status === 'paid' ? 'sent' : 'cancelled'}">${p.status}</span></td>
+              </tr>`)}
+            </tbody></table>`}
+        </div>
+      `}
     </div>
   `;
 }
@@ -6121,6 +6230,8 @@ function Revenue({ events, wsConnected }) {
   const [forecast, setForecast] = useState(null);
   const [accuracy, setAccuracy] = useState(null);
   const [mrrData, setMrrData] = useState(null);
+  const [refLeaderboard, setRefLeaderboard] = useState(null);
+  const [profileCtr, setProfileCtr] = useState(null);
   const [err, setErr] = useState(null);
 
   const reload = useCallback(async () => {
@@ -6139,6 +6250,11 @@ function Revenue({ events, wsConnected }) {
         const mr = await (await apiFetch("/api/revenue/mrr")).json();
         setMrrData(mr);
       } catch(e) { /* MRR timeout okay */ }
+      // Fetch referral leaderboard
+      try {
+        const lb = await apiFetch('/api/v1/referral-leaderboard?limit=10').then(x => x.json());
+        setRefLeaderboard(lb);
+      } catch(e) { /* non-critical */ }
       setErr(null);
     } catch (e) {
       if (e.message !== 'Unauthorized') setErr(e.message);
@@ -6350,6 +6466,49 @@ function Revenue({ events, wsConnected }) {
         <div style="font-family:var(--font-mono);font-size:9px;color:var(--empire-fog);margin-top:10px;text-align:right;letter-spacing:.04em">Source: crypto_payment_requests &middot; refresh on page load</div>
       </div>
       ` : ''}
+
+      <!-- ── Referral Leaderboard ── -->
+      ${refLeaderboard && refLeaderboard.leaderboard && refLeaderboard.leaderboard.length > 0 ? html`
+      <div class="rv-referral-panel" style="margin-top:0">
+        <div class="chart-panel-h" style="margin-bottom:0;padding-bottom:0;border-bottom:none">
+          <span class="chart-panel-title">Referral Leaderboard</span>
+          <span class="chart-panel-tag">${refLeaderboard.total_referrers || 0} referrers · top earners</span>
+        </div>
+        <table class="tbl" style="margin-top:12px">
+          <thead>
+            <tr>
+              <th class="tbl-num">#</th>
+              <th>Referrer</th>
+              <th class="tbl-num">Referred</th>
+              <th class="tbl-num">Total Earned</th>
+              <th class="tbl-num">Paid</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${refLeaderboard.leaderboard.map(e => html`
+              <tr key=${e.rank}>
+                <td class="tbl-num" style="font-weight:${e.rank <= 3 ? '700' : '400'};color:${e.rank === 1 ? 'var(--status-amber)' : e.rank <= 3 ? 'var(--signal-teal)' : 'var(--empire-fog)'}">
+                  ${e.rank === 1 ? '\uD83E\uDD47 ' : e.rank === 2 ? '\uD83E\uDD48 ' : e.rank === 3 ? '\uD83E\uDD49 ' : ''}${e.rank}
+                </td>
+                <td style="font-weight:600">${e.is_you ? html`<span style="color:var(--signal-teal)">${e.name} ← You</span>` : html`<span style="cursor:pointer;border-bottom:1px dotted var(--empire-fog);color:var(--empire-silver)" onclick="(() => { fetch('/api/v1/contractor-public/' + encodeURIComponent(e.id)).then(r => r.json()).then(d => { if (d.ok) setProfileCtr(d); else setProfileCtr({ name: 'Not found' }); }).catch(() => setProfileCtr({ name: 'Error' })); })()">${e.name}</span>`}</td>
+                <td class="tbl-num">${e.total_referrals}</td>
+                <td class="tbl-num" style="color:var(--status-amber);font-weight:600">$${Number(e.total_earned).toLocaleString(undefined, {minimumFractionDigits:2})}</td>
+                <td class="tbl-num" style="color:var(--signal-teal)">$${Number(e.total_paid).toLocaleString(undefined, {minimumFractionDigits:2})}</td>
+              </tr>
+            `)}
+          </tbody>
+        </table>
+        <div style="font-family:var(--font-mono);font-size:9px;color:var(--empire-fog);margin-top:10px;text-align:right;letter-spacing:.04em">Source: referral_payouts · $500 bounty per contractor referral · 60s refresh</div>
+      </div>
+      ` : html`
+      <div class="rv-referral-panel" style="margin-top:0">
+        <div class="chart-panel-h" style="margin-bottom:0;padding-bottom:0;border-bottom:none">
+          <span class="chart-panel-title">Referral Leaderboard</span>
+          <span class="chart-panel-tag">no bounties earned yet</span>
+        </div>
+        <div class="tbl-empty" style="padding:32px 0">No referrals with earned bounties yet. Share contractor referral links to start earning $500 per closed deal.</div>
+      </div>
+      `}
 
           `;
         })()}

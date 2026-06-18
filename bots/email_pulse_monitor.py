@@ -17,6 +17,7 @@ import json
 import asyncio
 import logging
 import time
+import uuid as _uuid
 from datetime import datetime, timezone, timedelta
 from collections import defaultdict
 
@@ -244,16 +245,17 @@ async def run_loop(interval_minutes: int = None):
                 new_tracking_count = tracking_result.get("new_opens", 0) + tracking_result.get("new_clicks", 0)
                 sb.table("agent_activity").insert({
                     "agent_name": AGENT_NAME,
-                    "run_id": f"pulse_{cycles}_{int(time.time())}",
+                    "run_id": str(_uuid.uuid4()),
                     "started_at": datetime.now(timezone.utc).isoformat(),
+                    "finished_at": datetime.now(timezone.utc).isoformat(),
                     "status": "ok",
                     "rows_seen": queue.get("overdue_count", 0),
                     "rows_processed": new_dispatch_count + new_tracking_count,
                     "rows_errored": 0,
                     "summary": f"{queue['overdue_count']} overdue, {new_dispatch_count} new dispatches, {new_tracking_count} new events",
                 }).execute()
-            except Exception:
-                pass
+            except Exception as e:
+                log.warning(f"agent_activity insert failed: {e}")
 
             cycles += 1
         except Exception as e:
