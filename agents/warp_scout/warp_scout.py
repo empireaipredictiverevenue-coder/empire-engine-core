@@ -42,6 +42,7 @@ except ImportError:
     pass
 
 from supabase import create_client
+from agents.event_emitter import emit_agent_event
 
 log = logging.getLogger("empire.warp_scout")
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(name)s] %(message)s")
@@ -76,20 +77,12 @@ def _read_config(sb):
 def _log_activity(sb, run_id, started_at, status,
                   rows_seen=0, rows_processed=0, rows_errored=0,
                   error=None, summary=None):
-    finished_at = datetime.now(timezone.utc).isoformat()
-    sb.table("agent_activity").insert({
-        "agent_name": AGENT_NAME,
-        "run_id": str(run_id),
-        "started_at": started_at.isoformat(),
-        "finished_at": finished_at,
-        "status": status,
-        "rows_seen": rows_seen,
-        "rows_processed": rows_processed,
-        "rows_errored": rows_errored,
-        "error": error,
-        "summary": summary,
-    }).execute()
-    return finished_at
+    return emit_agent_event(
+        sb=sb, agent_name=AGENT_NAME, run_id=run_id,
+        started_at=started_at, status=status,
+        rows_seen=rows_seen, rows_processed=rows_processed,
+        rows_errored=rows_errored, error=error, summary=summary,
+    )
 
 
 def _update_config(sb, status, finished_at):
