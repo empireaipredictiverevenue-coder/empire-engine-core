@@ -162,8 +162,11 @@ class HeliusStreamDetector:
                     log.info("[sniper] Helius WebSocket connected")
                     self._connection_errors = 0
 
-                    # Subscribe to logs for each DEX program
-                    sub_ids = []
+                    # ── Batch-subscribe to all DEX programs ──
+                    # Send ALL subscribe requests first, then collect responses.
+                    # This avoids stray log notifications leaking between send/recv
+                    # pairs and lets us enter the listen loop only after all subs
+                    # are confirmed.
                     for i, prog in enumerate(programs):
                         sub_req = {
                             "jsonrpc": "2.0",
@@ -175,8 +178,26 @@ class HeliusStreamDetector:
                             ],
                         }
                         await ws.send(json.dumps(sub_req))
-                        resp = await ws.recv()
-                        data = json.loads(resp)
+
+                    # Collect exactly N subscription responses
+                    sub_ids = []
+                    for i, prog in enumerate(programs):
+                        try:
+                            resp = await asyncio.wait_for(ws.recv(), timeout=10)
+                        except asyncio.TimeoutError:
+                            log.warning(
+                                "[sniper] subscribe timeout for %s — skipping",
+                                program_labels.get(prog, prog[:12]),
+                            )
+                            continue
+                        try:
+                            data = json.loads(resp)
+                        except json.JSONDecodeError:
+                            log.warning(
+                                "[sniper] subscribe response decode error for %s",
+                                program_labels.get(prog, prog[:12]),
+                            )
+                            continue
                         sid = data.get("result")
                         if sid is not None:
                             sub_ids.append(sid)
