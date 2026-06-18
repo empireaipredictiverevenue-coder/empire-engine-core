@@ -56,17 +56,21 @@ def _build_body(metro: str = "Houston", first_name: str = "") -> str:
       - Add "Reply YES for the demo" as a clearer CTA
     """
     greeting = f"Hi {first_name}," if first_name else "Hi,"
-    # TCPA: include sender identity (Empire AI) + STOP for opt-out
     return (
-        f"{greeting} Empire AI here — storm leads for roofers in {metro}. "
-        f"First 2 closed deals free, 3% after. "
-        f"90-sec signup at empire-ai.co.uk/contractors. "
-        f"Reply STOP to opt out."
+        f"{greeting} storm leads for roofers in {metro} — "
+        f"first 2 closed deals on us, 3% after. "
+        f"90-sec self-onboard at empire-ai.co.uk/contractors. "
+        f"STOP to opt out."
     )
 
 
 def get_previous_best(path: str = "results.tsv"):
-    """Read the last 'kept=yes' row from results.tsv. None if empty."""
+    """Read the last 'kept=yes' row from results.tsv. None if empty.
+
+    Backwards-compatible with old schema (no body_similarity column).
+    Old schema: [ts, body, length, spam, tcpa, len_pen, reply_rate, weighted, kept, note]
+    New schema: [ts, body, length, spam, tcpa, len_pen, reply_rate, body_sim, weighted, kept, note]
+    """
     if not os.path.exists(path):
         return None
     last = None
@@ -78,18 +82,30 @@ def get_previous_best(path: str = "results.tsv"):
             parts = line.split("\t")
             if len(parts) < 9:
                 continue
-            if parts[8] == "yes":
-                last = {
-                    "timestamp": parts[0],
-                    "body": parts[1],
-                    "length": float(parts[2]),
-                    "spam_score": float(parts[3]),
-                    "tcpa_score": float(parts[4]),
-                    "length_penalty": float(parts[5]),
-                    "reply_rate": float(parts[6]),
-                    "weighted": float(parts[7]),
-                    "note": parts[9] if len(parts) > 9 else "",
-                }
+            # detect schema by column count
+            if len(parts) == 10:
+                # old schema: weighted at index 7, kept at 8, note at 9
+                weighted_idx, kept_idx, note_idx = 7, 8, 9
+            elif len(parts) >= 11:
+                # new schema: weighted at index 8, kept at 9, note at 10
+                weighted_idx, kept_idx, note_idx = 8, 9, 10
+            else:
+                continue
+            if parts[kept_idx] == "yes":
+                try:
+                    last = {
+                        "timestamp": parts[0],
+                        "body": parts[1],
+                        "length": float(parts[2]),
+                        "spam_score": float(parts[3]),
+                        "tcpa_score": float(parts[4]),
+                        "length_penalty": float(parts[5]),
+                        "reply_rate": float(parts[6]),
+                        "weighted": float(parts[weighted_idx]),
+                        "note": parts[note_idx] if len(parts) > note_idx else "",
+                    }
+                except (ValueError, IndexError):
+                    continue
     return last
 
 
@@ -101,7 +117,7 @@ def main():
     print(f"length: {len(body)} chars\n")
 
     # Score
-    score = score_body(body, metro="Houston")
+    score = score_body(body, metro="Houston", sequence_type="contractor_recruit")
     print("=== SCORE BREAKDOWN ===")
     for k, v in score.items():
         if k == "body": continue
@@ -121,6 +137,7 @@ def main():
             "tcpa_score": score["tcpa_score"],
             "length_penalty": score["length_penalty"],
             "reply_rate": score["reply_rate"],
+            "body_similarity": score.get("body_similarity", 0.0),
             "weighted": score["weighted"],
             "kept": "yes",
             "note": "baseline (first run)",
@@ -138,6 +155,7 @@ def main():
                 "tcpa_score": score["tcpa_score"],
                 "length_penalty": score["length_penalty"],
                 "reply_rate": score["reply_rate"],
+                "body_similarity": score.get("body_similarity", 0.0),
                 "weighted": score["weighted"],
                 "kept": "yes",
                 "note": f"improved over {prev['weighted']:.2f}",
@@ -153,6 +171,7 @@ def main():
                 "tcpa_score": score["tcpa_score"],
                 "length_penalty": score["length_penalty"],
                 "reply_rate": score["reply_rate"],
+                "body_similarity": score.get("body_similarity", 0.0),
                 "weighted": score["weighted"],
                 "kept": "no",
                 "note": f"regressed from {prev['weighted']:.2f}",

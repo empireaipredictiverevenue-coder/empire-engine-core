@@ -63,7 +63,10 @@ def _build_storm_touch_zero(target_short: str = "your area") -> str:
 
 
 def get_previous_best(path: str = "results.tsv"):
-    """Read the last 'kept=yes' row from results.tsv. None if empty."""
+    """Read the last 'kept=yes' row from results.tsv. None if empty.
+
+    Backwards-compatible with old schema.
+    """
     if not os.path.exists(path):
         return None
     last = None
@@ -75,18 +78,27 @@ def get_previous_best(path: str = "results.tsv"):
             parts = line.split("\t")
             if len(parts) < 9:
                 continue
-            if parts[8] == "yes":
-                last = {
-                    "timestamp": parts[0],
-                    "body": parts[1],
-                    "length": float(parts[2]),
-                    "spam_score": float(parts[3]),
-                    "tcpa_score": float(parts[4]),
-                    "length_penalty": float(parts[5]),
-                    "reply_rate": float(parts[6]),
-                    "weighted": float(parts[7]),
-                    "note": parts[9] if len(parts) > 9 else "",
-                }
+            if len(parts) == 10:
+                weighted_idx, kept_idx, note_idx = 7, 8, 9
+            elif len(parts) >= 11:
+                weighted_idx, kept_idx, note_idx = 8, 9, 10
+            else:
+                continue
+            if parts[kept_idx] == "yes":
+                try:
+                    last = {
+                        "timestamp": parts[0],
+                        "body": parts[1],
+                        "length": float(parts[2]),
+                        "spam_score": float(parts[3]),
+                        "tcpa_score": float(parts[4]),
+                        "length_penalty": float(parts[5]),
+                        "reply_rate": float(parts[6]),
+                        "weighted": float(parts[weighted_idx]),
+                        "note": parts[note_idx] if len(parts) > note_idx else "",
+                    }
+                except (ValueError, IndexError):
+                    continue
     return last
 
 
@@ -117,6 +129,7 @@ def main():
             "tcpa_score": score["tcpa_score"],
             "length_penalty": score["length_penalty"],
             "reply_rate": score["reply_rate"],
+            "body_similarity": score.get("body_similarity", 0.0),
             "weighted": score["weighted"],
             "kept": "yes",
             "note": "baseline (first run)",
@@ -134,6 +147,7 @@ def main():
                 "tcpa_score": score["tcpa_score"],
                 "length_penalty": score["length_penalty"],
                 "reply_rate": score["reply_rate"],
+                "body_similarity": score.get("body_similarity", 0.0),
                 "weighted": score["weighted"],
                 "kept": "yes",
                 "note": f"improved over {prev['weighted']:.2f}",
@@ -149,6 +163,7 @@ def main():
                 "tcpa_score": score["tcpa_score"],
                 "length_penalty": score["length_penalty"],
                 "reply_rate": score["reply_rate"],
+                "body_similarity": score.get("body_similarity", 0.0),
                 "weighted": score["weighted"],
                 "kept": "no",
                 "note": f"regressed from {prev['weighted']:.2f}",
