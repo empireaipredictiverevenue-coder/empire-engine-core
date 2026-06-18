@@ -421,27 +421,96 @@ class LocalBrainContext:
         return [f.name for f in TEMPLATES_DIR.glob("*.mp4")]
 
     @staticmethod
+    def _ask_hub_brain(
+        system_prompt: str,
+        user_prompt: str,
+        format_schema: Optional[Dict[str, Any]] = None,
+    ) -> Optional[Dict[str, Any]]:
+        """Route through the hub's brain proxy (port 8001) so the call
+        flows through the TokenProxy cache + event bus + AIRouter.
+
+        When BRAIN_HUB_URL is set, POST to /api/v1/brain/chat with
+        the prompt. The hub caches identical prompts, dedupes in-flight
+        calls, and monitors via the event bus.
+
+        Returns the parsed response dict on success, or None on failure
+        (caller falls back to direct Ollama).
+        """
+        hub_url = os.environ.get("BRAIN_HUB_URL", "").rstrip("/")
+        hub_token = os.environ.get("BRAIN_HUB_TOKEN", "") or os.environ.get("HUB_TOKEN", "")
+        if not hub_url or not hub_token:
+            return None
+
+        import urllib.request as _req
+        import urllib.error as _err
+
+        payload = {
+            "system": system_prompt,
+            "prompt": user_prompt,
+        }
+        if format_schema is not None:
+            payload["format_schema"] = format_schema
+
+        try:
+            data = json.dumps(payload).encode()
+            req = _req.Request(
+                f"{hub_url}/api/v1/brain/chat",
+                data=data,
+                method="POST",
+                headers={
+                    "Content-Type": "application/json",
+                    "Authorization": f"Bearer {hub_token}",
+                },
+            )
+            with _req.urlopen(req, timeout=30) as resp:
+                result = json.loads(resp.read().decode())
+                response = result.get("response")
+                if response is None:
+                    return None
+                if format_schema is not None and isinstance(response, dict):
+                    return response
+                if format_schema is not None:
+                    return json.loads(response)
+                return {"response": response}
+        except Exception as exc:
+            log.warning(f"[brain] hub proxy failed ({exc}), falling back to direct Ollama")
+            return None
+
+    @staticmethod
     def ask_local_llm(
         system_prompt: str,
         user_prompt: str,
         format_schema: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
-        """Queries local Qwen/Llama instance through a direct low-overhead
-        loopback socket.
+        """Queries the LLM through the hub's brain proxy (when configured)
+        or directly via Ollama (fallback).
 
-        If `format_schema` is provided, it's passed to Ollama as the `format`
-        payload so the server does grammar-constrained sampling — the LLM
-        physically cannot emit tokens that don't conform to the schema. This
-        is much more reliable than a free-form "return JSON" instruction in
-        the system prompt.
+        **Primary path:** When env ``BRAIN_HUB_URL`` is set, POST to the
+        hub's ``/api/v1/brain/chat`` endpoint, which flows through the
+        TokenProxy cache (300x speedup on repeated prompts) and the
+        AIRouter.
 
-        When `format_schema` is None, the LLM returns plain text by default
-        (no JSON constraint). The response is returned as {"response": text}.
-        When a schema is provided, the LLM returns structured JSON matching
-        that schema.
+        **Fallback path:** Direct Ollama call on ``localhost:11434``.
+        Used when the hub is unreachable or ``BRAIN_HUB_URL`` is not set.
+
+        If ``format_schema`` is provided, it's passed as a JSON Schema
+        for grammar-constrained sampling. The response is parsed JSON
+        matching that schema.
+
+        When ``format_schema`` is None, the LLM returns plain text and
+        the response is {"response": text}.
 
         All calls are traced to Langfuse for observability.
         """
+
+        # ── Primary: route through hub brain proxy ──────────────────
+        hub_result = LocalBrainContext._ask_hub_brain(
+            system_prompt, user_prompt, format_schema,
+        )
+        if hub_result is not None:
+            return hub_result
+
+        # ── Fallback: direct Ollama call ────────────────────────────
         model = os.environ.get("OLLAMA_MODEL", "llama3.2:3b")
         conn = http.client.HTTPConnection("localhost", 11434)
         headers = {"Content-Type": "application/json"}

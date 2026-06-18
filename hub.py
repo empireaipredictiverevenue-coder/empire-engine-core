@@ -2080,6 +2080,63 @@ async def analytics_export(auth: bool = Depends(require_auth)):
     return JSONResponse(analytics_agent.export())
 
 
+# ── Brain Chat Proxy ──────────────────────────────────────────────
+# POST /api/v1/brain/chat — generic LLM proxy that flows through the
+#   AIRouter → TokenProxy cache. Used by the Predictive Cloud
+#   (synthetic_brain on port 8005) so its LLM calls are cached,
+#   monitored, and routed through the same infrastructure.
+#   Body: {system, prompt, format_schema?}
+#   Returns: {response: str} or {response: parsed_json}
+
+@app.post("/api/v1/brain/chat")
+async def brain_chat(request: Request, auth: bool = Depends(require_auth)):
+    """
+    Generic LLM proxy. Passes the prompt through the hub's AIRouter
+    (which is wrapped by the TokenProxy for caching + dedup).
+
+    Body:
+      system: str         — system prompt
+      prompt: str         — user message
+      format_schema: dict? — optional JSON Schema for structured output
+
+    Returns:
+      response: str | dict  — LLM response (string or parsed JSON)
+    """
+    try:
+        body = await request.json()
+    except Exception:
+        raise HTTPException(400, "Invalid JSON")
+
+    system = (body.get("system") or "").strip()
+    prompt = (body.get("prompt") or "").strip()
+    format_schema = body.get("format_schema")
+
+    if not prompt:
+        raise HTTPException(400, "prompt is required")
+    if len(prompt) > 8000:
+        raise HTTPException(400, "prompt too long (max 8000)")
+
+    try:
+        if format_schema:
+            result = await ai_router.generate_json(
+                prompt=prompt,
+                system=system or "You are a helpful assistant.",
+                task="brain.proxy",
+            )
+            return {"response": result}
+        else:
+            result = await ai_router.generate(
+                prompt=prompt,
+                system=system or "You are a helpful assistant.",
+                task="brain.proxy",
+            )
+            text = result.get("text", "") if isinstance(result, dict) else str(result)
+            return {"response": text}
+    except Exception as e:
+        log.warning(f"[brain/chat] LLM call failed: {e}")
+        raise HTTPException(502, f"Brain call failed: {str(e)[:200]}")
+
+
 # ── AI Closer Routes ────────────────────────────────────────────────
 # POST /api/v1/closer/run  — run the full AGI closer pipeline on a lead
 # GET  /api/v1/closer/stats — closer stats snapshot

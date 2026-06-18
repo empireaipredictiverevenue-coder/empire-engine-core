@@ -146,9 +146,10 @@ async def main():
     # ── 6. Check brain_learning urgency floor ────────────────────────────
     log.info("[check] BrainLearning urgency floor...")
     try:
-        floor = brain_learning.get_urgency_floor(
-            niche="roofing_restoration",
-            severity="Severe",
+        floor = await brain_learning.get_urgency_floor(
+            city=SAMPLE_TARGET.get("city", ""),
+            severity=SAMPLE_ALERT.get("severity", "Severe"),
+            asset_value=float(SAMPLE_TARGET.get("asset_value", 0) or 0),
         )
         log.info(f"       → Urgency floor: {floor}")
     except Exception as e:
