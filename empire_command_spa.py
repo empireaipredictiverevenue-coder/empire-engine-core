@@ -2920,71 +2920,71 @@ function ProductsPanel() {
     setCryptoBusy(false);
   }
 
-  return html\`
-    <div style=\${{padding:'0 24px',color:'var(--foreground)'}}>
-      <h3 style=\${{fontFamily:'var(--font-mono)',fontWeight:300,fontSize:'24px',margin:'12 0 8 0',color:'var(--strike-cyan)'}}>Suite Products</h3>
-      <p style=\${{fontSize:'12px',color:'var(--foreground-muted)',margin:'0 0 16 0'}}>
+  return html`
+    <div style=${{padding:'0 24px',color:'var(--foreground)'}}>
+      <h3 style=${{fontFamily:'var(--font-mono)',fontWeight:300,fontSize:'24px',margin:'12 0 8 0',color:'var(--strike-cyan)'}}>Suite Products</h3>
+      <p style=${{fontSize:'12px',color:'var(--foreground-muted)',margin:'0 0 16 0'}}>
         Subscribe to any tier directly from here. Prices are pulled from the product_metadata table.
       </p>
-      \${suite ? suite.map(p => html\`
-        <div style=\${{display:'flex',alignItems:'center',gap:'12px',padding:'8px 12px',margin:'4px 0',border:'1px solid var(--empire-border)',borderRadius:'6px',background:'var(--empire-surface)'}}>
-          <div style=\${{flex:1}}>
-            <div style=\${{fontWeight:600,fontSize:'13px'}}>\${p.display_name||p.tier}</div>
-            <div style=\${{fontSize:'11px',color:'var(--foreground-muted)'}}>\${p.description || ''}</div>
+      ${suite ? suite.map(p => html`
+        <div style=${{display:'flex',alignItems:'center',gap:'12px',padding:'8px 12px',margin:'4px 0',border:'1px solid var(--empire-border)',borderRadius:'6px',background:'var(--empire-surface)'}}>
+          <div style=${{flex:1}}>
+            <div style=${{fontWeight:600,fontSize:'13px'}}>${p.display_name||p.tier}</div>
+            <div style=${{fontSize:'11px',color:'var(--foreground-muted)'}}>${p.description || ''}</div>
           </div>
-          <div style=\${{fontSize:'15px',fontWeight:700,color:'var(--signal-teal)'}}>\$\${p.monthly_price_usd?.toFixed(0)}/mo</div>
-          <button style=\${{padding:'6px 16px',border:'1px solid var(--signal-teal)',background:'transparent',color:'var(--signal-teal)',borderRadius:'4px',cursor:'pointer',fontFamily:'var(--font-mono)',fontSize:'11px',textTransform:'uppercase',letterSpacing:'0.1em'}}
-            onClick=\${() => { setSubTier({tier:p.tier, name:p.display_name, price:p.monthly_price_usd}); setSubAcct(''); setSubMsg(null); }}
-            onmouseover=\${e => {e.target.style.background='var(--signal-teal)';e.target.style.color='var(--empire-black)'}}
-            onmouseout=\${e => {e.target.style.background='transparent';e.target.style.color='var(--signal-teal)'}}>Subscribe</button>
+          <div style=${{fontSize:'15px',fontWeight:700,color:'var(--signal-teal)'}}>\$${p.monthly_price_usd?.toFixed(0)}/mo</div>
+          <button style=${{padding:'6px 16px',border:'1px solid var(--signal-teal)',background:'transparent',color:'var(--signal-teal)',borderRadius:'4px',cursor:'pointer',fontFamily:'var(--font-mono)',fontSize:'11px',textTransform:'uppercase',letterSpacing:'0.1em'}}
+            onClick=${() => { setSubTier({tier:p.tier, name:p.display_name, price:p.monthly_price_usd}); setSubAcct(''); setSubMsg(null); }}
+            onmouseover=${e => {e.target.style.background='var(--signal-teal)';e.target.style.color='var(--empire-black)'}}
+            onmouseout=${e => {e.target.style.background='transparent';e.target.style.color='var(--signal-teal)'}}>Subscribe</button>
           <button style=${{marginLeft:'8px',padding:'6px 10px',border:'1px solid var(--strike-cyan)',background:'transparent',color:'var(--strike-cyan)',borderRadius:'4px',cursor:'pointer',fontFamily:'var(--font-mono)',fontSize:'10px',textTransform:'uppercase',letterSpacing:'0.1em'}}
-            onClick=${{() => {{ setCryptoProduct({{tier:p.tier, name:p.display_name, price:p.monthly_price_usd}}); setCryptoEmail(''); setCryptoAcct(''); setCryptoResult(null); setCryptoError(null); }}}}
-            onmouseover=${{e => {{e.target.style.background='var(--strike-cyan)';e.target.style.color='var(--empire-black)'}}}}
-            onmouseout=${{e => {{e.target.style.background='transparent';e.target.style.color='var(--strike-cyan)'}}}}>USDC</button>
-      \`) : html\`<div style=\${{fontSize:'11px',color:'var(--foreground-muted)',padding:'12px'}}>Loading products…</div>\`}
-      \${!packs ? null : html\`
-        <h3 style=\${{fontFamily:'var(--font-mono)',fontWeight:300,fontSize:'24px',margin:'24 0 8 0',color:'var(--strike-cyan)'}}>Strike Packs</h3>
-        <p style=\${{fontSize:'12px',color:'var(--foreground-muted)',margin:'0 0 16 0'}}>
+            onClick=${() => { setCryptoProduct({tier:p.tier, name:p.display_name, price:p.monthly_price_usd}); setCryptoEmail(''); setCryptoAcct(''); setCryptoResult(null); setCryptoError(null); }}
+            onmouseover=${e => {e.target.style.background='var(--strike-cyan)';e.target.style.color='var(--empire-black)'}}
+            onmouseout=${e => {e.target.style.background='transparent';e.target.style.color='var(--strike-cyan)'}}>USDC</button>
+      `) : html`<div style=${{fontSize:'11px',color:'var(--foreground-muted)',padding:'12px'}}>Loading products…</div>`}
+      ${!packs ? null : html`
+        <h3 style=${{fontFamily:'var(--font-mono)',fontWeight:300,fontSize:'24px',margin:'24 0 8 0',color:'var(--strike-cyan)'}}>Strike Packs</h3>
+        <p style=${{fontSize:'12px',color:'var(--foreground-muted)',margin:'0 0 16 0'}}>
           Per-lead products by niche.
         </p>
-        \${packs.map(s => html\`
-          <div style=\${{display:'flex',alignItems:'center',gap:'12px',padding:'8px 12px',margin:'4px 0',border:'1px solid var(--empire-border)',borderRadius:'6px',background:'var(--empire-surface)'}}>
-            <div style=\${{flex:1,fontWeight:600,fontSize:'13px'}}>\${s.slug}</div>
-            <div style=\${{fontSize:'11px',color:'var(--foreground-muted)'}}>tier \${s.tier}</div>
-            <div style=\${{fontSize:'15px',fontWeight:700,color:'var(--signal-teal)'}}>\$\${s.monthly_price_usd?.toFixed(0)}/mo</div>
+        ${packs.map(s => html`
+          <div style=${{display:'flex',alignItems:'center',gap:'12px',padding:'8px 12px',margin:'4px 0',border:'1px solid var(--empire-border)',borderRadius:'6px',background:'var(--empire-surface)'}}>
+            <div style=${{flex:1,fontWeight:600,fontSize:'13px'}}>${s.slug}</div>
+            <div style=${{fontSize:'11px',color:'var(--foreground-muted)'}}>tier ${s.tier}</div>
+            <div style=${{fontSize:'15px',fontWeight:700,color:'var(--signal-teal)'}}>\$${s.monthly_price_usd?.toFixed(0)}/mo</div>
           </div>
-        \`)}
-      \`}
+        `)}
+      `}
     </div>
 
     <!-- Subscribe modal overlay -->
-    \${!subTier ? null : html\`
-      <div style=\${{position:'fixed',inset:0,background:'rgba(0,0,0,0.6)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:9999}} onClick=\${e => {if(e.target===e.currentTarget) setSubTier(null)}}>
-        <div style=\${{background:'var(--empire-surface)',border:'1px solid var(--empire-border)',borderRadius:'12px',padding:'24px',maxWidth:'420px',width:'90%',color:'var(--foreground)'}}>
-          <div style=\${{fontSize:'16px',fontWeight:600,margin:'0 0 4 0'}}>Subscribe to \${subTier.name || subTier.tier}</div>
-          <div style=\${{fontSize:'12px',color:'var(--foreground-muted)',margin:'0 0 16 0'}}>
-            \${subTier.tier} · \$\${subTier.price?.toFixed(2) ?? '—'}/mo
+    ${!subTier ? null : html`
+      <div style=${{position:'fixed',inset:0,background:'rgba(0,0,0,0.6)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:9999}} onClick=${e => {if(e.target===e.currentTarget) setSubTier(null)}}>
+        <div style=${{background:'var(--empire-surface)',border:'1px solid var(--empire-border)',borderRadius:'12px',padding:'24px',maxWidth:'420px',width:'90%',color:'var(--foreground)'}}>
+          <div style=${{fontSize:'16px',fontWeight:600,margin:'0 0 4 0'}}>Subscribe to ${subTier.name || subTier.tier}</div>
+          <div style=${{fontSize:'12px',color:'var(--foreground-muted)',margin:'0 0 16 0'}}>
+            ${subTier.tier} · \$${subTier.price?.toFixed(2) ?? '—'}/mo
           </div>
-          <input style=\${{width:'100%',padding:'10px 12px',margin:'0 0 12 0',background:'var(--empire-black)',border:'1px solid var(--empire-border)',borderRadius:'6px',color:'var(--foreground)',fontSize:'13px',fontFamily:'var(--font-mono)',outline:'none',boxSizing:'border-box'}}
+          <input style=${{width:'100%',padding:'10px 12px',margin:'0 0 12 0',background:'var(--empire-black)',border:'1px solid var(--empire-border)',borderRadius:'6px',color:'var(--foreground)',fontSize:'13px',fontFamily:'var(--font-mono)',outline:'none',boxSizing:'border-box'}}
             placeholder="Customer account ID"
-            value=\${subAcct}
-            onInput=\${e => setSubAcct(e.target.value)}
-            disabled=\${subBusy} />
-          \${!subMsg ? null : html\`<div style=\${{fontSize:'11px',margin:'0 0 12 0',color: subMsg.startsWith('✅') ? 'var(--strike-cyan)' : 'var(--signal-orange)'}}>\${subMsg}</div>\`}
-          <div style=\${{display:'flex',gap:'8px',justifyContent:'flex-end'}}>
-            <button style=\${{padding:'8px 20px',background:'transparent',border:'1px solid var(--empire-border)',color:'var(--foreground-muted)',borderRadius:'6px',cursor:'pointer',fontSize:'11px',fontFamily:'var(--font-mono)',textTransform:'uppercase'}}
-              onClick=\${() => setSubTier(null)} disabled=\${subBusy}>Cancel</button>
-            <button style=\${{padding:'8px 20px',background:'var(--signal-teal)',border:'none',color:'var(--empire-black)',borderRadius:'6px',cursor:'pointer',fontSize:'11px',fontFamily:'var(--font-mono)',textTransform:'uppercase',fontWeight:600}}
-              onClick=\${() => doSubscribe(subTier)} disabled=\${subBusy}>\${subBusy ? 'Subscribing…' : 'Confirm'}</button>
+            value=${subAcct}
+            onInput=${e => setSubAcct(e.target.value)}
+            disabled=${subBusy} />
+          ${!subMsg ? null : html`<div style=${{fontSize:'11px',margin:'0 0 12 0',color: subMsg.startsWith('✅') ? 'var(--strike-cyan)' : 'var(--signal-orange)'}}>${subMsg}</div>`}
+          <div style=${{display:'flex',gap:'8px',justifyContent:'flex-end'}}>
+            <button style=${{padding:'8px 20px',background:'transparent',border:'1px solid var(--empire-border)',color:'var(--foreground-muted)',borderRadius:'6px',cursor:'pointer',fontSize:'11px',fontFamily:'var(--font-mono)',textTransform:'uppercase'}}
+              onClick=${() => setSubTier(null)} disabled=${subBusy}>Cancel</button>
+            <button style=${{padding:'8px 20px',background:'var(--signal-teal)',border:'none',color:'var(--empire-black)',borderRadius:'6px',cursor:'pointer',fontSize:'11px',fontFamily:'var(--font-mono)',textTransform:'uppercase',fontWeight:600}}
+              onClick=${() => doSubscribe(subTier)} disabled=${subBusy}>${subBusy ? 'Subscribing…' : 'Confirm'}</button>
           </div>
         </div>
       </div>
-    \`}
-  \`;
+    `}
+  `;
 
-    <!-- Crypto USDC Pay modal overlay -->
+    // Crypto USDC Pay modal overlay
     ${!cryptoProduct ? null : html`
-      <div style=${{position:'fixed',inset:0,background:'rgba(0,0,0,0.6)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:9999}} onClick=${{e => {{if(e.target===e.currentTarget) { if (pollInterval.current) { clearInterval(pollInterval.current); pollInterval.current = null; } setCryptoProduct(null); }}}}}>
+      <div style=${{position:'fixed',inset:0,background:'rgba(0,0,0,0.6)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:9999}} onClick=${e => {if(e.target===e.currentTarget) { if (pollInterval.current) { clearInterval(pollInterval.current); pollInterval.current = null; } setCryptoProduct(null); }}}}}>
         <div style=${{background:'var(--empire-surface)',border:'1px solid var(--empire-border)',borderRadius:'12px',padding:'24px',maxWidth:'480px',width:'90%',color:'var(--foreground)',maxHeight:'90vh',overflowY:'auto'}}>
           <div style=${{fontSize:'16px',fontWeight:600,margin:'0 0 4 0'}}>Pay with USDC for ${cryptoProduct.name || cryptoProduct.tier}</div>
           <div style=${{fontSize:'12px',color:'var(--foreground-muted)',margin:'0 0 16 0'}}>
@@ -3005,9 +3005,9 @@ function ProductsPanel() {
             ${!cryptoError ? null : html`<div style=${{fontSize:'11px',color:'var(--signal-orange)',margin:'0 0 10 0'}}>${cryptoError}</div>`}
             <div style=${{display:'flex',gap:'8px',justifyContent:'flex-end'}}>
               <button style=${{padding:'8px 20px',background:'transparent',border:'1px solid var(--empire-border)',color:'var(--foreground-muted)',borderRadius:'6px',cursor:'pointer',fontSize:'11px',fontFamily:'var(--font-mono)',textTransform:'uppercase'}}
-                onClick=${{() => {{ if (pollInterval.current) {{ clearInterval(pollInterval.current); pollInterval.current = null; }} setCryptoProduct(null); }}}} disabled=${{cryptoBusy}}>Cancel</button>
+                onClick=${() => { if (pollInterval.current) { clearInterval(pollInterval.current); pollInterval.current = null; } setCryptoProduct(null); }} disabled=${{cryptoBusy}}>Cancel</button>
               <button style=${{padding:'8px 20px',background:'var(--strike-cyan)',border:'none',color:'var(--empire-black)',borderRadius:'6px',cursor:'pointer',fontSize:'11px',fontFamily:'var(--font-mono)',textTransform:'uppercase',fontWeight:600}}
-                onClick=${{() => doCryptoPay(cryptoProduct)}} disabled=${{cryptoBusy}}>${cryptoBusy ? 'Creating…' : 'Create Payment'}</button>
+                onClick=${() => doCryptoPay(cryptoProduct)} disabled=${{cryptoBusy}}>${cryptoBusy ? 'Creating…' : 'Create Payment'}</button>
             </div>
           ` : html`
             <!-- Step 2: Payment details with memo -->
@@ -3039,7 +3039,7 @@ function ProductsPanel() {
             <div style=${{display:'flex',gap:'8px',justifyContent:'flex-end'}}>
               <a href=${{'/crypto/pay/' + cryptoResult.payment_id}} target="_blank" style=${{padding:'8px 20px',background:'transparent',border:'1px solid var(--empire-border)',color:'var(--foreground-muted)',borderRadius:'6px',cursor:'pointer',fontSize:'11px',fontFamily:'var(--font-mono)',textTransform:'uppercase',textDecoration:'none'}}>Status Page</a>
               <button style=${{padding:'8px 20px',background:'transparent',border:'1px solid var(--empire-border)',color:'var(--foreground-muted)',borderRadius:'6px',cursor:'pointer',fontSize:'11px',fontFamily:'var(--font-mono)',textTransform:'uppercase'}}
-                onClick=${{() => {{ if (pollInterval.current) {{ clearInterval(pollInterval.current); pollInterval.current = null; }} setCryptoProduct(null); }}}}>Close</button>
+                onClick=${() => { if (pollInterval.current) { clearInterval(pollInterval.current); pollInterval.current = null; } setCryptoProduct(null); }}>Close</button>
             </div>
           `}
         </div>
@@ -5857,7 +5857,7 @@ function Leads() {
 
   const loadActivity = useCallback(async (offset = 0, append = false) => {
     try {
-      const r = await apiFetch(\`/api/v1/leads/activity?limit=50&offset=\${offset}\`).then(r => r.json());
+      const r = await apiFetch(`/api/v1/leads/activity?limit=50&offset=${offset}`).then(r => r.json());
       if (append) {
         setActivity(a => [...a, ...(r.entries || [])]);
       } else {
@@ -8384,15 +8384,15 @@ const CplPricing = () => {
           </tr></thead>
           <tbody>
             ${(cmpNicheFilter ? lanes.filter(l => l.niche === cmpNicheFilter) : lanes).map(l => {
-              if (!l.cpl_available || !l.cpl) return html\`
+              if (!l.cpl_available || !l.cpl) return html`
                 <tr class="seo-row">
-                  <td style="font-family:var(--font-mono);font-size:10px;color:var(--empire-fog)">L\${String(l.lane_id).padStart(2,'0')}</td>
-                  <td>\${l.niche}</td>
+                  <td style="font-family:var(--font-mono);font-size:10px;color:var(--empire-fog)">L${String(l.lane_id).padStart(2,'0')}</td>
+                  <td>${l.niche}</td>
                   <td class="cmp-model-cell" colspan="3" style="text-align:center;color:var(--empire-fog);font-size:10px">Service lane — no CPL data</td>
                   <td class="cmp-model-cell" colspan="3" style="text-align:center;color:var(--empire-fog);font-size:10px">Service lane — no CPL data</td>
                   <td style="text-align:center"><span class="cpl-badge service">service</span></td>
                 </tr>
-              \`;
+              `;
               const ppl = l.cpl.ppl; const ppc = l.cpl.ppc;
               const hasPpl = ppl && ppl.low != null; const hasPpc = ppc && ppc.low != null;
               const pplMid = hasPpl ? (ppl.low + ppl.high) / 2 : 0;
@@ -8402,23 +8402,23 @@ const CplPricing = () => {
               const pplMargin = hasPpl ? Math.round((pplPrice - pplMid) / pplPrice * 100) : 0;
               const ppcMargin = hasPpc ? Math.round((ppcPrice - ppcMid) / ppcPrice * 100) : 0;
               const best = hasPpl && hasPpc ? (pplMargin > ppcMargin ? 'ppl' : 'ppc') : hasPpl ? 'ppl' : hasPpc ? 'ppc' : 'none';
-              return html\`
-                <tr class="\${best === 'ppl' ? 'cmp-winner' : ''}">
-                  <td style="font-family:var(--font-mono);font-size:10px;color:var(--empire-fog)">L\${String(l.lane_id).padStart(2,'0')}</td>
-                  <td>\${l.niche}\${l.sub_niche !== l.niche ? html\` <span style="color:var(--empire-fog);font-size:9px">· \${l.sub_niche}</span>\` : ''}</td>
-                  <td class="cmp-model-cell cmp-value">\${hasPpl ? '$\${ppl.low} — $\${ppl.high}' : '-'}</td>
-                  <td class="cmp-model-cell cmp-value">\${hasPpl ? '$\${pplPrice}' : '-'}</td>
-                  <td class="cmp-model-cell cmp-value \${pplMargin >= 30 ? 'pos' : pplMargin > 0 ? '' : 'neg'}">\${hasPpl ? pplMargin + '%' : '-'}</td>
-                  <td class="cmp-model-cell cmp-value">\${hasPpc ? '$\${ppc.low} — $\${ppc.high}' : '-'}</td>
-                  <td class="cmp-model-cell cmp-value">\${hasPpc ? '$\${ppcPrice}' : '-'}</td>
-                  <td class="cmp-model-cell cmp-value \${ppcMargin >= 30 ? 'pos' : ppcMargin > 0 ? '' : 'neg'}">\${hasPpc ? ppcMargin + '%' : '-'}</td>
-                  <td style="text-align:center">\${best !== 'none' ? html\`<span class="cmp-model-label cmp-\${best}">\${best.toUpperCase()}</span>\` : '-'}</td>
+              return html`
+                <tr class="${best === 'ppl' ? 'cmp-winner' : ''}">
+                  <td style="font-family:var(--font-mono);font-size:10px;color:var(--empire-fog)">L${String(l.lane_id).padStart(2,'0')}</td>
+                  <td>${l.niche}${l.sub_niche !== l.niche ? html` <span style="color:var(--empire-fog);font-size:9px">· ${l.sub_niche}</span>` : ''}</td>
+                  <td class="cmp-model-cell cmp-value">${hasPpl ? '$${ppl.low} — $${ppl.high}' : '-'}</td>
+                  <td class="cmp-model-cell cmp-value">${hasPpl ? '$${pplPrice}' : '-'}</td>
+                  <td class="cmp-model-cell cmp-value ${pplMargin >= 30 ? 'pos' : pplMargin > 0 ? '' : 'neg'}">${hasPpl ? pplMargin + '%' : '-'}</td>
+                  <td class="cmp-model-cell cmp-value">${hasPpc ? '$${ppc.low} — $${ppc.high}' : '-'}</td>
+                  <td class="cmp-model-cell cmp-value">${hasPpc ? '$${ppcPrice}' : '-'}</td>
+                  <td class="cmp-model-cell cmp-value ${ppcMargin >= 30 ? 'pos' : ppcMargin > 0 ? '' : 'neg'}">${hasPpc ? ppcMargin + '%' : '-'}</td>
+                  <td style="text-align:center">${best !== 'none' ? html`<span class="cmp-model-label cmp-${best}">${best.toUpperCase()}</span>` : '-'}</td>
                 </tr>
-              \`;
+              `;
             })}
           </tbody>
         </table>
-      \` : ''}
+      ` : ''}
 
         ` : ''}
       `}
@@ -9149,9 +9149,9 @@ function SelfAwarenessDashboard() {
     }
   }, [decisions]);
 
-  if (loading) return html\`<div class="body"><div class="sa-think-label"><span class="sa-live-dot"></span> System is thinking<div class="sa-think-dots"><span class="sa-think-dot"></span><span class="sa-think-dot"></span><span class="sa-think-dot"></span></div></div></div>\`;
-  if (error) return html\`<div class="body"><div class="sa-empty">Error: \${error}</div></div>\`;
-  if (!data) return html\`<div class="body"><div class="sa-empty">No data</div></div>\`;
+  if (loading) return html`<div class="body"><div class="sa-think-label"><span class="sa-live-dot"></span> System is thinking<div class="sa-think-dots"><span class="sa-think-dot"></span><span class="sa-think-dot"></span><span class="sa-think-dot"></span></div></div></div>`;
+  if (error) return html`<div class="body"><div class="sa-empty">Error: ${error}</div></div>`;
+  if (!data) return html`<div class="body"><div class="sa-empty">No data</div></div>`;
 
   const model = data.system_model || {};
   const health = model.health || {};
@@ -9203,11 +9203,11 @@ function SelfAwarenessDashboard() {
     const status = a.status;
     const color = agentStatusColor(status);
     const isSelected = selectedAgent === name;
-    return html\`<g class="sa-graph-node \${isSelected ? 'active' : ''}" onClick=\${() => setSelectedAgent(name === selectedAgent ? null : name)} transform="translate(\${cx - r}, \${cy - 8})">
-      <rect class="sa-graph-rect" width="\${r * 2}" height="16" rx="4" style="stroke:\${color};\${isSelected ? 'fill:rgba(' + (color === '#44E5B8' ? '68,229,184' : color === '#FFB800' ? '255,184,0' : '255,68,68') + ',0.08)' : ''}"/>
-      <text class="sa-graph-text" x="\${r}" y="11">\${name.length > 10 ? name.slice(0, 10) + '..' : name}</text>
-      <circle cx="4" cy="4" r="2" fill="\${color}" style="\${status === 'ACTIVE' ? 'animation:sa-node-pulse 2s ease-in-out infinite;filter:drop-shadow(0 0 4px ' + color + ')' : ''}"/>
-    </g>\`;
+    return html`<g class="sa-graph-node ${isSelected ? 'active' : ''}" onClick=${() => setSelectedAgent(name === selectedAgent ? null : name)} transform="translate(${cx - r}, ${cy - 8})">
+      <rect class="sa-graph-rect" width="${r * 2}" height="16" rx="4" style="stroke:${color};${isSelected ? 'fill:rgba(' + (color === '#44E5B8' ? '68,229,184' : color === '#FFB800' ? '255,184,0' : '255,68,68') + ',0.08)' : ''}"/>
+      <text class="sa-graph-text" x="${r}" y="11">${name.length > 10 ? name.slice(0, 10) + '..' : name}</text>
+      <circle cx="4" cy="4" r="2" fill="${color}" style="${status === 'ACTIVE' ? 'animation:sa-node-pulse 2s ease-in-out infinite;filter:drop-shadow(0 0 4px ' + color + ')' : ''}"/>
+    </g>`;
   }
 
   // Build edges from dependency graph
@@ -9220,18 +9220,18 @@ function SelfAwarenessDashboard() {
 
   // Build narrative from data
   const initialThoughts = [
-    { ts: ts ? ts.slice(11, 19) : '--', type: 'info', icon: '●', body: \`System <em>\${health.overall || 'unknown'}</em> · \${agentHealthy}/\${agentTotal} agents healthy · \${staleCount} stale, \${criticalCount} critical\` },
+    { ts: ts ? ts.slice(11, 19) : '--', type: 'info', icon: '●', body: `System <em>${health.overall || 'unknown'}</em> · ${agentHealthy}/${agentTotal} agents healthy · ${staleCount} stale, ${criticalCount} critical` },
   ];
   if (anomalies.length > 0) {
     initialThoughts.push({ ts: '--', type: anomalies[0].severity === 'critical' ? 'critical' : 'warn', icon: anomalies[0].severity === 'critical' ? '⚠' : '▲', body: anomalies[0].message });
   }
   if (improveCount > 0) {
-    initialThoughts.push({ ts: '--', type: 'info', icon: '●', body: \`<strong>\${improveCount}</strong> improvement suggestions available\` });
+    initialThoughts.push({ ts: '--', type: 'info', icon: '●', body: `<strong>${improveCount}</strong> improvement suggestions available` });
   }
 
   const allThoughts = [...initialThoughts, ...narrative];
 
-  return html\`
+  return html`
     <div class="body">
       <div class="section-h">
         <div>
@@ -9239,10 +9239,10 @@ function SelfAwarenessDashboard() {
           <div class="section-sub">Live system model · Narrative · Dependency graph · Decisions</div>
         </div>
         <div style="display:flex;align-items:center;gap:14px">
-          <span class="\${liveConnected ? 'sa-live-dot' : 'sa-live-dot paused'}"></span>
-          <span style="font-family:var(--font-mono);font-size:9px;color:var(--empire-fog);letter-spacing:.08em">\${liveConnected ? 'LIVE' : 'OFFLINE'}</span>
-          <button class="pulse-tab \${view === 'graph' ? 'active' : ''}" onClick=\${() => setView('graph')} style="font-size:10px;padding:6px 14px">Graph</button>
-          <button class="pulse-tab \${view === 'feed' ? 'active' : ''}" onClick=\${() => setView('feed')} style="font-size:10px;padding:6px 14px">Narrative</button>
+          <span class="${liveConnected ? 'sa-live-dot' : 'sa-live-dot paused'}"></span>
+          <span style="font-family:var(--font-mono);font-size:9px;color:var(--empire-fog);letter-spacing:.08em">${liveConnected ? 'LIVE' : 'OFFLINE'}</span>
+          <button class="pulse-tab ${view === 'graph' ? 'active' : ''}" onClick=${() => setView('graph')} style="font-size:10px;padding:6px 14px">Graph</button>
+          <button class="pulse-tab ${view === 'feed' ? 'active' : ''}" onClick=${() => setView('feed')} style="font-size:10px;padding:6px 14px">Narrative</button>
         </div>
       </div>
 
@@ -9252,54 +9252,54 @@ function SelfAwarenessDashboard() {
           <div class="sa-stat-row">
             <span class="sa-stat-label">Health</span>
           </div>
-          <div class="sa-stat-val \${healthColor}">\${healthPct}%</div>
-          <div class="sa-stat-meta">\${health.overall || 'unknown'} · \${agentHealthy}/\${agentTotal} agents</div>
+          <div class="sa-stat-val ${healthColor}">${healthPct}%</div>
+          <div class="sa-stat-meta">${health.overall || 'unknown'} · ${agentHealthy}/${agentTotal} agents</div>
         </div>
         <div class="sa-stat-card">
           <div class="sa-stat-row">
             <span class="sa-stat-label">Win Rate</span>
-            <span style="font-size:9px;color:var(--empire-fog)">\${lanes.active || 0} lanes</span>
+            <span style="font-size:9px;color:var(--empire-fog)">${lanes.active || 0} lanes</span>
           </div>
-          <div class="sa-stat-val \${winRate >= 0.6 ? 'teal' : winRate >= 0.3 ? 'amber' : 'red'}">\${winRate != null ? (winRate * 100).toFixed(0) + '%' : '--'}</div>
-          <div class="sa-stat-meta">\${lanes.total_runs || 0} runs · \${lanes.evolutions_run || 0} evolutions</div>
+          <div class="sa-stat-val ${winRate >= 0.6 ? 'teal' : winRate >= 0.3 ? 'amber' : 'red'}">${winRate != null ? (winRate * 100).toFixed(0) + '%' : '--'}</div>
+          <div class="sa-stat-meta">${lanes.total_runs || 0} runs · ${lanes.evolutions_run || 0} evolutions</div>
         </div>
         <div class="sa-stat-card">
           <div class="sa-stat-row">
             <span class="sa-stat-label">Revenue</span>
           </div>
-          <div class="sa-stat-val teal">\${rev24h > 0 ? '$' + rev24h.toLocaleString() : '--'}</div>
-          <div class="sa-stat-meta">24h · \${revenue.total_revenue_7d > 0 ? '$' + revenue.total_revenue_7d.toLocaleString() + ' 7d' : 'no data'}</div>
+          <div class="sa-stat-val teal">${rev24h > 0 ? '$' + rev24h.toLocaleString() : '--'}</div>
+          <div class="sa-stat-meta">24h · ${revenue.total_revenue_7d > 0 ? '$' + revenue.total_revenue_7d.toLocaleString() + ' 7d' : 'no data'}</div>
         </div>
         <div class="sa-stat-card">
           <div class="sa-stat-row">
             <span class="sa-stat-label">Anomalies</span>
-            <span style="font-size:9px;color:var(--empire-fog)">\${improveCount} improvements</span>
+            <span style="font-size:9px;color:var(--empire-fog)">${improveCount} improvements</span>
           </div>
-          <div class="sa-stat-val \${critAnomalies > 0 ? 'red' : anomalyCount > 0 ? 'amber' : 'teal'}">\${anomalyCount}</div>
-          <div class="sa-stat-meta">\${critAnomalies > 0 ? critAnomalies + ' critical' : 'no critical issues'}</div>
+          <div class="sa-stat-val ${critAnomalies > 0 ? 'red' : anomalyCount > 0 ? 'amber' : 'teal'}">${anomalyCount}</div>
+          <div class="sa-stat-meta">${critAnomalies > 0 ? critAnomalies + ' critical' : 'no critical issues'}</div>
         </div>
       </div>
 
-      \${view === 'graph' ? html\`
+      ${view === 'graph' ? html`
         <!-- Main content: graph + narrative + decisions -->
         <div class="sa-wrapper">
           <!-- LEFT: Agent dependency graph -->
           <div class="sa-panel">
             <div class="sa-panel-h">
               <strong>Agent Dependency Graph</strong>
-              <span>\${agentNames.length} nodes · \${edges.length} edges</span>
+              <span>${agentNames.length} nodes · ${edges.length} edges</span>
             </div>
             <div class="sa-panel-body" style="padding:0">
               <div class="sa-graph-wrap">
                 <svg class="sa-graph-svg" viewBox="0 0 600 340">
                   <!-- Center glow -->
-                  <circle cx="\${CX}" cy="\${CY}" r="180" class="sa-graph-ring"/>
-                  <circle cx="\${CX}" cy="\${CY}" r="120" class="sa-graph-ring"/>
-                  <circle cx="\${CX}" cy="\${CY}" r="60" class="sa-graph-ring"/>
-                  <circle cx="\${CX}" cy="\${CY}" r="30" class="sa-graph-center-dot"/>
+                  <circle cx="${CX}" cy="${CY}" r="180" class="sa-graph-ring"/>
+                  <circle cx="${CX}" cy="${CY}" r="120" class="sa-graph-ring"/>
+                  <circle cx="${CX}" cy="${CY}" r="60" class="sa-graph-ring"/>
+                  <circle cx="${CX}" cy="${CY}" r="30" class="sa-graph-center-dot"/>
                   
                   <!-- Edges -->
-                  \${edges.map((e, i) => {
+                  ${edges.map((e, i) => {
                     const fromIdx = agentNames.indexOf(e.from);
                     const toIdx = agentNames.indexOf(e.to);
                     if (fromIdx < 0 || toIdx < 0) return '';
@@ -9322,11 +9322,11 @@ function SelfAwarenessDashboard() {
                       toCx = graphX(idx, group.length, RADII[toRing], CX);
                       toCy = graphY(idx, group.length, RADII[toRing], CY);
                     }
-                    return html\`<line x1="\${fromCx}" y1="\${fromCy}" x2="\${toCx}" y2="\${toCy}" class="sa-graph-edge \${e.from === center || e.to === center ? 'active' : ''}"/>\`;
+                    return html`<line x1="${fromCx}" y1="${fromCy}" x2="${toCx}" y2="${toCy}" class="sa-graph-edge ${e.from === center || e.to === center ? 'active' : ''}"/>`;
                   })}
                   
                   <!-- Nodes -->
-                  \${agentNames.map((name, i) => {
+                  ${agentNames.map((name, i) => {
                     if (name === center) {
                       return agentNode(name, CX - 50, CY - 8, 50);
                     } else if (ring1.includes(name)) {
@@ -9346,25 +9346,25 @@ function SelfAwarenessDashboard() {
               </div>
               
               <!-- Agent detail panel -->
-              \${selectedAgent ? (() => {
+              ${selectedAgent ? (() => {
                 const a = getAgent(selectedAgent);
                 const depsList = deps[selectedAgent] || [];
                 const dependedBy = agentNames.filter(n => (deps[n] || []).includes(selectedAgent));
-                return html\`<div class="sa-agent-detail">
+                return html`<div class="sa-agent-detail">
                   <div class="sa-agent-detail-h">
-                    <div class="sa-agent-detail-name"><span style="color:\${agentStatusColor(a.status)}">●</span> \${selectedAgent}</div>
-                    <button class="sa-agent-detail-close" onClick=\${() => setSelectedAgent(null)}>✕</button>
+                    <div class="sa-agent-detail-name"><span style="color:${agentStatusColor(a.status)}">●</span> ${selectedAgent}</div>
+                    <button class="sa-agent-detail-close" onClick=${() => setSelectedAgent(null)}>✕</button>
                   </div>
                   <div class="sa-agent-detail-body">
                     <div class="sa-agent-detail-grid">
-                      <div class="sa-agent-detail-field"><span class="lbl">Status</span><span class="val" style="color:\${agentStatusColor(a.status)}">\${a.status}</span></div>
-                      <div class="sa-agent-detail-field"><span class="lbl">Ping</span><span class="val">\${a.last_ping ? new Date(a.last_ping).toLocaleString() : 'never'}</span></div>
-                      <div class="sa-agent-detail-field" style="grid-column:1/-1"><span class="lbl">Capabilities</span><span class="val">\${a.capabilities || caps[selectedAgent] || 'none'}</span></div>
-                      <div class="sa-agent-detail-field"><span class="lbl">Depends On</span><span class="val">\${depsList.length ? depsList.join(', ') : 'none'}</span></div>
-                      <div class="sa-agent-detail-field"><span class="lbl">Depended By</span><span class="val">\${dependedBy.length ? dependedBy.join(', ') : 'none'}</span></div>
+                      <div class="sa-agent-detail-field"><span class="lbl">Status</span><span class="val" style="color:${agentStatusColor(a.status)}">${a.status}</span></div>
+                      <div class="sa-agent-detail-field"><span class="lbl">Ping</span><span class="val">${a.last_ping ? new Date(a.last_ping).toLocaleString() : 'never'}</span></div>
+                      <div class="sa-agent-detail-field" style="grid-column:1/-1"><span class="lbl">Capabilities</span><span class="val">${a.capabilities || caps[selectedAgent] || 'none'}</span></div>
+                      <div class="sa-agent-detail-field"><span class="lbl">Depends On</span><span class="val">${depsList.length ? depsList.join(', ') : 'none'}</span></div>
+                      <div class="sa-agent-detail-field"><span class="lbl">Depended By</span><span class="val">${dependedBy.length ? dependedBy.join(', ') : 'none'}</span></div>
                     </div>
                   </div>
-                </div>\`;
+                </div>`;
               })() : ''}
             </div>
           </div>
@@ -9375,15 +9375,15 @@ function SelfAwarenessDashboard() {
             <div class="sa-panel" style="flex:1">
               <div class="sa-panel-h">
                 <strong>Live Narrative</strong>
-                <span>\${allThoughts.length} events</span>
+                <span>${allThoughts.length} events</span>
               </div>
-              <div class="sa-narrative-feed" ref=\${narrativeRef}>
-                \${allThoughts.length === 0 ? html\`<div class="sa-empty">Awaiting system signals...</div>\` : ''}
-                \${allThoughts.map(t => html\`
+              <div class="sa-narrative-feed" ref=${narrativeRef}>
+                ${allThoughts.length === 0 ? html`<div class="sa-empty">Awaiting system signals...</div>` : ''}
+                ${allThoughts.map(t => html`
                   <div class="sa-thought">
-                    <span class="sa-thought-ts">\${t.ts}</span>
-                    <span class="sa-thought-type \${t.type}">\${t.icon || t.type}</span>
-                    <span class="sa-thought-body">\${t.body}</span>
+                    <span class="sa-thought-ts">${t.ts}</span>
+                    <span class="sa-thought-type ${t.type}">${t.icon || t.type}</span>
+                    <span class="sa-thought-body">${t.body}</span>
                   </div>
                 `)}
                 <span class="sa-cursor"></span>
@@ -9394,16 +9394,16 @@ function SelfAwarenessDashboard() {
             <div class="sa-panel" style="flex:0 0 auto;max-height:200px">
               <div class="sa-panel-h">
                 <strong>Decision Trace</strong>
-                <span>\${decisions.length} live events</span>
+                <span>${decisions.length} live events</span>
               </div>
-              <div class="sa-decision-feed" ref=\${decisionsRef}>
-                \${decisions.length === 0 ? html\`<div class="sa-empty">No live events yet. Connect to WebSocket to see real-time decisions.</div>\` : ''}
-                \${decisions.map(d => html\`
+              <div class="sa-decision-feed" ref=${decisionsRef}>
+                ${decisions.length === 0 ? html`<div class="sa-empty">No live events yet. Connect to WebSocket to see real-time decisions.</div>` : ''}
+                ${decisions.map(d => html`
                   <div class="sa-decision">
-                    <span class="sa-decision-ts">\${d.ts}</span>
+                    <span class="sa-decision-ts">${d.ts}</span>
                     <span class="sa-decision-body">
-                      <span class="key">\${d.event.type}</span>
-                      \${Object.entries(d.event).filter(([k]) => k !== 'type' && k !== 'ts').slice(0, 3).map(([k, v]) => html\` <span class="key">\${k}:</span> <span class="val">\${typeof v === 'object' ? JSON.stringify(v).slice(0, 40) : String(v).slice(0, 40)}</span>\`).join('')}
+                      <span class="key">${d.event.type}</span>
+                      ${Object.entries(d.event).filter(([k]) => k !== 'type' && k !== 'ts').slice(0, 3).map(([k, v]) => html` <span class="key">${k}:</span> <span class="val">${typeof v === 'object' ? JSON.stringify(v).slice(0, 40) : String(v).slice(0, 40)}</span>`).join('')}
                     </span>
                   </div>
                 `)}
@@ -9411,19 +9411,19 @@ function SelfAwarenessDashboard() {
             </div>
           </div>
         </div>
-      ` : html\`
+      ` : html`
         <!-- Narrative-only view -->
         <div class="sa-panel" style="min-height:400px">
           <div class="sa-panel-h">
             <strong>System Narrative Stream</strong>
-            <span>\${allThoughts.length} events · \${narrative.length} live</span>
+            <span>${allThoughts.length} events · ${narrative.length} live</span>
           </div>
-          <div class="sa-narrative-feed" ref=\${narrativeRef} style="max-height:70vh">
-            \${allThoughts.map(t => html\`
+          <div class="sa-narrative-feed" ref=${narrativeRef} style="max-height:70vh">
+            ${allThoughts.map(t => html`
               <div class="sa-thought">
-                <span class="sa-thought-ts">\${t.ts}</span>
-                <span class="sa-thought-type \${t.type}">\${t.icon || t.type}</span>
-                <span class="sa-thought-body">\${t.body}</span>
+                <span class="sa-thought-ts">${t.ts}</span>
+                <span class="sa-thought-type ${t.type}">${t.icon || t.type}</span>
+                <span class="sa-thought-body">${t.body}</span>
               </div>
             `)}
             <span class="sa-cursor"></span>
@@ -9469,9 +9469,9 @@ function AgentOSDashboard() {
 
   useEffect(() => { fetchStatus(); }, []);
 
-  if (loading) return html\`<div class="body"><div class="psy-loading">Loading Agent OS data...</div></div>\`;
-  if (error) return html\`<div class="body"><div class="psy-error">Error: \${error}</div></div>\`;
-  if (!data) return html\`<div class="body"><div class="psy-error">No data</div></div>\`;
+  if (loading) return html`<div class="body"><div class="psy-loading">Loading Agent OS data...</div></div>`;
+  if (error) return html`<div class="body"><div class="psy-error">Error: ${error}</div></div>`;
+  if (!data) return html`<div class="body"><div class="psy-error">No data</div></div>`;
 
   const proc = data.processes || {};
   const ipc = data.ipc || {};
@@ -9482,163 +9482,163 @@ function AgentOSDashboard() {
 
   const healthPct = proc.total_agents > 0 ? Math.round((proc.running / proc.total_agents) * 100) : 0;
 
-  return html\`
+  return html`
     <div class="body">
-      \${actionError ? html\`<div style="margin-bottom:14px;padding:10px 16px;background:rgba(255,68,68,0.06);border:1px solid rgba(255,68,68,0.25);border-radius:6px;font-family:var(--font-mono);font-size:10px;color:var(--status-red);display:flex;align-items:center;gap:8px">
-        <span>⚠</span><span>\${actionError}</span>
-        <button style="margin-left:auto;background:none;border:none;color:var(--status-red);cursor:pointer;font-size:14px" onClick=\${() => setActionError(null)}>×</button>
-      </div>\` : ''}
+      ${actionError ? html`<div style="margin-bottom:14px;padding:10px 16px;background:rgba(255,68,68,0.06);border:1px solid rgba(255,68,68,0.25);border-radius:6px;font-family:var(--font-mono);font-size:10px;color:var(--status-red);display:flex;align-items:center;gap:8px">
+        <span>⚠</span><span>${actionError}</span>
+        <button style="margin-left:auto;background:none;border:none;color:var(--status-red);cursor:pointer;font-size:14px" onClick=${() => setActionError(null)}>×</button>
+      </div>` : ''}
       <div class="section-h">
         <div class="section-title"><em>Agent OS</em></div>
         <div class="section-sub">Kernel · Process manager · IPC bus · Capability registry · Boot protocol</div>
       </div>
 
       <div class="pulse-tabs">
-        <button class="pulse-tab \${tab === 'overview' ? 'active' : ''}" onClick=\${() => setTab('overview')}>Overview</button>
-        <button class="pulse-tab \${tab === 'agents' ? 'active' : ''}" onClick=\${() => setTab('agents')}>Agents</button>
-        <button class="pulse-tab \${tab === 'ipc' ? 'active' : ''}" onClick=\${() => setTab('ipc')}>IPC Bus</button>
-        <button class="pulse-tab \${tab === 'capabilities' ? 'active' : ''}" onClick=\${() => setTab('capabilities')}>Capabilities</button>
-        <button class="pulse-tab \${tab === 'boot' ? 'active' : ''}" onClick=\${() => setTab('boot')}>Boot</button>
+        <button class="pulse-tab ${tab === 'overview' ? 'active' : ''}" onClick=${() => setTab('overview')}>Overview</button>
+        <button class="pulse-tab ${tab === 'agents' ? 'active' : ''}" onClick=${() => setTab('agents')}>Agents</button>
+        <button class="pulse-tab ${tab === 'ipc' ? 'active' : ''}" onClick=${() => setTab('ipc')}>IPC Bus</button>
+        <button class="pulse-tab ${tab === 'capabilities' ? 'active' : ''}" onClick=${() => setTab('capabilities')}>Capabilities</button>
+        <button class="pulse-tab ${tab === 'boot' ? 'active' : ''}" onClick=${() => setTab('boot')}>Boot</button>
       </div>
 
-      \${tab === 'overview' ? html\`
+      ${tab === 'overview' ? html`
         <div class="psy-summary-grid">
           <div class="cpl-card">
             <div class="cpl-card-label">Booted</div>
-            <div class="cpl-card-value \${k.booted ? 'positive' : 'warning'}">\${k.booted ? 'YES' : 'NO'}</div>
+            <div class="cpl-card-value ${k.booted ? 'positive' : 'warning'}">${k.booted ? 'YES' : 'NO'}</div>
           </div>
           <div class="cpl-card">
             <div class="cpl-card-label">Agents</div>
-            <div class="cpl-card-value">\${proc.total_agents || 0}</div>
+            <div class="cpl-card-value">${proc.total_agents || 0}</div>
           </div>
           <div class="cpl-card">
             <div class="cpl-card-label">Running</div>
-            <div class="cpl-card-value positive">\${proc.running || 0}</div>
+            <div class="cpl-card-value positive">${proc.running || 0}</div>
           </div>
           <div class="cpl-card">
             <div class="cpl-card-label">Health</div>
-            <div class="cpl-card-value \${healthPct >= 80 ? 'positive' : healthPct >= 50 ? 'warning' : ''}">\${healthPct}%</div>
+            <div class="cpl-card-value ${healthPct >= 80 ? 'positive' : healthPct >= 50 ? 'warning' : ''}">${healthPct}%</div>
           </div>
           <div class="cpl-card">
             <div class="cpl-card-label">Error</div>
-            <div class="cpl-card-value \${proc.error > 0 ? 'warning' : ''}">\${proc.error || 0}</div>
+            <div class="cpl-card-value ${proc.error > 0 ? 'warning' : ''}">${proc.error || 0}</div>
           </div>
           <div class="cpl-card">
             <div class="cpl-card-label">IPC Events</div>
-            <div class="cpl-card-value">\${ipc.total_events_tracked || 0}</div>
+            <div class="cpl-card-value">${ipc.total_events_tracked || 0}</div>
           </div>
           <div class="cpl-card">
             <div class="cpl-card-label">Capabilities</div>
-            <div class="cpl-card-value">\${(caps.total_capabilities) || 0}</div>
+            <div class="cpl-card-value">${(caps.total_capabilities) || 0}</div>
           </div>
           <div class="cpl-card">
             <div class="cpl-card-label">Uptime</div>
-            <div class="cpl-card-value positive">\${k.uptime_seconds ? Math.round(k.uptime_seconds / 60) + 'm' : '0m'}</div>
+            <div class="cpl-card-value positive">${k.uptime_seconds ? Math.round(k.uptime_seconds / 60) + 'm' : '0m'}</div>
           </div>
         </div>
         <div class="cpl-health-meta" style="margin-top: 8px; text-align: center;">
-          Boot order: \${(proc.boot_order || []).slice(0, 10).join(' → ')}${(proc.boot_order || []).length > 10 ? ' …' : ''}
+          Boot order: ${(proc.boot_order || []).slice(0, 10).join(' → ')}${(proc.boot_order || []).length > 10 ? ' …' : ''}
         </div>
       ` : ''}
 
-      \${tab === 'agents' ? html\`
+      ${tab === 'agents' ? html`
         <div class="cpl-service-summary" style="margin-bottom: 14px;">
-          <span class="cpl-service-count">\${agentList.length}</span>
+          <span class="cpl-service-count">${agentList.length}</span>
           <span class="cpl-service-label">agents registered</span>
         </div>
         <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">
-          <span class="cpl-service-count">\${agentList.length}</span>
+          <span class="cpl-service-count">${agentList.length}</span>
           <span class="cpl-service-label">agents registered</span>
-          <button class="gh-refresh-btn" style="margin-left:auto" onClick=\${() => fetchStatus()}>Refresh</button>
+          <button class="gh-refresh-btn" style="margin-left:auto" onClick=${() => fetchStatus()}>Refresh</button>
         </div>
         <table class="cpl-table">
           <thead><tr><th>Agent</th><th>Status</th><th>Interval</th><th>Priority</th><th>Capabilities</th><th>Dependencies</th><th>Retries</th><th>Actions</th></tr></thead>
           <tbody>
-            \${agentList.map(([name, a]) => {
+            ${agentList.map(([name, a]) => {
               const busy = actioning[name];
               const running = a.status === 'RUNNING';
               const isErr = a.status === 'ERROR';
-              return html\`<tr key=\${name} class="\${busy ? 'af-card stale' : ''}">
-              <td style="font-weight: 500;">\${name}</td>
-              <td><span class="hth-dot \${running ? 'green' : isErr ? 'red' : 'amber'}"></span> \${a.status}</td>
-              <td style="font-family: var(--font-mono);">\${a.interval || '-'}s</td>
-              <td>\${a.priority || '-'}</td>
-              <td style="color: var(--empire-mist); font-size: 10px;">\${(a.capabilities || []).join(', ')}</td>
-              <td style="color: var(--empire-mist); font-size: 10px;">\${(a.dependencies || []).join(', ') || '-'}</td>
-              <td>\${a.retry_count || 0}/\${a.max_retries || 3}</td>
+              return html`<tr key=${name} class="${busy ? 'af-card stale' : ''}">
+              <td style="font-weight: 500;">${name}</td>
+              <td><span class="hth-dot ${running ? 'green' : isErr ? 'red' : 'amber'}"></span> ${a.status}</td>
+              <td style="font-family: var(--font-mono);">${a.interval || '-'}s</td>
+              <td>${a.priority || '-'}</td>
+              <td style="color: var(--empire-mist); font-size: 10px;">${(a.capabilities || []).join(', ')}</td>
+              <td style="color: var(--empire-mist); font-size: 10px;">${(a.dependencies || []).join(', ') || '-'}</td>
+              <td>${a.retry_count || 0}/${a.max_retries || 3}</td>
               <td style="white-space:nowrap">
-                \${!running ? html\`<button class="tbl-action go" disabled=\${!!busy} onClick=\${() => actionAgent(name, 'start')}>\${busy === 'start' ? '...' : 'Start'}</button>\` : ''}
-                \${running ? html\`<button class="tbl-action" disabled=\${!!busy} onClick=\${() => actionAgent(name, 'stop')}>\${busy === 'stop' ? '...' : 'Stop'}</button>\` : ''}
-                <button class="tbl-action" disabled=\${!!busy} onClick=\${() => actionAgent(name, 'restart')}>\${busy === 'restart' ? '...' : 'Restart'}</button>
+                ${!running ? html`<button class="tbl-action go" disabled=${!!busy} onClick=${() => actionAgent(name, 'start')}>${busy === 'start' ? '...' : 'Start'}</button>` : ''}
+                ${running ? html`<button class="tbl-action" disabled=${!!busy} onClick=${() => actionAgent(name, 'stop')}>${busy === 'stop' ? '...' : 'Stop'}</button>` : ''}
+                <button class="tbl-action" disabled=${!!busy} onClick=${() => actionAgent(name, 'restart')}>${busy === 'restart' ? '...' : 'Restart'}</button>
               </td>
-            </tr>\`;
+            </tr>`;
             })}
           </tbody>
         </table>
       ` : ''}
 
-      \${tab === 'ipc' ? html\`
+      ${tab === 'ipc' ? html`
         <div class="cpl-service-summary" style="margin-bottom: 14px;">
-          <span class="cpl-service-count">\${ipc.total_events_tracked || 0}</span>
+          <span class="cpl-service-count">${ipc.total_events_tracked || 0}</span>
           <span class="cpl-service-label">events tracked</span>
-          <span style="margin-left: 16px; color: var(--empire-mist);">\${Object.keys(ipc.subscriptions || {}).length} subscriptions</span>
+          <span style="margin-left: 16px; color: var(--empire-mist);">${Object.keys(ipc.subscriptions || {}).length} subscriptions</span>
         </div>
         <table class="cpl-table">
           <thead><tr><th>Event</th><th>Source</th><th>Priority</th><th>Time</th></tr></thead>
           <tbody>
-            \${(ipc.recent_events || []).map(ev => html\`<tr key=\${ev.event_id}>
-              <td style="font-weight: 500;">\${ev.event_type}</td>
-              <td style="color: var(--empire-mist);">\${ev.source}</td>
-              <td><span class="cpl-badge \${ev.priority === 'critical' ? 'ppc' : 'ppl'}">\${ev.priority}</span></td>
-              <td style="font-family: var(--font-mono); font-size: 9px; color: var(--empire-fog);">\${new Date(ev.ts).toLocaleTimeString()}</td>
-            </tr>\`)}
-            \${(ipc.recent_events || []).length === 0 ? html\`<tr><td colspan="4" style="color: var(--empire-mist); text-align: center; padding: 20px;">No events yet</td></tr>\` : ''}
+            ${(ipc.recent_events || []).map(ev => html`<tr key=${ev.event_id}>
+              <td style="font-weight: 500;">${ev.event_type}</td>
+              <td style="color: var(--empire-mist);">${ev.source}</td>
+              <td><span class="cpl-badge ${ev.priority === 'critical' ? 'ppc' : 'ppl'}">${ev.priority}</span></td>
+              <td style="font-family: var(--font-mono); font-size: 9px; color: var(--empire-fog);">${new Date(ev.ts).toLocaleTimeString()}</td>
+            </tr>`)}
+            ${(ipc.recent_events || []).length === 0 ? html`<tr><td colspan="4" style="color: var(--empire-mist); text-align: center; padding: 20px;">No events yet</td></tr>` : ''}
           </tbody>
         </table>
       ` : ''}
 
-      \${tab === 'capabilities' ? html\`
+      ${tab === 'capabilities' ? html`
         <div class="cpl-service-summary" style="margin-bottom: 14px;">
-          <span class="cpl-service-count">\${caps.total_capabilities || 0}</span>
+          <span class="cpl-service-count">${caps.total_capabilities || 0}</span>
           <span class="cpl-service-label">capabilities across</span>
-          <span class="cpl-service-total">\${caps.total_agents || 0}</span>
+          <span class="cpl-service-total">${caps.total_agents || 0}</span>
           <span class="cpl-service-label">agents</span>
         </div>
         <table class="cpl-table">
           <thead><tr><th>Capability</th><th>Agents</th></tr></thead>
           <tbody>
-            \${Object.entries(caps.by_capability || {}).sort().map(([cap, agentList]) => html\`<tr key=\${cap}>
-              <td style="font-weight: 500;">\${cap}</td>
-              <td style="color: var(--empire-mist); font-size: 10px;">\${agentList.join(', ')}</td>
-            </tr>\`)}
-            \${Object.keys(caps.by_capability || {}).length === 0 ? html\`<tr><td colspan="2" style="color: var(--empire-mist); text-align: center; padding: 20px;">No capabilities registered</td></tr>\` : ''}
+            ${Object.entries(caps.by_capability || {}).sort().map(([cap, agentList]) => html`<tr key=${cap}>
+              <td style="font-weight: 500;">${cap}</td>
+              <td style="color: var(--empire-mist); font-size: 10px;">${agentList.join(', ')}</td>
+            </tr>`)}
+            ${Object.keys(caps.by_capability || {}).length === 0 ? html`<tr><td colspan="2" style="color: var(--empire-mist); text-align: center; padding: 20px;">No capabilities registered</td></tr>` : ''}
           </tbody>
         </table>
       ` : ''}
 
-      \${tab === 'boot' ? html\`
+      ${tab === 'boot' ? html`
         <div class="cpl-service-summary" style="margin-bottom: 14px;">
-          <span class="cpl-service-count">\${(proc.boot_order || []).length}</span>
+          <span class="cpl-service-count">${(proc.boot_order || []).length}</span>
           <span class="cpl-service-label">agents in boot order</span>
         </div>
         <table class="cpl-table">
           <thead><tr><th>#</th><th>Agent</th><th>Status</th><th>Priority</th><th>Dependencies</th></tr></thead>
           <tbody>
-            \${(proc.boot_order || []).map((name, i) => {
+            ${(proc.boot_order || []).map((name, i) => {
               const a = agents[name] || {};
-              return html\`<tr key=\${name}>
-                <td style="color: var(--empire-fog);">\${i + 1}</td>
-                <td style="font-weight: 500;">\${name}</td>
-                <td><span class="hth-dot \${a.status === 'RUNNING' ? 'green' : a.status === 'ERROR' ? 'red' : 'amber'}"></span> \${a.status || 'unknown'}</td>
-                <td>\${a.priority || '-'}</td>
-                <td style="color: var(--empire-mist); font-size: 10px;">\${(a.dependencies || []).join(', ') || '-'}</td>
-              </tr>\`;
+              return html`<tr key=${name}>
+                <td style="color: var(--empire-fog);">${i + 1}</td>
+                <td style="font-weight: 500;">${name}</td>
+                <td><span class="hth-dot ${a.status === 'RUNNING' ? 'green' : a.status === 'ERROR' ? 'red' : 'amber'}"></span> ${a.status || 'unknown'}</td>
+                <td>${a.priority || '-'}</td>
+                <td style="color: var(--empire-mist); font-size: 10px;">${(a.dependencies || []).join(', ') || '-'}</td>
+              </tr>`;
             })}
           </tbody>
         </table>
       ` : ''}
     </div>
-  \`;
+  `;
 }
 
 function BusinessPlannerDashboard() {
@@ -9951,6 +9951,70 @@ function SniperFleet() {
   const [fixing, setFixing] = useState({});
   const [loading, setLoading] = useState(true);
   const [showAllFindings, setShowAllFindings] = useState(true);
+  // ── Operator override state ──────────────────────────────────
+  const [overrideInfo, setOverrideInfo] = useState(null);
+  const [ovLoading, setOvLoading] = useState(false);
+  const [overrideError, setOverrideError] = useState(false);
+  const [overrideForm, setOverrideForm] = useState({buy_amount_sol:'',min_risk_score:'',market_mode:'balanced',ttl_seconds:'300'});
+  const [settingOverride, setSettingOverride] = useState(false);
+
+  const fetchOverrideStatus = useCallback(async () => {
+    setOverrideError(false);
+    try {
+      const res = await apiFetch('/api/v1/sniper/brain/health');
+      if (res.ok) {
+        const data = await res.json();
+        setOverrideInfo(data);
+      } else {
+        setOverrideError(true);
+      }
+    } catch (e) {
+      console.error('Override status fetch error:', e);
+      setOverrideError(true);
+    } finally {
+      setOvLoading(false);
+    }
+  }, []);
+
+  async function setOverride() {
+    const ba = overrideForm.buy_amount_sol.trim();
+    const rs = overrideForm.min_risk_score.trim();
+    const mm = overrideForm.market_mode.trim();
+    if (!ba && !rs && mm === 'balanced') return;
+    setSettingOverride(true);
+    try {
+      const body = {};
+      if (ba) body.buy_amount_sol = parseFloat(ba);
+      if (rs) body.min_risk_score = parseInt(rs);
+      if (mm) body.market_mode = mm;
+      body.ttl_seconds = parseInt(overrideForm.ttl_seconds) || 300;
+      const res = await apiFetch('/api/v1/sniper/brain/override', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      if (res.ok) {
+        setOverrideForm({buy_amount_sol:'',min_risk_score:'',market_mode:'balanced',ttl_seconds:'300'});
+        await fetchOverrideStatus();
+      }
+    } catch (e) {
+      console.error('Set override error:', e);
+    } finally {
+      setSettingOverride(false);
+    }
+  }
+
+  async function clearOverride() {
+    setSettingOverride(true);
+    try {
+      await apiFetch('/api/v1/sniper/brain/override', { method: 'DELETE' });
+      await fetchOverrideStatus();
+    } catch (e) {
+      console.error('Clear override error:', e);
+    } finally {
+      setSettingOverride(false);
+    }
+  }
 
   const fetchData = useCallback(async () => {
     try {
@@ -9969,7 +10033,7 @@ function SniperFleet() {
     }
   }, []);
 
-  useEffect(() => { fetchData(); const iv = setInterval(fetchData, 15000); return () => clearInterval(iv); }, [fetchData]);
+  useEffect(() => { fetchData(); fetchOverrideStatus(); const iv = setInterval(fetchData, 15000); return () => clearInterval(iv); }, [fetchData, fetchOverrideStatus]);
 
   async function acknowledgeFinding(id) {
     setAcknowledging(prev => ({ ...prev, [id]: true }));
@@ -10041,6 +10105,60 @@ function SniperFleet() {
           <div class="stat-label">Fixed</div>
           <div class="stat-value" style=${{color: s.fixed > 0 ? 'var(--signal-teal)' : 'var(--empire-mist)'}}>${s.fixed || 0}</div>
           <div class="stat-meta">${s.unfixed || 0} unfixed</div>
+        </div>
+      </div>
+
+      ${/* Operator Override Panel */ ''}
+      <div class="af-panel" style={{marginTop:'0'}}>
+        <div class="af-h">
+          <div class="af-title">Sniper <em>Override</em></div>
+          <div class="af-tag">operator override for dynamic sniper config</div>
+        </div>
+        <div style={{display:'flex',flexDirection:'column',gap:'12px'}}>
+          <div style={{display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+            <div>
+                            ${ovLoading ? html`<span class="af-tag">Loading…</span>` : overrideError ? html`
+                <span style={{fontFamily:'var(--font-mono)',fontSize:'10px',color:'var(--status-red)']}>
+                  \xe2\x9a\xa0 Brain Unreachable — using static fallback config
+                </span>
+              ` : overrideInfo ? html`
+                <span style={{fontFamily:'var(--font-mono)',fontSize:'10px',color:overrideInfo.brain_healthy && !overrideInfo.operator_override_active?'var(--empire-fog)':'var(--signal-teal)']}>
+                  \xe2\x97\x8f ${overrideInfo.brain_healthy ? html`Brain ${overrideInfo.operator_override_active ? 'OVERRIDE ACTIVE' : 'ONLINE'}` : html`Brain Unreachable`}
+                </span>
+                <span style={{fontFamily:'var(--font-mono)',fontSize:'9px',color:'var(--empire-mist)',marginLeft:'12px']}>
+                  Router: ${overrideInfo.router_available ? '\xe2\x9c\x93' : '\xe2\x9c\x97'} \xc2\xb7 DB: ${overrideInfo.db_available ? '\xe2\x9c\x93' : '\xe2\x9c\x97'}
+                </span>
+              ` : html`<span class="af-tag">Fetching status…</span>`}
+            </div>
+            <div style={{display:'flex',gap:'8px'}}>
+              <button class="btn ghost" style={{fontSize:'9px',padding:'6px 12px'}} onClick={() => { setOvLoading(true); fetchOverrideStatus(); }} disabled={ovLoading}>REFRESH</button>
+            </div>
+          </div>
+          ${/* Override form */ ''}
+          <div style={{display:'flex',gap:'10px',flexWrap:'wrap',alignItems:'end'}}>
+            <div class="fld" style={{flex:'0 1 120px',marginBottom:'0'}}>
+              <label class="fld-lbl" style={{fontSize:'9px'}}>Buy (SOL)</label>
+              <input class="fld-in mono" style={{fontSize:'11px',padding:'7px 10px'}} type="number" step="0.01" min="0" placeholder="0.1" value={overrideForm.buy_amount_sol} onChange={e => setOverrideForm(p => ({...p, buy_amount_sol: e.target.value}))} />
+            </div>
+            <div class="fld" style={{flex:'0 1 100px',marginBottom:'0'}}>
+              <label class="fld-lbl" style={{fontSize:'9px'}}>Risk (1-100)</label>
+              <input class="fld-in mono" style={{fontSize:'11px',padding:'7px 10px'}} type="number" min="1" max="100" placeholder="50" value={overrideForm.min_risk_score} onChange={e => setOverrideForm(p => ({...p, min_risk_score: e.target.value}))} />
+            </div>
+            <div class="fld" style={{flex:'0 1 110px',marginBottom:'0'}}>
+              <label class="fld-lbl" style={{fontSize:'9px'}}>Market Mode</label>
+              <select class="fld-in mono" style={{fontSize:'11px',padding:'7px 10px',cursor:'pointer'}} value={overrideForm.market_mode} onChange={e => setOverrideForm(p => ({...p, market_mode: e.target.value}))}>
+                <option value="balanced">balanced</option>
+                <option value="aggressive">aggressive</option>
+                <option value="conservative">conservative</option>
+              </select>
+            </div>
+            <div class="fld" style={{flex:'0 1 80px',marginBottom:'0'}}>
+              <label class="fld-lbl" style={{fontSize:'9px'}}>TTL (s)</label>
+              <input class="fld-in mono" style={{fontSize:'11px',padding:'7px 10px'}} type="number" min="10" max="3600" value={overrideForm.ttl_seconds} onChange={e => setOverrideForm(p => ({...p, ttl_seconds: e.target.value}))} />
+            </div>
+            <button class="btn" style={{fontSize:'9px',padding:'7px 14px'}} onClick={setOverride} disabled={settingOverride}>{settingOverride ? 'SETTING…' : 'SET OVERRIDE'}</button>
+            <button class="btn ghost" style={{fontSize:'9px',padding:'7px 14px',color:'var(--status-red)',borderColor:'var(--status-red)'}} onClick={clearOverride} disabled={settingOverride}>{settingOverride ? '…' : 'CLEAR'}</button>
+          </div>
         </div>
       </div>
 
@@ -10219,33 +10337,33 @@ function TrialPipeline() {
     <div>
       <div class="section-h">
         <div class="section-title">Trial <em>Pipeline</em></div>
-        <div class="section-sub">Active · expiring · converted · churned · \${daily.length > 0 ? daily[0].date + ' daily' : ''}</div>
+        <div class="section-sub">Active · expiring · converted · churned · ${daily.length > 0 ? daily[0].date + ' daily' : ''}</div>
       </div>
       <div class="tp-summary-grid">
         <div class="tp-summary-card">
-          <div class="tp-summary-val teal">\${active}</div>
+          <div class="tp-summary-val teal">${active}</div>
           <div class="tp-summary-lbl">Active Trials</div>
-          <div class="tp-summary-sub">\${expiring} expiring soon</div>
+          <div class="tp-summary-sub">${expiring} expiring soon</div>
         </div>
         <div class="tp-summary-card">
-          <div class="tp-summary-val amber">\${expiring}</div>
+          <div class="tp-summary-val amber">${expiring}</div>
           <div class="tp-summary-lbl">Expiring Soon</div>
-          <div class="tp-summary-sub">\${active > 0 ? Math.round(expiring/active*100) + '% of active' : '—'}</div>
+          <div class="tp-summary-sub">${active > 0 ? Math.round(expiring/active*100) + '% of active' : '—'}</div>
         </div>
         <div class="tp-summary-card">
-          <div class="tp-summary-val teal">\${converted}</div>
+          <div class="tp-summary-val teal">${converted}</div>
           <div class="tp-summary-lbl">Converted</div>
-          <div class="tp-summary-sub">\${winRate > 0 ? Math.round(winRate*100) + '% win rate' : ''}</div>
+          <div class="tp-summary-sub">${winRate > 0 ? Math.round(winRate*100) + '% win rate' : ''}</div>
         </div>
         <div class="tp-summary-card">
-          <div class="tp-summary-val \${churned > 0 ? 'red' : 'dim'}">\${churned}</div>
+          <div class="tp-summary-val ${churned > 0 ? 'red' : 'dim'}">${churned}</div>
           <div class="tp-summary-lbl">Churned</div>
-          <div class="tp-summary-sub">\${converted > 0 && churned > 0 ? Math.round(churned/converted*100) + '% of converted' : ''}</div>
+          <div class="tp-summary-sub">${converted > 0 && churned > 0 ? Math.round(churned/converted*100) + '% of converted' : ''}</div>
         </div>
         <div class="tp-summary-card">
-          <div class="tp-summary-val \${expired > 5 ? 'amber' : 'dim'}">\${expired}</div>
+          <div class="tp-summary-val ${expired > 5 ? 'amber' : 'dim'}">${expired}</div>
           <div class="tp-summary-lbl">Expired (Unconv.)</div>
-          <div class="tp-summary-sub">\${totalTrials > 0 ? Math.round(expired/totalTrials*100) + '% of all' : ''}</div>
+          <div class="tp-summary-sub">${totalTrials > 0 ? Math.round(expired/totalTrials*100) + '% of all' : ''}</div>
         </div>
         <div class="tp-summary-card">
           <div class="tp-summary-val teal">\$${potentialMRR.toLocaleString()}</div>
@@ -10253,18 +10371,18 @@ function TrialPipeline() {
           <div class="tp-summary-sub">From active trials</div>
         </div>
       </div>
-      \${products.length > 0 ? html`
+      ${products.length > 0 ? html`
         <div class="tp-product-grid">
-          \${products.map(p => html`
+          ${products.map(p => html`
             <div class="tp-product-card">
-              <div class="tp-product-name">\${p.name || p.product || '?'}</div>
+              <div class="tp-product-name">${p.name || p.product || '?'}</div>
               <div class="tp-product-meta">
-                <span>\${p.trials} trials · \${p.active} active</span>
-                <span class="\${p.converted > 0 ? 'tp-stat-teal' : 'tp-stat-dim'}">\${p.converted} conv</span>
+                <span>${p.trials} trials · ${p.active} active</span>
+                <span class="${p.converted > 0 ? 'tp-stat-teal' : 'tp-stat-dim'}">${p.converted} conv</span>
               </div>
               <div class="tp-product-bar">
                 <div class="tp-bar-track">
-                  \${p.trials > 0 ? html`
+                  ${p.trials > 0 ? html`
                     <div class="tp-bar-fill active" style=${{width: Math.round(p.active/p.trials*100)+'%'}}></div>
                     <div class="tp-bar-fill converted" style=${{width: Math.round(p.converted/p.trials*100)+'%'}}></div>
                     <div class="tp-bar-fill expired" style=${{width: Math.round(p.expired/p.trials*100)+'%'}}></div>
@@ -10272,51 +10390,51 @@ function TrialPipeline() {
                 </div>
               </div>
               <div class="tp-bar-legend">
-                <span class="tp-legend-dot active">Active \${Math.round(p.active/p.trials*100) + '%'}</span>
-                <span class="tp-legend-dot converted">Conv \${Math.round(p.converted/p.trials*100) + '%'}</span>
-                <span class="tp-legend-dot expired">Exp \${Math.round(p.expired/p.trials*100) + '%'}</span>
+                <span class="tp-legend-dot active">Active ${Math.round(p.active/p.trials*100) + '%'}</span>
+                <span class="tp-legend-dot converted">Conv ${Math.round(p.converted/p.trials*100) + '%'}</span>
+                <span class="tp-legend-dot expired">Exp ${Math.round(p.expired/p.trials*100) + '%'}</span>
               </div>
             </div>
           `)}
         </div>
       ` : ''}
       <div class="split">
-        \${daily.length > 0 ? html`
+        ${daily.length > 0 ? html`
           <div class="panel">
             <div class="panel-head">Daily Trial Starts (last 14d)</div>
             <div style=${{display:'flex',flexDirection:'column',gap:'4px'}}>
-              \${daily.slice(0,14).reverse().map(d => {
+              ${daily.slice(0,14).reverse().map(d => {
                 const maxCount = Math.max(...daily.slice(0,14).map(x=>x.count), 1);
                 return html`
                   <div class="tp-bar-row">
-                    <span class="tp-bar-date">\${d.date.slice(5)}</span>
+                    <span class="tp-bar-date">${d.date.slice(5)}</span>
                     <div class="tp-small-bar-track">
                       <div class="tp-small-bar-fill" style=${{width: Math.round(d.count/maxCount*80)+'%'}}></div>
                     </div>
-                    <span class="tp-bar-val">\${d.count}</span>
+                    <span class="tp-bar-val">${d.count}</span>
                   </div>
                 `;
               })}
             </div>
           </div>
         ` : ''}
-        \${recent.length > 0 ? html`
+        ${recent.length > 0 ? html`
           <div class="panel">
             <div class="panel-head">Recent Trials</div>
             <div style=${{maxHeight:'320px',overflowY:'auto'}}>
-              \${recent.map(t => html`
+              ${recent.map(t => html`
                 <div class="tp-recent-row">
                   <div class="tp-recent-left">
-                    <div class="tp-recent-email">\${t.email}</div>
-                    <div class="tp-recent-prod">\${t.product} · \${t.tier}</div>
+                    <div class="tp-recent-email">${t.email}</div>
+                    <div class="tp-recent-prod">${t.product} · ${t.tier}</div>
                   </div>
                   <div class="tp-recent-right">
-                    <span class="tp-status-bdg \${t.status}">
+                    <span class="tp-status-bdg ${t.status}">
                       <span class="tp-bdg-dot"></span>
-                      \${t.status}
+                      ${t.status}
                     </span>
                     <div class="tp-recent-days">
-                      \${t.status === 'active' ? t.days_left + 'd left' : t.status === 'expired' ? 'ended' : t.status === 'converted' ? 'paid' : ''}
+                      ${t.status === 'active' ? t.days_left + 'd left' : t.status === 'expired' ? 'ended' : t.status === 'converted' ? 'paid' : ''}
                     </div>
                   </div>
                 </div>

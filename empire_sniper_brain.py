@@ -250,6 +250,7 @@ async def brain_health():
     """Health check for the sniper brain bridge."""
     return JSONResponse({
         "status": "ok",
+        "brain_healthy": True,
         "router_available": _HAS_ROUTER,
         "db_available": _db is not None,
         "operator_override_active": bool(_operator_override and time.time() < _override_expires_at),

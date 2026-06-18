@@ -19,14 +19,6 @@
 // wired yet. Remove this once all code paths are exercised.
 #![allow(dead_code)]
 
-mod sniper;
-mod security;
-mod jito;
-mod tracker;
-mod config;
-mod wallet_rotation;
-mod tracker_api;
-
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
@@ -40,12 +32,16 @@ use tokio::sync::{mpsc, Mutex, RwLock};
 use tracing::{error, info, warn};
 use tracing_subscriber::EnvFilter;
 
-use sniper::SniperConfig;
-use security::AntiRugMatrix;
-use jito::{BlockhashWorker, JitoBundleBuilder, JitoConfig, TipOptimizer};
-use tracker::{SmartMoneyTracker, CopyTradeDetection};
-use config::{DynamicConfig, ConfigWorker};
-use wallet_rotation::WalletRotationPool;
+use solana_meme_sniper::sniper;
+use solana_meme_sniper::sniper::SniperConfig;
+use solana_meme_sniper::security::AntiRugMatrix;
+use solana_meme_sniper::jito;
+use solana_meme_sniper::jito::{BlockhashWorker, JitoBundleBuilder, JitoConfig, TipOptimizer};
+use solana_meme_sniper::tracker;
+use solana_meme_sniper::tracker::{SmartMoneyTracker, CopyTradeDetection};
+use solana_meme_sniper::config::{DynamicConfig, ConfigWorker};
+use solana_meme_sniper::tracker_api;
+use solana_meme_sniper::wallet_rotation::WalletRotationPool;
 
 /// CLI arguments parsed from the command line.
 #[derive(Debug)]

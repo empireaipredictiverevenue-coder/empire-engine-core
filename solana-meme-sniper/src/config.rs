@@ -20,6 +20,7 @@ use serde::Deserialize;
 use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_sdk::pubkey::Pubkey;
 use tokio::sync::{Mutex, RwLock};
+use tokio::time::Instant;
 use tracing::{debug, info, warn};
 
 // ── Dynamic Config ──────────────────────────────────────────────────────
@@ -128,6 +129,8 @@ pub struct ConfigWorker {
     wallet_pubkey: Pubkey,
     /// HTTP client for polling.
     client: reqwest::Client,
+    /// How long without a successful brain poll before falling back to static config.
+    brain_timeout: Duration,
 }
 
 impl ConfigWorker {
@@ -157,7 +160,14 @@ impl ConfigWorker {
             rpc_client,
             wallet_pubkey,
             client,
+            brain_timeout: Duration::from_secs(30),
         }
+    }
+
+    /// Set a custom brain timeout (shorter for testing).
+    pub fn with_brain_timeout(mut self, timeout: Duration) -> Self {
+        self.brain_timeout = timeout;
+        self
     }
 
     /// Run the polling loop (blocks until cancellation).
@@ -170,17 +180,55 @@ impl ConfigWorker {
         );
 
         let mut consecutive_failures: u32 = 0;
+        let mut last_success: Option<Instant> = None;
+        let mut static_fallback_active: bool = false;
         let mut interval = tokio::time::interval(Duration::from_millis(5000));
 
         loop {
             interval.tick().await;
 
+            // ── Brain health check: fall back to static if down >timeout ──
+            if let Some(last) = last_success {
+                if last.elapsed() > self.brain_timeout && !static_fallback_active {
+                    let outage = last.elapsed().as_secs();
+                    warn!(
+                        "🧠 BRAIN DOWN: bridge unreachable for {outage}s — FALLING BACK to static config"
+                    );
+                    static_fallback_active = true;
+                    {
+                        let mut lock = self.config.write().await;
+                        *lock = DynamicConfig {
+                            generated_by: "static-fallback".to_string(),
+                            reasoning: format!(
+                                "Brain bridge unreachable for >30s — using static defaults (last success: {outage}s ago)"
+                            ),
+                            ..DynamicConfig::default()
+                        };
+                    }
+                }
+            }
+
             match self.poll().await {
                 Ok(Some(cfg)) => {
                     consecutive_failures = 0;
+                    let was_fallback = static_fallback_active;
+                    static_fallback_active = false;
+
                     let mode = &cfg.market_mode;
                     let risk = cfg.min_risk_score;
                     let paused = if cfg.pause_sniping { "⏸ PAUSED" } else { "▶ LIVE" };
+
+                    if was_fallback {
+                        let outage_s = last_success
+                            .map(|last| last.elapsed().as_secs_f64())
+                            .unwrap_or(0.0);
+                        info!(
+                            "🧠 BRAIN RECOVERED: bridge back online after {outage_s:.1}s outage — resuming dynamic config ({})",
+                            &cfg.generated_by,
+                        );
+                    }
+
+                    last_success = Some(Instant::now());
 
                     info!(
                         "📡 ConfigWorker: mode={mode} risk={risk} buy={} SOL tip={}/{} SOL {paused} ({})",
@@ -256,5 +304,125 @@ impl ConfigWorker {
             .context("ConfigWorker: failed to parse JSON response")?;
 
         Ok(Some(config))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_default_config_has_expected_values() {
+        let cfg = DynamicConfig::default();
+        assert_eq!(cfg.min_risk_score, 40, "default risk");
+        assert_eq!(cfg.buy_amount_sol, 0.05, "default buy amount");
+        assert_eq!(cfg.jito_base_tip_sol, 0.005, "default base tip");
+        assert_eq!(cfg.jito_max_tip_sol, 0.02, "default max tip");
+        assert_eq!(cfg.copy_trade_sol, 0.1, "default copy trade");
+        assert_eq!(cfg.max_slippage_bps, 500, "default slippage");
+        assert_eq!(cfg.market_mode, "balanced", "default market mode");
+        assert!(!cfg.pause_sniping, "default not paused");
+        assert!(cfg.tracked_wallets.is_empty(), "default no tracked wallets");
+        assert_eq!(cfg.generated_by, "static", "default generated_by");
+        assert_eq!(cfg.reasoning, "Default configuration (brain offline)", "default reasoning");
+    }
+
+    #[test]
+    fn test_is_agi_generated_various_modes() {
+        let mut cfg = DynamicConfig::default();
+        assert!(!cfg.is_agi_generated(), "static should not be AGI");
+
+        cfg.generated_by = "agi".to_string();
+        assert!(cfg.is_agi_generated(), "agi should be AGI");
+
+        cfg.generated_by = "static-fallback".to_string();
+        assert!(!cfg.is_agi_generated(), "static-fallback should not be AGI");
+
+        cfg.generated_by = "operator_override".to_string();
+        assert!(!cfg.is_agi_generated(), "operator_override should not be AGI");
+
+        cfg.generated_by = "test-brain".to_string();
+        assert!(!cfg.is_agi_generated(), "unknown mode should not be AGI");
+
+        cfg.generated_by = "".to_string();
+        assert!(!cfg.is_agi_generated(), "empty should not be AGI");
+    }
+
+    #[test]
+    fn test_lamports_conversions() {
+        // Default: 0.05 SOL buy, 0.005 base tip, 0.02 max tip, 0.1 copy
+        let cfg = DynamicConfig::default();
+        assert_eq!(cfg.buy_amount_lamports(), 50_000_000);
+        assert_eq!(cfg.jito_base_tip_lamports(), 5_000_000);
+        assert_eq!(cfg.jito_max_tip_lamports(), 20_000_000);
+        assert_eq!(cfg.copy_trade_lamports(), 100_000_000);
+
+        // Custom values
+        let cfg = DynamicConfig {
+            buy_amount_sol: 1.5,
+            jito_base_tip_sol: 0.01,
+            jito_max_tip_sol: 0.05,
+            copy_trade_sol: 2.0,
+            ..DynamicConfig::default()
+        };
+        assert_eq!(cfg.buy_amount_lamports(), 1_500_000_000);
+        assert_eq!(cfg.jito_base_tip_lamports(), 10_000_000);
+        assert_eq!(cfg.jito_max_tip_lamports(), 50_000_000);
+        assert_eq!(cfg.copy_trade_lamports(), 2_000_000_000);
+    }
+
+    #[test]
+    fn test_fallback_config_structure() {
+        // Simulate what the run() method writes when fallback triggers:
+        // DynamicConfig { generated_by: "static-fallback", reasoning: ..., ..DynamicConfig::default() }
+        let outage_secs = 34u64;
+        let fallback = DynamicConfig {
+            generated_by: "static-fallback".to_string(),
+            reasoning: format!(
+                "Brain bridge unreachable for >30s — using static defaults (last success: {outage_secs}s ago)"
+            ),
+            ..DynamicConfig::default()
+        };
+
+        // Config identity: generated_by + reasoning are specific
+        assert_eq!(fallback.generated_by, "static-fallback");
+        assert!(fallback.reasoning.contains("Brain bridge unreachable"));
+        assert!(fallback.reasoning.contains("34s"));
+
+        // All other fields should match defaults
+        let default = DynamicConfig::default();
+        assert_eq!(fallback.min_risk_score, default.min_risk_score);
+        assert_eq!(fallback.buy_amount_sol, default.buy_amount_sol);
+        assert_eq!(fallback.jito_base_tip_sol, default.jito_base_tip_sol);
+        assert_eq!(fallback.jito_max_tip_sol, default.jito_max_tip_sol);
+        assert_eq!(fallback.copy_trade_sol, default.copy_trade_sol);
+        assert_eq!(fallback.max_slippage_bps, default.max_slippage_bps);
+        assert_eq!(fallback.market_mode, default.market_mode);
+        assert_eq!(fallback.pause_sniping, default.pause_sniping);
+        assert!(fallback.tracked_wallets.is_empty());
+    }
+
+    #[test]
+    fn test_serde_deserialize() {
+        // Ensure DynamicConfig can be deserialized from a partial JSON response
+        let json = r#"{
+            "min_risk_score": 60,
+            "buy_amount_sol": 0.2,
+            "market_mode": "conservative",
+            "generated_by": "agi",
+            "reasoning": "High volatility detected"
+        }"#;
+
+        let cfg: DynamicConfig = serde_json::from_str(json).unwrap();
+        assert_eq!(cfg.min_risk_score, 60);
+        assert_eq!(cfg.buy_amount_sol, 0.2);
+        assert_eq!(cfg.market_mode, "conservative");
+        assert_eq!(cfg.generated_by, "agi");
+        assert!(cfg.reasoning.contains("High volatility"));
+
+        // Fields not in JSON should use serde defaults
+        assert_eq!(cfg.jito_base_tip_sol, 0.005, "unset field uses default");
+        assert_eq!(cfg.max_slippage_bps, 500);
+        assert!(!cfg.pause_sniping);
     }
 }
