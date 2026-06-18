@@ -307,12 +307,41 @@ class GodModeController:
         return await _do()
 
     async def _ollama_chat_json(self, system: str, prompt: str) -> Dict[str, Any]:
-        """Direct Ollama chat for GodMode decision-making, traced to Langfuse."""
+        """Direct Ollama chat for GodMode decision-making, traced to Langfuse.
+
+        Flows through the TokenProxy cache when available — identical
+        decisions within TTL are served from cache instead of hitting Ollama.
+        """
         import httpx
+
+        # ── Try TokenProxy cache first ────────────────────────────────
+        try:
+            from empire_token_proxy import get_token_proxy
+            _proxy = get_token_proxy()
+            compressed = _proxy.compress_prompt(prompt, task="controller.ollama")
+            key_data = {"p": compressed, "s": system}
+            result = await _proxy.cached_call(
+                task="controller.ollama",
+                key_data=key_data,
+                llm_call=lambda: self._raw_ollama_call(system, compressed, httpx),
+            )
+            return result
+        except ImportError:
+            pass
+        except Exception as e:
+            log.debug(f"[controller] token proxy bypassed ({e}) — calling Ollama directly")
+
+        # ── Direct fallback (no proxy) ───────────────────────────────
+        return await self._raw_ollama_call(system, prompt, httpx)
+
+    async def _raw_ollama_call(self, system: str, prompt: str, httpx_mod=None) -> Dict[str, Any]:
+        """Raw Ollama call without caching (used by proxy fallback and standalone)."""
+        import httpx as _httpx
+        _http = httpx_mod or _httpx
 
         async def _do() -> Dict[str, Any]:
             try:
-                async with httpx.AsyncClient(timeout=60.0) as client:
+                async with _http.AsyncClient(timeout=60.0) as client:
                     r = await client.post(
                         f"{OLLAMA_URL}/api/chat",
                         json={

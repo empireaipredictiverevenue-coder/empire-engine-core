@@ -71,6 +71,8 @@ from empire_auth import AuthEngine, register_auth_routes, require_role
 from empire_inbound import InboundCallTriage, register_inbound_routes
 from empire_brain_memory import BrainMemory
 from empire_brain_learning import BrainLearning
+from empire_token_proxy import TokenProxy, get_token_proxy
+from empire_event_bus import bus as event_bus, register_event_bus_routes
 from empire_dream import DreamLoop, set_dream_loop, get_latest_wisdom
 from empire_hourly_digest import HourlyDigestLoop
 from bots.seo_agent import run_loop as seo_run_loop
@@ -522,6 +524,14 @@ console = SovereignConsole(
 
 # AI Router + Brain (local Ollama, no external dependencies)
 ai_router = AIRouter(get_db=get_db)
+
+# Token Proxy — transparent caching + dedup + context compression
+# Wraps the router so all LLM calls (brain.decide, enricher, drafting, etc.)
+# flow through the cache automatically. Zero behavioral change.
+token_proxy = get_token_proxy()
+token_proxy.wrap_router(ai_router)
+log.info("[boot] token proxy active — %d task types cached", 9)
+
 brain_decider = BrainDecider(router=ai_router)
 
 # Phase 9: Brain Personality — operator-configurable persona per niche
@@ -549,7 +559,7 @@ storm_orchestrator = StormOrchestrator(
     poll_interval_sec=int(os.environ.get("STORM_POLL_INTERVAL_SEC", "300")),
     lane_count=int(os.environ.get("STORM_LANE_COUNT", "6")),
     max_sends_hour=int(os.environ.get("STORM_MAX_SENDS_PER_HOUR", "50")),
-    max_sends_day=int(os.environ.get("STORM_MAX_SENDS_PER_DAY", "200")),
+    max_sends_day=int(os.environ.get("STORM_MAX_SENDS_PER_DAY", "10000")),
     bounce_breaker_pct=float(os.environ.get("STORM_BOUNCE_BREAKER_PCT", "5")),
 )
 
@@ -970,6 +980,7 @@ register_map_routes(app, scout=storm_orchestrator.scout, get_db=get_db, require_
 register_switchboard_routes(app, require_auth=require_auth)
 register_partner_routes(app, require_auth=require_auth)
 register_data_bridge_routes(app, get_db=get_db, require_auth=require_auth)
+register_event_bus_routes(app, require_auth=require_auth)
 register_bridge_engine_routes(
     app, bridge_engine,
     require_auth=require_auth,
@@ -2801,6 +2812,10 @@ async def _deferred_background_tasks():
     running in the thread-per-startup model).
     """
     await asyncio.sleep(0.5)
+
+    # Event Bus — centralized fleet event system
+    event_bus.start(get_db=get_db, broadcaster=live_broadcaster)
+    log.info("[boot] event bus started — pub/sub + persistence + WebSocket")
 
     # Schedule all persistent background loops.
     # Each runs as an independent asyncio.Task with its own

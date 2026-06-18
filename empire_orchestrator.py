@@ -297,7 +297,7 @@ class StormOrchestrator:
         poll_interval_sec: int = 300,
         lane_count: int = 6,
         max_sends_hour: int = 50,
-        max_sends_day: int = 200,
+        max_sends_day: int = 10000,
         bounce_breaker_pct: float = 5.0,
         autonomy_default: bool = True,
     ):
@@ -462,17 +462,16 @@ class StormOrchestrator:
         target_id = self.state.stage_target(target, source="storm_trigger")
         strike_id = self.state.log_strike(target_id, alert_summary, niche=niche, strategy=None)
 
-        # Rate gate
-        if self._hit_send_limit():
-            if strike_id:
-                self.state.update_strike_status(strike_id, "skipped_rate", extra_meta={"niche": niche})
-            return "skipped_rate"
-
         # Brain gate — retrieval-augmented decision-making
         #  1. Query brain_memory for similar past leads (few-shot examples)
         #  2. Look up tuned urgency floor from brain_learning
         #  3. Pass both as context to brain.decide()
         #  4. Record the decision in brain_memory for future learning
+        #
+        # NOTE: Brain gate runs BEFORE the rate gate so the token proxy
+        # caches the decision even when the system is rate-limited.
+        # On the next tick, similar alerts will hit the cache (~0.3s)
+        # instead of waiting for Ollama (~85s) — compounding speedup.
         if self.brain:
             memory_context = ""
             if self.brain_memory:
@@ -523,6 +522,14 @@ class StormOrchestrator:
         strategy = _agi_governor.strategy_for_niche(niche) if _agi_governor else "AGGRESSIVE_STRIKE"
         if strike_id:
             self.state.update_strike_status(strike_id, "pending", extra_meta={"strategy": strategy, "niche": niche})
+
+        # Rate gate — checks hourly/daily caps.
+        # NOTE: Placed AFTER the brain decision (so token proxy caches it)
+        # but BEFORE email dispatch (so we don't violate send limits).
+        if self._hit_send_limit():
+            if strike_id:
+                self.state.update_strike_status(strike_id, "skipped_rate", extra_meta={"niche": niche})
+            return "skipped_rate"
 
         # Try to enrich email if missing
         target_email = target.get("email")
