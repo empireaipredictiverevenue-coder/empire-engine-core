@@ -322,7 +322,17 @@ tbody tr:last-child td {{ border-bottom: none; }}
   white-space: nowrap; align-self: end;
 }}
 .profile-form button:hover {{ background: transparent; color: var(--teal); outline: 1px solid var(--teal); }}
-.btn { font-family: var(--mono); font-size: 9px; letter-spacing: 0.08em; text-transform: uppercase; padding: 8px 16px; cursor: pointer; border: none; transition: all 0.2s; }
+.btn {{ font-family: var(--mono); font-size: 9px; letter-spacing: 0.08em; text-transform: uppercase; padding: 8px 16px; cursor: pointer; border: none; transition: all 0.2s; }}
+.modal-overlay {{ position:fixed; inset:0; background:rgba(0,0,0,0.6); display:none; align-items:center; justify-content:center; z-index:9999; }}
+.modal-overlay.show {{ display:flex; }}
+.modal-box {{ background:var(--bg2); border:1px solid var(--divider); padding:28px 32px; max-width:420px; width:90%; position:relative; }}
+.modal-close {{ position:absolute; top:12px; right:16px; background:none; border:none; color:var(--fg3); font-size:18px; cursor:pointer; font-family:var(--mono); }}
+.modal-close:hover {{ color:var(--red); }}
+.modal-name {{ font-size:18px; font-weight:500; color:var(--fg); margin-bottom:4px; }}
+.modal-meta-sub {{ font-family:var(--mono); font-size:10px; color:var(--fg3); margin-bottom:16px; }}
+.modal-stat {{ display:flex; justify-content:space-between; padding:8px 0; border-bottom:1px solid var(--divider); font-family:var(--mono); font-size:10px; }}
+.modal-stat-label {{ color:var(--fg3); }}
+.modal-stat-value {{ color:var(--teal); font-weight:600; }}
 .btn-teal {{ background: var(--teal); color: #000; }}
 .btn-teal:hover {{ background: transparent; color: var(--teal); outline: 1px solid var(--teal); }}
 .ccy {{ font-family: var(--mono); font-weight: 400; font-size: 14px; color: var(--fg3); vertical-align: super; }}
@@ -332,6 +342,10 @@ tbody tr:last-child td {{ border-bottom: none; }}
   <div class="header-brand"><span class="e">EMPIRE</span><span class="ai">AI</span></div>
   <h1>Contractor <em>Dashboard</em></h1>
   <div class="header-right">
+    <div id="navRefSection" style="display:none;align-items:center;gap:6px;flex-shrink:1;min-width:0;">
+      <code id="navRefLink" title="Referral link — click Copy to share" style="background:rgba(0,0,0,0.3);padding:4px 8px;font-size:9px;color:var(--amber);border:1px solid rgba(255,184,0,0.15);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:200px;">Loading...</code>
+      <button onclick="copyNavRefLink()" style="font-family:var(--mono);font-size:8px;letter-spacing:0.08em;text-transform:uppercase;background:transparent;color:var(--amber);border:1px solid rgba(255,184,0,0.3);padding:3px 7px;cursor:pointer;white-space:nowrap;flex-shrink:0;">Copy</button>
+    </div>
     <span class="name">{ctr_name}</span>
     <a href="/portal/contractors/logout" class="logout">Sign out</a>
   </div>
@@ -352,6 +366,7 @@ tbody tr:last-child td {{ border-bottom: none; }}
     <button class="tab active" onclick="switchTab('overview')">Overview</button>
     <button class="tab" onclick="switchTab('dispatches')">Dispatches</button>
     <button class="tab" onclick="switchTab('earnings')">Earnings</button>
+    <button class="tab" onclick="switchTab('referrals')">Referrals</button>
     <button class="tab" onclick="switchTab('profile')">Profile</button>
   </div>
 
@@ -362,12 +377,55 @@ tbody tr:last-child td {{ border-bottom: none; }}
       <div class="card"><div class="card-label">Completed</div><div class="card-value cyan" id="stat-completed">--</div></div>
       <div class="card"><div class="card-label">Ghosted</div><div class="card-value" id="stat-ghosted">--</div></div>
       <div class="card"><div class="card-label">Total Earnings</div><div class="card-value teal" id="stat-earnings">$0.00</div></div>
+      <div class="card"><div class="card-label">Referral Bounty Earned</div><div class="card-value amber" id="stat-ref-earned">$0.00</div></div>
+      <div class="card"><div class="card-label">Pending Bounties</div><div class="card-value" id="stat-ref-pending">0</div></div>
       <div class="card"><div class="card-label">Trust Score</div><div class="card-value" id="stat-trust">--</div></div>
+      <div class="card"><div class="card-label">Your Referral Rank</div><div class="card-value amber" id="stat-ref-rank">--</div><div class="card-meta" id="stat-ref-rank-meta"></div></div>
     </div>
     <div class="section">
       <div class="section-title"><strong>Quick Links</strong></div>
       <button class="btn btn-teal" onclick="switchTab('dispatches')" style="margin-right:8px;">View Dispatches →</button>
       <button class="btn btn-teal" onclick="switchTab('earnings')" style="margin-right:8px;">Earnings →</button>
+      <button class="btn btn-teal" onclick="switchTab('referrals')" style="margin-right:8px;">Referrals →</button>
+    </div>
+
+    <!-- ── Referral Quick-View ── -->
+    <div class="section" style="margin-top:0;">
+      <div class="section-title"><strong>Your Referral Link</strong> <span class="count" id="ov-ref-status">—</span></div>
+      <div style="background:var(--bg2);border:1px solid var(--divider);padding:14px 18px;">
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+          <code id="ovRefLink" style="flex:1;background:rgba(0,0,0,0.3);padding:8px 12px;font-family:var(--mono);font-size:11px;color:var(--amber);word-break:break-all;border:1px solid rgba(255,184,0,0.2);min-width:160px;">Loading...</code>
+          <button onclick="copyOvRefLink()" style="font-family:var(--mono);font-size:9px;letter-spacing:0.08em;text-transform:uppercase;background:var(--teal);color:#000;border:none;padding:8px 12px;cursor:pointer;white-space:nowrap;">Copy</button>
+          <button onclick="copyMessage(document.getElementById('ovRefLink').textContent)" style="font-family:var(--mono);font-size:9px;letter-spacing:0.08em;text-transform:uppercase;background:transparent;color:var(--amber);border:1px solid var(--amber);padding:8px 12px;cursor:pointer;white-space:nowrap;">Copy Msg</button>
+          <button onclick="shareViaSms(document.getElementById('ovRefLink').textContent)" style="font-family:var(--mono);font-size:9px;letter-spacing:0.08em;text-transform:uppercase;background:transparent;color:var(--teal);border:1px solid var(--teal);padding:8px 12px;cursor:pointer;white-space:nowrap;">SMS</button>
+          <button onclick="shareViaWhatsApp(document.getElementById('ovRefLink').textContent)" style="font-family:var(--mono);font-size:9px;letter-spacing:0.08em;text-transform:uppercase;background:transparent;color:var(--teal);border:1px solid var(--teal);padding:8px 12px;cursor:pointer;white-space:nowrap;">WhatsApp</button>
+          <button onclick="shareViaTelegram(document.getElementById('ovRefLink').textContent)" style="font-family:var(--mono);font-size:9px;letter-spacing:0.08em;text-transform:uppercase;background:transparent;color:var(--teal);border:1px solid var(--teal);padding:8px 12px;cursor:pointer;white-space:nowrap;">Telegram</button>
+          <button onclick="toggleMoreShare('ov')" id="more-toggle-ov" style="font-family:var(--mono);font-size:9px;letter-spacing:0.08em;text-transform:uppercase;background:transparent;color:var(--fg3);border:1px solid var(--divider);padding:8px 12px;cursor:pointer;white-space:nowrap;">+ More</button>
+        </div>
+        <div id="more-share-ov" style="display:none;margin-top:4px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+          <button onclick="shareViaEmail(document.getElementById('ovRefLink').textContent)" style="font-family:var(--mono);font-size:9px;letter-spacing:0.08em;text-transform:uppercase;background:transparent;color:var(--teal);border:1px solid var(--teal);padding:8px 12px;cursor:pointer;white-space:nowrap;">Email</button>
+          <button onclick="shareViaTwitter(document.getElementById('ovRefLink').textContent)" style="font-family:var(--mono);font-size:9px;letter-spacing:0.08em;text-transform:uppercase;background:transparent;color:var(--teal);border:1px solid var(--teal);padding:8px 12px;cursor:pointer;white-space:nowrap;">X</button>
+          <button onclick="shareViaLinkedIn(document.getElementById('ovRefLink').textContent)" style="font-family:var(--mono);font-size:9px;letter-spacing:0.08em;text-transform:uppercase;background:transparent;color:var(--teal);border:1px solid var(--teal);padding:8px 12px;cursor:pointer;white-space:nowrap;">LinkedIn</button>
+          <button onclick="shareViaFacebook(document.getElementById('ovRefLink').textContent)" style="font-family:var(--mono);font-size:9px;letter-spacing:0.08em;text-transform:uppercase;background:transparent;color:var(--teal);border:1px solid var(--teal);padding:8px 12px;cursor:pointer;white-space:nowrap;">Facebook</button>
+          <button onclick="shareViaReddit(document.getElementById('ovRefLink').textContent)" style="font-family:var(--mono);font-size:9px;letter-spacing:0.08em;text-transform:uppercase;background:transparent;color:var(--teal);border:1px solid var(--teal);padding:8px 12px;cursor:pointer;white-space:nowrap;">Reddit</button>
+          <button onclick="shareViaPinterest(document.getElementById('ovRefLink').textContent)" style="font-family:var(--mono);font-size:9px;letter-spacing:0.08em;text-transform:uppercase;background:transparent;color:var(--teal);border:1px solid var(--teal);padding:8px 12px;cursor:pointer;white-space:nowrap;">Pinterest</button>
+          <button onclick="shareViaMessenger(document.getElementById('ovRefLink').textContent)" style="font-family:var(--mono);font-size:9px;letter-spacing:0.08em;text-transform:uppercase;background:transparent;color:var(--teal);border:1px solid var(--teal);padding:8px 12px;cursor:pointer;white-space:nowrap;">Messenger</button>
+          <button onclick="shareViaTikTok(document.getElementById('ovRefLink').textContent)" style="font-family:var(--mono);font-size:9px;letter-spacing:0.08em;text-transform:uppercase;background:transparent;color:var(--teal);border:1px solid var(--teal);padding:8px 12px;cursor:pointer;white-space:nowrap;">TikTok</button>
+          <button onclick="shareViaSnapchat(document.getElementById('ovRefLink').textContent)" style="font-family:var(--mono);font-size:9px;letter-spacing:0.08em;text-transform:uppercase;background:transparent;color:var(--teal);border:1px solid var(--teal);padding:8px 12px;cursor:pointer;white-space:nowrap;">Snapchat</button>
+        </div>
+        </div>
+        <div style="font-family:var(--mono);font-size:9px;color:var(--fg3);margin-top:8px;display:flex;gap:16px;flex-wrap:wrap;">
+          <span>Earned: <strong style="color:var(--amber);font-weight:600;" id="ov-ref-earned">$0.00</strong></span>
+          <span>Pending: <strong style="color:var(--fg2);font-weight:600;" id="ov-ref-pending-count">0</strong></span>
+          <span>Total Referrals: <strong style="color:var(--teal);font-weight:600;" id="ov-ref-total">0</strong></span>
+        </div>
+        <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--divider);display:flex;align-items:center;gap:16px;">
+          <img id="ovQrCode" src="" alt="QR Code" onerror="this.style.display='none'" style="width:100px;height:100px;border-radius:4px;background:white;padding:4px;display:none;" />
+          <div style="font-size:10px;color:var(--fg3);line-height:1.5;">
+            Scan to share your referral link — post on flyers, job boards, or in person.
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -394,7 +452,117 @@ tbody tr:last-child td {{ border-bottom: none; }}
         <tr><td class="empty" colspan="4">No payouts yet</td></tr>
       </tbody>
     </table>
-  </div>    <div id="tab-profile" class="tab-content">
+  </div>
+
+  <div id="tab-referrals" class="tab-content">
+    <div class="section-title"><strong>Your Referral Link</strong></div>
+    <div style="background:var(--bg2);border:1px solid var(--divider);padding:16px 20px;margin-bottom:20px;">
+      <div style="font-family:var(--mono);font-size:8px;color:var(--fg3);letter-spacing:0.14em;text-transform:uppercase;margin-bottom:6px;">Share this link with other contractors</div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+        <code id="referralLinkDisplay" style="flex:1;background:rgba(0,0,0,0.3);padding:10px 14px;font-family:var(--mono);font-size:11px;color:var(--cyan);word-break:break-all;border:1px solid var(--divider);min-width:200px;">Loading...</code>
+        <button onclick="copyReferralLink()" style="font-family:var(--mono);font-size:9px;letter-spacing:0.08em;text-transform:uppercase;background:var(--teal);color:#000;border:none;padding:10px 14px;cursor:pointer;white-space:nowrap;">Copy Link</button>
+        <button onclick="copyMessage(document.getElementById('referralLinkDisplay').textContent)" style="font-family:var(--mono);font-size:9px;letter-spacing:0.08em;text-transform:uppercase;background:transparent;color:var(--amber);border:1px solid var(--amber);padding:10px 14px;cursor:pointer;white-space:nowrap;">Copy Msg</button>
+        <button onclick="shareViaSms(document.getElementById('referralLinkDisplay').textContent)" style="font-family:var(--mono);font-size:9px;letter-spacing:0.08em;text-transform:uppercase;background:transparent;color:var(--teal);border:1px solid var(--teal);padding:10px 14px;cursor:pointer;white-space:nowrap;">SMS</button>
+        <button onclick="shareViaWhatsApp(document.getElementById('referralLinkDisplay').textContent)" style="font-family:var(--mono);font-size:9px;letter-spacing:0.08em;text-transform:uppercase;background:transparent;color:var(--teal);border:1px solid var(--teal);padding:10px 14px;cursor:pointer;white-space:nowrap;">WhatsApp</button>
+        <button onclick="shareViaTelegram(document.getElementById('referralLinkDisplay').textContent)" style="font-family:var(--mono);font-size:9px;letter-spacing:0.08em;text-transform:uppercase;background:transparent;color:var(--teal);border:1px solid var(--teal);padding:10px 14px;cursor:pointer;white-space:nowrap;">Telegram</button>
+          <button onclick="toggleMoreShare('ref')" id="more-toggle-ref" style="font-family:var(--mono);font-size:9px;letter-spacing:0.08em;text-transform:uppercase;background:transparent;color:var(--fg3);border:1px solid var(--divider);padding:10px 14px;cursor:pointer;white-space:nowrap;">+ More</button>
+        </div>
+        <div id="more-share-ref" style="display:none;margin-top:4px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+          <button onclick="shareViaEmail(document.getElementById('referralLinkDisplay').textContent)" style="font-family:var(--mono);font-size:9px;letter-spacing:0.08em;text-transform:uppercase;background:transparent;color:var(--teal);border:1px solid var(--teal);padding:10px 14px;cursor:pointer;white-space:nowrap;">Email</button>
+          <button onclick="shareViaTwitter(document.getElementById('referralLinkDisplay').textContent)" style="font-family:var(--mono);font-size:9px;letter-spacing:0.08em;text-transform:uppercase;background:transparent;color:var(--teal);border:1px solid var(--teal);padding:10px 14px;cursor:pointer;white-space:nowrap;">X</button>
+          <button onclick="shareViaLinkedIn(document.getElementById('referralLinkDisplay').textContent)" style="font-family:var(--mono);font-size:9px;letter-spacing:0.08em;text-transform:uppercase;background:transparent;color:var(--teal);border:1px solid var(--teal);padding:10px 14px;cursor:pointer;white-space:nowrap;">LinkedIn</button>
+          <button onclick="shareViaFacebook(document.getElementById('referralLinkDisplay').textContent)" style="font-family:var(--mono);font-size:9px;letter-spacing:0.08em;text-transform:uppercase;background:transparent;color:var(--teal);border:1px solid var(--teal);padding:10px 14px;cursor:pointer;white-space:nowrap;">Facebook</button>
+          <button onclick="shareViaReddit(document.getElementById('referralLinkDisplay').textContent)" style="font-family:var(--mono);font-size:9px;letter-spacing:0.08em;text-transform:uppercase;background:transparent;color:var(--teal);border:1px solid var(--teal);padding:10px 14px;cursor:pointer;white-space:nowrap;">Reddit</button>
+          <button onclick="shareViaPinterest(document.getElementById('referralLinkDisplay').textContent)" style="font-family:var(--mono);font-size:9px;letter-spacing:0.08em;text-transform:uppercase;background:transparent;color:var(--teal);border:1px solid var(--teal);padding:10px 14px;cursor:pointer;white-space:nowrap;">Pinterest</button><button onclick="shareViaMessenger(document.getElementById('referralLinkDisplay').textContent)" style="font-family:var(--mono);font-size:9px;letter-spacing:0.08em;text-transform:uppercase;background:transparent;color:var(--teal);border:1px solid var(--teal);padding:10px 14px;cursor:pointer;white-space:nowrap;">Messenger</button>
+          <button onclick="shareViaTikTok(document.getElementById('referralLinkDisplay').textContent)" style="font-family:var(--mono);font-size:9px;letter-spacing:0.08em;text-transform:uppercase;background:transparent;color:var(--teal);border:1px solid var(--teal);padding:10px 14px;cursor:pointer;white-space:nowrap;">TikTok</button>
+          <button onclick="shareViaSnapchat(document.getElementById('referralLinkDisplay').textContent)" style="font-family:var(--mono);font-size:9px;letter-spacing:0.08em;text-transform:uppercase;background:transparent;color:var(--teal);border:1px solid var(--teal);padding:10px 14px;cursor:pointer;white-space:nowrap;">Snapchat</button>
+          </div>
+        </div>
+      <div style="font-family:var(--mono);font-size:9px;color:var(--fg3);margin-top:8px;">
+        When a contractor signs up through your link and closes their first deal, you earn <strong style="color:var(--teal);font-weight:600;">$500</strong>.
+      </div>
+      <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--divider);display:flex;align-items:center;gap:16px;">
+        <img id="refQrCode" src="" alt="QR Code" onerror="this.style.display='none'" style="width:120px;height:120px;border-radius:4px;background:white;padding:4px;display:none;" />
+        <div style="font-size:10px;color:var(--fg3);line-height:1.5;">
+          <strong style="color:var(--teal);font-weight:600;">Scan to share</strong> — print this QR code on flyers, business cards, or job site boards. Anyone who scans it lands on the contractor sign-up page with your referral code pre-attached.
+        </div>
+      </div>
+
+    <div class="grid" style="margin-bottom:20px;">
+      <div class="card"><div class="card-label">Contractors Referred</div><div class="card-value" id="ref-total">--</div></div>
+      <div class="card"><div class="card-label">Signed Up</div><div class="card-value cyan" id="ref-signed">--</div></div>
+      <div class="card"><div class="card-label">Bounties Earned</div><div class="card-value teal" id="ref-earned">$0.00</div></div>
+      <div class="card"><div class="card-label">Pending Bounties</div><div class="card-value" id="ref-pending">0</div></div>
+      <div class="card"><div class="card-label">Bounties Paid</div><div class="card-value teal" id="ref-paid">$0.00</div></div>
+    </div>
+
+    <!-- ── Payout Request Section ── -->
+    <div class="section">
+      <div class="section-title"><strong>Request Payout</strong></div>
+      <div style="background:var(--bg2);border:1px solid var(--divider);padding:20px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:14px;">
+          <div>
+            <div style="font-family:var(--mono);font-size:8px;color:var(--fg3);letter-spacing:0.14em;text-transform:uppercase;margin-bottom:4px;">Available for Payout</div>
+            <div style="font-size:28px;font-weight:200;color:var(--teal);" id="payout-available">$0.00</div>
+          </div>
+          <div id="payout-status" style="display:none;font-family:var(--mono);font-size:10px;color:var(--teal);padding:8px 14px;background:rgba(68,229,184,0.06);border:1px solid rgba(68,229,184,0.2);"></div>
+        </div>
+        <div style="margin-bottom:14px;">
+          <label style="font-family:var(--mono);font-size:8px;color:var(--fg3);letter-spacing:0.14em;text-transform:uppercase;margin-bottom:4px;display:block;">USDC Wallet (Solana)</label>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+            <input type="text" id="payout-wallet" placeholder="Your Solana wallet address for USDC..."
+                   style="flex:1;min-width:200px;background:rgba(0,0,0,0.4);color:var(--fg);border:1px solid var(--divider);font-family:var(--mono);font-size:12px;padding:10px 12px;outline:none;" />
+            <button id="payout-btn" onclick="requestPayout()"
+                    style="font-family:var(--mono);font-size:9px;letter-spacing:0.08em;text-transform:uppercase;background:var(--amber);color:#000;border:none;padding:10px 18px;cursor:pointer;font-weight:600;white-space:nowrap;">Request Payout</button>
+          </div>
+          <div style="font-family:var(--mono);font-size:8px;color:var(--fg3);margin-top:6px;">Leave blank to use your default payout method (USDC).</div>
+        </div>
+        <div id="payout-err" style="display:none;font-family:var(--mono);font-size:10px;color:var(--red);padding:8px 12px;background:rgba(244,63,94,0.06);border:1px solid rgba(244,63,94,0.2);margin-bottom:10px;"></div>
+      </div>
+    </div>
+
+    <div class="section-title"><strong>Referral History</strong></div>
+    <table>
+      <thead><tr><th>Date</th><th>Contractor</th><th>Company</th><th>Metro</th><th>Status</th><th>Bounty</th><th>Bounty Status</th></tr></thead>
+      <tbody id="referralsBody">
+        <tr><td class="empty" colspan="7">Loading...</td></tr>
+      </tbody>
+    </table>
+
+    <!-- ── Payout History ── -->
+    <div class="section-title" style="margin-top:28px;"><strong>Payout History</strong></div>
+    <table>
+      <thead><tr><th>Date</th><th class="num">Amount</th><th>Status</th><th>TX ID</th><th>Method</th></tr></thead>
+      <tbody id="payoutHistoryBody">
+        <tr><td class="empty" colspan="5">No payouts yet</td></tr>
+      </tbody>
+    </table>
+
+    <!-- ── Referral Leaderboard ── -->
+    <div class="section-title" style="margin-top:28px;"><strong>Referral Leaderboard</strong> <span class="count" id="lb-total">—</span></div>
+    <table>
+      <thead><tr><th class="num">#</th><th>Referrer</th><th class="num">Referred</th><th class="num">Total Earned</th><th class="num">Paid</th></tr></thead>
+      <tbody id="leaderboardBody">
+        <tr><td class="empty" colspan="5">Loading...</td></tr>
+      </tbody>
+    </table>
+    <div style="font-family:var(--mono);font-size:8px;color:var(--fg3);margin-top:8px;text-align:right;letter-spacing:0.04em;">Across all contractors · updated on page load</div>
+  </div>
+
+  <!-- ── Contractor Profile Modal ── -->
+  <div class="modal-overlay" id="profileModal" onclick="if(event.target===this)closeProfileModal()">
+    <div class="modal-box">
+      <button class="modal-close" onclick="closeProfileModal()">✕</button>
+      <div id="pmContent">
+        <div class="modal-name" id="pmName">Loading...</div>
+        <div class="modal-meta-sub" id="pmMetro">—</div>
+        <div class="modal-stat"><span class="modal-stat-label">Trust Score</span><span class="modal-stat-value" id="pmTrust">—</span></div>
+        <div class="modal-stat"><span class="modal-stat-label">Specialties</span><span class="modal-stat-value" id="pmSpecs">—</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="tab-profile" class="tab-content">
     <div class="section-title"><strong>Edit Your Profile</strong></div>
     <div class="profile-form">
       <div class="field">
@@ -470,6 +638,32 @@ async function loadStats() {{
     document.getElementById('earnings-fees').textContent = fmtCurrency(d.fee_revenue || 0);
   }} catch (e) {{
     document.querySelectorAll('#statsGrid .card-value').forEach(function(el) {{ el.textContent = 'err'; }});
+  }}
+  // Also load referral summary for overview
+  loadReferralSummary();
+  // Load your referral rank
+  loadYourRank();
+}}
+
+async function loadReferralSummary() {{
+  try {{
+    const d = await apiFetch('/api/v1/contractors/' + CTR_ID + '/referrals');
+    document.getElementById('stat-ref-earned').textContent = fmtCurrency(d.total_earned);
+    document.getElementById('stat-ref-pending').textContent = d.pending_count || 0;
+    // Update overview quick-view
+    document.getElementById('ov-ref-earned').textContent = fmtCurrency(d.total_earned);
+    document.getElementById('ov-ref-pending-count').textContent = d.pending_count || 0;
+    document.getElementById('ov-ref-total').textContent = d.total || 0;
+    const statusEl = document.getElementById('ov-ref-status');
+    if (d.total && d.total > 0) {{
+      statusEl.textContent = d.total + ' referral' + (d.total === 1 ? '' : 's');
+      statusEl.style.color = 'var(--teal)';
+    }} else {{
+      statusEl.textContent = 'No referrals yet';
+      statusEl.style.color = 'var(--fg3)';
+    }}
+  }} catch (e) {{
+    /* non-critical */
   }}
 }}
 
@@ -568,16 +762,464 @@ function switchTab(name) {{
   document.querySelectorAll('.tab').forEach(function(t) {{ t.classList.remove('active'); }});
   document.querySelectorAll('.tab-content').forEach(function(t) {{ t.classList.remove('active'); }});
   var tabs = document.querySelectorAll('.tab');
-  var tabMap = {{ overview: 0, dispatches: 1, earnings: 2, profile: 3 }};
+  var tabMap = {{ overview: 0, dispatches: 1, earnings: 2, referrals: 3, profile: 4 }};
   if (tabMap[name] !== undefined && tabs[tabMap[name]]) {{
     tabs[tabMap[name]].classList.add('active');
   }}
   document.getElementById('tab-' + name).classList.add('active');
   if (name === 'dispatches') loadDispatches();
   if (name === 'earnings') loadEarnings();
+  if (name === 'referrals') {{
+    loadReferrals();
+    loadLeaderboard();
+  }}
+}}
+
+// ── Referral Link ──────────────────────────────────────────────
+let referralCode = null;
+
+async function loadReferralLink() {{
+  try {{
+    const d = await apiFetch('/api/v1/contractors/' + CTR_ID + '/referral-link');
+    if (d.referral_code) {{
+      referralCode = d.referral_code;
+      const link = window.location.origin + '/ref/contractor/' + d.referral_code;
+      document.getElementById('referralLinkDisplay').textContent = link;
+      // Also update overview link
+      const ovEl = document.getElementById('ovRefLink');
+      if (ovEl) ovEl.textContent = link;
+      // Update nav bar link
+      const navEl = document.getElementById('navRefLink');
+      const navSection = document.getElementById('navRefSection');
+      if (navEl) {{ navEl.textContent = link; navEl.title = 'Referral link: ' + link; }}
+      if (navSection) navSection.style.display = 'flex';
+      // Set QR code images (use a free QR code API)
+      const encoded = encodeURIComponent(link);
+      const qrSrc = 'https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=' + encoded;
+      const ovQr = document.getElementById('ovQrCode');
+      if (ovQr) {{ ovQr.src = qrSrc; ovQr.style.display = 'inline'; }}
+      const refQr = document.getElementById('refQrCode');
+      if (refQr) {{ refQr.src = qrSrc; refQr.style.display = 'inline'; }}
+    }}
+  }} catch (e) {{
+    const msg = 'Could not load referral link';
+    document.getElementById('referralLinkDisplay').textContent = msg;
+    const ovEl = document.getElementById('ovRefLink');
+    if (ovEl) ovEl.textContent = msg;
+  }}
+}}
+
+function copyNavRefLink() {{
+  const el = document.getElementById('navRefLink');
+  if (!el) return;
+  const link = el.textContent;
+  if (!link || link === 'Loading...' || link === 'Could not load referral link') return;
+  navigator.clipboard.writeText(link).then(function() {{
+    const btn = document.querySelector('#navRefSection button');
+    if (btn) {{
+      const orig = btn.textContent;
+      btn.textContent = 'Copied!';
+      btn.style.borderColor = 'var(--teal)';
+      btn.style.color = 'var(--teal)';
+      setTimeout(function() {{
+        btn.textContent = orig;
+        btn.style.borderColor = 'rgba(255,184,0,0.3)';
+        btn.style.color = 'var(--amber)';
+      }}, 2000);
+    }}
+  }}).catch(function() {{}});
+}}
+
+function copyReferralLink() {{
+  const el = document.getElementById('referralLinkDisplay');
+  const link = el.textContent;
+  if (!link || link === 'Loading...' || link === 'Could not load referral link') return;
+  navigator.clipboard.writeText(link).then(function() {{
+    const orig = el.textContent;
+    el.textContent = '✓ Copied!';
+    el.style.color = 'var(--teal)';
+    setTimeout(function() {{
+      el.textContent = orig;
+      el.style.color = 'var(--cyan)';
+    }}, 2000);
+  }}).catch(function() {{}});
+}}
+
+function copyOvRefLink() {{
+  const el = document.getElementById('ovRefLink');
+  const link = el.textContent;
+  if (!link || link === 'Loading...' || link === 'Could not load referral link') return;
+  navigator.clipboard.writeText(link).then(function() {{
+    const orig = el.textContent;
+    el.textContent = '✓ Copied!';
+    el.style.color = 'var(--teal)';
+    setTimeout(function() {{
+      el.textContent = orig;
+      el.style.color = 'var(--amber)';
+    }}, 2000);
+  }}).catch(function() {{}});
+}}
+
+function trackShareClick(platform) {{
+  if (!platform) return;
+  try {{
+    navigator.sendBeacon('/api/v1/track/share-click',
+      new Blob([JSON.stringify({{platform: platform}})], {{type: 'application/json'}}));
+  }} catch(e) {{}}
+}}
+
+function shareViaSms(link) {{
+  if (!link || link === 'Loading...' || link === 'Could not load referral link') return;
+  const msg = encodeURIComponent(
+    'Check out Empire AI - earn $500 per contractor you refer! Use my link: ' + link
+  );
+  trackShareClick('sms');
+  window.location.href = 'sms:?body=' + msg;
+}}
+
+function shareViaWhatsApp(link) {{
+  if (!link || link === 'Loading...' || link === 'Could not load referral link') return;
+  const msg = encodeURIComponent(
+    'Check out Empire AI - earn $500 per contractor you refer! Use my link: ' + link
+  );
+  trackShareClick('whatsapp');
+  window.location.href = 'whatsapp://send?text=' + msg;
+}}
+
+// ── Your Referral Rank ───────────────────────────────────────────
+async function loadYourRank() {{
+  try {{
+    const d = await apiFetch('/api/v1/referral-leaderboard?limit=50&current_contractor_id=' + encodeURIComponent(CTR_ID));
+    const rankEl = document.getElementById('stat-ref-rank');
+    const metaEl = document.getElementById('stat-ref-rank-meta');
+    if (!rankEl) return;
+    if (d.your_rank && d.your_rank.rank) {{
+      const rank = d.your_rank.rank;
+      const total = d.total_referrers || 0;
+      const medal = rank === 1 ? '\\uD83E\\uDD47 ' : (rank === 2 ? '\\uD83E\\uDD48 ' : (rank === 3 ? '\\uD83E\\uDD49 ' : ''));
+      rankEl.textContent = medal + '#' + rank;
+      rankEl.className = 'card-value' + (rank <= 3 ? ' amber' : '');
+      if (metaEl) metaEl.textContent = 'of ' + total + ' referrer' + (total === 1 ? '' : 's');
+    }} else {{
+      rankEl.textContent = 'Not ranked';
+      rankEl.className = 'card-value';
+      if (metaEl) metaEl.textContent = 'Refer others to earn bounties';
+    }}
+  }} catch (e) {{
+    /* non-critical */
+    const rankEl = document.getElementById('stat-ref-rank');
+    if (rankEl) rankEl.textContent = '--';
+    if (rankEl) rankEl.className = 'card-value';
+  }}
+}}
+
+function shareViaTelegram(link) {{
+  if (!link || link === 'Loading...' || link === 'Could not load referral link') return;
+  const msg = encodeURIComponent(
+    'Check out Empire AI - earn $500 per contractor you refer! Use my link: ' + link
+  );
+  trackShareClick('telegram');
+  window.location.href = 'tg://msg_url?text=' + msg;
+}}
+
+function shareViaEmail(link) {{
+  if (!link || link === 'Loading...' || link === 'Could not load referral link') return;
+  const subj = encodeURIComponent('Empire AI - Contractor Referral');
+  const body = encodeURIComponent(
+    'Check out Empire AI - earn $500 per contractor you refer! Use my link: ' + link
+  );
+  trackShareClick('email');
+  window.location.href = 'mailto:?subject=' + subj + '&body=' + body;
+}}
+
+function shareViaTwitter(link) {{
+  if (!link || link === 'Loading...' || link === 'Could not load referral link') return;
+  const msg = encodeURIComponent(
+    'Earn $500 per contractor you refer to Empire AI! Use my link: ' + link
+  );
+  trackShareClick('x');
+  window.location.href = 'https://twitter.com/intent/tweet?text=' + msg;
+}}
+
+function shareViaLinkedIn(link) {{
+  if (!link || link === 'Loading...' || link === 'Could not load referral link') return;
+  trackShareClick('linkedin');
+  window.location.href = 'https://www.linkedin.com/sharing/share-offsite/?url=' + encodeURIComponent(link);
+}}
+
+function shareViaFacebook(link) {{
+  if (!link || link === 'Loading...' || link === 'Could not load referral link') return;
+  trackShareClick('facebook');
+  window.location.href = 'https://www.facebook.com/sharer/sharer.php?u=' + encodeURIComponent(link);
+}}
+
+function shareViaReddit(link) {{
+  if (!link || link === 'Loading...' || link === 'Could not load referral link') return;
+  trackShareClick('reddit');
+  window.location.href = 'https://www.reddit.com/submit?url=' + encodeURIComponent(link);
+}}
+
+function shareViaPinterest(link) {{
+  if (!link || link === 'Loading...' || link === 'Could not load referral link') return;
+  trackShareClick('pinterest');
+  window.location.href = 'https://www.pinterest.com/pin/create/button/?url=' + encodeURIComponent(link);
+}}
+
+function shareViaMessenger(link) {{
+  if (!link || link === 'Loading...' || link === 'Could not load referral link') return;
+  trackShareClick('messenger');
+  window.location.href = 'fb-messenger://share/?link=' + encodeURIComponent(link);
+}}
+
+function shareViaTikTok(link) {{
+  if (!link || link === 'Loading...' || link === 'Could not load referral link') return;
+  trackShareClick('tiktok');
+  var text = 'Check out Empire AI - earn $500 per contractor you refer! Use my link: ' + link;
+  // Try Web Share API (mobile) first, fall back to clipboard
+  if (navigator.share) {{
+    navigator.share({{ text: text }}).catch(function() {{}});
+  }} else {{
+    navigator.clipboard.writeText(text).then(function() {{
+      document.querySelectorAll('button[onclick*="shareViaTikTok"]').forEach(function(btn) {{
+        var orig = btn.textContent;
+        btn.textContent = 'Copied!';
+        btn.style.borderColor = 'var(--teal)';
+        btn.style.color = 'var(--teal)';
+        setTimeout(function() {{
+          btn.textContent = orig;
+          btn.style.borderColor = '';
+          btn.style.color = '';
+        }}, 2000);
+      }});
+    }}).catch(function() {{}});
+  }}
+}}
+
+function shareViaSnapchat(link) {{
+  if (!link || link === 'Loading...' || link === 'Could not load referral link') return;
+  trackShareClick('snapchat');
+  window.location.href = 'https://www.snapchat.com/share?link=' + encodeURIComponent(link);
+}}
+
+function toggleMoreShare(id) {{
+  const div = document.getElementById('more-share-' + id);
+  const btn = document.getElementById('more-toggle-' + id);
+  if (!div || !btn) return;
+  const isHidden = div.style.display === 'none' || div.style.display === '';
+  div.style.display = isHidden ? 'flex' : 'none';
+  btn.textContent = isHidden ? '▲ Less' : '+ More';
+  btn.style.borderColor = isHidden ? 'var(--teal)' : 'var(--divider)';
+  btn.style.color = isHidden ? 'var(--teal)' : 'var(--fg3)';
+}}
+
+function copyMessage(link) {{
+  if (!link || link === 'Loading...' || link === 'Could not load referral link') return;
+  const text = 'Check out Empire AI - earn $500 per contractor you refer! Use my link: ' + link;
+  trackShareClick('copy_msg');
+  navigator.clipboard.writeText(text).then(function() {{
+    // Flash feedback on all Copy Msg buttons
+    document.querySelectorAll('button[onclick*="copyMessage"]').forEach(function(btn) {{
+      var orig = btn.textContent;
+      btn.textContent = 'Copied!';
+      btn.style.borderColor = 'var(--teal)';
+      btn.style.color = 'var(--teal)';
+      setTimeout(function() {{
+        btn.textContent = orig;
+        btn.style.borderColor = '';
+        btn.style.color = '';
+      }}, 2000);
+    }});
+  }}).catch(function() {{}});
+}}
+
+// ── Referrals ────────────────────────────────────────────────────
+async function loadReferrals() {{
+  try {{
+    const d = await apiFetch('/api/v1/contractors/' + CTR_ID + '/referrals');
+    document.getElementById('ref-total').textContent = d.total || 0;
+    document.getElementById('ref-signed').textContent = d.signed_up || 0;
+    document.getElementById('ref-earned').textContent = fmtCurrency(d.total_earned);
+    document.getElementById('ref-pending').textContent = d.pending_count || 0;
+    document.getElementById('ref-paid').textContent = fmtCurrency(d.total_paid);
+
+    // Update payout section: earned bounties not yet paid = available for payout
+    const available = d.available_for_payout || 0;
+    document.getElementById('payout-available').textContent = fmtCurrency(available);
+    const payoutBtn = document.getElementById('payout-btn');
+    if (available > 0) {{
+      payoutBtn.disabled = false;
+      payoutBtn.textContent = 'Request Payout — ' + fmtCurrency(available);
+    }} else {{
+      payoutBtn.disabled = true;
+      payoutBtn.textContent = 'No bounties available';
+    }}
+
+    const tbody = document.getElementById('referralsBody');
+    if (!d.referrals || d.referrals.length === 0) {{
+      tbody.innerHTML = '<tr><td class="empty" colspan="7">No referrals yet. Share your link to start earning $500 per contractor who signs up and closes their first deal.</td></tr>';
+      return;
+    }}
+    tbody.innerHTML = d.referrals.map(function(r) {{
+      const bountyStatus = r.bounty_status || 'pending';
+      const bountyLabel = {{ pending: 'Pending', earned: 'Earned \u2713', paid: 'Paid', cancelled: 'Cancelled', payout_requested: 'Payout Requested' }};
+      const bountyColor = {{ pending: 'var(--fg3)', earned: 'var(--teal)', paid: 'var(--teal)', cancelled: 'var(--red)', payout_requested: 'var(--amber)' }};
+      const refStatus = r.referral_status || 'new';
+      return '<tr>' +
+        '<td>' + fmtDate(r.created_at) + '</td>' +
+        '<td>' + _esc(r.referred_name || '--') + '</td>' +
+        '<td>' + _esc(r.referred_company || '--') + '</td>' +
+        '<td>' + _esc(r.referred_metro || '--') + '</td>' +
+        '<td>' + _esc(refStatus) + '</td>' +
+        '<td class="num" style="font-weight:600">$' + (r.bounty_amount || 500).toLocaleString() + '</td>' +
+        '<td style="color:' + (bountyColor[bountyStatus] || 'var(--fg3)') + ';font-weight:600">' + (bountyLabel[bountyStatus] || bountyStatus) + '</td>' +
+      '</tr>';
+    }}).join('');
+
+    // Render payout history
+    const payoutBody = document.getElementById('payoutHistoryBody');
+    if (d.payout_history && d.payout_history.length > 0) {{
+      payoutBody.innerHTML = d.payout_history.map(function(p) {{
+        const pStatus = p.status || 'paid';
+        const dt = p.paid_at || p.created_at;
+        const txId = p.payout_tx_id || '';
+        const pMethod = p.payout_method || 'usdc';
+        return '<tr>' +
+          '<td>' + fmtDate(dt) + '</td>' +
+          '<td class="num" style="font-weight:600">$' + Number(p.bounty_amount).toLocaleString(undefined, {{ minimumFractionDigits: 2 }}) + '</td>' +
+          '<td><span class="badge ' + (pStatus === 'paid' ? 'sent' : (pStatus === 'cancelled' ? 'expired' : '')) + '">' + _esc(pStatus) + '</span></td>' +
+          '<td style="font-size:9px;color:var(--fg3);font-family:var(--mono);max-width:120px;overflow:hidden;text-overflow:ellipsis" title="' + _esc(txId) + '">' + (txId ? txId.slice(0, 12) + '…' : '—') + '</td>' +
+          '<td style="font-size:9px;color:var(--fg3);font-family:var(--mono)">' + _esc(pMethod) + '</td>' +
+        '</tr>';
+      }}).join('');
+    }} else {{
+      payoutBody.innerHTML = '<tr><td class="empty" colspan="5">No payouts yet</td></tr>';
+    }}
+  }} catch (e) {{
+    document.getElementById('referralsBody').innerHTML = '<tr><td class="empty" colspan="7">Failed to load referrals</td></tr>';
+  }}
+}}
+
+// ── Referral Leaderboard ────────────────────────────────────────────
+async function loadLeaderboard() {{
+  try {{
+    const d = await apiFetch('/api/v1/referral-leaderboard?current_contractor_id=' + encodeURIComponent(CTR_ID));
+    const tbody = document.getElementById('leaderboardBody');
+    const totalEl = document.getElementById('lb-total');
+    if (totalEl) totalEl.textContent = d.total_referrers + ' referrer' + (d.total_referrers === 1 ? '' : 's');
+    if (!d.leaderboard || d.leaderboard.length === 0) {{
+      tbody.innerHTML = '<tr><td class="empty" colspan="5">No referrals with earned bounties yet — be the first!</td></tr>';
+      return;
+    }}
+    var rows = d.leaderboard.map(function(e) {{
+      var rankCls = e.rank === 1 ? 'color:var(--amber);font-weight:700' : (e.rank <= 3 ? 'color:var(--teal);font-weight:600' : 'color:var(--fg3)');
+      var medal = e.rank === 1 ? '\\uD83E\\uDD47 ' : (e.rank === 2 ? '\\uD83E\\uDD48 ' : (e.rank === 3 ? '\\uD83E\\uDD49 ' : ''));
+      var bgStyle = e.is_you ? 'background:rgba(68,229,184,0.08);outline:1px solid rgba(68,229,184,0.25);' : '';
+      var nameLabel = e.is_you ? '<strong style="color:var(--teal)">' + _esc(e.name) + ' ← You</strong>' : '<span style="color:var(--fg2);cursor:pointer;border-bottom:1px dotted var(--fg3)" onclick="showContractorProfile('' + _esc(e.id || '') + '')">' + _esc(e.name) + '</span>';
+      return '<tr style="' + bgStyle + '">' +
+        '<td class="num" style="' + rankCls + '">' + medal + e.rank + '</td>' +
+        '<td style="font-weight:600">' + nameLabel + '</td>' +
+        '<td class="num">' + e.total_referrals + '</td>' +
+        '<td class="num" style="color:var(--amber);font-weight:600">' + fmtCurrency(e.total_earned) + '</td>' +
+        '<td class="num" style="color:var(--teal)">' + fmtCurrency(e.total_paid) + '</td>' +
+      '</tr>';
+    }}).join('');
+
+    // If the logged-in contractor is outside the top 10, add a "Your Position" row
+    if (d.your_rank && d.your_rank.rank > 10) {{
+      rows += '<tr style="border-top:2px solid var(--divider)"><td class="empty" colspan="5" style="font-family:var(--mono);font-size:8px;color:var(--fg3);padding:6px 14px;text-align:center;letter-spacing:0.08em;text-transform:uppercase;">Your Position</td></tr>';
+      rows += '<tr style="background:rgba(68,229,184,0.08);outline:1px solid rgba(68,229,184,0.25);">' +
+        '<td class="num" style="color:var(--teal);font-weight:700">' + d.your_rank.rank + '</td>' +
+        '<td style="font-weight:600;color:var(--teal)">' + _esc(d.your_rank.name) + ' ← You</td>' +
+        '<td class="num">' + d.your_rank.total_referrals + '</td>' +
+        '<td class="num" style="color:var(--amber);font-weight:600">' + fmtCurrency(d.your_rank.total_earned) + '</td>' +
+        '<td class="num" style="color:var(--teal)">' + fmtCurrency(d.your_rank.total_paid) + '</td>' +
+      '</tr>';
+    }}
+
+    tbody.innerHTML = rows;
+  }} catch (e) {{
+    document.getElementById('leaderboardBody').innerHTML = '<tr><td class="empty" colspan="5">Failed to load leaderboard</td></tr>';
+  }}
+}}
+
+// ── Request Payout ────────────────────────────────────────────────
+async function requestPayout() {{
+  const btn = document.getElementById('payout-btn');
+  const wallet = document.getElementById('payout-wallet').value.trim();
+  const statusEl = document.getElementById('payout-status');
+  const errEl = document.getElementById('payout-err');
+
+  statusEl.style.display = 'none';
+  errEl.style.display = 'none';
+  btn.disabled = true;
+  btn.textContent = 'Requesting...';
+
+  try {{
+    const r = await fetch('/api/v1/contractors/' + CTR_ID + '/bounty-payout-request', {{
+      method: 'POST',
+      headers: {{ 'Content-Type': 'application/json' }},
+      body: JSON.stringify({{
+        payout_method: wallet ? 'usdc' : 'usdc',
+        payout_address: wallet || '',
+      }}),
+      credentials: 'include',
+    }});
+    const d = await r.json();
+    if (r.ok && d.ok) {{
+      statusEl.style.display = 'block';
+      statusEl.textContent = '✓ Payout requested! ' + fmtCurrency(d.total_amount) + ' (' + d.payout_count + ' bounties) — we\'ll process within 30 days.';
+      // Reset UI
+      document.getElementById('payout-available').textContent = '$0.00';
+      btn.textContent = 'No bounties available';
+      // Refresh referral stats
+      loadReferrals();
+    }} else {{
+      errEl.style.display = 'block';
+      errEl.textContent = '✗ ' + (d.error || 'Request failed. Please try again.');
+      btn.disabled = false;
+      btn.textContent = 'Request Payout';
+    }}
+  }} catch (e) {{
+    errEl.style.display = 'block';
+    errEl.textContent = '✗ Network error. Please try again.';
+    btn.disabled = false;
+    btn.textContent = 'Request Payout';
+  }}
+}}
+
+// ── Contractor Profile Modal (from leaderboard click) ──────────
+async function showContractorProfile(ctrId) {{
+  const overlay = document.getElementById('profileModal');
+  const nameEl = document.getElementById('pmName');
+  const metroEl = document.getElementById('pmMetro');
+  const trustEl = document.getElementById('pmTrust');
+  const specsEl = document.getElementById('pmSpecs');
+  nameEl.textContent = 'Loading...';
+  metroEl.textContent = '';
+  trustEl.textContent = '';
+  specsEl.textContent = '';
+  overlay.classList.add('show');
+  try {{
+    const r = await fetch('/api/v1/contractor-public/' + encodeURIComponent(ctrId));
+    const d = await r.json();
+    if (d.ok) {{
+      nameEl.textContent = _esc(d.name);
+      metroEl.textContent = _esc(d.metro || '—');
+      trustEl.textContent = d.trust_score != null ? d.trust_score.toFixed(1) + ' / 10' : '—';
+      specsEl.textContent = d.specialties && d.specialties.length > 0 ? _esc(d.specialties.join(', ')) : '—';
+    }} else {{
+      nameEl.textContent = 'Not found';
+    }}
+  }} catch (e) {{
+    nameEl.textContent = 'Error loading profile';
+  }}
+}}
+function closeProfileModal() {{
+  document.getElementById('profileModal').classList.remove('show');
 }}
 
 loadStats();
+loadReferralLink();
 </script>
 </body></html>"""
 
@@ -591,7 +1233,13 @@ def register_contractor_portal_routes(
     send_email: Callable,
     public_base_url: str,
 ):
-    """Register contractor portal routes."""
+    """Register contractor portal routes + referral tracking routes.
+
+    Also registers the public /ref/contractor/{code} tracking endpoint
+    and its companion register_contractor_referral_tracking_routes().
+    """
+    # Always register the tracking routes (no auth required)
+    register_contractor_referral_tracking_routes(app, public_base_url=public_base_url)
 
     # ── PUBLIC: LOGIN PAGE ────────────────────────────────────────────
     @app.get("/portal/contractors/login", response_class=HTMLResponse)
@@ -995,4 +1643,416 @@ def register_contractor_portal_routes(
             log.error(f"[contractor_portal] active-dispatch error: {e}")
             return {"active": False, "dispatch": None, "error": str(e)[:80]}
 
-    log.info("[contractor_portal] Routes registered - /portal/contractors/{login,verify,dashboard,logout} + /api/v1/contractors/{stats,dispatches,earnings,profile,active-dispatch}")
+    # ── API: REFERRAL LINK (get or create unique referral code) ───────
+    @app.get("/api/v1/contractors/{contractor_id}/referral-link")
+    async def ctr_referral_link(contractor_id: str, request: Request):
+        """Return the contractor's unique referral link/code for the $500 bounty program.
+        Creates one if the contractor doesn't have a referral_code yet.
+        Returns {referral_code, referral_url}."""
+        contractor = _resolve_contractor(request)
+        if not contractor or str(contractor.get("id", "")) != contractor_id:
+            raise HTTPException(401, "Authentication required")
+
+        try:
+            # Check if contractor already has a referral_code
+            res = _SB.table("contractors").select("referral_code, name") \
+                .eq("id", contractor_id).limit(1).execute()
+            if not res.data:
+                raise HTTPException(404, "Contractor not found")
+
+            ref_code = res.data[0].get("referral_code")
+            if ref_code:
+                base_url = public_base_url.rstrip("/")
+                return {
+                    "referral_code": ref_code,
+                    "referral_url": f"{base_url}/ref/contractor/{ref_code}",
+                }
+
+            # Generate a new referral code
+            name = res.data[0].get("name", "contractor")
+            base = name.strip().lower()
+            base = "".join(c if c.isalnum() else "-" for c in base)[:20].rstrip("-")
+            suffix = secrets.token_hex(2).upper()
+            ref_code = f"{base}-{suffix}" if base else f"ctr-{suffix}"
+
+            _SB.table("contractors").update({"referral_code": ref_code}) \
+                .eq("id", contractor_id).execute()
+
+            log.info(f"[contractor_portal] referral code created for {contractor_id}: {ref_code}")
+            base_url = public_base_url.rstrip("/")
+            return {
+                "referral_code": ref_code,
+                "referral_url": f"{base_url}/ref/contractor/{ref_code}",
+            }
+        except HTTPException:
+            raise
+        except Exception as e:
+            log.error(f"[contractor_portal] referral-link error: {e}")
+            raise HTTPException(500, str(e)[:80])
+
+    # ── API: REFERRALS LIST ───────────────────────────────────────────
+    @app.get("/api/v1/contractors/{contractor_id}/referrals")
+    async def ctr_referrals_list(
+        contractor_id: str,
+        request: Request,
+        limit: int = Query(50, ge=1, le=200),
+    ):
+        """Return referrals made by this contractor with bounty tracking."""
+        contractor = _resolve_contractor(request)
+        if not contractor or str(contractor.get("id", "")) != contractor_id:
+            raise HTTPException(401, "Authentication required")
+
+        try:
+            # Query the contractor_referral_view for this referrer
+            refs = _SB.table("contractor_referral_view").select("*") \
+                .eq("referrer_contractor_id", contractor_id) \
+                .order("created_at", desc=True) \
+                .limit(limit) \
+                .execute()
+            rows = refs.data or []
+
+            # Aggregate stats
+            total = len(rows)
+            signed_up = sum(1 for r in rows if r.get("referred_contractor_id") is not None)
+            total_earned = sum(float(r.get("bounty_amount", 0) or 0) for r in rows if r.get("bounty_status") in ("earned", "paid"))
+            total_paid = sum(float(r.get("bounty_amount", 0) or 0) for r in rows if r.get("bounty_status") == "paid")
+            pending_count = sum(1 for r in rows if r.get("bounty_status") == "pending")
+
+            # Also query referral_payouts for additional paid info
+            try:
+                payouts = _SB.table("referral_payouts").select("bounty_amount") \
+                    .eq("referrer_contractor_id", contractor_id) \
+                    .eq("status", "paid") \
+                    .execute()
+                total_paid_from_payouts = sum(float(p.get("bounty_amount", 0) or 0) for p in (payouts.data or []))
+                if total_paid_from_payouts > total_paid:
+                    total_paid = total_paid_from_payouts
+            except Exception:
+                pass
+
+            # Calculate available_for_payout: earned bounties that haven't been paid yet
+            # Query referral_payouts for this referrer with status='earned' (not yet paid/requested)
+            available_for_payout = 0
+            try:
+                payout_rows = _SB.table("referral_payouts").select("bounty_amount") \
+                    .eq("referrer_contractor_id", contractor_id) \
+                    .eq("status", "earned") \
+                    .execute()
+                available_for_payout = sum(float(p.get("bounty_amount", 0) or 0) for p in (payout_rows.data or []))
+            except Exception:
+                pass
+
+            # Query payout history: paid, cancelled, payout_requested payouts with tx IDs
+            payout_history = []
+            try:
+                hist_res = _SB.table("referral_payouts").select("*") \
+                    .eq("referrer_contractor_id", contractor_id) \
+                    .in_("status", ["paid", "cancelled", "payout_requested"]) \
+                    .order("paid_at", desc=True, nullslast=True) \
+                    .order("created_at", desc=True) \
+                    .limit(limit) \
+                    .execute()
+                payout_history = hist_res.data or []
+            except Exception:
+                pass
+
+            return {
+                "referrals": rows,
+                "total": total,
+                "signed_up": signed_up,
+                "total_earned": round(total_earned, 2),
+                "total_paid": round(total_paid, 2),
+                "pending_count": pending_count,
+                "available_for_payout": round(available_for_payout, 2),
+                "payout_history": payout_history,
+            }
+        except Exception as e:
+            log.error(f"[contractor_portal] referrals error: {e}")
+            return {"referrals": [], "total": 0, "signed_up": 0, "total_earned": 0, "total_paid": 0}
+
+    # ── API: BOUNTY PAYOUT REQUEST ────────────────────────────────────
+    @app.post("/api/v1/contractors/{contractor_id}/bounty-payout-request")
+    async def ctr_bounty_payout_request(contractor_id: str, request: Request):
+        """
+        Request payout for all earned bounties.
+
+        Finds all referral_payouts for this contractor with status='earned'
+        and marks them as 'payout_requested'. Records the payout method
+        (default: USDC). Sends an ntfy notification to operators.
+
+        Body:
+            payout_method (str, optional): 'usdc' (default)
+            payout_address (str, optional): Solana wallet address
+
+        Returns:
+            {ok, payout_count, total_amount}
+        """
+        contractor = _resolve_contractor(request)
+        if not contractor or str(contractor.get("id", "")) != contractor_id:
+            raise HTTPException(401, "Authentication required")
+
+        try:
+            body = await request.json()
+        except Exception:
+            body = {}
+
+        payout_method = (body.get("payout_method") or "usdc").strip()
+        payout_address = (body.get("payout_address") or "").strip()
+        now_iso = datetime.now(timezone.utc).isoformat()
+
+        try:
+            # Find all earned bounties for this contractor
+            earned_rows = _SB.table("referral_payouts").select("id,bounty_amount,contractor_referral_id") \
+                .eq("referrer_contractor_id", contractor_id) \
+                .eq("status", "earned") \
+                .limit(100) \
+                .execute()
+
+            if not earned_rows.data:
+                return {"ok": False, "error": "No earned bounties available for payout"}
+
+            payout_ids = [r["id"] for r in earned_rows.data]
+            total_amount = sum(float(r.get("bounty_amount", 0) or 0) for r in earned_rows.data)
+            payout_count = len(payout_ids)
+
+            # Update all earned payouts to payout_requested
+            meta_update = {
+                "payout_method": payout_method,
+            }
+            if payout_address:
+                meta_update["payout_address"] = payout_address
+
+            _SB.table("referral_payouts").update({
+                "status": "payout_requested",
+                "notes": f"Payout requested via contractor portal ({now_iso}). Method: {payout_method}.",
+                "meta": meta_update,
+            }).eq("referrer_contractor_id", contractor_id).eq("status", "earned").execute()
+
+            # Also mark the related contractor_referrals rows
+            for r in earned_rows.data:
+                ref_id = r.get("contractor_referral_id")
+                if ref_id:
+                    try:
+                        _SB.table("contractor_referrals").update({
+                            "bounty_status": "payout_requested",
+                            "notes": f"Payout requested via portal. {now_iso}",
+                        }).eq("id", ref_id).execute()
+                    except Exception:
+                        pass
+
+            # Send ntfy notification to operators
+            try:
+                import httpx as _httpx
+                ctr_name = contractor.get("name", "Contractor")
+                ctr_phone = contractor.get("phone", "")
+                ntfy_topic = os.environ.get("NTFY_TOPIC", "").strip()
+                ntfy_token = os.environ.get("NTFY_TOKEN", "").strip()
+                if ntfy_topic:
+                    headers = {
+                        "Title": f"💸 Bounty Payout Request — ${total_amount:,.0f}",
+                        "Tags": "money-with-wings",
+                        "Priority": "4",
+                    }
+                    if ntfy_token:
+                        headers["Authorization"] = f"Bearer {ntfy_token}"
+                    ntfy_msg = (
+                        f"{ctr_name} ({ctr_phone[:15]}) requested ${total_amount:,.2f} "
+                        f"payout for {payout_count} bounties. "
+                        f"Method: {payout_method}. "
+                        f"Wallet: {payout_address[:20] if payout_address else '—'}."
+                    )
+                    async with _httpx.AsyncClient(timeout=10) as _client:
+                        await _client.post(
+                            f"https://ntfy.sh/{ntfy_topic}",
+                            content=ntfy_msg,
+                            headers=headers,
+                        )
+            except Exception as e:
+                log.warning(f"[bounty_payout] ntfy notification failed: {e}")
+
+            log.info(
+                f"[bounty_payout] Payout requested: contractor={contractor_id} "
+                f"count={payout_count} total=${total_amount:,.2f} method={payout_method}"
+            )
+
+            return {
+                "ok": True,
+                "payout_count": payout_count,
+                "total_amount": round(total_amount, 2),
+                "payout_method": payout_method,
+            }
+
+        except Exception as e:
+            log.error(f"[bounty_payout] payout request error: {e}")
+            raise HTTPException(500, str(e)[:200])
+
+    # ── API: REFERRAL LEADERBOARD ───────────────────────────────────
+    @app.get("/api/v1/referral-leaderboard")
+    async def ctr_referral_leaderboard(
+        limit: int = Query(10, ge=1, le=50),
+        current_contractor_id: str = Query("", description="If provided, returns this contractor's rank"),
+    ):
+        """Return top referrers by total bounty earned across all contractors.
+        No auth required — displayed publicly in the contractor dashboard.
+        If current_contractor_id is provided, computes your_rank for that contractor.
+        Returns {leaderboard, total_referrers, your_rank}
+        """
+        try:
+            # Fetch all referral_payouts with status in (earned, paid)
+            res = _SB.table("referral_payouts").select("referrer_contractor_id, bounty_amount, status") \
+                .in_("status", ["earned", "paid"]) \
+                .limit(5000) \
+                .execute()
+
+            if not res.data:
+                return {"leaderboard": [], "total_referrers": 0, "your_rank": None}
+
+            # Aggregate by referrer_contractor_id
+            agg: dict[str, dict] = {}
+            for row in res.data:
+                rid = row.get("referrer_contractor_id")
+                if not rid:
+                    continue
+                if rid not in agg:
+                    agg[rid] = {
+                        "referrer_contractor_id": rid,
+                        "total_referrals": 0,
+                        "total_earned": 0.0,
+                        "total_paid": 0.0,
+                    }
+                bounty = float(row.get("bounty_amount", 0) or 0)
+                agg[rid]["total_referrals"] += 1
+                agg[rid]["total_earned"] += bounty
+                if row.get("status") == "paid":
+                    agg[rid]["total_paid"] += bounty
+
+            # Fetch names from contractors table
+            ref_ids = list(agg.keys())
+            names_map: dict[str, str] = {}
+            try:
+                ctr_res = _SB.table("contractors").select("id, name") \
+                    .in_("id", ref_ids).execute()
+                for c in (ctr_res.data or []):
+                    cid = c.get("id")
+                    if cid:
+                        names_map[cid] = c.get("name", "Unknown")
+            except Exception:
+                pass
+
+            # Sort by total_earned descending
+            sorted_refs = sorted(agg.values(), key=lambda x: x["total_earned"], reverse=True)
+
+            # Assign rank and trim
+            result = []
+            your_rank = None
+            for i, entry in enumerate(sorted_refs):
+                rank = i + 1
+                is_current = bool(current_contractor_id) and str(entry["referrer_contractor_id"]) == current_contractor_id
+                if rank <= limit:
+                    result.append({
+                        "id": entry["referrer_contractor_id"],
+                        "rank": rank,
+                        "name": names_map.get(entry["referrer_contractor_id"], "Unknown"),
+                        "total_referrals": entry["total_referrals"],
+                        "total_earned": round(entry["total_earned"], 2),
+                        "total_paid": round(entry["total_paid"], 2),
+                        "is_you": is_current,
+                    })
+                if is_current:
+                    your_rank = {
+                        "rank": rank,
+                        "name": names_map.get(current_contractor_id, "You"),
+                        "total_referrals": entry["total_referrals"],
+                        "total_earned": round(entry["total_earned"], 2),
+                        "total_paid": round(entry["total_paid"], 2),
+                    }
+
+            return {"leaderboard": result, "total_referrers": len(agg), "your_rank": your_rank}
+        except Exception as e:
+            log.error(f"[referral_leaderboard] query error: {e}")
+            return {"leaderboard": [], "total_referrers": 0, "your_rank": None}
+
+    # ── API: PUBLIC CONTRACTOR PROFILE (no auth) ────────────────────────
+    @app.get("/api/v1/contractor-public/{contractor_id}")
+    async def ctr_public_profile(contractor_id: str):
+        """Return basic public info for any contractor. No auth required.
+        Used by the leaderboard modal to show contractor details."""
+        try:
+            res = _SB.table("contractors").select("name, metro, specialties, trust_score, active")                 .eq("id", contractor_id).limit(1).execute()
+            if not res.data:
+                return {"ok": False, "error": "Contractor not found"}
+            c = res.data[0]
+            return {
+                "ok": True,
+                "id": contractor_id,
+                "name": c.get("name", "Unknown"),
+                "metro": c.get("metro", "—"),
+                "specialties": c.get("specialties", []),
+                "trust_score": float(c.get("trust_score", 5.0)),
+            }
+        except Exception as e:
+            log.error(f"[contractor_public] profile error: {e}")
+            return {"ok": False, "error": str(e)[:80]}
+
+    log.info("[contractor_portal] Routes registered - /portal/contractors/{login,verify,dashboard,logout} + /api/v1/contractors/{stats,dispatches,earnings,profile,active-dispatch,referral-link,referrals,bounty-payout-request} + /api/v1/referral-leaderboard + /api/v1/contractor-public/{id} + /ref/contractor/{code}")
+
+
+# ─────────────────────────────────────────────────────────────────────
+# CONTRACTOR REFERRAL TRACKING ROUTES (standalone, no auth)
+# ─────────────────────────────────────────────────────────────────────
+def register_contractor_referral_tracking_routes(
+    app: FastAPI,
+    *,
+    public_base_url: str,
+):
+    """Register the /ref/contractor/{code} tracking landing page.
+    No auth required — this is a public redirect endpoint.
+    """
+
+    _CONTRACTOR_REF_REFERRAL_COOKIE = "contractor_ref"
+
+    @app.get("/ref/contractor/{code}")
+    async def contractor_ref_redirect(code: str):
+        """
+        Landing page for contractor-to-contractor referrals. Sets a
+        tracking cookie and redirects to the contractor self-onboard page.
+
+        The cookie (`contractor_ref`) is read by the onboard form to
+        auto-tag new signups with the referrer code.
+
+        When the referred contractor completes the onboard form at
+        /api/contractors/onboard, the handler checks for this cookie
+        and creates a contractor_referrals record linking back to
+        the referrer.
+
+        Cookie: 90-day expiry (contractors network slowly).
+        """
+        base = public_base_url.rstrip("/")
+
+        # Log the click in a lightweight way
+        try:
+            # Check if this referral_code exists — if not, redirect anyway
+            from supabase import create_client as _create_client
+            _tmp_sb = _create_client(
+                os.getenv("SUPABASE_URL", ""),
+                os.getenv("SUPABASE_SERVICE_KEY", ""),
+            )
+            res = _tmp_sb.table("contractors").select("name") \
+                .eq("referral_code", code).limit(1).execute()
+            if res.data:
+                log.info(f"[contractor_ref] tracking click: {code} -> {res.data[0].get('name', '?')}")
+        except Exception:
+            pass
+
+        response = RedirectResponse(url=f"{base}/contractors", status_code=302)
+        response.set_cookie(
+            key=_CONTRACTOR_REF_REFERRAL_COOKIE,
+            value=code,
+            max_age=60 * 60 * 24 * 90,  # 90 days
+            httponly=False,
+            samesite="lax",
+            path="/",
+        )
+        return response
+
+    log.info("[contractor_ref] Routes registered - /ref/contractor/{code}")

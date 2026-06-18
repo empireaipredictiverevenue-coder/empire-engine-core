@@ -30,6 +30,7 @@ Usage in hub.py:
     from empire_fee import register_fee_routes
     register_fee_routes(app, require_auth=require_auth)
 """
+import asyncio
 import logging
 import os
 import uuid
@@ -113,6 +114,17 @@ def register_fee_routes(
             r = db.table("fee_events").insert(fee_event).execute()
             inserted_id = r.data[0]["id"] if r.data else None
             log.info(f"[fee] claim-settled webhook: claim={claim_id} amount=${claim_amount} fee=${fee} contractor={contractor_id} lead={lead_id}")
+
+            # ── Referral bounty check: if this is the contractor's first fee_event,
+            # automatically mark any pending referral bounties as 'earned' ────
+            if contractor_id and inserted_id:
+                try:
+                    from bots.bounty_tracker import check_bounty_eligible
+                    bounty_event = dict(fee_event, id=inserted_id)
+                    asyncio.create_task(check_bounty_eligible(bounty_event, db=db))
+                except Exception as bounty_err:
+                    log.warning(f"[fee] bounty check failed (non-fatal): {bounty_err}")
+
             return {
                 "ok": True,
                 "fee_event": {

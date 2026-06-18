@@ -560,6 +560,45 @@ async def contractors_onboard(request: Request) -> JSONResponse:
 
     contractor_id = ins.data[0].get("id")
     log.info(f"[contractors_onboard] new prospect: {contractor_id} phone={phone} trade={trade}")
+
+    # ── Referral tracking ──
+    try:
+        ref_cookie = request.cookies.get("contractor_ref", "")
+        if ref_cookie and contractor_id:
+            ref_res = db.table("contractors").select("id, name, phone") \
+                .eq("referral_code", ref_cookie).limit(1).execute()
+            if ref_res.data:
+                referrer = ref_res.data[0]
+                referrer_id = referrer["id"]
+                cr_payload = {
+                    "referrer_contractor_id": referrer_id,
+                    "referrer_phone": referrer.get("phone", ""),
+                    "referred_name": name,
+                    "referred_phone": phone,
+                    "referred_company": company,
+                    "referred_metro": service_area,
+                    "referred_contractor_id": contractor_id,
+                    "referred_email": email,
+                    "referral_code": ref_cookie,
+                    "status": "new",
+                    "bounty_status": "pending",
+                    "bounty_amount": 500.00,
+                }
+                db.table("contractor_referrals").insert(cr_payload).execute()
+                log.info(f"[contractors_onboard] referral tracked: {referrer_id} via code {ref_cookie}")
+                # Fire-and-forget: ntfy + SMS to referrer
+                import asyncio as _ref_asyncio
+                _ref_asyncio.ensure_future(_notify_referral_signup(
+                    referrer_name=referrer.get("name", "Contractor"),
+                    referrer_phone=referrer.get("phone", ""),
+                    referred_name=name,
+                    referred_company=company,
+                    referred_metro=service_area,
+                    referred_phone=phone,
+                ))
+    except Exception as e:
+        log.warning(f"[contractors_onboard] referral tracking failed: {e}")
+
     return JSONResponse({
         "ok": True,
         "contractor_id": contractor_id,
@@ -792,6 +831,78 @@ def _is_opted_out_for_refer(db, phone: str) -> bool:
         return bool(r.data)
     except Exception:
         return False
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Referral signup notification helper (fire-and-forget)
+# ─────────────────────────────────────────────────────────────────────────────
+
+async def _notify_referral_signup(
+    referrer_name: str,
+    referrer_phone: str,
+    referred_name: str,
+    referred_company: str,
+    referred_metro: str,
+    referred_phone: str,
+):
+    """Fire-and-forget: send ntfy notification to operators + SMS to referrer."""
+    import httpx as _r_httpx
+
+    # 1. Ntfy notification to operators
+    ntfy_topic = os.environ.get("NTFY_TOPIC", "").strip()
+    ntfy_token = os.environ.get("NTFY_TOKEN", "").strip()
+    if ntfy_topic:
+        try:
+            headers = {
+                "Title": f"\U0001f4e5 New Referral Signup \u2014 {referred_company or referred_name}",
+                "Tags": "inbox_tray",
+                "Priority": "4",
+            }
+            if ntfy_token:
+                headers["Authorization"] = f"Bearer {ntfy_token}"
+            ntfy_msg = (
+                f"{referred_name} ({referred_company}) signed up using "
+                f"{referrer_name}'s referral link. "
+                f"Metro: {referred_metro}. "
+                f"Phone: {referred_phone}."
+            )
+            async with _r_httpx.AsyncClient(timeout=10) as _r_client:
+                await _r_client.post(
+                    f"https://ntfy.sh/{ntfy_topic}",
+                    content=ntfy_msg,
+                    headers=headers,
+                )
+        except Exception as e:
+            log.warning(f"[referral_ntfy] failed: {e}")
+
+    # 2. SMS to referrer
+    if referrer_phone:
+        try:
+            vonage_key = os.environ.get("VONAGE_API_KEY", "").strip()
+            vonage_secret = os.environ.get("VONAGE_API_SECRET", "").strip()
+            vonage_from = os.environ.get("VONAGE_NUMBER", "").strip()
+            if vonage_key and vonage_secret and vonage_from:
+                sms_text = (
+                    f"Empire AI: {referred_name} ({referred_company}) signed up "
+                    f"using your referral link! When they close their first deal, "
+                    f"you'll earn your $500 bounty. Reply STOP to opt out."
+                )
+                async with _r_httpx.AsyncClient(timeout=10) as _r_sms:
+                    await _r_sms.post(
+                        "https://rest.nexmo.com/sms/json",
+                        data={
+                            "api_key": vonage_key,
+                            "api_secret": vonage_secret,
+                            "from": vonage_from.lstrip("+"),
+                            "to": referrer_phone.lstrip("+"),
+                            "text": sms_text[:1600],
+                        },
+                    )
+                    log.info(f"[referral_sms] welcome SMS sent to {referrer_phone} for {referrer_name}")
+            else:
+                log.debug("[referral_sms] Vonage not configured, skipping SMS to referrer")
+        except Exception as e:
+            log.warning(f"[referral_sms] failed: {e}")
 
 
 # ─────────────────────────────────────────────────────────────────────────────

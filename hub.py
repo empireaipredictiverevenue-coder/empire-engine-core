@@ -58,7 +58,7 @@ from empire_attribution import register_attribution_routes
 from empire_email import EmailEngine, register_email_routes
 from empire_matching import ContractorMatcher, register_matching_routes
 from empire_playbook import register_playbook_routes
-from empire_payouts import PayoutEngine, register_payout_routes
+from empire_payouts import PayoutEngine, register_payout_routes, register_bounty_payout_routes
 from empire_solana_webhook import register_solana_webhook_routes
 from empire_crypto_payments import CryptoPaymentEngine, register_crypto_payment_routes
 from empire_fee import register_fee_routes
@@ -77,6 +77,7 @@ from bots.seo_agent import run_loop as seo_run_loop
 from bots.backlinks_agent import run_loop as backlinks_run_loop
 from bots.traffic_specialist import run_loop as traffic_specialist_run_loop, register_traffic_specialist_routes
 from bots.affiliate_recruiter import run_loop as affiliate_recruiter_run_loop, register_affiliate_recruiter_routes
+from bots.bounty_tracker import run_loop as bounty_tracker_run_loop, register_bounty_tracker_routes
 from bots.email_pulse_monitor import run_loop as email_pulse_run_loop
 from empire_console import SovereignConsole, register_console_routes
 from empire_orchestrator import StormOrchestrator, register_storm_routes
@@ -539,6 +540,8 @@ storm_orchestrator = StormOrchestrator(
     get_db=get_db,
     email_engine=email_engine,
     brain=brain_decider,
+    brain_memory=brain_memory,
+    brain_learning=brain_learning,
     drafter=email_drafter,
     enricher=ai_enricher,
     narrator=narrator,
@@ -909,6 +912,7 @@ async def email_quota(auth: bool = Depends(require_auth)):
 register_matching_routes(app, matcher=matcher, require_auth=require_auth, sign_token=_hub_sign_token, verify_token=_hub_verify_token, send_email=_send_email_critical)
 register_playbook_routes(app, require_auth=require_auth, get_db=get_db)
 register_payout_routes(app, engine=payout_engine, require_auth=require_auth, require_owner=require_owner)
+register_bounty_payout_routes(app, require_auth=require_auth, payout_engine=payout_engine)
 register_fee_routes(app, require_auth=require_auth, get_db=get_db)
 register_operator_mark_settled(app, require_auth=require_auth, get_db=get_db)
 register_ab_test_routes(app, require_auth=require_auth, get_db=get_db)
@@ -1215,6 +1219,9 @@ register_traffic_specialist_routes(app, require_auth=require_auth)
 
 # ── Affiliate Recruiter — autonomous affiliate finder + converter ───
 register_affiliate_recruiter_routes(app, require_auth=require_auth)
+
+# ── Bounty Tracker — auto-earn referral bounties on first fee_event ──
+register_bounty_tracker_routes(app, require_auth=require_auth)
 
 # ── Suite Gateway — 3-Product Monetization ───────────────────────────
 suite_subscriptions = SuiteSubscriptionEngine(get_db=get_db)
@@ -2785,26 +2792,39 @@ async def _si_evolution_loop():
 
 
 
+@app.on_event("startup")
 async def _deferred_background_tasks():
-    """Create all background loops after a 1.0s sleep.
+    """Create all background loops after uvicorn binds the socket.
 
-    The delay gives uvicorn time to create the server socket and begin
-    serving before any background task potentially starves the event loop.
-    Without this, a tight while-True loop (missing await asyncio.sleep)
-    permanently blocks uvicorn from binding.
+    The short delay gives uvicorn a clean window to bind the server socket
+    before any background loops consume the event loop (important when
+    running in the thread-per-startup model).
     """
-    await asyncio.sleep(1.0)
+    await asyncio.sleep(0.5)
 
-    # Defer all background tasks so uvicorn binds the socket first.
-    # Event-loop starvation: if any background loop enters a tight
-    # while-True without yielding (missing await asyncio.sleep),
-    # it permanently blocks uvicorn from creating the server socket.
-    # By deferring with a 1.0s sleep, uvicorn gets a clean window
-    # to bind before any background task consumes the loop.
-    asyncio.create_task(_deferred_background_tasks())
+    # Schedule all persistent background loops.
+    # Each runs as an independent asyncio.Task with its own
+    # while-True + sleep pattern so they never block each other.
 
-    _t_end = _boot_time.time()
-    log.info(f"[boot] startup handler complete: {_t_end - _st:.2f}s (total: {_t_end - _BOOT_START:.1f}s)")
+    asyncio.create_task(dream_loop.run(), name="dream-loop")
+    asyncio.create_task(hourly_digest.run(), name="hourly-digest")
+    asyncio.create_task(seo_run_loop(), name="seo-agent")
+    asyncio.create_task(backlinks_run_loop(), name="backlinks-agent")
+    asyncio.create_task(traffic_specialist_run_loop(), name="traffic-specialist")
+    asyncio.create_task(affiliate_recruiter_run_loop(), name="affiliate-recruiter")
+    asyncio.create_task(bounty_tracker_run_loop(), name="bounty-tracker")
+    asyncio.create_task(email_pulse_run_loop(), name="email-pulse-monitor")
+
+    # Mission Control broadcast loop
+    asyncio.create_task(
+        mission_control_broadcast_loop(get_db, live_broadcaster),
+        name="mission-control-broadcast",
+    )
+
+    # Brain learning: nightly urgency floor auto-tuning
+    asyncio.create_task(brain_learning.nightly_tune_loop(), name="brain-learning")
+
+    log.info("[boot] Background loops scheduled: DreamLoop, HourlyDigest, SEO, Backlinks, Traffic, Affiliates, Bounty, EmailPulse, MissionControl")
     log.info("Empire V49 · Operational")
 
 
@@ -5204,6 +5224,82 @@ async def hub_diagnostics():
             "ports": "./check_ports.sh",
         },
     })
+
+
+# ── Share Click Analytics — contractor portal share button tracking ──
+@app.post("/api/v1/track/share-click")
+async def track_share_click(request: Request):
+    """Track a share button click from the contractor portal.
+    No auth required — lightweight analytics ping.
+    Body: {platform: string}
+    """
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse({"ok": False, "error": "invalid_json"}, status_code=400)
+
+    platform = (body.get("platform") or "").strip().lower()
+    if not platform:
+        return JSONResponse({"ok": False, "error": "platform required"}, status_code=400)
+
+    valid_platforms = {"sms","whatsapp","telegram","email","x","twitter","linkedin","facebook","reddit","pinterest","messenger","tiktok","snapchat","copy_msg"}
+    if platform not in valid_platforms:
+        return JSONResponse({"ok": False, "error": f"unknown platform: {platform}"}, status_code=400)
+
+    try:
+        db = get_db()
+        db.table("agent_activity").insert({
+            "agent_name": "share_tracker",
+            "run_id": str(uuid.uuid4()),
+            "status": "ok",
+            "meta": {"platform": platform},
+        }).execute()
+    except Exception as e:
+        log.warning(f"[share-track] failed to log: {e}")
+
+    return JSONResponse({"ok": True})
+
+
+@app.get("/api/v1/track/share-click/stats")
+async def track_share_click_stats():
+    """Return aggregated share click stats — platform breakdown.
+    No auth required. Query agent_activity where agent_name='share_tracker'.
+    """
+    try:
+        db = get_db()
+        r = db.table("agent_activity") \
+            .select("meta", count="exact") \
+            .eq("agent_name", "share_tracker") \
+            .eq("status", "ok") \
+            .order("started_at", desc=True) \
+            .limit(1000) \
+            .execute()
+        rows = r.data or []
+        db_count = getattr(r, "count", 0)
+    except Exception as e:
+        rows = []
+        db_count = 0
+        log.warning(f"[share-track] stats query failed: {e}")
+
+    # Aggregate by platform from the most recent 1000 clicks
+    platform_counts: dict[str, int] = {}
+    for row in rows:
+        meta = row.get("meta") or {}
+        platform = (meta.get("platform") or "unknown").strip().lower()
+        platform_counts[platform] = platform_counts.get(platform, 0) + 1
+
+    sorted_platforms = sorted(platform_counts.items(), key=lambda x: x[1], reverse=True)
+    breakdown = [{"platform": p, "count": c} for p, c in sorted_platforms]
+
+    return JSONResponse({
+        "total": db_count,
+        "sampled": len(rows),
+        "breakdown": breakdown,
+        "top_platform": breakdown[0]["platform"] if breakdown else None,
+        "top_count": breakdown[0]["count"] if breakdown else 0,
+    })
+
+
 
 
 log.info(f"[boot] module imports complete: {_boot_time.time() - _BOOT_START:.1f}s (total)")
