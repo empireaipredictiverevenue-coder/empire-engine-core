@@ -583,6 +583,153 @@ def create_app() -> FastAPI:
 
     log.info("[trading] public API endpoints registered")
 
+    # ── Sniper endpoints ─────────────────────────────────────────
+
+    _sniper_engine = None
+
+    def _get_sniper_engine():
+        nonlocal _sniper_engine
+        if _sniper_engine is None:
+            from skills.sniper_worker import get_sniper_engine
+            _sniper_engine = get_sniper_engine()
+            # Wire snipe events to WebSocket manager
+            try:
+                from skills.websocket_manager import get_ws_manager
+                ws_mgr = get_ws_manager()
+                _sniper_engine.set_event_callback(ws_mgr.broadcast_snipe_event)
+                log.info("[trading] sniper engine → WebSocket callback wired")
+            except Exception as e:
+                log.warning(f"[trading] sniper → WebSocket wiring failed: {e}")
+        return _sniper_engine
+
+    @app.get("/api/v1/user/sniper-config")
+    async def user_get_sniper_config(auth: dict = Depends(_require_auth)):
+        """Get your auto-snipe configuration."""
+        store = _get_user_store()
+        try:
+            config = await store.get_sniper_config(auth["api_key"])
+            return {"ok": True, "config": config}
+        except ValueError as e:
+            return JSONResponse({"ok": False, "error": str(e)}, status_code=401)
+
+    @app.post("/api/v1/user/sniper-config")
+    async def user_set_sniper_config(body: dict, auth: dict = Depends(_require_auth)):
+        """Configure auto-snipe parameters.
+
+        Body (all optional):
+          is_enabled: bool — enable/disable auto-snipe
+          amount_per_snipe: float — SOL per snipe (default 0.1)
+          max_daily_spend: float — daily SOL spending cap
+          risk_threshold: int — max rug score (0-100, lower = safer)
+          min_liquidity: float — minimum pool liquidity USD
+          max_age_seconds: int — max token age to consider
+          stop_loss_pct: float — auto-SL percentage (default 0.15 = 15%)
+          take_profit_pct: float — auto-TP percentage (default 0.50 = 50%)
+          enabled_chains: str — comma-separated (solana, ethereum, base)
+          auto_approve: bool — skip manual approval for qualified tokens
+        """
+        store = _get_user_store()
+        try:
+            config = await store.set_sniper_config(auth["api_key"], body)
+            return {"ok": True, "config": config}
+        except ValueError as e:
+            return JSONResponse({"ok": False, "error": str(e)}, status_code=401)
+
+    @app.delete("/api/v1/user/sniper-config")
+    async def user_delete_sniper_config(auth: dict = Depends(_require_auth)):
+        """Delete sniper config (disables auto-snipe)."""
+        store = _get_user_store()
+        try:
+            ok = await store.delete_sniper_config(auth["api_key"])
+            return {"ok": ok}
+        except ValueError as e:
+            return JSONResponse({"ok": False, "error": str(e)}, status_code=401)
+
+    @app.post("/api/v1/user/sniper-wallet")
+    async def user_generate_sniper_wallet(auth: dict = Depends(_require_auth)):
+        """Generate a sniper wallet for auto-snipe execution.
+
+        A new Solana keypair is generated and private key encrypted at rest.
+        Transfer SOL to the returned address to fund auto-snipes.
+        """
+        store = _get_user_store()
+        try:
+            result = await store.generate_sniper_wallet(auth["api_key"])
+            if "error" in result:
+                return JSONResponse({"ok": False, "error": result["error"]}, status_code=500)
+            return {"ok": True, **result}
+        except ValueError as e:
+            return JSONResponse({"ok": False, "error": str(e)}, status_code=401)
+
+    @app.get("/api/v1/user/sniper-wallet")
+    async def user_get_sniper_wallet(auth: dict = Depends(_require_auth)):
+        """Get your sniper wallet address and balance."""
+        store = _get_user_store()
+        try:
+            config = await store.get_sniper_config(auth["api_key"])
+            if not config or not config.get("sniper_wallet"):
+                return {"ok": True, "sniper_wallet": None, "note": "Generate a sniper wallet first"}
+            # Check live balance
+            balance = await store.check_sniper_wallet_balance(auth["api_key"])
+            return {
+                "ok": True,
+                "sniper_wallet": {
+                    "pubkey": config["sniper_wallet"]["pubkey"],
+                    "balance_sol": balance if balance is not None else config["sniper_wallet"]["balance_sol"],
+                },
+            }
+        except ValueError as e:
+            return JSONResponse({"ok": False, "error": str(e)}, status_code=401)
+
+    @app.get("/api/v1/user/sniper-history")
+    async def user_get_snipe_history(limit: int = 50, auth: dict = Depends(_require_auth)):
+        """Get your snipe activity history."""
+        store = _get_user_store()
+        try:
+            history = await store.get_snipe_history(auth["api_key"], limit=min(limit, 200))
+            return {"ok": True, "events": history, "count": len(history)}
+        except ValueError as e:
+            return JSONResponse({"ok": False, "error": str(e)}, status_code=401)
+
+    @app.post("/api/v1/user/sniper/start")
+    async def user_start_sniper(auth: dict = Depends(_require_auth)):
+        """Start the auto-snipe engine (requires sniper wallet + config)."""
+        store = _get_user_store()
+        try:
+            config = await store.get_sniper_config(auth["api_key"])
+            if not config:
+                return JSONResponse({"ok": False, "error": "Configure sniper first: POST /api/v1/user/sniper-config"}, status_code=400)
+            if not config.get("sniper_wallet"):
+                return JSONResponse({"ok": False, "error": "Generate sniper wallet first: POST /api/v1/user/sniper-wallet"}, status_code=400)
+            if not config.get("is_enabled"):
+                return JSONResponse({"ok": False, "error": "Enable sniper config first (set is_enabled: true)"}, status_code=400)
+
+            engine = _get_sniper_engine()
+            # Cache the user's API key for sniper wallet decryption
+            engine.set_api_key(auth["user"]["api_key_hash"], auth["api_key"])
+            if not engine.status["running"]:
+                await engine.start()
+            return {"ok": True, "status": engine.status}
+        except ValueError as e:
+            return JSONResponse({"ok": False, "error": str(e)}, status_code=401)
+
+    @app.post("/api/v1/user/sniper/stop")
+    async def user_stop_sniper(auth: dict = Depends(_require_auth)):
+        """Stop the auto-snipe engine."""
+        engine = _get_sniper_engine()
+        engine.clear_api_key(auth["user"]["api_key_hash"])
+        if engine.status["running"]:
+            await engine.stop()
+        return {"ok": True, "status": engine.status}
+
+    @app.get("/api/v1/user/sniper/status")
+    async def user_sniper_status(auth: dict = Depends(_require_auth)):
+        """Get auto-snipe engine status."""
+        engine = _get_sniper_engine()
+        return {"ok": True, "status": engine.status}
+
+    log.info("[trading] sniper endpoints registered")
+
     # ── WebSocket endpoint ────────────────────────────────────────
 
     @app.websocket("/ws/user")

@@ -327,6 +327,17 @@ class ConnectionManager:
         """Total active price feed subscriptions."""
         return len(self._subscriptions)
 
+    # ── Snipe event broadcast ────────────────────────────────────
+
+    async def broadcast_snipe_event(self, user_hash: str, event: dict) -> None:
+        """Broadcast a snipe event to all connected clients for a user.
+
+        Called by the AutoSnipeEngine when snipe events occur.
+        Event types: snipe_detected, snipe_rug_blocked, snipe_requires_approval,
+                     snipe_executing, snipe_success, snipe_failed
+        """
+        await self._broadcast(user_hash, event)
+
 
 # ── Global singleton ─────────────────────────────────────────────────
 

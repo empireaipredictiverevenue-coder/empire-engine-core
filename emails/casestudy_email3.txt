@@ -1,0 +1,12 @@
+Subject: What the contractors we dispatched are doing with Strike Campaigns
+
+Hi {{name}},
+
+The 4 contractors we recently sent leads to are all using Strike Campaigns as part of the bundle.
+
+They’re running multi-touch sequences (SMS + email) on every new lead.
+
+If you’d like to see the actual campaign structure they’re using, just reply YES.
+
+Best,
+Empire AI

@@ -88,6 +88,10 @@ from .websocket_manager import (
     ConnectionManager,
     get_ws_manager,
 )
+from .sniper_worker import (
+    AutoSnipeEngine,
+    get_sniper_engine,
+)
 
 __all__ = [
     "BaseSkill", "SkillInput", "SkillOutput", "SkillMetrics", "SkillContext",
@@ -120,6 +124,8 @@ __all__ = [
     "VectorEngine",
     "calc_rsi_2d", "calc_macd_2d", "calc_ma_2d", "calc_bb_2d",
     "calc_volatility_2d", "calc_sharpe_2d", "calc_momentum_2d",
-    "UserStore", "get_user_store", "verify_solana_signature",
-    "ConnectionManager", "get_ws_manager",
+    "UserStore", "get_user_store", "verify_solana_signature",    "ConnectionManager",
+    "get_ws_manager",
+    "AutoSnipeEngine",
+    "get_sniper_engine",
 ]

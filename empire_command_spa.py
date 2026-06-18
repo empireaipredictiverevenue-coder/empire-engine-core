@@ -259,6 +259,8 @@ _SPA_CSS = """
   .pipe-stage-node{width:64px;height:46px;padding:3px 6px}
   .pipe-boss-card{width:96px;height:96px}
   .pipe-boss-rate{font-size:22px}
+}
+
 /* ── PIPELINE BREAKDOWN ──────────────────────────────────────────── */
 .pipeline-breakdown{background:var(--empire-surface);border:1px solid var(--empire-border);padding:20px;margin-bottom:24px}
 .pipeline-h{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:16px;padding-bottom:14px;border-bottom:1px solid var(--empire-divider)}
@@ -3069,7 +3071,7 @@ function Pipeline() {
   const totalSent = (d.em?.emails_sent ?? 0) + (d.sm?.sms_sent ?? 0);
   const totalReplied = (d.em?.replies ?? 0) + (d.sm?.replies ?? 0);
   const totalUnsub = (d.em?.unsubscribes ?? 0) + (d.sm?.opt_outs ?? 0);
-  const totalConverted = Math.round(totalReplied * 0.28); // rough estimate
+  const totalConverted = Math.round(totalReplied * 0.28); // rough: ~28% of replies convert
   const convRate = totalSent > 0 ? Math.round((totalReplied / totalSent) * 100) : 0;
 
   // Pipeline stages for the orbital ring (5 stages, clockwise from top)
@@ -3078,7 +3080,7 @@ function Pipeline() {
     { id: 'sent',     icon: '→', label: 'Sent',     count: totalSent,       cls: 'sent' },
     { id: 'replied',  icon: '↩', label: 'Replied',  count: totalReplied,    cls: 'replied' },
     { id: 'unsub',    icon: '✕', label: 'Unsub',    count: totalUnsub,      cls: '' },
-    { id: 'converted',icon: '★', label: 'Conv (est)',count: totalConverted,   cls: 'converted' },
+    { id: 'converted',icon: '★', label: 'Converted',count: totalConverted,   cls: 'converted' },
   ];
 
   return html`
@@ -3108,7 +3110,6 @@ function Pipeline() {
             const ay = Math.sin(angleRad) * orbitR;
             const isActive = s.count > 0;
             return html`<line 
-              key=${s.id}
               x1="0" y1="0" 
               x2="${ax.toFixed(1)}" y2="${ay.toFixed(1)}" 
               class=${'pipe-orbit-line' + (isActive ? ' active' : '')}
@@ -3122,10 +3123,10 @@ function Pipeline() {
             const a1 = (i * (360 / stages.length) - 90) * Math.PI / 180;
             const a2 = (nextI * (360 / stages.length) - 90) * Math.PI / 180;
             const midR = orbitR;
-            const x1 = Math.cos(a1) * midR * 0.78;
-            const y1 = Math.sin(a1) * midR * 0.78;
-            const x2 = Math.cos(a2) * midR * 0.78;
-            const y2 = Math.sin(a2) * midR * 0.78;
+            const x1 = Math.cos(a1) * midR * 0.82;
+            const y1 = Math.sin(a1) * midR * 0.82;
+            const x2 = Math.cos(a2) * midR * 0.82;
+            const y2 = Math.sin(a2) * midR * 0.82;
             const mx = (x1 + x2) / 2;
             const my = (y1 + y2) / 2;
             const dx = x2 - x1;
@@ -3142,7 +3143,7 @@ function Pipeline() {
             const px = -uy * wing;
             const py = ux * wing;
             const points = `${tipX.toFixed(1)},${tipY.toFixed(1)} ${(baseX+px).toFixed(1)},${(baseY+py).toFixed(1)} ${(baseX-px).toFixed(1)},${(baseY-py).toFixed(1)}`;
-            return html`<polygon key=${s.id} class="pipe-orbit-arrow" points="${points}" style=${{animationDelay: (i * 0.2) + 's'}} />`;
+            return html`<polygon class="pipe-orbit-arrow" points="${points}" style=${{animationDelay: (i * 0.2) + 's'}} />`;
           });
           
           return html`
@@ -3168,7 +3169,7 @@ function Pipeline() {
               const ax = Math.cos(angleRad) * orbitR;
               const ay = Math.sin(angleRad) * orbitR;
               return html`
-                <div key=${s.id} class=${'pipe-stage-node' + (s.cls ? ' ' + s.cls : '')}
+                <div class=${'pipe-stage-node' + (s.cls ? ' ' + s.cls : '')}
                      style=${{transform: 'translate(-50%,-50%) translate(' + ax.toFixed(1) + 'px,' + ay.toFixed(1) + 'px)', animationDelay: (i * 0.08) + 's'}}>
                   <span class="pipe-stage-icon">${s.icon}</span>
                   <span class="pipe-stage-count">${s.count}</span>
@@ -3950,7 +3951,7 @@ function AgiDashboard(){
       ${dreamData ? html`
         <div class="agi-decisions-head">
           <div class="agi-decisions-title">Dream Memory <span style=${{fontSize:'0.7em',opacity:0.6}}>(cycle #${dreamData.dream_cycle})</span></div>
-          <div class="agi-decisions-count">${(dreamData.insights||[]).length} insights · ${(dreamData.rule_suggestions||[]).length} rules${(dreamData.risk_flags||[]).length > 0 ? ` · ⚠ ${(dreamData.risk_flags||[]).length} risks` : ``}</div>
+          <div class="agi-decisions-count">${(dreamData.insights||[]).length} insights · ${(dreamData.rule_suggestions||[]).length} rules${(dreamData.risk_flags||[]).length > 0 ? ` · ⚠ ${(dreamData.risk_flags||[]).length} risks` : ''}</div>
         </div>
         ${(dreamData.insights||[]).slice(0,3).map(i => html`
           <div class="agi-row">
@@ -8216,7 +8217,7 @@ const CplPricing = () => {
           <input class="cmp-niche-search" type="search" placeholder="Filter by niche..." value=${laneSearch} onChange=${e => { setLaneSearch(e.target.value); setPage(1); }} style="flex:0 1 160px;margin:0 4px" />
           <span style="flex:1;text-align:right;font-size:10px;color:var(--empire-fog);padding:5px 0">${filtered.length} lanes</span>
         </div>
-        ${serviceOnly ? html\ : }
+        ${serviceOnly ? html\ : ''}
 
         <table class="cpl-table">
           <thead><tr>

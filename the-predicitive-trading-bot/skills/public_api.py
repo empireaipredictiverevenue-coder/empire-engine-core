@@ -100,9 +100,54 @@ CREATE TABLE IF NOT EXISTS auth_challenges (
     expires_at         TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS sniper_configs (
+    user_hash           TEXT PRIMARY KEY,
+    is_enabled          INTEGER NOT NULL DEFAULT 0,
+    amount_per_snipe    REAL NOT NULL DEFAULT 0.1,
+    max_daily_spend     REAL,
+    risk_threshold      INTEGER NOT NULL DEFAULT 50,
+    min_liquidity       REAL NOT NULL DEFAULT 5000.0,
+    max_age_seconds     INTEGER NOT NULL DEFAULT 300,
+    stop_loss_pct       REAL NOT NULL DEFAULT 0.15,
+    take_profit_pct     REAL NOT NULL DEFAULT 0.50,
+    enabled_chains      TEXT NOT NULL DEFAULT 'solana',
+    auto_approve        INTEGER NOT NULL DEFAULT 0,
+    created_at          TEXT NOT NULL,
+    updated_at          TEXT NOT NULL,
+    FOREIGN KEY (user_hash) REFERENCES users(api_key_hash)
+);
+
+CREATE TABLE IF NOT EXISTS sniper_wallets (
+    user_hash           TEXT PRIMARY KEY,
+    wallet_pubkey       TEXT NOT NULL,
+    encrypted_private   TEXT NOT NULL,
+    balance_sol         REAL DEFAULT 0.0,
+    created_at          TEXT NOT NULL,
+    FOREIGN KEY (user_hash) REFERENCES users(api_key_hash)
+);
+
+CREATE TABLE IF NOT EXISTS snipe_history (
+    id                  TEXT PRIMARY KEY,
+    user_hash           TEXT NOT NULL,
+    token_address       TEXT NOT NULL,
+    token_symbol        TEXT DEFAULT '',
+    chain               TEXT NOT NULL DEFAULT 'solana',
+    detected_at         TEXT NOT NULL,
+    rug_score           INTEGER,
+    amount_sol          REAL,
+    entry_price         REAL,
+    tx_signature        TEXT,
+    status              TEXT NOT NULL DEFAULT 'detected',
+    pnl_pct             REAL,
+    closed_at           TEXT,
+    FOREIGN KEY (user_hash) REFERENCES users(api_key_hash)
+);
+
 CREATE INDEX IF NOT EXISTS idx_exchange_user ON exchange_keys(user_hash);
 CREATE INDEX IF NOT EXISTS idx_positions_user ON user_positions(user_hash);
 CREATE INDEX IF NOT EXISTS idx_challenges_expiry ON auth_challenges(expires_at);
+CREATE INDEX IF NOT EXISTS idx_snipe_history_user ON snipe_history(user_hash);
+CREATE INDEX IF NOT EXISTS idx_snipe_history_status ON snipe_history(status);
 """
 
 CHALLENGE_TTL_SEC = 300  # 5 minutes
@@ -730,6 +775,432 @@ class UserStore:
             cursor = await db.execute("SELECT COUNT(*) as cnt FROM users")
             row = await cursor.fetchone()
             return row["cnt"] if row else 0
+
+    # ── Sniper config management ──────────────────────────────────
+
+    async def get_sniper_config(self, api_key: str) -> Optional[dict]:
+        """Get a user's auto-snipe configuration."""
+        user = await self.get_user_by_api_key(api_key)
+        if not user:
+            raise ValueError("Invalid API key")
+
+        async with self._conn() as db:
+            cursor = await db.execute(
+                "SELECT * FROM sniper_configs WHERE user_hash = ?",
+                (user["api_key_hash"],),
+            )
+            row = await cursor.fetchone()
+            if not row:
+                return None
+            config = dict(row)
+            # Also include sniper wallet info
+            wcur = await db.execute(
+                "SELECT wallet_pubkey, balance_sol FROM sniper_wallets WHERE user_hash = ?",
+                (user["api_key_hash"],),
+            )
+            wrow = await wcur.fetchone()
+            if wrow:
+                config["sniper_wallet"] = {
+                    "pubkey": wrow["wallet_pubkey"],
+                    "balance_sol": wrow["balance_sol"],
+                }
+            return config
+
+    async def set_sniper_config(self, api_key: str, config: dict) -> dict:
+        """Create or update auto-snipe configuration for a user."""
+        user = await self.get_user_by_api_key(api_key)
+        if not user:
+            raise ValueError("Invalid API key")
+
+        user_hash = user["api_key_hash"]
+        now = datetime.now(timezone.utc).isoformat()
+
+        async with self._conn() as db:
+            # Upsert
+            await db.execute(
+                """INSERT INTO sniper_configs (
+                    user_hash, is_enabled, amount_per_snipe, max_daily_spend,
+                    risk_threshold, min_liquidity, max_age_seconds,
+                    stop_loss_pct, take_profit_pct, enabled_chains,
+                    auto_approve, created_at, updated_at
+                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
+                ON CONFLICT(user_hash) DO UPDATE SET
+                    is_enabled=excluded.is_enabled,
+                    amount_per_snipe=excluded.amount_per_snipe,
+                    max_daily_spend=excluded.max_daily_spend,
+                    risk_threshold=excluded.risk_threshold,
+                    min_liquidity=excluded.min_liquidity,
+                    max_age_seconds=excluded.max_age_seconds,
+                    stop_loss_pct=excluded.stop_loss_pct,
+                    take_profit_pct=excluded.take_profit_pct,
+                    enabled_chains=excluded.enabled_chains,
+                    auto_approve=excluded.auto_approve,
+                    updated_at=excluded.updated_at""",
+                (
+                    user_hash,
+                    int(config.get("is_enabled", False)),
+                    float(config.get("amount_per_snipe", 0.1)),
+                    float(config.get("max_daily_spend", 0)) if config.get("max_daily_spend") else None,
+                    int(config.get("risk_threshold", 50)),
+                    float(config.get("min_liquidity", 5000)),
+                    int(config.get("max_age_seconds", 300)),
+                    float(config.get("stop_loss_pct", 0.15)),
+                    float(config.get("take_profit_pct", 0.50)),
+                    str(config.get("enabled_chains", "solana")),
+                    int(config.get("auto_approve", False)),
+                    now, now,
+                ),
+            )
+            await db.commit()
+
+        log.info(f"[public_api] sniper config updated for {user_hash[:12]}... enabled={config.get('is_enabled')}")
+        return await self.get_sniper_config(api_key) or {}
+
+    async def delete_sniper_config(self, api_key: str) -> bool:
+        """Delete a user's sniper config (disables auto-snipe)."""
+        user = await self.get_user_by_api_key(api_key)
+        if not user:
+            raise ValueError("Invalid API key")
+
+        async with self._conn() as db:
+            cursor = await db.execute(
+                "DELETE FROM sniper_configs WHERE user_hash = ?",
+                (user["api_key_hash"],),
+            )
+            await db.commit()
+            return cursor.rowcount > 0
+
+    async def get_enabled_sniper_users(self) -> list[dict]:
+        """Get all users with auto-snipe enabled (for the sniper engine)."""
+        async with self._conn() as db:
+            cursor = await db.execute(
+                """SELECT u.api_key_hash, u.wallet_pubkey, sc.*
+                   FROM sniper_configs sc
+                   JOIN users u ON u.api_key_hash = sc.user_hash
+                   WHERE sc.is_enabled = 1"""
+            )
+            rows = await cursor.fetchall()
+            return [dict(r) for r in rows]
+
+    # ── Sniper wallet management ──────────────────────────────────
+
+    async def generate_sniper_wallet(self, api_key: str) -> dict:
+        """Generate a Solana keypair for auto-snipe execution.
+
+        The private key is Fernet-encrypted using the user's API key.
+        User must fund this wallet before auto-snipe can execute.
+        """
+        user = await self.get_user_by_api_key(api_key)
+        if not user:
+            raise ValueError("Invalid API key")
+
+        user_hash = user["api_key_hash"]
+
+        # Generate keypair
+        try:
+            from solders.keypair import Keypair
+            kp = Keypair()
+            pubkey_str = str(kp.pubkey())
+            private_bytes = bytes(kp)
+        except ImportError:
+            return {"error": "solders not installed — cannot generate sniper wallet"}
+
+        # Encrypt private key
+        key = _derive_key(api_key)
+        from cryptography.fernet import Fernet
+        f = Fernet(base64.urlsafe_b64encode(key))
+        encrypted_private = f.encrypt(private_bytes).decode()
+
+        now = datetime.now(timezone.utc).isoformat()
+
+        async with self._conn() as db:
+            await db.execute(
+                """INSERT OR REPLACE INTO sniper_wallets (
+                    user_hash, wallet_pubkey, encrypted_private, created_at
+                ) VALUES (?,?,?,?)""",
+                (user_hash, pubkey_str, encrypted_private, now),
+            )
+            await db.commit()
+
+        log.info(f"[public_api] sniper wallet generated for {user_hash[:12]}... → {pubkey_str[:12]}...")
+        return {
+            "wallet_pubkey": pubkey_str,
+            "note": "Transfer SOL to this address to fund auto-snipes. Minimum recommended: 1 SOL.",
+            "created_at": now,
+        }
+
+    async def get_sniper_wallet_private(self, api_key: str) -> Optional[bytes]:
+        """Decrypt and return the sniper wallet private key bytes.
+
+        INTERNAL USE ONLY — called by the sniper engine.
+        """
+        user = await self.get_user_by_api_key(api_key)
+        if not user:
+            return None
+
+        async with self._conn() as db:
+            cursor = await db.execute(
+                "SELECT encrypted_private FROM sniper_wallets WHERE user_hash = ?",
+                (user["api_key_hash"],),
+            )
+            row = await cursor.fetchone()
+            if not row:
+                return None
+
+        key = _derive_key(api_key)
+        from cryptography.fernet import Fernet
+        f = Fernet(base64.urlsafe_b64encode(key))
+        return f.decrypt(row["encrypted_private"].encode())
+
+    async def check_sniper_wallet_balance(self, api_key: str) -> Optional[float]:
+        """Check SOL balance of the user's sniper wallet via RPC."""
+        user = await self.get_user_by_api_key(api_key)
+        if not user:
+            return None
+
+        async with self._conn() as db:
+            cursor = await db.execute(
+                "SELECT wallet_pubkey FROM sniper_wallets WHERE user_hash = ?",
+                (user["api_key_hash"],),
+            )
+            row = await cursor.fetchone()
+            if not row:
+                return None
+            pubkey = row["wallet_pubkey"]
+
+        try:
+            import httpx
+            async with httpx.AsyncClient(timeout=10) as http:
+                r = await http.post(
+                    os.environ.get("SOLANA_RPC_URL", "https://api.mainnet-beta.solana.com"),
+                    json={"jsonrpc": "2.0", "id": 1, "method": "getBalance", "params": [pubkey]},
+                )
+                data = r.json()
+                balance = data.get("result", {}).get("value", 0) / 1e9
+
+        except Exception as e:
+            log.warning(f"[public_api] failed to check sniper wallet balance for {pubkey[:12]}...: {e}")
+            return None
+
+        # Update stored balance
+        async with self._conn() as db:
+            await db.execute(
+                "UPDATE sniper_wallets SET balance_sol = ? WHERE user_hash = ?",
+                (round(balance, 6), user["api_key_hash"]),
+            )
+            await db.commit()
+
+        return balance
+
+    # ── Snipe history ────────────────────────────────────────────
+
+    async def log_snipe_event(self, api_key: str, event: dict) -> str:
+        """Record a snipe event in the history table.
+
+        Args:
+            api_key: User's API key
+            event: dict with keys: token_address, chain, status, and optionally
+                   token_symbol, rug_score, amount_sol, entry_price, tx_signature
+        """
+        user = await self.get_user_by_api_key(api_key)
+        if not user:
+            raise ValueError("Invalid API key")
+
+        event_id = f"sn_{uuid.uuid4().hex[:12]}"
+        now = datetime.now(timezone.utc).isoformat()
+
+        async with self._conn() as db:
+            await db.execute(
+                """INSERT INTO snipe_history (
+                    id, user_hash, token_address, token_symbol, chain,
+                    detected_at, rug_score, amount_sol, entry_price,
+                    tx_signature, status
+                ) VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
+                (
+                    event_id,
+                    user["api_key_hash"],
+                    event["token_address"],
+                    event.get("token_symbol", ""),
+                    event.get("chain", "solana"),
+                    event.get("detected_at", now),
+                    event.get("rug_score"),
+                    event.get("amount_sol"),
+                    event.get("entry_price"),
+                    event.get("tx_signature"),
+                    event.get("status", "detected"),
+                ),
+            )
+            await db.commit()
+
+        return event_id
+
+    async def update_snipe_event(self, event_id: str, updates: dict) -> bool:
+        """Update a snipe history event (e.g., after execution)."""
+        async with self._conn() as db:
+            sets = []
+            vals = []
+            for key in ("status", "tx_signature", "amount_sol", "entry_price", "pnl_pct", "closed_at"):
+                if key in updates:
+                    sets.append(f"{key} = ?")
+                    vals.append(updates[key])
+            if not sets:
+                return False
+            vals.append(event_id)
+            await db.execute(
+                f"UPDATE snipe_history SET {', '.join(sets)} WHERE id = ?",
+                tuple(vals),
+            )
+            await db.commit()
+            return True
+
+    async def get_snipe_history(self, api_key: str, limit: int = 50) -> list[dict]:
+        """Get a user's snipe history."""
+        user = await self.get_user_by_api_key(api_key)
+        if not user:
+            raise ValueError("Invalid API key")
+
+        async with self._conn() as db:
+            cursor = await db.execute(
+                """SELECT * FROM snipe_history
+                   WHERE user_hash = ?
+                   ORDER BY detected_at DESC LIMIT ?""",
+                (user["api_key_hash"], limit),
+            )
+            rows = await cursor.fetchall()
+            return [dict(r) for r in rows]
+
+    # ── Internal methods (accept user_hash, no API key needed) ────
+    # These are used by the sniper engine which only has the hash.
+
+    async def _log_snipe_event_internal(self, user_hash: str, event: dict) -> str:
+        """Internal: record a snipe event by user_hash directly."""
+        event_id = f"sn_{uuid.uuid4().hex[:12]}"
+        now = datetime.now(timezone.utc).isoformat()
+        async with self._conn() as db:
+            await db.execute(
+                """INSERT INTO snipe_history (
+                    id, user_hash, token_address, token_symbol, chain,
+                    detected_at, rug_score, amount_sol, entry_price,
+                    tx_signature, status
+                ) VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
+                (
+                    event_id, user_hash,
+                    event["token_address"],
+                    event.get("token_symbol", ""),
+                    event.get("chain", "solana"),
+                    event.get("detected_at", now),
+                    event.get("rug_score"),
+                    event.get("amount_sol"),
+                    event.get("entry_price"),
+                    event.get("tx_signature"),
+                    event.get("status", "detected"),
+                ),
+            )
+            await db.commit()
+        return event_id
+
+    async def _update_snipe_event_internal(self, user_hash: str, event_id: str, updates: dict) -> bool:
+        """Internal: update a snipe history event with ownership check."""
+        async with self._conn() as db:
+            sets = []
+            vals = []
+            for key in ("status", "tx_signature", "amount_sol", "entry_price", "pnl_pct", "closed_at", "rug_score"):
+                if key in updates:
+                    sets.append(f"{key} = ?")
+                    vals.append(updates[key])
+            if not sets:
+                return False
+            vals.append(event_id)
+            vals.append(user_hash)
+            await db.execute(
+                f"UPDATE snipe_history SET {', '.join(sets)} WHERE id = ? AND user_hash = ?",
+                tuple(vals),
+            )
+            await db.commit()
+            return True
+
+    async def _get_sniper_wallet_private_internal(self, user_hash: str) -> Optional[bytes]:
+        """Internal: decrypt sniper wallet private key by user_hash."""
+        async with self._conn() as db:
+            cursor = await db.execute(
+                "SELECT encrypted_private FROM sniper_wallets WHERE user_hash = ?",
+                (user_hash,),
+            )
+            row = await cursor.fetchone()
+            if not row:
+                return None
+
+        # We need the raw API key to decrypt, but the engine only has user_hash.
+        # The private key is encrypted with a derived key from the API key.
+        # Solution: we need a way to decrypt without the API key.
+        # For now, the engine must have access to the API key (passed at init).
+        # Return the encrypted blob — engine handles decryption if it has the key.
+        return row["encrypted_private"].encode()
+
+    async def _add_position_internal(
+        self,
+        user_hash: str,
+        symbol: str,
+        entry_price: float,
+        amount: float,
+        *,
+        stop_loss_pct: float = 0.05,
+        take_profit_pct: float = 0.50,
+        side: str = "long",
+    ) -> Optional[str]:
+        """Internal: add a tracked position by user_hash directly."""
+        pos_id = f"up_{uuid.uuid4().hex[:12]}"
+        now = datetime.now(timezone.utc).isoformat()
+        stop_level = entry_price * (1 - stop_loss_pct) if side == "long" else entry_price * (1 + stop_loss_pct)
+        tp_level = entry_price * (1 + take_profit_pct) if take_profit_pct and side == "long" else (
+            entry_price * (1 - take_profit_pct) if take_profit_pct else None
+        )
+        async with self._conn() as db:
+            await db.execute(
+                """INSERT INTO user_positions (
+                    id, user_hash, symbol, entry_price, amount,
+                    current_stop_loss, take_profit_level,
+                    peak_price, status, side, created_at
+                ) VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
+                (pos_id, user_hash, symbol, entry_price, amount,
+                 stop_level, tp_level, entry_price, "open", side, now),
+            )
+            await db.execute(
+                "UPDATE users SET total_trades = total_trades + 1 WHERE api_key_hash = ?",
+                (user_hash,),
+            )
+            await db.commit()
+        return pos_id
+
+    async def _get_daily_snipe_spend(self, user_hash: str) -> float:
+        """Internal: get total SOL spent on snipes today for a user."""
+        today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        async with self._conn() as db:
+            cursor = await db.execute(
+                """SELECT COALESCE(SUM(amount_sol), 0) as total
+                   FROM snipe_history
+                   WHERE user_hash = ?
+                     AND status = 'executed'
+                     AND detected_at >= ?""",
+                (user_hash, today + "T00:00:00"),
+            )
+            row = await cursor.fetchone()
+            return float(row["total"]) if row else 0.0
+
+    async def _get_sniper_wallet_info(self, user_hash: str) -> Optional[dict]:
+        """Internal: get sniper wallet pubkey and encrypted private key."""
+        async with self._conn() as db:
+            cursor = await db.execute(
+                "SELECT wallet_pubkey, encrypted_private FROM sniper_wallets WHERE user_hash = ?",
+                (user_hash,),
+            )
+            row = await cursor.fetchone()
+            if not row:
+                return None
+            return {
+                "pubkey": row["wallet_pubkey"],
+                "encrypted_private": row["encrypted_private"],
+            }
 
 
 # ── Wallet verification ────────────────────────────────────────────────

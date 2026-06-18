@@ -162,20 +162,15 @@ def _call_dispatch_endpoint(hub_url: str, hub_token: str, lead_id: str, urgency:
         return {"ok": False, "error": f"{type(e).__name__}: {e}"}
 
 
-def _hub_alive(timeout: float = 2.0) -> bool:
-    """Quick TCP-level health check on the hub. Avoids blasting YES
-    dispatches into URLError when the hub is down."""
-    import socket
-    hub_url = os.getenv("HUB_URL", "http://127.0.0.1:8000")
+def _hub_alive(timeout: float = 3.0) -> bool:
+    """HTTP GET health check on the hub root (returns 200 HTML)."""
+    import urllib.request
+    import urllib.error
+    hub_url = os.getenv("HUB_URL", "http://127.0.0.1:8000").rstrip("/")
     try:
-        hostport = hub_url.split("://", 1)[1].split("/", 1)[0]
-        if ":" in hostport:
-            host, port_s = hostport.rsplit(":", 1)
-            port = int(port_s)
-        else:
-            host, port = hostport, 80
-        with socket.create_connection((host, port), timeout=timeout):
-            return True
+        req = urllib.request.Request(hub_url + "/", method="GET")
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            return r.status == 200
     except Exception:
         return False
 

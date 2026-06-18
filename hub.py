@@ -99,6 +99,7 @@ from empire_partner_onboarding import register_partner_routes
 from empire_affiliate_portal import register_affiliate_routes
 from empire_affiliate_recruit import register_affiliate_recruit_routes
 from empire_si_brain import SyntheticBrain, register_synthetic_routes
+from empire_sniper_brain import register_sniper_brain_routes
 from empire_si_strategy import StrategyEvolution
 from empire_si_adaptive import AdaptiveEngine
 from empire_ai_closer import AICloser, ai_closer_score_only
@@ -1270,6 +1271,16 @@ crypto_payment_engine = CryptoPaymentEngine(
     broadcaster=live_broadcaster,
 )
 
+
+# Vonage webhook aliases (for dashboard config pointing to /webhook/vonage-*)
+@app.post("/webhook/vonage-answer")
+async def vonage_answer_alias(request: Request):
+    return await voice_router.answer_webhook(request)
+
+@app.post("/webhook/vonage-event")
+async def vonage_event_alias(request: Request):
+    return await voice_router.event_webhook(request)
+
 register_solana_webhook_routes(
     app,
     payout_engine=payout_engine,
@@ -1691,6 +1702,9 @@ synthetic_brain = SyntheticBrain(
     base_dir=BASE_DIR,
 )
 register_synthetic_routes(app, brain=synthetic_brain, require_auth=require_auth, auth_engine=auth_engine)
+
+# Sniper Brain Bridge — AGI-driven config for the Solana Meme Sniper Rust bot
+register_sniper_brain_routes(app, require_auth=require_auth)
 
 # Mission Control — always-visible top status bar (AGI/SI/Brain/Revenue/Lanes/Compliance/Network)
 register_mission_control_routes(app, get_db=get_db)
@@ -5504,5 +5518,4 @@ if __name__ == "__main__":
         server.run(sockets=[_sock])
     finally:
         _sock.close()
-
-
+     
