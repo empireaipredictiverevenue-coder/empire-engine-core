@@ -22,19 +22,19 @@ services:
       dockerfile: Dockerfile
     container_name: empire-hub
     ports:
-      - "8000:8000"
+      - "8000:8001"
     env_file:
       - /root/.env
     environment:
       - CONTAINER_MODE=hub
-      - HUB_PORT=8000
+      - HUB_PORT=8001
       - PARTNER_ID=empire_official
       - PARTNER_NAME=Empire AI
     volumes:
       - /root/.env:/root/.env:ro
       - empire_data:/app/data
     healthcheck:
-      test: ["CMD", "curl", "-sf", "http://localhost:8000/api/hub/diagnostics"]
+      test: ["CMD", "curl", "-sf", "http://localhost:8001/api/hub/diagnostics"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -112,7 +112,7 @@ services:
   #   image: empireai/hub:latest
   #   container_name: partner-acme-restoration
   #   ports:
-  #     - "8001:8000"
+  #     - "8001:8001"
   #   env_file:
   #     - /root/partners/acme/.env
   #   environment:
@@ -121,7 +121,7 @@ services:
   #     - BRAND_PRIMARY_COLOR=#00AAFF
   #     - BRAND_LOGO_URL=https://acme.com/logo.png
   #     - TIER=growth
-  #     - HUB_PORT=8000
+  #     - HUB_PORT=8001
   #   volumes:
   #     - partner_acme_data:/app/data
   #   restart: unless-stopped
@@ -132,7 +132,7 @@ services:
   #   image: empireai/hub:latest
   #   container_name: partner-enterprise-roofing
   #   ports:
-  #     - "8002:8000"
+  #     - "8002:8001"
   #   env_file:
   #     - /root/partners/enterprise_roofing/.env
   #   environment:
