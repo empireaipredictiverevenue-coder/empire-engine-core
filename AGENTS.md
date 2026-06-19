@@ -33,7 +33,7 @@ The fleet is bigger than the two agents. Last enumerated 2026-06-13
 ### PM2 services (10, all online; restart with `pm2 restart <name>`)
   - **empire-mesh** (PID 3451686) — `main.py`. The fleet orchestrator script
     (signal handler, lib import, env bootstrap). Logs to `/var/log/empire.log`.
-  - **empire-hub** (PID 3663717) — `hub.py` on `:8000` via uvicorn. The main
+  - **empire-hub** (PID 3663717) — `hub.py` on `:8001` via uvicorn. The main
     Empire-AI FastAPI app. `/api/v1/*` routes, contractor signup, voice,
     SMS, attribution dashboard. Restart after code changes (12s downtime).
   - **empire-chrome** (PID 3451900) — `scripts/chrome_headless.sh` + xvfb.

@@ -23,7 +23,7 @@ except ImportError:
 import httpx
 from playwright.async_api import async_playwright
 
-BASE = "http://localhost:8000"
+BASE = "http://localhost:8001"
 TOKEN = os.environ.get("HUB_TOKEN", "dev-token-insecure")
 
 

@@ -232,7 +232,7 @@ class StrategyEvolution:
         dream_risk_flags = []
         try:
             import httpx
-            base = os.environ.get("PUBLIC_BASE_URL", "http://localhost:8000")
+            base = os.environ.get("PUBLIC_BASE_URL", "http://localhost:8001")
             async with httpx.AsyncClient(timeout=5.0) as client:
                 r = await client.get(f"{base}/api/dream/si-feed")
             if r.status_code == 200:

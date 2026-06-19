@@ -9,7 +9,7 @@ module.exports = {
       PYTHONPATH: "/root/empire-v49",
       PUBLIC_BASE_URL: "https://empire-ai.co.uk",
       EMPIRE_PUBLIC_BASE_URL: "https://empire-ai.co.uk",
-      HUB_URL: "http://127.0.0.1:8000",
+      HUB_URL: "http://127.0.0.1:8001",
       SECRET_KEY: "empire-rotate-this-to-a-long-random-string"
     },
     out_file: "/root/.pm2/logs/empire-hub-out.log",

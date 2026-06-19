@@ -156,7 +156,7 @@ D5. Test locally first:
        export $(cat .env | xargs)
        uvicorn hub:app --reload
 
-       Visit http://localhost:8000 — splash should load
+       Visit http://localhost:8001 — splash should load
 
 
 ───────────────────────────────────────────────────────────────────────────────

@@ -33,7 +33,7 @@ log = logging.getLogger("empire.event_emitter")
 
 
 def _hub_base() -> str:
-    return os.getenv("HUB_URL", "http://127.0.0.1:8000").rstrip("/")
+    return os.getenv("HUB_URL", "http://127.0.0.1:8001").rstrip("/")
 
 
 def _hub_token() -> str:

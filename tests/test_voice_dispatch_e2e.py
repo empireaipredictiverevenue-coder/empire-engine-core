@@ -107,7 +107,7 @@ async def run_test():
         vonage_app_id=os.environ.get("VONAGE_APPLICATION_ID", ""),
         vonage_private_key_path=os.environ.get("VONAGE_PRIVATE_KEY_PATH", ""),
         vonage_number=os.environ.get("VONAGE_NUMBER", ""),
-        public_base_url=os.environ.get("PUBLIC_BASE_URL", "http://localhost:8000"),
+        public_base_url=os.environ.get("PUBLIC_BASE_URL", "http://localhost:8001"),
     )
     check("VoiceRouter created", isinstance(voice_router, VoiceRouter),
           f"vonage_enabled={voice_router.vonage.enabled}")

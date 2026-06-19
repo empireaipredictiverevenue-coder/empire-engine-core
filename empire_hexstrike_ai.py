@@ -355,7 +355,7 @@ class HexStrike:
             "/api/contractors/chat", "/api/customer-service/chat",
         ]
 
-        hub_base = "http://localhost:8000"
+        hub_base = "http://localhost:8001"
 
         async with httpx.AsyncClient(timeout=5.0, follow_redirects=False) as client:
 

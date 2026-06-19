@@ -2980,7 +2980,6 @@ function ProductsPanel() {
         </div>
       </div>
     `}
-  `;
 
     // Crypto USDC Pay modal overlay
     ${!cryptoProduct ? null : html`
@@ -2994,20 +2993,20 @@ function ProductsPanel() {
             <!-- Step 1: Email + Account form -->
             <input style=${{width:'100%',padding:'10px 12px',margin:'0 0 10 0',background:'var(--empire-black)',border:'1px solid var(--empire-border)',borderRadius:'6px',color:'var(--foreground)',fontSize:'13px',fontFamily:'var(--font-mono)',outline:'none',boxSizing:'border-box'}}
               placeholder="Your email address"
-              value=${{cryptoEmail}}
-              onInput=${{e => setCryptoEmail(e.target.value)}}
-              disabled=${{cryptoBusy}} />
+              value=${cryptoEmail}
+              onInput=${e => setCryptoEmail(e.target.value)}
+              disabled=${cryptoBusy} />
             <input style=${{width:'100%',padding:'10px 12px',margin:'0 0 10 0',background:'var(--empire-black)',border:'1px solid var(--empire-border)',borderRadius:'6px',color:'var(--foreground)',fontSize:'13px',fontFamily:'var(--font-mono)',outline:'none',boxSizing:'border-box'}}
               placeholder="Account ID (optional, defaults to email)"
-              value=${{cryptoAcct}}
-              onInput=${{e => setCryptoAcct(e.target.value)}}
-              disabled=${{cryptoBusy}} />
+              value=${cryptoAcct}
+              onInput=${e => setCryptoAcct(e.target.value)}
+              disabled=${cryptoBusy} />
             ${!cryptoError ? null : html`<div style=${{fontSize:'11px',color:'var(--signal-orange)',margin:'0 0 10 0'}}>${cryptoError}</div>`}
             <div style=${{display:'flex',gap:'8px',justifyContent:'flex-end'}}>
               <button style=${{padding:'8px 20px',background:'transparent',border:'1px solid var(--empire-border)',color:'var(--foreground-muted)',borderRadius:'6px',cursor:'pointer',fontSize:'11px',fontFamily:'var(--font-mono)',textTransform:'uppercase'}}
-                onClick=${() => { if (pollInterval.current) { clearInterval(pollInterval.current); pollInterval.current = null; } setCryptoProduct(null); }} disabled=${{cryptoBusy}}>Cancel</button>
+                onClick=${() => { if (pollInterval.current) { clearInterval(pollInterval.current); pollInterval.current = null; } setCryptoProduct(null); }} disabled=${cryptoBusy}>Cancel</button>
               <button style=${{padding:'8px 20px',background:'var(--strike-cyan)',border:'none',color:'var(--empire-black)',borderRadius:'6px',cursor:'pointer',fontSize:'11px',fontFamily:'var(--font-mono)',textTransform:'uppercase',fontWeight:600}}
-                onClick=${() => doCryptoPay(cryptoProduct)} disabled=${{cryptoBusy}}>${cryptoBusy ? 'Creating…' : 'Create Payment'}</button>
+                onClick=${() => doCryptoPay(cryptoProduct)} disabled=${cryptoBusy}>${cryptoBusy ? 'Creating…' : 'Create Payment'}</button>
             </div>
           ` : html`
             <!-- Step 2: Payment details with memo -->
@@ -3037,7 +3036,7 @@ function ProductsPanel() {
               </div>
             ` : null}
             <div style=${{display:'flex',gap:'8px',justifyContent:'flex-end'}}>
-              <a href=${{'/crypto/pay/' + cryptoResult.payment_id}} target="_blank" style=${{padding:'8px 20px',background:'transparent',border:'1px solid var(--empire-border)',color:'var(--foreground-muted)',borderRadius:'6px',cursor:'pointer',fontSize:'11px',fontFamily:'var(--font-mono)',textTransform:'uppercase',textDecoration:'none'}}>Status Page</a>
+              <a href=${'/crypto/pay/' + cryptoResult.payment_id} target="_blank" style=${{padding:'8px 20px',background:'transparent',border:'1px solid var(--empire-border)',color:'var(--foreground-muted)',borderRadius:'6px',cursor:'pointer',fontSize:'11px',fontFamily:'var(--font-mono)',textTransform:'uppercase',textDecoration:'none'}}>Status Page</a>
               <button style=${{padding:'8px 20px',background:'transparent',border:'1px solid var(--empire-border)',color:'var(--foreground-muted)',borderRadius:'6px',cursor:'pointer',fontSize:'11px',fontFamily:'var(--font-mono)',textTransform:'uppercase'}}
                 onClick=${() => { if (pollInterval.current) { clearInterval(pollInterval.current); pollInterval.current = null; } setCryptoProduct(null); }}>Close</button>
             </div>
@@ -3045,6 +3044,7 @@ function ProductsPanel() {
         </div>
       </div>
     `}
+  `;
 }
 
 function stripMeta(e) {
@@ -3881,7 +3881,7 @@ function Console() {
           <div class="panel-head">Supported actions (${actions.length})</div>
           <div class="sec-meta">${actions.map(a => typeof a === 'string' ? a : (a && a.name) || JSON.stringify(a)).join(' · ')}</div>
         </div>
-      ` : ''}
+      `}
     </div>
   `;
 }
@@ -4210,9 +4210,6 @@ function Governor() {
         <span class="gov-watch-tag">Last check: <strong>${(wd.last_check || '').slice(11,19)}</strong></span>
         <span class="gov-watch-tag">Watching: <strong>${wd.watching.join(', ')}</strong></span>
       </div>
-      ` : ''}
-
-      
       ` : ''}
 
       ${mrrData ? html`<div class="rv-narrative-panel" style="margin-bottom:20px">
@@ -10118,14 +10115,14 @@ function SniperFleet() {
           <div style={{display:'flex',alignItems:'center',justifyContent:'space-between'}}>
             <div>
                             ${ovLoading ? html`<span class="af-tag">Loading…</span>` : overrideError ? html`
-                <span style={{fontFamily:'var(--font-mono)',fontSize:'10px',color:'var(--status-red)']}>
+                <span style={{fontFamily:'var(--font-mono)',fontSize:'10px',color:'var(--status-red)'}}>
                   \xe2\x9a\xa0 Brain Unreachable — using static fallback config
                 </span>
               ` : overrideInfo ? html`
-                <span style={{fontFamily:'var(--font-mono)',fontSize:'10px',color:overrideInfo.brain_healthy && !overrideInfo.operator_override_active?'var(--empire-fog)':'var(--signal-teal)']}>
+                <span style={{fontFamily:'var(--font-mono)',fontSize:'10px',color:overrideInfo.brain_healthy && !overrideInfo.operator_override_active?'var(--empire-fog)':'var(--signal-teal)'}}>
                   \xe2\x97\x8f ${overrideInfo.brain_healthy ? html`Brain ${overrideInfo.operator_override_active ? 'OVERRIDE ACTIVE' : 'ONLINE'}` : html`Brain Unreachable`}
                 </span>
-                <span style={{fontFamily:'var(--font-mono)',fontSize:'9px',color:'var(--empire-mist)',marginLeft:'12px']}>
+                <span style={{fontFamily:'var(--font-mono)',fontSize:'9px',color:'var(--empire-mist)',marginLeft:'12px'}}>
                   Router: ${overrideInfo.router_available ? '\xe2\x9c\x93' : '\xe2\x9c\x97'} \xc2\xb7 DB: ${overrideInfo.db_available ? '\xe2\x9c\x93' : '\xe2\x9c\x97'}
                 </span>
               ` : html`<span class="af-tag">Fetching status…</span>`}

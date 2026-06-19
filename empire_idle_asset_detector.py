@@ -817,7 +817,7 @@ class IdleAssetOutreach:
         email_engine=None,
         sms_engine=None,
         get_db: Optional[Callable] = None,
-        public_base_url: str = "http://localhost:8000",
+        public_base_url: str = "http://localhost:8001",
     ):
         self.email_engine = email_engine
         self.sms_engine = sms_engine

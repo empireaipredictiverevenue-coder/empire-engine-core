@@ -30,7 +30,7 @@ import httpx
 from supabase import create_client
 
 AGENT_NAME = "settled_claim_monitor"
-HUB_URL = os.environ.get("HUB_URL", "http://127.0.0.1:8000")
+HUB_URL = os.environ.get("HUB_URL", "http://127.0.0.1:8001")
 HUB_TOKEN = os.environ.get("HUB_TOKEN", "Jaykub20*")
 SETTLE_PROBABILITY = 0.3  # 30% of open claims get settled each tick
 SETTLE_FRACTION_MIN = 0.60

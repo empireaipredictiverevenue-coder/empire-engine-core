@@ -8,7 +8,7 @@
 #
 # Run (standalone hub):
 #   docker run -d --name empire-hub \
-#     -p 8000:8000 \
+#     -p 8000:8001 \
 #     -v /root/.env:/root/.env:ro \
 #     empireai/hub:latest
 #
@@ -17,7 +17,7 @@
 #
 # White-label partner (custom branding):
 #   docker run -d --name partner-acme \
-#     -p 8001:8000 \
+#     -p 8001:8001 \
 #     -v /root/.env:/root/.env:ro \
 #     -e PARTNER_ID=acme \
 #     -e PARTNER_NAME="Acme Restoration" \
@@ -78,4 +78,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
 EXPOSE ${HUB_PORT}
 
 # Default: run the hub
-CMD ["python3", "-m", "uvicorn", "hub:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["python3", "-m", "uvicorn", "hub:app", "--host", "0.0.0.0", "--port", "8001"]

@@ -43,7 +43,7 @@ const OUTPUT = '/root/empire-v49/screenshots/self_awareness.png';
 
   // 2. Navigate to base page first (establishes session, loads SPA shell)
   console.log('Loading SPA shell...');
-  await page.goto('http://localhost:8000/command', {
+  await page.goto('http://localhost:8001/command', {
     waitUntil: 'networkidle0',
     timeout: 20000,
   });

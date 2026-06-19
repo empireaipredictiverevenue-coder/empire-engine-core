@@ -55,7 +55,7 @@ What you should see:
    - If 21:00-08:00 Central, that's why.
 2. Check the dispatcher is alive:
    - `pm2 logs empire-hub --lines 50` — look for "Dispatch running"
-   - `curl http://127.0.0.1:8000/command` — HTTP 200 means it's up
+   - `curl http://127.0.0.1:8001/command` — HTTP 200 means it's up
 3. Check sms_sequences:
    - Is `nsa < now()` for active sequences? If not, they need to be rescheduled.
 

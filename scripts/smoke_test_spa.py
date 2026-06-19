@@ -7,7 +7,7 @@ to a running instance) and checking for critical structural markers.
 
 Usage:
     # Test a running instance
-    python scripts/smoke_test_spa.py --url http://localhost:8000
+    python scripts/smoke_test_spa.py --url http://localhost:8001
 
     # Start hub and test (CI mode)
     python scripts/smoke_test_spa.py --start-hub

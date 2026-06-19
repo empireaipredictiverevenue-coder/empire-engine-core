@@ -117,7 +117,7 @@ echo "─── [3/3] Verifying hub startup ───"
 # Wait for hub to start (up to 15 seconds)
 for i in $(seq 1 15); do
   sleep 1
-  if curl -s --max-time 2 http://localhost:8000/ >/dev/null 2>&1; then
+  if curl -s --max-time 2 http://localhost:8001/ >/dev/null 2>&1; then
     echo "  ✅  Hub is responding on port 8000 (${i}s)"
     break
   fi

@@ -420,7 +420,7 @@ document.getElementById('email').addEventListener('keydown', e => {{ if (e.key =
 
 
 # ── DASHBOARD PAGE ───────────────────────────────────────────────────
-def _advertiser_dashboard(advertiser: dict, base_url: str = "http://localhost:8000") -> str:
+def _advertiser_dashboard(advertiser: dict, base_url: str = "http://localhost:8001") -> str:
     adv_id = advertiser.get("id", "")
     adv_name = advertiser.get("company_name", "Advertiser")
     pid_json = json.dumps(adv_id)

@@ -257,12 +257,12 @@ causes crash loops.
                 or
                 ./validate_hub_deploy.sh            (full: plus changed files)
 3. Deploy:     ./hub_safe_restart.sh                (validate + restart)
-4. Verify:     curl http://localhost:8000/api/hub/diagnostics   (no auth needed)
-               curl http://localhost:8000/                       (splash page)
+4. Verify:     curl http://localhost:8001/api/hub/diagnostics   (no auth needed)
+               curl http://localhost:8001/                       (splash page)
                
    If the hub doesn't come up:
      ./hub_safe_restart.sh --status     # shows status + last crash lines
-     curl http://localhost:8000/api/hub/diagnostics  # health check (no auth)
+     curl http://localhost:8001/api/hub/diagnostics  # health check (no auth)
 ```
 
 ### Quick reference (common operations):
@@ -307,7 +307,7 @@ broken code from ever being committed to the repo.
 
 ```
 1. Check status:    ./hub_safe_restart.sh --status
-2. Hit diagnostics: curl http://localhost:8000/api/hub/diagnostics  (no auth)
+2. Hit diagnostics: curl http://localhost:8001/api/hub/diagnostics  (no auth)
 3. If diagnostics fails → the hub has an import-level crash.
    Run: ./validate_hub_deploy.sh --quick
    It will tell you exactly which module is broken and why.
@@ -366,7 +366,7 @@ This is what causes 47-restart crash loops.
 - Auth: Hub token (legacy) or per-operator session tokens
 - SOUL: /root/.hermes/SOUL.md (operator agent's personal SOUL)
 - Kanban: /root/.hermes/kanban.db (SQLite, managed via `hermes kanban`)
-- Hub health: `curl http://localhost:8000/api/hub/diagnostics` (no auth needed)
+- Hub health: `curl http://localhost:8001/api/hub/diagnostics` (no auth needed)
 - Deploy validator: `./validate_hub_deploy.sh` (syntax + import checker)
 - Safe restart: `./hub_safe_restart.sh` (validates → restarts → verifies)
 

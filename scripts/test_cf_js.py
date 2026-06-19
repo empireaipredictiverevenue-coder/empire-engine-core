@@ -5,7 +5,7 @@ import subprocess
 import urllib.request
 
 # Fetch from direct server
-with urllib.request.urlopen("http://localhost:8000/command") as resp:
+with urllib.request.urlopen("http://localhost:8001/command") as resp:
     direct_html = resp.read().decode()
 
 # Fetch through Cloudflare with browser User-Agent

@@ -5,11 +5,11 @@
 #   empire-stats --json       → raw JSON
 #   empire-stats --variant warehouse → single variant detail
 #
-# Reads HUB_TOKEN from /root/.env, talks to localhost:8000.
+# Reads HUB_TOKEN from /root/.env, talks to localhost:8001.
 
 set -euo pipefail
 
-HUB_URL="${EMPIRE_HUB_URL:-http://localhost:8000}"
+HUB_URL="${EMPIRE_HUB_URL:-http://localhost:8001}"
 ENDPOINT="/api/v1/outreach/template-stats"
 
 # ── extract HUB_TOKEN safely ──────────────────────────────────────

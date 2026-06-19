@@ -24,7 +24,7 @@ os.environ.setdefault("SUPABASE_URL", "http://test.supabase.co")
 os.environ.setdefault("SUPABASE_SERVICE_KEY", "test-service-key")
 os.environ.setdefault("SUPABASE_ANON_KEY", "test-anon-key")
 os.environ.setdefault("HUB_TOKEN", "test-hub-token")
-os.environ.setdefault("PUBLIC_BASE_URL", "http://localhost:8000")
+os.environ.setdefault("PUBLIC_BASE_URL", "http://localhost:8001")
 
 
 # ── Import module under test (for rate limit access) ──────────────

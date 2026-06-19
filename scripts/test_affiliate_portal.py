@@ -10,10 +10,10 @@ for row in (r.data or []):
 first_id = str(r.data[0]['buyer_id']) if r.data else None
 print(f"\nFirst buyer_id: {first_id}")
 import subprocess, json
-code = subprocess.run(['curl', '-s', '-o', '/dev/null', '-w', '%{http_code}', 'http://localhost:8000/portal/affiliate/login'], capture_output=True, text=True)
+code = subprocess.run(['curl', '-s', '-o', '/dev/null', '-w', '%{http_code}', 'http://localhost:8001/portal/affiliate/login'], capture_output=True, text=True)
 print(f"Login page: HTTP {code.stdout}")
 if first_id:
-    code = subprocess.run(['curl', '-s', '-o', '/dev/null', '-w', '%{http_code}', f'http://localhost:8000/api/v1/affiliate/{first_id}/stats'], capture_output=True, text=True)
+    code = subprocess.run(['curl', '-s', '-o', '/dev/null', '-w', '%{http_code}', f'http://localhost:8001/api/v1/affiliate/{first_id}/stats'], capture_output=True, text=True)
     print(f"Stats (unauthed): HTTP {code.stdout}")
 hub_token = ""
 for line in open('/root/.env'):
@@ -21,7 +21,7 @@ for line in open('/root/.env'):
         hub_token = line.split('=', 1)[1].strip().strip('"').strip("'")
         break
 if hub_token and first_id:
-    code = subprocess.run(['curl', '-s', '-o', '/tmp/stats.json', '-w', '%{http_code}', '-H', f'Authorization: Bearer {hub_token}', f'http://localhost:8000/api/v1/affiliate/{first_id}/stats'], capture_output=True, text=True)
+    code = subprocess.run(['curl', '-s', '-o', '/tmp/stats.json', '-w', '%{http_code}', '-H', f'Authorization: Bearer {hub_token}', f'http://localhost:8001/api/v1/affiliate/{first_id}/stats'], capture_output=True, text=True)
     print(f"Stats (authed): HTTP {code.stdout}")
     if code.stdout == '200':
         d = json.load(open('/tmp/stats.json'))

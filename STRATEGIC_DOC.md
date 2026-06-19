@@ -52,7 +52,7 @@ This document audits Empire AI through each of Scheffel's four pillars, identifi
 
 | Component | Status |
 |---|---|
-| Hub (FastAPI :8000) | ✅ Online, stable |
+| Hub (FastAPI :8001) | ✅ Online, stable |
 | Supabase backend | ✅ Connected |
 | 25 agent heartbeats | ✅ All ACTIVE |
 | Langfuse observability | ✅ Recently integrated |

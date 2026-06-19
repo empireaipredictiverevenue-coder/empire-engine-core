@@ -16,12 +16,12 @@
 #
 # Requires:
 #   - Docker (for container provisioning)
-#   - Empire hub running on localhost:8000
+#   - Empire hub running on localhost:8001
 # ═══════════════════════════════════════════════════════════════════════════
 
 set -euo pipefail
 
-HUB_URL="${HUB_URL:-http://localhost:8000}"
+HUB_URL="${HUB_URL:-http://localhost:8001}"
 AUTH_TOKEN="${AUTH_TOKEN:-}"
 
 # ── Colors for output ──────────────────────────────────────────────────

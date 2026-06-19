@@ -22,7 +22,7 @@ except ImportError:
 
 import httpx
 
-BASE = "http://localhost:8000"
+BASE = "http://localhost:8001"
 TOKEN = os.environ.get("HUB_TOKEN", "dev-token-insecure")
 HEADERS = {"Authorization": f"Bearer {TOKEN}", "Content-Type": "application/json"}
 

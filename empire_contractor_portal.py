@@ -203,7 +203,7 @@ document.getElementById('email').addEventListener('keydown', e => { if (e.key ==
 
 
 # ── DASHBOARD PAGE ───────────────────────────────────────────────────
-def _contractor_dashboard(contractor: dict, base_url: str = "http://localhost:8000") -> str:
+def _contractor_dashboard(contractor: dict, base_url: str = "http://localhost:8001") -> str:
     ctr_id = contractor.get("id", "")
     ctr_name = contractor.get("name", "Contractor")
     pid_json = json.dumps(ctr_id)

@@ -147,7 +147,7 @@ def _trigger_hub_pipeline(event_id: str) -> None:
     import os
     hub_url = os.environ.get(
         "EMPIRE_HUB_URL",
-        "http://localhost:8000",
+        "http://localhost:8001",
     ).rstrip("/")
     hub_token = os.environ.get("HUB_TOKEN", "dev-token-insecure")
     endpoint = f"{hub_url}/api/v1/storm/process-sqlite"

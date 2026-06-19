@@ -1474,7 +1474,7 @@ class InfrastructureWatchdog:
     """
 
     CHECKS = [
-        "port:8000",    # hub
+        "port:8001",    # hub
         "port:11434",   # Ollama
         "port:8005",    # synthetic_brain
         "port:8042",    # agent_orchestrator
@@ -1770,7 +1770,7 @@ class DegradationManager:
         return self._compute_level()
 
     def _compute_level(self):
-        if not self._ping("http://localhost:8000/"):
+        if not self._ping("http://localhost:8001/"):
             return 4
         if not self._ping("http://localhost:11434/api/tags"):
             return 1

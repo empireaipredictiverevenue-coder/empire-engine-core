@@ -3,7 +3,7 @@
 import json, time, urllib.request, sys
 
 CHROME_URL = "http://127.0.0.1:9222"
-TARGET_URL = "http://localhost:8000/command"
+TARGET_URL = "http://localhost:8001/command"
 
 try:
     import websocket

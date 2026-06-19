@@ -166,7 +166,7 @@ def _hub_alive(timeout: float = 3.0) -> bool:
     """HTTP GET health check on the hub root (returns 200 HTML)."""
     import urllib.request
     import urllib.error
-    hub_url = os.getenv("HUB_URL", "http://127.0.0.1:8000").rstrip("/")
+    hub_url = os.getenv("HUB_URL", "http://127.0.0.1:8001").rstrip("/")
     try:
         req = urllib.request.Request(hub_url + "/", method="GET")
         with urllib.request.urlopen(req, timeout=timeout) as r:
@@ -222,7 +222,7 @@ def run() -> dict:
     rows_skipped = 0
     error_msgs = []
     sample_dispatches = []
-    hub_url = os.getenv("HUB_URL", "http://127.0.0.1:8000")
+    hub_url = os.getenv("HUB_URL", "http://127.0.0.1:8001")
     hub_token = os.getenv("HUB_TOKEN", "")
 
     for sms in candidates[:cfg["max_per_run"]]:

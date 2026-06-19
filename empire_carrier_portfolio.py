@@ -722,7 +722,7 @@ class StormReportEngine:
         get_db: Callable,
         manager: PortfolioManager,
         send_email: Optional[Callable] = None,
-        public_base_url: str = "http://localhost:8000",
+        public_base_url: str = "http://localhost:8001",
     ):
         self.get_db = get_db
         self.manager = manager

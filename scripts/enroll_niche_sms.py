@@ -193,7 +193,7 @@ def run(dry_run: bool = True):
             if not dry_run:
                 try:
                     import urllib.request
-                    hub_url = os.getenv("HUB_URL", "http://127.0.0.1:8000")
+                    hub_url = os.getenv("HUB_URL", "http://127.0.0.1:8001")
                     hub_token = os.getenv("HUB_TOKEN", "")
                     if not hub_token:
                         errors += 1

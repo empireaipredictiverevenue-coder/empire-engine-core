@@ -200,7 +200,7 @@ if [ -f "check_ports.sh" ] && [ "$QUICK_MODE" = false ]; then
 else
   # Quick mode: just check port 8000 (hub) is not held by an orphan
   if command -v ss &>/dev/null; then
-    PORT_8000=$(ss -tlnp "sport = :8000" 2>/dev/null | grep -v State | head -1)
+    PORT_8000=$(ss -tlnp "sport = :8001" 2>/dev/null | grep -v State | head -1)
     if [ -n "$PORT_8000" ]; then
       print_result "PASS" "Port 8000 is occupied (expected for running hub)"
     else

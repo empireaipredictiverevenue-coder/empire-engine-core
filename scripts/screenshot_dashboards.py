@@ -21,9 +21,9 @@ CHROME = "http://127.0.0.1:9222"
 OUTDIR = "/tmp/dashboards"
 
 URLS = [
-    ("hub",        "http://127.0.0.1:8000/"),
-    ("hub_command","http://127.0.0.1:8000/command"),
-    ("hub_contractors", "http://127.0.0.1:8000/contractors/signup"),
+    ("hub",        "http://127.0.0.1:8001/"),
+    ("hub_command","http://127.0.0.1:8001/command"),
+    ("hub_contractors", "http://127.0.0.1:8001/contractors/signup"),
     ("hermes",     "http://127.0.0.1:9119/"),
     ("hermes_sessions", "http://127.0.0.1:9119/sessions"),
     ("brain",      "http://127.0.0.1:8005/"),

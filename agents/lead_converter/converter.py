@@ -277,7 +277,7 @@ def _do_live_send(channel: str, phone: str, body: str, lead: dict) -> tuple[bool
     """Call the hub to enroll the lead in the SMS or email sequence.
     Returns (ok, sent_status_or_error)."""
     import urllib.request
-    hub_url = os.getenv("HUB_URL", "http://127.0.0.1:8000")
+    hub_url = os.getenv("HUB_URL", "http://127.0.0.1:8001")
     hub_token = os.getenv("HUB_TOKEN", "")
     if not hub_token:
         return False, "no_hub_token_in_env"
@@ -344,7 +344,7 @@ def _hub_alive(timeout: float = 2.0) -> bool:
     Returns True if the hub accepts a TCP connection on the configured
     port within `timeout` seconds."""
     import socket
-    hub_url = os.getenv("HUB_URL", "http://127.0.0.1:8000")
+    hub_url = os.getenv("HUB_URL", "http://127.0.0.1:8001")
     # crude parse: assume http://host:port
     try:
         # strip scheme

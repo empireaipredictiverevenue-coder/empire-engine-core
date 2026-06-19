@@ -23,7 +23,7 @@ echo ""
 # -N: no remote command, -L: local port forward, -g: allow remote hosts (skip; localhost only)
 ssh -N \
   -i "$KEY" \
-  -L "$HUB_PORT:127.0.0.1:8000" \
+  -L "$HUB_PORT:127.0.0.1:8001" \
   -L "$HERMES_PORT:127.0.0.1:9119" \
   -L "$BRAIN_PORT:127.0.0.1:8005" \
   -L "$ORCH_PORT:127.0.0.1:8042" \

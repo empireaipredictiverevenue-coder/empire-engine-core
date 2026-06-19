@@ -3,7 +3,7 @@
 import re, subprocess, sys
 
 import urllib.request
-with urllib.request.urlopen("http://localhost:8000/command") as r:
+with urllib.request.urlopen("http://localhost:8001/command") as r:
     html = r.read().decode()
 
 m = re.search(r'<script type="module">(.*?)</script>', html, re.DOTALL)

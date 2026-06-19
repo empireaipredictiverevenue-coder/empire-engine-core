@@ -422,7 +422,7 @@ document.getElementById('email').addEventListener('keydown', e => {{ if (e.key =
 
 
 # ── DASHBOARD PAGE ───────────────────────────────────────────────────
-def _publisher_dashboard(publisher: dict, base_url: str = "http://localhost:8000") -> str:
+def _publisher_dashboard(publisher: dict, base_url: str = "http://localhost:8001") -> str:
     pub_id = publisher.get("id", "")
     pub_name = publisher.get("name", "Publisher")
     api_key = publisher.get("api_key", "")

@@ -17,7 +17,7 @@ import uuid
 import httpx
 
 AGENT_NAME = "ab_monitor"
-HUB_URL = os.environ.get("HUB_URL", "http://127.0.0.1:8000")
+HUB_URL = os.environ.get("HUB_URL", "http://127.0.0.1:8001")
 HUB_TOKEN = os.environ.get("HUB_TOKEN", "")
 
 

@@ -12,7 +12,7 @@ from supabase import create_client
 
 SUPABASE_URL = os.environ.get("SUPABASE_URL")
 SUPABASE_KEY = os.environ.get("SUPABASE_SERVICE_KEY")
-HUB_BASE = "http://localhost:8000"
+HUB_BASE = "http://localhost:8001"
 
 if not SUPABASE_URL or not SUPABASE_KEY:
     print("FAIL: SUPABASE_URL and SUPABASE_SERVICE_KEY must be set")

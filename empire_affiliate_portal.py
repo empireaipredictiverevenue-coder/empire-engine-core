@@ -211,7 +211,7 @@ document.getElementById('email').addEventListener('keydown', e => { if (e.key ==
 
 
 # ── AFFILIATE DASHBOARD PAGE ──────────────────────────────────────────
-def _affiliate_dashboard(buyer: dict, base_url: str = "http://localhost:8000") -> str:
+def _affiliate_dashboard(buyer: dict, base_url: str = "http://localhost:8001") -> str:
     buyer_name = buyer.get("buyer_name", "Partner")
     buyer_id = buyer.get("id", "")
     ref_link = f"{base_url}/portal/affiliate/{buyer_id}/verify?ref="

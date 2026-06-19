@@ -155,7 +155,7 @@ class AdaptiveEngine:
             log.warning("[si.adaptive] httpx not available, skip persist")
             return
         try:
-            base = _os.environ.get("PUBLIC_BASE_URL", "http://localhost:8000")
+            base = _os.environ.get("PUBLIC_BASE_URL", "http://localhost:8001")
             async with httpx.AsyncClient(timeout=10.0) as _client:
                 r = await _client.post(f"{base}/api/si/parameters", json={"parameters": si_params})
                 if r.status_code >= 400:

@@ -3,7 +3,7 @@
 import re, subprocess, sys, urllib.request
 
 # Fetch from local server
-resp = urllib.request.urlopen("http://localhost:8000/command")
+resp = urllib.request.urlopen("http://localhost:8001/command")
 html = resp.read().decode()
 
 # Extract script type="module" content

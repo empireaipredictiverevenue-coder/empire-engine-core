@@ -19,10 +19,10 @@ LOG_FILE="$LOG_DIR/sqlite_bridge_cron.log"
 # variables we need, avoiding $ interpolation in secret strings.
 if [ -f /root/.env ]; then
     export HUB_TOKEN="$(grep '^HUB_TOKEN=' /root/.env | cut -d= -f2- | tr -d '"' || echo 'dev-token-insecure')"
-    export EMPIRE_HUB_URL="$(grep '^EMPIRE_HUB_URL=' /root/.env | cut -d= -f2- | tr -d '"' || echo 'http://localhost:8000')"
+    export EMPIRE_HUB_URL="$(grep '^EMPIRE_HUB_URL=' /root/.env | cut -d= -f2- | tr -d '"' || echo 'http://localhost:8001')"
 fi
 
-HUB_URL="${EMPIRE_HUB_URL:-http://localhost:8000}"
+HUB_URL="${EMPIRE_HUB_URL:-http://localhost:8001}"
 TOKEN="${HUB_TOKEN:-dev-token-insecure}"
 ENDPOINT="${HUB_URL}/api/v1/storm/process-sqlite"
 

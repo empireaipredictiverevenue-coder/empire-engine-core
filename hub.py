@@ -213,7 +213,7 @@ SUPABASE_URL = os.environ.get("SUPABASE_URL", "")
 SUPABASE_ANON_KEY = os.environ.get("SUPABASE_ANON_KEY", "")
 SUPABASE_SERVICE_KEY = os.environ.get("SUPABASE_SERVICE_KEY", "")
 HUB_TOKEN = os.environ.get("HUB_TOKEN", "dev-token-insecure")
-PUBLIC_BASE_URL = os.environ.get("PUBLIC_BASE_URL", "http://localhost:8000")
+PUBLIC_BASE_URL = os.environ.get("PUBLIC_BASE_URL", "http://localhost:8001")
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
 VONAGE_API_KEY = os.environ.get("VONAGE_API_KEY", "")
 VONAGE_API_SECRET = os.environ.get("VONAGE_API_SECRET", "")
@@ -5441,11 +5441,11 @@ if __name__ == "__main__":
     log.info(f"[boot] uvicorn imported: {_boot_time.time() - _t_uvicorn:.1f}s (total: {_boot_time.time() - _BOOT_START:.1f}s)")
     _t_run = _boot_time.time()
     log.info(f"[boot] calling uvicorn.run at {_boot_time.time() - _BOOT_START:.1f}s")
-    # Port: env override for hosts where the default :8000 is occupied (e.g. a
+    # Port: env override for hosts where the default :8001 is occupied (e.g. a
     # local solana-test-validator on dev machines). Production sets HUB_PORT in
     # /root/.env. Falls back to 8000 for back-compat.
     import os as _os_hub
-    _hub_port = int(_os_hub.environ.get("HUB_PORT", "8000"))
+    _hub_port = int(_os_hub.environ.get("HUB_PORT", "8001"))
     log.info(f"[boot] binding uvicorn to 0.0.0.0:{_hub_port}")
 
     # === v5 hub boot fix ===
@@ -5518,4 +5518,9 @@ if __name__ == "__main__":
         server.run(sockets=[_sock])
     finally:
         _sock.close()
+     
+
+@app.get("/")
+async def root():
+    return {"status": "Empire AI Hub", "spa": "/command", "login": "/login"}
      

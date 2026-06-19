@@ -3,7 +3,7 @@ import json, urllib.request, urllib.parse, base64, time, os
 import websocket
 
 CHROME = 'http://127.0.0.1:9222'
-url = 'http://127.0.0.1:8000/contractors/signup'
+url = 'http://127.0.0.1:8001/contractors/signup'
 out = '/tmp/dashboards/hub_contractors_v2.png'
 
 quoted = urllib.parse.quote(url, safe=':/?&=')

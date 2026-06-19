@@ -51,7 +51,7 @@ log = logging.getLogger("empire.affiliate_recruiter")
 # ── CONFIG ───────────────────────────────────────────────────────────
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "")
 SUPABASE_KEY = os.environ.get("SUPABASE_SERVICE_KEY", "")
-HUB_URL = os.environ.get("PUBLIC_BASE_URL", "http://localhost:8000")
+HUB_URL = os.environ.get("PUBLIC_BASE_URL", "http://localhost:8001")
 RESEND_API_KEY = os.environ.get("RESEND_API_KEY", "")
 RESEND_AFFILIATE_KEY = os.environ.get("RESEND_AFFILIATE_KEY", "") or RESEND_API_KEY
 

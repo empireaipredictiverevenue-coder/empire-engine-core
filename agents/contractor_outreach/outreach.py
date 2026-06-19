@@ -364,7 +364,7 @@ def run() -> dict:
     rows_skipped = 0
     error_msgs = []
     sample_enrolls = []
-    hub_url = os.getenv("HUB_URL", "http://127.0.0.1:8000")
+    hub_url = os.getenv("HUB_URL", "http://127.0.0.1:8001")
     hub_token = os.getenv("HUB_TOKEN", "")
 
     for c in to_enroll:

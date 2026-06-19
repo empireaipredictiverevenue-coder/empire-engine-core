@@ -494,7 +494,7 @@ async def inbound_sms(request: Request):
     if body:
         # Send via the hub's SMS endpoint (same one the converter uses)
         hub_token = os.environ.get("HUB_TOKEN", "")
-        hub_url   = os.environ.get("HUB_URL", "http://127.0.0.1:8000")
+        hub_url   = os.environ.get("HUB_URL", "http://127.0.0.1:8001")
         try:
             data = json.dumps({
                 "phone":          "+" + from_number,

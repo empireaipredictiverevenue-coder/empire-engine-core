@@ -31,7 +31,7 @@ SUPABASE_SERVICE_KEY=<service-role-key>
 
 # Auth (required)
 HUB_TOKEN=<long-random-string>
-PUBLIC_BASE_URL=http://localhost:8000
+PUBLIC_BASE_URL=http://localhost:8001
 
 # Vonage / voice (required for outbound calls)
 VONAGE_API_KEY=<key>
@@ -102,13 +102,13 @@ supabase db push
 Bootstrap the new tables with sample data:
 
 ```bash
-curl -X POST http://localhost:8000/api/admin/seed
+curl -X POST http://localhost:8001/api/admin/seed
 ```
 
 If `ADMIN_TOKEN` is set in the env, include it as a header:
 
 ```bash
-curl -X POST http://localhost:8000/api/admin/seed \
+curl -X POST http://localhost:8001/api/admin/seed \
   -H "X-Admin-Token: $ADMIN_TOKEN"
 ```
 
@@ -123,8 +123,8 @@ pm2 start ecosystem.config.js
 pm2 logs empire-hub
 ```
 
-The SPA is served at `http://localhost:8000/command`. The legacy
-server-rendered pages are at `http://localhost:8000/command/<section>`
+The SPA is served at `http://localhost:8001/command`. The legacy
+server-rendered pages are at `http://localhost:8001/command/<section>`
 (redirects to the SPA hash route).
 
 ---
@@ -205,9 +205,9 @@ print('All subsystem configurators: OK')
 python3 test_billing_flow.py
 
 # End-to-end: hit the SPA + API endpoints
-curl http://localhost:8000/api/si/strategy | head
-curl http://localhost:8000/api/si/adaptive | head
-curl http://localhost:8000/api/revenue/forecast | head
+curl http://localhost:8001/api/si/strategy | head
+curl http://localhost:8001/api/si/adaptive | head
+curl http://localhost:8001/api/revenue/forecast | head
 ```
 
 ---

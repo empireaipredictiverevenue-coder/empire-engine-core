@@ -64,7 +64,7 @@ log = logging.getLogger("empire.traffic_specialist")
 # ── CONFIG ───────────────────────────────────────────────────────────
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "")
 SUPABASE_KEY = os.environ.get("SUPABASE_SERVICE_KEY", "")
-HUB_URL = os.environ.get("PUBLIC_BASE_URL", "http://localhost:8000")
+HUB_URL = os.environ.get("PUBLIC_BASE_URL", "http://localhost:8001")
 HUB_TOKEN = os.environ.get("HUB_TOKEN", "dev-token-insecure")
 
 _sb = None

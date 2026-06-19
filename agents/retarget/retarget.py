@@ -133,7 +133,7 @@ def _is_yes_reply(body: str) -> bool:
 
 
 def _hub_url() -> str:
-    return os.getenv("HUB_URL", "http://127.0.0.1:8000").rstrip("/")
+    return os.getenv("HUB_URL", "http://127.0.0.1:8001").rstrip("/")
 
 
 def _hub_token() -> str:

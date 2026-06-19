@@ -32,7 +32,7 @@ log = logging.getLogger("empire.supervisor")
 # ── Configuration ────────────────────────────────────────────────────
 _HEALTH_CHECK_INTERVAL = 60  # seconds between health checks
 _EVOLUTION_INTERVAL = 300     # seconds between loop agent evolution cycles
-_HUB_URL = os.environ.get("HUB_URL", "http://127.0.0.1:8000")
+_HUB_URL = os.environ.get("HUB_URL", "http://127.0.0.1:8001")
 _PM2_BIN = "pm2"
 
 # Supabase client (lazy-init)

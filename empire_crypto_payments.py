@@ -894,7 +894,7 @@ def register_crypto_payment_routes(
     *,
     engine: CryptoPaymentEngine,
     require_auth: Callable = None,
-    public_base_url: str = "http://localhost:8000",
+    public_base_url: str = "http://localhost:8001",
 ):
     """
     Wire crypto payment endpoints into the FastAPI app.
