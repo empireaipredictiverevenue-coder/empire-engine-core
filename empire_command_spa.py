@@ -1676,7 +1676,9 @@ font-size:7px!important;color:#999!important;margin-top:2px!important
 .bill-chart-line-svg{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:2}
 .bill-chart-line{fill:none;stroke:var(--strike-cyan);stroke-width:1.5px;stroke-linecap:round;stroke-linejoin:round;opacity:.7}
 .bill-chart-line-dot{fill:var(--strike-cyan);opacity:.8;transition:r .15s var(--ease-snap)}
-.bill-chart-bars:hover ~ .bill-chart-line-svg .bill-chart-line-dot{r:3.5}
+.bill-chart-line-cumul{fill:none;stroke:var(--status-amber);stroke-width:1.5px;opacity:.7;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:4 3}
+.bill-chart-line-dot-cumul{fill:var(--status-amber);opacity:.6;transition:r .15s var(--ease-snap)}
+.bill-chart-bars:hover ~ .bill-chart-line-svg .bill-chart-line-dot,.bill-chart-bars:hover ~ .bill-chart-line-svg .bill-chart-line-dot-cumul{r:3.5}
 .bill-chart-inner{position:relative;flex:0 0 auto;height:130px}
 .bill-chart-bars{display:flex;align-items:flex-end;gap:3px;position:relative;z-index:1}
 .bill-chart-empty{text-align:center;padding:50px 20px;color:var(--empire-mist);font-family:var(--font-mono);font-size:11px}
@@ -11242,6 +11244,7 @@ function QC() {
             <div class="bill-chart-legend-item"><div class="bill-chart-legend-dot" style="background:var(--signal-teal);opacity:.85"></div>Settlement</div>
             <div class="bill-chart-legend-item"><div class="bill-chart-legend-dot" style="background:var(--strike-cyan);opacity:.5"></div>Per-Min</div>
             <div class="bill-chart-legend-item"><div class="bill-chart-legend-dot premium-dot"></div>Premium</div>
+            <div class="bill-chart-legend-item"><div class="bill-chart-legend-dot" style="background:var(--status-amber);opacity:.7;height:2px;border-radius:1px;border:1px dashed var(--status-amber)"></div>Cumulative Fees</div>
             <div class="bill-chart-legend-item"><div class="bill-chart-legend-dot" style="background:var(--strike-cyan);opacity:.7;height:2px;border-radius:1px"></div>Call Volume</div>
             <div class="bill-chart-legend-item"><span style="color:var(--empire-mist)">${billTimeseries.total_calls} calls · ${billTimeseries.days} days with data</span></div>
           </div>
