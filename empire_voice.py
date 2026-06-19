@@ -1321,6 +1321,8 @@ def register_voice_routes(
 
             operator = os.environ.get("EMPIRE_OPERATOR_NUMBER", "")
             brain_decision = None
+            # Initialize variables that may be set inside the enrichment block
+            state = ""
 
             # ── Enrich + consult the brain for outbound strikes ──
             if brain_decider is not None and get_db:
@@ -1439,6 +1441,42 @@ def register_voice_routes(
                 broadcaster=broadcaster,
                 brain_decision=brain_decision,
             )
+
+            # ── Create call_logs record for billing ──
+            if result.get("ok") and result.get("uuid") and get_db:
+                try:
+                    _cl_uuid = result["uuid"]
+                    _cl_niche = body.get("niche") or _voice_niche or "unknown"
+                    _cl_state = body.get("state") or state or "TX"
+                    _cl_caller = to_number
+
+                    # Try to find a buyer via switchboard (synchronous function)
+                    _cl_buyer = None
+                    try:
+                        from empire_switchboard import find_buyer
+                        _cl_buyer = find_buyer(_cl_niche, _cl_state, _cl_caller, 0)
+                    except Exception:
+                        pass
+
+                    _cl_db = get_db()
+                    _cl_db.table("call_logs").insert({
+                        "vonage_call_id": _cl_uuid,
+                        "buyer_id": _cl_buyer["id"] if _cl_buyer else None,
+                        "niche": _cl_niche,
+                        "caller_state": _cl_state,
+                        "caller_number": _cl_caller,
+                        "status": "routed" if _cl_buyer else "strike",
+                        "payout_value": float(_cl_buyer.get("base_payout", 0)) if _cl_buyer else 0.0,
+                        "source": "strike",
+                    }).execute()
+                    log.info(
+                        f"[voice/strike] call_logs created for {_cl_uuid[:8]}... · "
+                        f"niche={_cl_niche} state={_cl_state} "
+                        f"buyer={'yes' if _cl_buyer else 'no'}"
+                    )
+                except Exception as e:
+                    log.warning(f"[voice/strike] call_logs insert failed: {e}")
+
             return result
 
         @app.get("/api/v1/voice/stats")
