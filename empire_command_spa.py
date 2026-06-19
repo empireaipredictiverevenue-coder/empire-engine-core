@@ -1665,7 +1665,9 @@ font-size:7px!important;color:#999!important;margin-top:2px!important
 .bill-chart-bar:hover{opacity:.8}
 
 .bill-chart-bar.settlement{background:var(--signal-teal);opacity:.85;border-radius:0 0 2px 2px}
-.bill-chart-bar.per-minute{background:var(--strike-cyan);opacity:.5;border-radius:2px 2px 0 0;margin-top:1px}
+.bill-chart-bar.premium{background:var(--status-amber);opacity:.7;border-radius:2px 2px 0 0;position:absolute;bottom:0;left:0;right:0}
+.bill-chart-legend-dot.premium-dot{background:var(--status-amber);opacity:.7}
+.bill-chart-bar.per-minute{background:var(--strike-cyan);opacity:.5;border-radius:2px 2px 0 0;margin-top:1px;position:relative}
 .bill-chart-bar-stack{display:flex;flex-direction:column-reverse;align-items:center;width:18px;min-height:3px}
 .bill-chart-bar.calls{background:var(--strike-cyan);opacity:.5}
 .bill-chart-bar-label{font-family:var(--font-mono);font-size:7px;color:var(--empire-fog);margin-top:4px;white-space:nowrap}
@@ -2059,7 +2061,7 @@ function PainPoints() {
     let stop = false;
     const load = () => {
       apiFetch('/api/v1/billing/timeseries?days=' + (billWindow === '90d' ? 90 : billWindow === '7d' ? 7 : 30)).then(r => r.json())
-        .then(d => { if (!stop) { setBillTimeseries(d); } })
+        .then(d => { if (!stop) { d.total_premium = d.series ? d.series.reduce((sum, s) => sum + Math.max(0, s.per_minute_revenue - s.settlement_revenue), 0) : 0; setBillTimeseries(d); } })
         .catch(e => { if (!stop) console.warn('timeseries fetch:', e); });
     };
     load();
@@ -11194,7 +11196,7 @@ function QC() {
               <button class="bill-chart-window-btn ${billWindow === '30d' ? 'active' : ''}" onClick=${() => setBillWindow('30d')}>30d</button>
               <button class="bill-chart-window-btn ${billWindow === '90d' ? 'active' : ''}" onClick=${() => setBillWindow('90d')}>90d</button>
             </div>
-            <span class="bill-chart-tag">${billTimeseries ? billTimeseries.total_revenue.toLocaleString('en-US', {style:'currency',currency:'USD',minimumFractionDigits:0}) + ' total' : ''}</span>
+            <span class="bill-chart-tag">${billTimeseries ? billTimeseries.total_revenue.toLocaleString('en-US', {style:'currency',currency:'USD',minimumFractionDigits:0}) + ' total' + (billTimeseries.total_premium > 0 ? ' · +$' + billTimeseries.total_premium.toFixed(0) + ' PM' : '') : ''}</span>
           </div>
           ${!billTimeseries ? html`<div class="bill-chart-empty">Loading chart data&hellip;</div>` : billTimeseries.series.length === 0 ? html`<div class="bill-chart-empty">${`No billing data in the last ${billWindow === '90d' ? 90 : billWindow === '7d' ? 7 : 30} days`}</div>` : html`
           <div class="bill-chart">
@@ -11208,9 +11210,9 @@ function QC() {
               return html`
                 ${series.map(d => html`
                   <div class="bill-chart-bars" style="display:flex;align-items:flex-end;gap:3px;grid-area:chart"><div class="bill-chart-bar-wrap">
-                    <div class="bill-chart-tooltip">${d.date}: $${d.revenue.toFixed(0)} total · S:$${d.settlement_revenue.toFixed(0)} PM:$${d.per_minute_revenue.toFixed(0)} · ${d.calls} calls · ${d.billable} billable</div>
+                    <div class="bill-chart-tooltip">${d.date}: $${d.revenue.toFixed(0)} total · S:$${d.settlement_revenue.toFixed(0)} PM:$${d.per_minute_revenue.toFixed(0)}${d.per_minute_revenue > d.settlement_revenue ? ' Δ+$' + (d.per_minute_revenue - d.settlement_revenue).toFixed(0) : ''} · ${d.calls} calls · ${d.billable} billable</div>
                     <div class="bill-chart-bar-stack" style="height:${Math.max(3, (d.revenue / maxRev) * chartH)}px">
-                    <div class="bill-chart-bar per-minute" style="height:${Math.max(0, (d.per_minute_revenue / maxRev) * chartH)}px"></div>
+                    <div class="bill-chart-bar per-minute" style="height:${Math.max(0, (d.per_minute_revenue / maxRev) * chartH)}px">${d.per_minute_revenue > d.settlement_revenue ? html`<div class="bill-chart-bar premium" style="height:${Math.max(2, ((d.per_minute_revenue - d.settlement_revenue) / maxRev) * chartH)}px"></div>` : }</div>
                     <div class="bill-chart-bar settlement" style="height:${Math.max(3, (d.settlement_revenue / maxRev) * chartH)}px"></div>
                   </div>
                     <div class="bill-chart-bar-label">${d.date.slice(5)}</div>
@@ -11235,6 +11237,7 @@ function QC() {
           <div class="bill-chart-legend">
             <div class="bill-chart-legend-item"><div class="bill-chart-legend-dot" style="background:var(--signal-teal);opacity:.85"></div>Settlement</div>
             <div class="bill-chart-legend-item"><div class="bill-chart-legend-dot" style="background:var(--strike-cyan);opacity:.5"></div>Per-Min</div>
+            <div class="bill-chart-legend-item"><div class="bill-chart-legend-dot premium-dot"></div>Premium</div>
             <div class="bill-chart-legend-item"><div class="bill-chart-legend-dot" style="background:var(--strike-cyan);opacity:.7;height:2px;border-radius:1px"></div>Call Volume</div>
             <div class="bill-chart-legend-item"><span style="color:var(--empire-mist)">${billTimeseries.total_calls} calls · ${billTimeseries.days} days with data</span></div>
           </div>
