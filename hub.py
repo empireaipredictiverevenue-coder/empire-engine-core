@@ -56,6 +56,7 @@ from empire_qc_api import register_qc_routes
 from empire_hermes_api import register_hermes_routes
 from empire_wiki_viewer import register_wiki_routes
 from empire_attribution import register_attribution_routes
+
 from hub_customer_endpoints import router as customer_router
 from empire_email import EmailEngine, register_email_routes
 from empire_matching import ContractorMatcher, register_matching_routes
@@ -66,6 +67,7 @@ from empire_crypto_payments import CryptoPaymentEngine, register_crypto_payment_
 from empire_fee import register_fee_routes
 from empire_fee_operator import register_operator_mark_settled
 from empire_claims import register_claims_routes
+from empire_claim_webhook import register_claim_webhook
 from empire_abtest import register_ab_test_routes
 from empire_predictive import register_predictive_routes, register_organic_signal_routes
 from empire_carrier import register_mock_carrier_routes
@@ -121,6 +123,7 @@ from empire_bridge import BridgeEngine, register_bridge_routes as register_bridg
 from empire_voice_control import VoiceController
 from empire_brain_personality import BrainPersonality
 from empire_strike_packs import StrikePackCatalog, SubscriptionEngine, DeliveryFilter, register_strike_pack_routes
+from empire_carrier_enrollment import register_carrier_enrollment_routes
 from empire_carrier_portfolio import PortfolioManager, StormMatcher, StormReportEngine, register_carrier_routes
 from empire_native_ads import NativeAdsNetwork, register_native_ads_routes
 from agent_mesh import AgentMesh, register_mesh_routes
@@ -542,10 +545,31 @@ async def _on_sms_yes_reply(phone: str, body: str, sequence: dict):
         email_sent = result.get("email_sent", 0)
         sms_sent = result.get("sms_sent", 0)
         dispatched = result.get("dispatched", 0)
-        log.info(
-            f"[sms\u2192dispatch] {dispatched} dispatched · "
+        log.info(f"[sms\u2192dispatch] {dispatched} dispatched · "
             f"{email_sent} emailed · {sms_sent} SMS'd · for {phone}"
         )
+        # ── ntfy alert on dispatch ──
+        if dispatched > 0:
+            try:
+                import urllib.request as _ur
+                if NTFY_TOPIC and NTFY_TOKEN:
+                    ntfy_body = (
+                        f"✅ *SMS Reply → Dispatch*\n"
+                        f"  Phone: {phone}\n"
+                        f"  City: {lead.get('city', '?')}\n"
+                        f"  Contractors: {dispatched} ({email_sent} emailed, {sms_sent} SMS'd)\n"
+                        f"  Reply: {body[:80]}"
+                    )
+                    req = _ur.Request(
+                        f"https://ntfy.sh/{NTFY_TOPIC}",
+                        data=ntfy_body.encode(),
+                        method="POST",
+                        headers={"Title": "SMS → Dispatch", "Priority": "high", "Tags": "telephone_receiver", "Authorization": f"Bearer {NTFY_TOKEN}"},
+                    )
+                    _ur.urlopen(req, timeout=5)
+            except Exception:
+                pass
+
         dispatch_ids = result.get("dispatch_ids", [])
         if dispatch_ids:
             lead_id = lead.get("id")
@@ -1061,10 +1085,83 @@ register_bounty_payout_routes(app, require_auth=require_auth, payout_engine=payo
 register_fee_routes(app, require_auth=require_auth, get_db=get_db)
 register_operator_mark_settled(app, require_auth=require_auth, get_db=get_db)
 register_claims_routes(app, require_auth=require_auth, get_db=get_db)
+register_claim_webhook(app, get_db=get_db, broadcaster=live_broadcaster)
+
+
+# ── SMS Reply Monitor — pipeline visibility into the reply→dispatch loop ──
+@app.get("/api/v1/sms/reply-monitor")
+async def sms_reply_monitor(auth: bool = Depends(require_auth)):
+    """Monitor snapshot of the SMS reply→dispatch pipeline.
+
+    Returns:
+      - engine: SMSEngine stats (sequences, sends, replies, opt-outs)
+      - yes_replies: count of sequences marked replied in last 24h
+      - dispatches: dispatch rows created from YES replies
+      - dispatcher_running: whether the background loop is live
+    """
+    db = get_db()
+    now = datetime.now(timezone.utc)
+    twenty_four_hours_ago = (now - timedelta(hours=24)).isoformat()
+
+    # YES replies in the last 24h (sequences marked 'replied' with reply_text in meta)
+    yes_replies = 0
+    try:
+        r = db.table("sms_sequences")
+        r = r.select("id", count="exact")
+        r = r.eq("status", "replied")
+        r = r.gte("created_at", twenty_four_hours_ago)
+        yes_result = r.execute()
+        yes_replies = yes_result.count if hasattr(yes_result, 'count') else len(yes_result.data or [])
+    except Exception as e:
+        log.debug(f"[reply-monitor] yes_replies query: {e}")
+
+    # Dispatches from SMS pipeline (inbound monitor)
+    dispatches_24h = 0
+    try:
+        r = db.table("inbox_messages")
+        r = r.select("id", count="exact")
+        r = r.eq("channel", "sms")
+        r = r.eq("classified_intent", "paused_for_human")
+        r = r.gte("received_at", twenty_four_hours_ago)
+        inbox_result = r.execute()
+        dispatches_24h = inbox_result.count if hasattr(inbox_result, 'count') else len(inbox_result.data or [])
+    except Exception as e:
+        log.debug(f"[reply-monitor] inbox query: {e}")
+
+    # Check if dispatcher loop is running by looking at last_dispatch
+    engine_stats = dict(sms_engine.stats) if hasattr(sms_engine, 'stats') else {}
+    dispatcher_running = engine_stats.get("last_dispatch") is not None or engine_stats.get("sms_sent", 0) > 0
+
+    return {
+        "engine": engine_stats,
+        "yes_replies_24h": yes_replies,
+        "sms_inbound_24h": dispatches_24h,
+        "dispatcher_running": dispatcher_running,
+        "vonage_configured": bool(VONAGE_API_KEY) and bool(VONAGE_API_SECRET),
+        "timestamp": now.isoformat(),
+    }
+
+
 register_ab_test_routes(app, require_auth=require_auth, get_db=get_db)
 register_predictive_routes(app, require_auth=require_auth, get_db=get_db)
 register_organic_signal_routes(app, require_auth=require_auth, get_db=get_db)  # /api/v1/signal/organic
 register_mock_carrier_routes(app, require_auth=require_auth, get_db=get_db)
+register_carrier_enrollment_routes(app, require_auth=require_auth)
+
+# ── Carrier Webhook Enroll SPA — self-service for carriers ──────────────
+@app.get("/carrier/enroll", response_class=HTMLResponse)
+async def carrier_enroll_spa():
+    """Self-service carrier webhook enrollment SPA."""
+    spa_path = os.path.join(_STATIC_DIR, "carrier-enroll.html")
+    try:
+        with open(spa_path, "r", encoding="utf-8") as f:
+            return f.read()
+    except FileNotFoundError:
+        raise HTTPException(404, "carrier-enroll.html not found")
+    except Exception as e:
+        log.warning(f"[carrier-enroll] read failed: {e}")
+        raise HTTPException(500, "Internal error")
+
 register_inbound_monitor_routes(app, require_auth=require_auth, get_db=get_db)
 register_profit_margin_routes(app, require_auth=require_auth, get_db=get_db)
 register_traffic_ads_routes(app, require_auth=require_auth, get_db=get_db)
@@ -1392,14 +1489,83 @@ crypto_payment_engine = CryptoPaymentEngine(
 )
 
 
-# Vonage webhook aliases (for dashboard config pointing to /webhook/vonage-*)
+# Vonage webhook aliases (for dashboard config pointing to /webhook/vonage-* or /api/v1/vonage/*)
+# These proxy to the real endpoints registered by register_voice_routes() at
+# /api/v1/voice/answer and /api/v1/voice/events. The VoiceRouter class does
+# NOT have answer_webhook/event_webhook methods — those handlers live in the
+# register_voice_routes closure.
 @app.post("/webhook/vonage-answer")
 async def vonage_answer_alias(request: Request):
-    return await voice_router.answer_webhook(request)
+    """Proxy to /api/v1/voice/answer — the real Vonage answer webhook."""
+    body = await request.body()
+    params = dict(request.query_params)
+    async with _httpx.AsyncClient(base_url="http://localhost:8001", timeout=10.0) as client:
+        resp = await client.post(
+            "/api/v1/voice/answer",
+            content=body,
+            params=params,
+            headers={"Content-Type": "application/json"},
+        )
+    return Response(
+        content=resp.content,
+        status_code=resp.status_code,
+        media_type=resp.headers.get("content-type", "application/json"),
+    )
 
 @app.post("/webhook/vonage-event")
 async def vonage_event_alias(request: Request):
-    return await voice_router.event_webhook(request)
+    """Proxy to /api/v1/voice/events — the real Vonage event webhook."""
+    body = await request.body()
+    async with _httpx.AsyncClient(base_url="http://localhost:8001", timeout=10.0) as client:
+        resp = await client.post(
+            "/api/v1/voice/events",
+            content=body,
+            headers={"Content-Type": "application/json"},
+        )
+    return Response(
+        content=resp.content,
+        status_code=resp.status_code,
+        media_type=resp.headers.get("content-type", "application/json"),
+    )
+
+# Old Vonage dashboard webhook URL aliases — the dashboard was configured
+# with /api/v1/vonage/inbound and /api/v1/vonage/status (legacy paths).
+# These proxy to the real endpoints so existing Vonage app config doesn't
+# need to be updated in the dashboard UI.
+@app.post("/api/v1/vonage/inbound")
+@app.get("/api/v1/vonage/inbound")
+async def vonage_inbound_legacy(request: Request):
+    """Legacy alias for /api/v1/voice/answer — kept for Vonage dashboard config."""
+    body = await request.body()
+    params = dict(request.query_params)
+    async with _httpx.AsyncClient(base_url="http://localhost:8001", timeout=10.0) as client:
+        resp = await client.post(
+            "/api/v1/voice/answer",
+            content=body,
+            params=params,
+            headers={"Content-Type": "application/json"},
+        )
+    return Response(
+        content=resp.content,
+        status_code=resp.status_code,
+        media_type=resp.headers.get("content-type", "application/json"),
+    )
+
+@app.post("/api/v1/vonage/status")
+async def vonage_status_legacy(request: Request):
+    """Legacy alias for /api/v1/voice/events — kept for Vonage dashboard config."""
+    body = await request.body()
+    async with _httpx.AsyncClient(base_url="http://localhost:8001", timeout=10.0) as client:
+        resp = await client.post(
+            "/api/v1/voice/events",
+            content=body,
+            headers={"Content-Type": "application/json"},
+        )
+    return Response(
+        content=resp.content,
+        status_code=resp.status_code,
+        media_type=resp.headers.get("content-type", "application/json"),
+    )
 
 register_solana_webhook_routes(
     app,
@@ -3055,7 +3221,12 @@ async def _deferred_background_tasks():
     # Brain learning: nightly urgency floor auto-tuning
     asyncio.create_task(brain_learning.nightly_tune_loop(), name="brain-learning")
 
-    log.info("[boot] Background loops scheduled: DreamLoop, HourlyDigest, SEO, Backlinks, Traffic, Affiliates, Bounty, EmailPulse, MissionControl, StormOrchestrator")
+    # SMS dispatcher — checks every 60s for sequences due to send
+    asyncio.create_task(sms_engine.dispatcher_loop(), name="sms-dispatcher")
+    # Email dispatcher — checks every 60s for scheduled email sends
+    asyncio.create_task(email_engine.dispatcher_loop(), name="email-dispatcher")
+
+    log.info("[boot] Background loops scheduled: DreamLoop, HourlyDigest, SEO, Backlinks, Traffic, Affiliates, Bounty, EmailPulse, MissionControl, StormOrchestrator, SMSDispatcher, EmailDispatcher")
     log.info("Empire V49 · Operational")
 
 
@@ -5804,4 +5975,3 @@ async def customer_event(request: Request):
     # TODO: Validate API key, store event, trigger AGI analysis
     print(f"[Hub] Received customer event: {data.get(event_type)}")
     return {"status": "received"}
-from hub_customer_endpoints import router as customer_router
