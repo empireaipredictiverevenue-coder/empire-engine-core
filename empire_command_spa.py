@@ -1684,6 +1684,11 @@ font-size:7px!important;color:#999!important;margin-top:2px!important
 .bill-chart-window-btn{padding:4px 10px;font-family:var(--font-mono);font-size:9px;letter-spacing:.1em;text-transform:uppercase;border:1px solid var(--empire-border);background:transparent;color:var(--empire-mist);cursor:pointer;border-radius:4px;transition:all .15s var(--ease-snap)}
 .bill-chart-window-btn:hover{color:var(--empire-white);border-color:var(--empire-border-hi)}
 .bill-chart-window-btn.active{color:var(--signal-teal);border-color:var(--signal-teal-soft);background:rgba(68,229,184,0.06)}
+.bill-chart-mode-btn{margin-left:9px;padding:4px 10px;font-family:var(--font-mono);font-size:9px;letter-spacing:.1em;text-transform:uppercase;border:1px solid var(--empire-border);background:transparent;color:var(--empire-fog);cursor:pointer;border-radius:4px;transition:all .15s var(--ease-snap)}
+.bill-chart-mode-btn:hover{color:var(--empire-white);border-color:var(--empire-border-hi)}
+.bill-chart-bar-wrap.side{display:flex;gap:3px;align-items:flex-end}
+.bill-chart-bar.settlement.side{background:var(--signal-teal);opacity:.85;border-radius:2px 2px 0 0;flex:1;min-width:6px}
+.bill-chart-bar.per-minute.side{background:var(--strike-cyan);opacity:.5;border-radius:2px 2px 0 0;flex:1;min-width:6px}
 .bill-chart-legend{display:flex;gap:16px;margin-top:10px;padding-top:10px;border-top:1px solid var(--empire-divider)}
 .bill-chart-legend-item{display:flex;align-items:center;gap:6px;font-family:var(--font-mono);font-size:8px;color:var(--empire-mist);letter-spacing:.08em}
 .bill-chart-legend-dot{width:8px;height:8px;border-radius:2px;flex-shrink:0}
@@ -9440,7 +9445,8 @@ function PsychologyDashboard() {
   
   const [billingData, setBillingData] = useState(null);
   const [billingErr, setBillingErr] = useState(null);
-  const [billTimeseries, setBillTimeseries] = useState(null);const [billWindow, setBillWindow] = useState("30d");const [detectResult, setDetectResult] = useState(null);
+  const [billTimeseries, setBillTimeseries] = useState(null);const [billWindow, setBillWindow] = useState("30d");
+      const [chartMode, setChartMode] = useState("stacked");const [detectResult, setDetectResult] = useState(null);
 
   useEffect(() => {
     apiFetch('/api/psychology/snapshot')
@@ -11196,6 +11202,7 @@ function QC() {
               <button class="bill-chart-window-btn ${billWindow === '30d' ? 'active' : ''}" onClick=${() => setBillWindow('30d')}>30d</button>
               <button class="bill-chart-window-btn ${billWindow === '90d' ? 'active' : ''}" onClick=${() => setBillWindow('90d')}>90d</button>
             </div>
+            <button class="bill-chart-mode-btn" onClick=${() => setChartMode(chartMode === "stacked" ? "side" : "stacked")}>${chartMode === "stacked" ? "Side-by-Side" : "Stacked"}</button>
             <span class="bill-chart-tag">${billTimeseries ? billTimeseries.total_revenue.toLocaleString('en-US', {style:'currency',currency:'USD',minimumFractionDigits:0}) + ' total' + (billTimeseries.total_premium > 0 ? ' · +$' + billTimeseries.total_premium.toFixed(0) + ' PM' : '') : ''}</span>
           </div>
           ${!billTimeseries ? html`<div class="bill-chart-empty">Loading chart data&hellip;</div>` : billTimeseries.series.length === 0 ? html`<div class="bill-chart-empty">${`No billing data in the last ${billWindow === '90d' ? 90 : billWindow === '7d' ? 7 : 30} days`}</div>` : html`
@@ -11211,10 +11218,7 @@ function QC() {
                 ${series.map(d => html`
                   <div class="bill-chart-bars" style="display:flex;align-items:flex-end;gap:3px;grid-area:chart"><div class="bill-chart-bar-wrap">
                     <div class="bill-chart-tooltip">${d.date}: $${d.revenue.toFixed(0)} total · S:$${d.settlement_revenue.toFixed(0)} PM:$${d.per_minute_revenue.toFixed(0)}${d.per_minute_revenue > d.settlement_revenue ? ' Δ+$' + (d.per_minute_revenue - d.settlement_revenue).toFixed(0) : ''} · ${d.calls} calls · ${d.billable} billable</div>
-                    <div class="bill-chart-bar-stack" style="height:${Math.max(3, (d.revenue / maxRev) * chartH)}px">
-                    <div class="bill-chart-bar per-minute" style="height:${Math.max(0, (d.per_minute_revenue / maxRev) * chartH)}px">${d.per_minute_revenue > d.settlement_revenue ? html`<div class="bill-chart-bar premium" style="height:${Math.max(2, ((d.per_minute_revenue - d.settlement_revenue) / maxRev) * chartH)}px"></div>` : }</div>
-                    <div class="bill-chart-bar settlement" style="height:${Math.max(3, (d.settlement_revenue / maxRev) * chartH)}px"></div>
-                  </div>
+                    ${chartMode === "stacked" ? html`<div class="bill-chart-bar-stack" style="height:${Math.max(3, (d.revenue / maxRev) * chartH)}px"><div class="bill-chart-bar per-minute" style="height:${Math.max(0, (d.per_minute_revenue / maxRev) * chartH)}px">${d.per_minute_revenue > d.settlement_revenue ? html`<div class="bill-chart-bar premium" style="height:${Math.max(2, ((d.per_minute_revenue - d.settlement_revenue) / maxRev) * chartH)}px"></div>` : }</div><div class="bill-chart-bar settlement" style="height:${Math.max(3, (d.settlement_revenue / maxRev) * chartH)}px"></div></div>` : html`<div class="bill-chart-bars-side" style="display:flex;gap:3px;align-items:flex-end;height:${Math.max(3, (Math.max(d.settlement_revenue, d.per_minute_revenue) / maxRev) * chartH)}px;width:100%"><div class="bill-chart-bar settlement side" style="height:${Math.max(3, (d.settlement_revenue / maxRev) * chartH)}px;flex:1;min-width:6px;border-radius:2px 2px 0 0"></div><div class="bill-chart-bar per-minute side" style="height:${Math.max(0, (d.per_minute_revenue / maxRev) * chartH)}px;flex:1;min-width:6px;border-radius:2px 2px 0 0;position:relative">${d.per_minute_revenue > d.settlement_revenue ? html`<div class="bill-chart-bar premium" style="height:${Math.max(2, ((d.per_minute_revenue - d.settlement_revenue) / maxRev) * chartH)}px;position:absolute;bottom:0;left:0;right:0;background:var(--status-amber);opacity:.7;border-radius:2px 2px 0 0"></div>` : }</div></div>`}
                     <div class="bill-chart-bar-label">${d.date.slice(5)}</div>
                   </div>
                 `).join('')}
