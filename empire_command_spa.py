@@ -3881,7 +3881,7 @@ function Console() {
           <div class="panel-head">Supported actions (${actions.length})</div>
           <div class="sec-meta">${actions.map(a => typeof a === 'string' ? a : (a && a.name) || JSON.stringify(a)).join(' · ')}</div>
         </div>
-      `}
+      ` : ''}
     </div>
   `;
 }
@@ -5541,7 +5541,7 @@ function HealthMonitor() {
         </div>
         <div class="hm-empty">No overseer report yet. The overseer agent writes to system_health every 10 minutes.</div>
       </div>
-      ` : ''}
+      `}
     </div>
   `;
 }
