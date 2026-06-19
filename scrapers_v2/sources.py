@@ -6,7 +6,6 @@ SOURCES: List[Dict] = [
         "scraper": "public_adjuster_async",
         "urls": [
             "https://www.bbb.org/search?term=public+adjuster&location=Texas",
-            "https://www.angi.com/companylist/us/tx/dallas/public-adjusters.htm",
         ],
         "rate_limit": 3.0,
         "priority": 1
@@ -16,7 +15,6 @@ SOURCES: List[Dict] = [
         "scraper": "restoration_async",
         "urls": [
             "https://www.bbb.org/search?term=restoration&location=Texas",
-            "https://www.angi.com/companylist/us/tx/dallas/water-damage-restoration.htm",
         ],
         "rate_limit": 3.0,
         "priority": 1

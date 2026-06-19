@@ -64,6 +64,7 @@ from empire_solana_webhook import register_solana_webhook_routes
 from empire_crypto_payments import CryptoPaymentEngine, register_crypto_payment_routes
 from empire_fee import register_fee_routes
 from empire_fee_operator import register_operator_mark_settled
+from empire_claims import register_claims_routes
 from empire_abtest import register_ab_test_routes
 from empire_predictive import register_predictive_routes, register_organic_signal_routes
 from empire_carrier import register_mock_carrier_routes
@@ -381,15 +382,75 @@ voice_router = VoiceRouter(
     public_base_url=PUBLIC_BASE_URL,
 )
 
+async def _classify_sms_intent(body: str) -> dict:
+    """AI classification guard for inbound SMS replies.
+
+    Uses the AI Router to distinguish genuine interest from false positives
+    like "YES STOP", "YES UNSUBSCRIBE", "NOT YES", etc.
+
+    Returns dict with keys: intent, confidence, next_action, summary.
+    Only returns "dispatch_contractor" when the reply is clearly interested.
+    """
+    if not body or len(body.strip()) < 2:
+        return {"intent": "empty", "confidence": 0.0,
+                "next_action": "no_action", "summary": "empty body"}
+
+    system = (
+        "You classify SMS replies from property owners responding to storm-damage outreach. "
+        "The outreach offers a free roof inspection from a vetted contractor.\n\n"
+        "Return ONLY JSON with keys:\n"
+        '  - intent: "interested" | "question" | "not_now" | "opt_out" | "wrong_number" | "spam"\n'
+        "  - confidence: 0.0-1.0\n"
+        '  - next_action: "dispatch_contractor" | "ask_followup" | "no_action"\n'
+        "  - summary: one sentence\n\n"
+        "Rules:\n"
+        '  - "YES" alone or with positive context (yes please, sure, send them) → "interested", dispatch_contractor\n'
+        '  - "YES" + "STOP"/"UNSUBSCRIBE"/"CANCEL" in same message → "opt_out", no_action\n'
+        '  - "NOT YES", "NO THANKS", "DON\'T CONTACT", "WRONG NUMBER" → "opt_out"/"wrong_number", no_action\n'
+        "  - Questions without clear commitment → \"question\", ask_followup\n"
+        '  - "NOT NOW", "LATER" → "not_now", no_action\n'
+        "  - Gibberish or clearly not about storm damage → \"spam\", no_action\n\n"
+        "CRITICAL: Only return dispatch_contractor when the person clearly wants the inspection. "
+        "When in doubt, use ask_followup."
+    )
+
+    try:
+        result = await ai_router.generate_json(
+            prompt=body[:2000],
+            task="sms.reply.classify",
+            system=system,
+            temperature=0.0,
+            max_tokens=150,
+        )
+        if "_error" in result:
+            return {"intent": "unknown", "confidence": 0.0,
+                    "next_action": "no_action", "summary": "ai error"}
+        return {
+            "intent": (result.get("intent") or "unknown").lower(),
+            "confidence": float(result.get("confidence", 0.5) or 0.5),
+            "next_action": (result.get("next_action") or "no_action").lower(),
+            "summary": result.get("summary", ""),
+        }
+    except Exception as e:
+        log.warning(f"[sms\u2192dispatch] AI classification failed: {e}")
+        return {"intent": "unknown", "confidence": 0.0,
+                "next_action": "no_action", "summary": str(e)[:80]}
+
+
 async def _on_sms_yes_reply(phone: str, body: str, sequence: dict):
     """
     Real-time dispatch trigger. Called when a lead replies YES to an SMS.
     Finds the corresponding lead by phone, matches contractors via the
     matcher, and fans out dispatch notifications.
+
+    AI classification guard runs AFTER lead lookup (to avoid wasting
+    LLM tokens on orphan YES replies) and BEFORE contractor matching.
+    Catches false positives like \"YES STOP\", \"YES UNSUBSCRIBE\", etc.
     """
     try:
         db = get_db()
-        # Find the lead — try enriched_leads first (by radar_target_id or direct fallback), then radar_targets
+
+        # Find the lead — try enriched_leads first, then radar_targets
         lead = None
         enriched_lead_row = None
         r = db.table("enriched_leads").select("id, radar_target_id, address, city, state, warehouse_name, phone, email, meta").eq("phone", phone).limit(1).execute()
@@ -421,12 +482,44 @@ async def _on_sms_yes_reply(phone: str, body: str, sequence: dict):
             log.info(f"[sms\u2192dispatch] no lead found for YES reply from {phone}")
             return
 
+        # ── AI classification guard ──
+        # Confirm via LLM that the reply is genuinely interested before
+        # spending dispatch cycles. Catches heuristic false positives.
+        # On AI failure we fall back to the heuristic result (trust _is_yes_reply)
+        # rather than silently dropping the reply.
+        try:
+            ai_intent = await _classify_sms_intent(body)
+        except Exception:
+            ai_intent = {"intent": "ai_error", "confidence": 0.0,
+                         "next_action": "dispatch_contractor",
+                         "summary": "AI unavailable — falling back to heuristic"}
+        if ai_intent.get("next_action") != "dispatch_contractor":
+            log.info(
+                f"[sms\u2192dispatch] AI skipped {phone}: "
+                f"intent={ai_intent.get('intent')}, "
+                f"confidence={ai_intent.get('confidence')}"
+            )
+            # Store classification in sms_sequences meta so it's queryable
+            try:
+                seq_id = sequence.get("id")
+                if seq_id:
+                    db.table("sms_sequences").update({
+                        "meta": {"ai_intent": ai_intent},
+                    }).eq("id", seq_id).execute()
+                else:
+                    db.table("sms_sequences").update({
+                        "meta": {"ai_intent": ai_intent},
+                    }).eq("phone", phone).limit(1).execute()
+            except Exception:
+                pass
+            return
+
         # Match contractors
         matched = await matcher.match_for_lead(
             metro=lead.get("city") or "",
             # Match against specialties contractors actually have in DB
             # roofing(178), hvac(164), restoration(73), general_contractor(45)
-            required_specialties=["roofing", "restoration", "general_contractor"],
+            required_specialties=["roofing", "restoration", "general_contractor", "hvac", "water_mitigation"],
             top_n=5,
         )
 
@@ -452,6 +545,31 @@ async def _on_sms_yes_reply(phone: str, body: str, sequence: dict):
             f"[sms\u2192dispatch] {dispatched} dispatched · "
             f"{email_sent} emailed · {sms_sent} SMS'd · for {phone}"
         )
+        dispatch_ids = result.get("dispatch_ids", [])
+        if dispatch_ids:
+            lead_id = lead.get("id")
+            asset_value = None
+            try:
+                if enriched_lead_row:
+                    av = enriched_lead_row.get("asset_value") or enriched_lead_row.get("estimated_claim_value")
+                    if av is not None:
+                        asset_value = float(av)
+            except (TypeError, ValueError):
+                pass
+            for did in dispatch_ids:
+                try:
+                    db.table("carrier_claims").insert({
+                        "dispatch_id": did,
+                        "status": "open",
+                        "loss_description": lead.get("address", ""),
+                        "asset_value": asset_value,
+                        "filed_at": datetime.now(timezone.utc).isoformat(),
+                        "created_at": datetime.now(timezone.utc).isoformat(),
+                    }).execute()
+                except Exception as cc_err:
+                    log.warning(f"[sms\u2192dispatch] carrier_claims insert failed for dispatch {did}: {cc_err}")
+            log.info(f"[sms\u2192dispatch] {len(dispatch_ids)} carrier_claims rows created")
+
         if result.get("email_errors"):
             log.warning(f"[sms\u2192dispatch] email errors: {result['email_errors']}")
     except Exception as e:
@@ -941,6 +1059,7 @@ register_payout_routes(app, engine=payout_engine, require_auth=require_auth, req
 register_bounty_payout_routes(app, require_auth=require_auth, payout_engine=payout_engine)
 register_fee_routes(app, require_auth=require_auth, get_db=get_db)
 register_operator_mark_settled(app, require_auth=require_auth, get_db=get_db)
+register_claims_routes(app, require_auth=require_auth, get_db=get_db)
 register_ab_test_routes(app, require_auth=require_auth, get_db=get_db)
 register_predictive_routes(app, require_auth=require_auth, get_db=get_db)
 register_organic_signal_routes(app, require_auth=require_auth, get_db=get_db)  # /api/v1/signal/organic
@@ -5299,6 +5418,151 @@ async def sms_niche_stats(auth: bool = Depends(require_auth)):
 # ─────────────────────────────────────────────────────────────────────
 # HUB HEALTH DIAGNOSTICS — deploy validation + crash debugging
 # ─────────────────────────────────────────────────────────────────────
+
+
+
+# ── REPLY RATES — YES reply rate by niche, by sequence, daily dispatch ──
+@app.get("/api/v1/reply/rates")
+async def reply_rates(
+    days: int = 30,
+    auth: bool = Depends(require_auth),
+):
+    """Return YES reply rates broken down by sequence_type (niche),
+    storm_strike vs storm_strike_v2 comparison, and daily dispatch counts."""
+    try:
+        db = get_db()
+        window = max(1, min(days, 90))
+        from datetime import timedelta
+        cutoff = (datetime.now(timezone.utc) - timedelta(days=window)).isoformat()
+
+        # ── 1. YES replies from sms_log ──────────────────────────
+        yes_by_seq = {}
+        yes_by_day = {}
+        _yes_phones = []  # (phone, date_str) tuples for batch resolution
+        page = 0
+        while True:
+            r = db.table("sms_log").select("phone, body, created_at")                 .eq("direction", "inbound")                 .gte("created_at", cutoff)                 .order("created_at", desc=False)                 .range(page * 1000, (page + 1) * 1000 - 1)                 .execute()
+            rows = r.data or []
+            if not rows:
+                break
+            for row in rows:
+                phone = row.get("phone", "")
+                body = (row.get("body") or "").strip().upper()
+                ts = (row.get("created_at") or "")[:10]
+                # Same YES detection as empire_sms.py:_is_yes_reply
+                single_yes = ("YES", "Y", "YEAH", "YEP", "SURE", "OK", "OKAY", "YEA", "YUP")
+                is_yes = body in single_yes or ("YES" in body.split())
+                if not is_yes:
+                    continue
+                yes_by_day[ts] = yes_by_day.get(ts, 0) + 1
+                # Store YES phone+day for batch sequence_type resolution below
+                _yes_phones.append((phone, ts))
+            page += 1
+            if len(rows) < 1000:
+                break
+
+        # ── Batch resolve sequence_type for all YES phones ─────
+        if _yes_phones:
+            _unique_phones = list(set(p[0] for p in _yes_phones))
+            _phone_seq = {}
+            # Query in batches of 300 (Supabase .in_ limit)
+            for _batch_start in range(0, len(_unique_phones), 300):
+                _batch_phones = _unique_phones[_batch_start:_batch_start + 300]
+                try:
+                    _sr = db.table("sms_sequences").select("phone, sequence_type")                         .in_("phone", _batch_phones).execute()
+                    for _row in (_sr.data or []):
+                        _p = _row.get("phone", "")
+                        _phone_seq[_p] = _row.get("sequence_type", "unknown")
+                except Exception:
+                    pass
+            for _p, _ts in _yes_phones:
+                _st = _phone_seq.get(_p, "unknown")
+                yes_by_seq[_st] = yes_by_seq.get(_st, 0) + 1
+
+        # ── 2. Sent counts from sms_sequences ────────────────────
+        sent_by_seq = {}
+        sent_by_day = {}
+        page = 0
+        while True:
+            r = db.table("sms_sequences").select("sequence_type, created_at")                 .gte("created_at", cutoff)                 .order("created_at", desc=False)                 .range(page * 1000, (page + 1) * 1000 - 1)                 .execute()
+            rows = r.data or []
+            if not rows:
+                break
+            for row in rows:
+                st = row.get("sequence_type", "unknown")
+                ts = (row.get("created_at") or "")[:10]
+                sent_by_seq[st] = sent_by_seq.get(st, 0) + 1
+                sent_by_day[ts] = sent_by_day.get(ts, 0) + 1
+            page += 1
+            if len(rows) < 1000:
+                break
+
+        # ── 3. Daily dispatch counts ──────────────────────────────
+        daily_dispatches = []
+        try:
+            dr = db.table("dispatches").select("created_at")                 .gte("created_at", cutoff)                 .order("created_at", desc=False)                 .limit(5000).execute()
+            disp_by_day = {}
+            for row in (dr.data or []):
+                ts = (row.get("created_at") or "")[:10]
+                disp_by_day[ts] = disp_by_day.get(ts, 0) + 1
+            from datetime import date as _date
+            today = _date.today()
+            for i in range(window):
+                d = (today - timedelta(days=i)).isoformat()
+                daily_dispatches.append({
+                    "date": d,
+                    "count": disp_by_day.get(d, 0),
+                    "yes_replies": yes_by_day.get(d, 0),
+                    "sent": sent_by_day.get(d, 0),
+                })
+            daily_dispatches.reverse()
+        except Exception:
+            pass
+
+        # ── 4. Build response ────────────────────────────────────
+        by_niche = []
+        for st, sent in sorted(sent_by_seq.items(), key=lambda x: -x[1]):
+            yes = yes_by_seq.get(st, 0)
+            rate = round(yes / max(sent, 1) * 100, 2)
+            label = st.replace("_", " ").title()
+            by_niche.append({
+                "sequence_type": st,
+                "label": label,
+                "sent": sent,
+                "yes_replies": yes,
+                "reply_rate_pct": rate,
+            })
+
+        by_sequence = []
+        for cohort in ("storm_strike", "storm_strike_v2"):
+            sent = sent_by_seq.get(cohort, 0)
+            yes = yes_by_seq.get(cohort, 0)
+            rate = round(yes / max(sent, 1) * 100, 2)
+            by_sequence.append({
+                "cohort": cohort,
+                "label": "Storm Strike" if cohort == "storm_strike" else "Storm Strike v2",
+                "sent": sent,
+                "yes_replies": yes,
+                "reply_rate_pct": rate,
+            })
+
+        total_yes = sum(yes_by_seq.values())
+        total_sent = sum(sent_by_seq.values())
+        blended = round(total_yes / max(total_sent, 1) * 100, 2)
+
+        return {
+            "by_niche": by_niche,
+            "by_sequence": by_sequence,
+            "daily_dispatches": daily_dispatches,
+            "blended_reply_rate_pct": blended,
+            "total_sent": total_sent,
+            "total_yes_replies": total_yes,
+            "window_days": window,
+        }
+    except Exception as e:
+        raise HTTPException(500, f"reply rates query failed: {e}")
+
+
 @app.get("/api/hub/diagnostics")
 async def hub_diagnostics():
     """Return hub health diagnostics: status, database, port status.

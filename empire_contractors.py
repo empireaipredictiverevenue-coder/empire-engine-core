@@ -53,20 +53,9 @@ TRADE_ENUM = (
 # working. These are the operator-dashboard's specialty chips + metro
 # filter dropdown. Keep these in sync with TRADE_ENUM above.
 SPECIALTIES = list(TRADE_ENUM)
-METROS = (
-    "DFW",
-    "Houston",
-    "San Antonio",
-    "Austin",
-    "Waco",
-    "Temple",
-    "Bryan/College Station",
-    "Tyler",
-    "Lubbock",
-    "Amarillo",
-    "El Paso",
-    "Corpus Christi",
-)
+# ── METROS sourced from config/metros.py (single source of truth) ──
+from config.metros import metro_keys
+METROS = tuple(metro_keys())
 
 
 def _page_css() -> str:

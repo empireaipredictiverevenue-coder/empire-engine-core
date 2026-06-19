@@ -567,7 +567,14 @@ class VoiceController:
             try:
                 db = self.get_db()
                 city_hint = ""
-                for c in ["dallas", "houston", "austin", "fort worth", "san antonio", "oklahoma city"]:
+                from config.metros import metro_keys
+                _metro_terms = []
+                for _k in metro_keys():
+                    _lower = _k.lower()
+                    _metro_terms.append(_lower)
+                    # Also add individual words for partial matching (e.g. "dallas" from "Dallas-Fort Worth")
+                    _metro_terms.extend(_lower.replace("-", " ").replace("/", " ").split())
+                for c in sorted(set(_metro_terms)):
                     if c in lower:
                         city_hint = c.title()
                         break

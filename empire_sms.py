@@ -736,15 +736,32 @@ class SMSSequenceEngine:
     # ── YES DETECTION ────────────────────────────────────────────────────
     @staticmethod
     def _is_yes_reply(body: str) -> bool:
-        """Heuristic: does this SMS reply signal interest (YES/OK/SURE etc)?"""
+        """Heuristic: does this SMS reply signal genuine interest?
+
+        Anti-pattern filters block false positives:
+          - "YES STOP" / "YES UNSUBSCRIBE" → opt-out, not interest
+          - "NOT YES" / "DON'T YES" / "NO" → negation, not interest
+        """
         if not body:
             return False
         cleaned = body.strip().upper()
+        words = cleaned.split()
+
+        # Pure single-word YES signals
         if cleaned in ("YES", "Y", "YEAH", "YEP", "SURE", "OK", "OKAY", "YEA", "YUP"):
             return True
-        words = cleaned.split()
+
+        # If "YES" appears as a word, run anti-pattern checks
         if "YES" in words:
+            # Anti-pattern 1: YES + STOP keyword → opt-out
+            if any(kw in words for kw in STOP_KEYWORDS):
+                return False
+            # Anti-pattern 2: negation near YES
+            _negation = {"NOT", "DON'T", "DONT", "NO", "NEVER", "WRONG"}
+            if any(nw in words for nw in _negation):
+                return False
             return True
+
         return False
 
     # ── INBOUND HANDLING ────────────────────────────────────────────────

@@ -15,8 +15,7 @@ Revenue models:
   2. Consulting/audit — sell waste audit reports to station owners/operators
   3. Marketplace — match idle pump capacity with demand, list abandoned stations
 
-Target metros (same as idle asset pipeline):
-  - DFW, Houston, San Antonio, Austin (initial)
+Target metros — dynamically sourced from config/metros.py (single source of truth)
   - Oklahoma City, Kansas City, Memphis, Atlanta, Nashville (phase 2)
 """
 
@@ -35,18 +34,14 @@ from supabase import create_client, Client
 
 log = logging.getLogger("empire.gas_station")
 
-# ── Metro search configs (lat, lon, radius_km) ────────────────────
-METRO_SEARCH_ZONES = {
-    "DFW":          (32.7767, -96.7970, 60),
-    "Houston":      (29.7604, -95.3698, 60),
-    "San Antonio":  (29.4241, -98.4936, 50),
-    "Austin":       (30.2672, -97.7431, 40),
-    "Oklahoma City":(35.4676, -97.5164, 40),
-    "Kansas City":  (39.0997, -94.5786, 40),
-    "Memphis":      (35.1495, -90.0490, 40),
-    "Atlanta":      (33.7490, -84.3880, 50),
-    "Nashville":    (36.1627, -86.7816, 40),
-}
+# ── Metro search configs — sourced from config/metros.py (single source of truth) ──
+from config.metros import METROS as _SHARED_METROS
+METRO_SEARCH_ZONES = {}
+for _name, _m in _SHARED_METROS.items():
+    METRO_SEARCH_ZONES[_name] = (
+        float(_m["lat"]), float(_m["lon"]),
+        50 if _m.get("state") == "TX" else 40,  # wider radius in TX
+    )
 
 # ── OSM Overpass tags for gas station waste detection ─────────────
 GAS_STATION_TAGS = {
@@ -346,7 +341,7 @@ class GasStationDetector:
             score += 0.08
 
         # ── Metro traffic ─────────────────────────────────────
-        high_traffic = {"DFW", "Houston", "Atlanta", "Memphis"}
+        high_traffic = {"Dallas-Fort Worth", "Houston", "Atlanta", "Memphis"}
         if s.metro in high_traffic:
             score += 0.05  # more stations to compete with → weaker ones show waste
 

@@ -454,18 +454,19 @@ class ContractorMatcher:
         # Broadcast to operator dashboard
         if broadcaster:
             try:
+                total_sent = db_dispatched + email_sent + sms_sent
                 await broadcaster.broadcast({
                     "type":      "dispatch_fanout",
                     "lead_addr": lead.get("address"),
                     "metro":     lead.get("city"),
                     "matches":   len(matched),
-                    "sent":      sent,
+                    "sent":      total_sent,
                     "urgency":   urgency,
                     "top_contractor": matched[0]["contractor"].get("name") if matched else None,
                     "top_score":      round(matched[0]["score"], 3) if matched else 0,
                 })
-            except Exception:
-                pass
+            except Exception as e:
+                log.debug(f"[matching] broadcast failed: {e}")
 
         return {
             "ok":              True,

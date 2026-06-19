@@ -170,17 +170,41 @@ def _hub_alive(timeout: float = 3.0) -> bool:
     try:
         req = urllib.request.Request(hub_url + "/", method="GET")
         with urllib.request.urlopen(req, timeout=timeout) as r:
-            return r.status == 200
+            return r.status < 500
     except Exception:
         return False
 
 
 def _is_yes(body: str) -> bool:
-    """Heuristic: 'YES' anywhere in the inbound body counts. Case-insensitive. Trimmed."""
+    """Heuristic: 'YES' in the inbound body, with anti-pattern filtering.
+
+    False positives filtered:
+      - "YES STOP" / "YES UNSUBSCRIBE" → opt-out, not interest
+      - "NOT YES" / "DON'T" / "NO" → negation, not interest
+    Case-insensitive. Trimmed.
+    """
     if not body:
         return False
     cleaned = body.strip().upper()
-    return "YES" in cleaned.split() or cleaned in ("YES", "Y", "YEAH", "YEP", "SURE", "OK", "OKAY")
+    words = cleaned.split()
+
+    # Pure single-word YES signals
+    if cleaned in ("YES", "Y", "YEAH", "YEP", "SURE", "OK", "OKAY"):
+        return True
+
+    # If "YES" appears as a word, run anti-pattern checks
+    if "YES" in words:
+        # Anti-pattern: YES + STOP keyword = opt-out
+        _stop_words = {"STOP", "STOPALL", "UNSUBSCRIBE", "CANCEL", "END", "QUIT", "REMOVE"}
+        if any(kw in words for kw in _stop_words):
+            return False
+        # Anti-pattern: negation near YES
+        _neg_words = {"NOT", "DON'T", "DONT", "NO", "NEVER", "WRONG"}
+        if any(nw in words for nw in _neg_words):
+            return False
+        return True
+
+    return False
 
 
 def run() -> dict:

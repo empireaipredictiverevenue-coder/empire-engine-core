@@ -1,8 +1,7 @@
 #!/bin/bash
-# Fee Watcher — every 6h on :55 (offset from other 6h agents)
-# Polls for settled-claim events. Currently scaffolded: no claim source
-# wired yet. Disabled by default. Enable once a claim event source is
-# in place (webhook /api/v1/fee/claim-settled or polling a claim_events table).
+# Fee Watcher — every 15 min on :05, :20, :35, :50
+# Polls carrier_claims for settled claims → creates fee_events.
+# Enabled Jun 2026 after carrier_claims auto-filing was wired in hub.py.
 set -e
 cd /root/empire-v49
 set -a; source /root/.env; set +a

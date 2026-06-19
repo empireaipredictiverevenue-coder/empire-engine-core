@@ -1643,6 +1643,7 @@ const NAV_GROUPS = [
       { id: 'leads',         label: 'Leads',          sub: 'Inbound leads · pipeline · intake' },
       { id: 'kanban',        label: 'Kanban',         sub: 'Agent task queue · pipeline stages' },
       { id: 'sms-performance', label: 'SMS Performance', sub: 'Niche breakdown · sequence stats' },
+      { id: 'reply-rates',     label: 'Reply Rates',      sub: 'YES reply % by niche · A/B · daily dispatch counts' },
       { id: 'fleet', label: 'Fleet', sub: 'Agent roles · hierarchy · findings' },
     ]
   },
@@ -3263,7 +3264,7 @@ function Dispatches() {
     }
     setBusy(dispatch_id);
     try {
-      const r = await apiFetch('/api/v1/fee/operator-mark-settled', {
+      const r = await apiFetch('/api/v1/claims/mark-settled', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ dispatch_id, claim_amount: parseFloat(amount), meta: { notes } }),
@@ -3596,7 +3597,7 @@ function Fees() {
         <div class="panel-head">How fees get created</div>
         <div class="panel-body" style=${{fontSize: '12px', color: 'var(--empire-mist)', lineHeight: '1.6'}}>
           <p style=${{marginBottom: '8px'}}><strong>1. Carrier webhook (when integrated):</strong> <code>POST /api/v1/fee/claim-settled</code> with <code>{claim_id, claim_amount, contractor_id, lead_id, settled_at}</code></p>
-          <p style=${{marginBottom: '8px'}}><strong>2. Operator mark-settled:</strong> <code>POST /api/v1/fee/operator-mark-settled</code> with <code>{dispatch_id, claim_amount, meta}</code>. Looks up the dispatch, resolves the lead + contractor, writes the fee event.</p>
+          <p style=${{marginBottom: '8px'}}><strong>2. Operator mark-settled:</strong> <code>POST /api/v1/claims/mark-settled</code> with <code>{dispatch_id, claim_amount, meta}</code>. Looks up the dispatch, resolves the lead + contractor, writes the fee event.</p>
           <p style=${{marginBottom: '8px'}}><strong>3. Manual trigger:</strong> <code>python3 -m agents.fee_watcher.trigger --claim-amount 50000 --contractor-id &lt;uuid&gt;</code></p>
           <p style=${{marginBottom: '0'}}>All three paths converge on the same <code>fee_events</code> table with <code>fee_amount = claim_amount × 0.03</code>.</p>
         </div>
@@ -5553,6 +5554,148 @@ function HealthMonitor() {
 
 
 /* ── EMAIL TRACKING SECTION ───────────────────────────────────── */
+
+
+// ── REPLY RATES DASHBOARD — YES reply % by niche, A/B, daily dispatch ──
+function ReplyRates() {
+  const [data, setData] = useState(null);
+  const [err, setErr] = useState(null);
+  const [days, setDays] = useState(30);
+
+  const reload = useCallback(async () => {
+    try {
+      const r = await apiFetch('/api/v1/reply/rates?days=' + days).then(x => x.json());
+      setData(r);
+      setErr(null);
+    } catch (e) {
+      if (e.message !== 'Unauthorized') setErr(e.message);
+    }
+  }, [days]);
+
+  useEffect(() => {
+    reload();
+    const t = setInterval(reload, 60000);
+    return () => clearInterval(t);
+  }, [reload]);
+
+  if (err) return html`<div class="stub"><div class="stub-title">Could not load Reply Rates</div><div class="stub-body">${err}</div></div>`;
+  if (!data) return html`<div class="stub"><div class="stub-body">Loading reply rates…</div></div>`;
+
+  const niches = data.by_niche || [];
+  const cohorts = data.by_sequence || [];
+  const daily = data.daily_dispatches || [];
+
+  const rateColor = (pct) => pct >= 8 ? '#44E5B8' : pct >= 4 ? '#FFB800' : '#FF4444';
+  const barWidth = (pct) => Math.min(100, Math.max(2, pct * 4)) + '%';
+
+  return html`
+    <div>
+      <div class="section-h">
+        <div>
+          <div class="section-title">Reply Rates</div>
+          <div class="section-sub">YES reply % by niche · A/B comparison · daily dispatch</div>
+        </div>
+        <div class="sec-actions">
+          <select class="tbl-action" value=${days} onChange=${e => setDays(Number(e.target.value))}>
+            <option value="7">7 days</option>
+            <option value="14">14 days</option>
+            <option value="30" selected>30 days</option>
+            <option value="60">60 days</option>
+            <option value="90">90 days</option>
+          </select>
+          <button class="btn ghost" onClick=${reload}>Refresh</button>
+        </div>
+      </div>
+
+      <div class="fee-stats" style="margin-bottom:20px">
+        <div class="fee-stat">
+          <div class="fee-stat-label">Blended reply rate</div>
+          <div class="fee-stat-value teal">${data.blended_reply_rate_pct}%</div>
+        </div>
+        <div class="fee-stat">
+          <div class="fee-stat-label">Total sent (${data.window_days}d)</div>
+          <div class="fee-stat-value">${data.total_sent}</div>
+        </div>
+        <div class="fee-stat">
+          <div class="fee-stat-label">Total YES replies</div>
+          <div class="fee-stat-value teal">${data.total_yes_replies}</div>
+        </div>
+        <div class="fee-stat">
+          <div class="fee-stat-label">Daily avg dispatched</div>
+          <div class="fee-stat-value dim">${daily.length > 0 ? Math.round(daily.reduce((s,d) => s + d.count, 0) / daily.length) : 0}</div>
+        </div>
+      </div>
+
+      <div class="split" style="margin-bottom:20px">
+        <div class="panel" style="max-height:480px;overflow-y:auto">
+          <div class="panel-head">YES reply rate by niche</div>
+          ${niches.length > 0 ? niches.map(n => html`
+            <div style=${{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'10px 0',borderBottom:'1px solid var(--empire-divider)'}}>
+              <div style=${{flex:1,minWidth:0}}>
+                <div style=${{fontSize:'12px',color:'var(--empire-white)',fontWeight:500,marginBottom:'2px'}}>${n.label}</div>
+                <div style=${{fontFamily:'var(--font-mono)',fontSize:'9px',color:'var(--empire-fog)'}}>${n.sent} sent · ${n.yes_replies} YES</div>
+              </div>
+              <div style=${{fontFamily:'var(--font-mono)',fontSize:'16px',fontWeight:600,color:rateColor(n.reply_rate_pct)}}>${n.reply_rate_pct}%</div>
+            </div>
+          `) : html`<div class="hm-empty">No sequence data in this window.</div>`}
+        </div>
+
+        <div class="panel">
+          <div class="panel-head">storm_strike vs storm_strike_v2</div>
+          ${cohorts.length > 0 ? cohorts.map(c => html`
+            <div style=${{marginBottom:'16px'}}>
+              <div style=${{display:'flex',justifyContent:'space-between',alignItems:'baseline',marginBottom:'6px'}}>
+                <span style=${{fontSize:'13px',color:'var(--empire-white)',fontWeight:500}}>${c.label}</span>
+                <span style=${{fontFamily:'var(--font-mono)',fontSize:'12px',color:rateColor(c.reply_rate_pct)}}>${c.reply_rate_pct}%</span>
+              </div>
+              <div style=${{display:'flex',justifyContent:'space-between',marginBottom:'8px',fontFamily:'var(--font-mono)',fontSize:'10px',color:'var(--empire-fog)'}}>
+                <span>${c.sent} sent</span>
+                <span>${c.yes_replies} YES replies</span>
+              </div>
+              <div style=${{height:'6px',background:'var(--empire-elevated)',borderRadius:'3px',overflow:'hidden'}}>
+                <div style=${{width:barWidth(c.reply_rate_pct),height:'100%',borderRadius:'3px',background:rateColor(c.reply_rate_pct),transition:'width .6s var(--ease-out-empire)'}}></div>
+              </div>
+            </div>
+          `) : html`<div class="hm-empty">No storm_strike data in this window.</div>`}
+          ${cohorts.length >= 2 && html`
+            <div style=${{marginTop:'14px',paddingTop:'12px',borderTop:'1px solid var(--empire-divider)',fontFamily:'var(--font-mono)',fontSize:'10px',color:'var(--empire-mist)'}}>
+              ${(() => {
+                const a = cohorts.find(c => c.cohort === 'storm_strike');
+                const b = cohorts.find(c => c.cohort === 'storm_strike_v2');
+                if (!a || !b || a.reply_rate_pct === b.reply_rate_pct) return 'No significant difference';
+                const winner = a.reply_rate_pct > b.reply_rate_pct ? a : b;
+                const loser = winner === a ? b : a;
+                const lift = Math.abs(winner.reply_rate_pct - loser.reply_rate_pct);
+                return html`<strong>${winner.label}</strong> leads by <span style="color:#44E5B8">+${lift.toFixed(1)}pp</span> reply rate`;
+              })()}
+            </div>
+          `}
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head">Daily dispatch counts (${data.window_days}d)</div>
+        ${daily.length > 0 ? html`
+          <div style=${{display:'flex',alignItems:'flex-end',gap:'3px',height:'120px',paddingTop:'8px'}}>
+            ${daily.map(d => {
+              const maxCount = Math.max(...daily.map(x => x.count), 1);
+              const h = Math.max(2, Math.round(d.count / maxCount * 100));
+              return html`
+                <div style=${{flex:1,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'flex-end',height:'100%'}} title="${d.date}: ${d.count} dispatched, ${d.yes_replies} YES, ${d.sent} sent">
+                  <div style=${{fontFamily:'var(--font-mono)',fontSize:'7px',color:'var(--empire-fog)',marginBottom:'3px'}}>${d.count || ''}</div>
+                  <div style=${{width:'100%',maxWidth:'28px',height:h+'%',background:'linear-gradient(180deg, #44E5B8, rgba(68,229,184,0.2))',borderRadius:'2px 2px 0 0',minHeight:'2px',transition:'height .4s var(--ease-out-empire)'}}></div>
+                  <div style=${{fontFamily:'var(--font-mono)',fontSize:'6px',color:'var(--empire-fog)',marginTop:'4px',transform:'rotate(-45deg)',transformOrigin:'top left',whiteSpace:'nowrap'}}>${d.date.slice(5)}</div>
+                </div>`;
+            })}
+          </div>
+          <div style=${{marginTop:'8px',fontFamily:'var(--font-mono)',fontSize:'9px',color:'var(--empire-fog)',textAlign:'center'}}>
+            Hover bars for detail · ${daily.filter(d => d.count > 0).length} days with dispatches
+          </div>
+        ` : html`<div class="hm-empty">No dispatch data in this window.</div>`}
+      </div>
+    </div>
+  `;
+}
 
 // ── SMS PERFORMANCE — niche-specific sequence breakdown ──────────────
 function SmsPerformance() {
@@ -9929,7 +10072,7 @@ function App() {
             active.id === 'stack'        ? html`<${Stack} />` :
             active.id === 'network'      ? html`<${Network} />` :
             active.id === 'loop'         ? html`<${Loop} />` :
-            active.id === 'sms-performance' ? html`<${SmsPerformance} />` :
+            active.id === 'sms-performance' ? html`<${SmsPerformance} />` : active.id === 'reply-rates' ? html`<${ReplyRates} />` :
             html`<${Stub} section=${active} />`
           }
         </section>
