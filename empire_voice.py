@@ -1122,12 +1122,19 @@ def register_voice_routes(
         Process billing for a completed call. Must meet the minimum
         duration threshold (90s) to be billable.
 
+        Fee model (dual):
+          - Settlement fee: payout × fee_rate (default 3%)
+          - Per-minute fee: duration / 60 × per_minute_rate (if set on buyer)
+        The actual fee_earned is the MAX of both — the buyer always pays
+        the higher amount.
+
         Lookup flow:
           1. Find the call_logs record by vonage_call_id
-          2. If the call had a buyer assigned, compute fee_earned
-          3. Mark is_billable on the call_logs record
-          4. Increment the buyer's calls_accepted counter
-          5. Invalidate the switchboard's buyers cache
+          2. Fetch buyer's fee_rate AND per_minute_rate
+          3. Compute both fees, take the max
+          4. Mark is_billable on the call_logs record, store breakdown
+          5. Increment the buyer's calls_accepted counter
+          6. Invalidate the switchboard's buyers cache
         """
         if duration < _BILLABLE_SECONDS:
             log.info(
@@ -1159,40 +1166,59 @@ def register_voice_routes(
             buyer_id = cl.get("buyer_id")
             payout_value = float(cl.get("payout_value") or 0)
 
-            # 2. If buyer assigned, get their fee_rate for fee computation
+            # 2. Fetch buyer's rates (fee_rate + per_minute_rate)
             fee_rate = COMMISSION_RATE  # default 3% (from conversion_funnel)
+            per_minute_rate = None      # no per-minute billing by default
             if buyer_id:
-                buyer_res = db.table("buyers").select("fee_rate").eq("id", buyer_id).limit(1).execute()
+                buyer_res = db.table("buyers").select("fee_rate,per_minute_rate").eq("id", buyer_id).limit(1).execute()
                 if buyer_res.data:
-                    fee_rate = float(buyer_res.data[0].get("fee_rate") or COMMISSION_RATE)
+                    b = buyer_res.data[0]
+                    fee_rate = float(b.get("fee_rate") or COMMISSION_RATE)
+                    pmr = b.get("per_minute_rate")
+                    if pmr is not None:
+                        per_minute_rate = float(pmr)
 
-            # 3. Compute fee_earned
-            fee_earned = round(payout_value * fee_rate, 2)
+            # 3. Compute both fees
+            settlement_fee = round(payout_value * fee_rate, 2)
+            per_minute_fee = 0.0
+            if per_minute_rate and per_minute_rate > 0 and duration > 0:
+                per_minute_fee = round(duration / 60 * per_minute_rate, 2)
 
-            # 4. Update call_logs with billing info
-            db.table("call_logs").update({
+            # 4. Take the higher of the two
+            fee_earned = max(settlement_fee, per_minute_fee)
+
+            # 5. Update call_logs with billing info + breakdown
+            update_payload = {
                 "is_billable": True,
                 "fee_earned": fee_earned,
+                "settlement_fee": settlement_fee,
+                "per_minute_fee": per_minute_fee,
                 "status": "completed",
-            }).eq("id", cl["id"]).execute()
+            }
+            db.table("call_logs").update(update_payload).eq("id", cl["id"]).execute()
 
-            # 5. Update buyer's calls_accepted counter
+            # 6. Update buyer's calls_accepted counter
             if buyer_id:
                 buyer_update = db.table("buyers").select("calls_accepted").eq("id", buyer_id).limit(1).execute()
                 if buyer_update.data:
                     cur = int(buyer_update.data[0].get("calls_accepted") or 0)
                     db.table("buyers").update({"calls_accepted": cur + 1}).eq("id", buyer_id).execute()
 
-            # 6. Invalidate switchboard's buyers cache so next route picks fresh data
+            # 7. Invalidate switchboard's buyers cache so next route picks fresh data
             try:
                 from empire_switchboard import _invalidate_buyers_cache
                 _invalidate_buyers_cache()
             except Exception:
                 pass
 
+            # 8. Log the billing breakdown
+            billing_model = "per_minute" if per_minute_fee > settlement_fee else "settlement"
             log.info(
                 f"[voice] billing: call {call_uuid} · "
-                f"duration={duration}s · fee=${fee_earned} · "
+                f"duration={duration}s · "
+                f"settlement=${settlement_fee} · "
+                f"per_minute=${per_minute_fee} · "
+                f"charged=${fee_earned} ({billing_model}) · "
                 f"buyer={'yes' if buyer_id else 'no'}"
             )
 
