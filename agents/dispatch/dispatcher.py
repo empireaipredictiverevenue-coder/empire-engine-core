@@ -41,6 +41,183 @@ log = logging.getLogger("empire.dispatch")
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(name)s] %(message)s")
 
 
+# ── CIRCUIT BREAKER — prevents cascade failures ──
+# Module-level state: tracks consecutive dispatch failures so the cron
+# agent backs off rather than hammering a degraded hub every 15 minutes.
+_CIRCUIT_STATE = {
+    "consecutive_failures": 0,
+    "last_failure_at": None,
+    "backoff_until": None,
+    "reset_at": None,
+}
+
+
+def _backoff_minutes(failures: int) -> int:
+    """Exponential backoff: 1 → 5min, 2 → 10min, 3 → 20min, 4+ → 60min."""
+    return min(5 * (2 ** (max(1, failures) - 1)), 60)
+
+
+def _circuit_ok() -> bool:
+    """True if the circuit is closed (dispatch can proceed)."""
+    if _CIRCUIT_STATE["consecutive_failures"] == 0:
+        return True
+    backoff_minutes = _backoff_minutes(_CIRCUIT_STATE["consecutive_failures"])
+    if _CIRCUIT_STATE["backoff_until"]:
+        from datetime import datetime, timezone
+        if datetime.now(timezone.utc) < _CIRCUIT_STATE["backoff_until"]:
+            return False
+    return True
+
+
+def _circuit_record_failure():
+    """Record a failure, increase backoff."""
+    from datetime import datetime, timezone, timedelta
+    _CIRCUIT_STATE["consecutive_failures"] += 1
+    _CIRCUIT_STATE["last_failure_at"] = datetime.now(timezone.utc).isoformat()
+    backoff_minutes = _backoff_minutes(_CIRCUIT_STATE["consecutive_failures"])
+    _CIRCUIT_STATE["backoff_until"] = datetime.now(timezone.utc) + timedelta(minutes=backoff_minutes)
+
+    # ── Telegram alert on trip ──
+    if _CIRCUIT_STATE["consecutive_failures"] == 3:
+        _send_circuit_telegram("trip", _CIRCUIT_STATE)
+    elif _CIRCUIT_STATE["consecutive_failures"] == 5:
+        _send_circuit_telegram("warn", _CIRCUIT_STATE)
+
+    # Persist to agent_config so state survives restarts
+    try:
+        sb = _sb()
+        _persist_circuit_state(sb)
+    except Exception as e:
+        log.debug(f"[dispatch] persist after failure failed: {e}")
+
+
+def _load_circuit_state(sb) -> dict:
+    """Restore circuit breaker state from agent_config on startup.
+    Returns the restored state (or default if no persisted state)."""
+    try:
+        r = sb.table("agent_config").select("config_json").eq("agent_name", "dispatch").limit(1).execute()
+        if r.data:
+            cfg = r.data[0].get("config_json") or {}
+            saved = cfg.get("circuit_breaker")
+            if isinstance(saved, dict):
+                return {
+                    "consecutive_failures": int(saved.get("consecutive_failures", 0)),
+                    "last_failure_at": saved.get("last_failure_at"),
+                    "backoff_until": saved.get("backoff_until"),
+                    "reset_at": saved.get("reset_at"),
+                }
+    except Exception as e:
+        log.debug(f"[dispatch] load circuit state failed: {e}")
+    return {"consecutive_failures": 0, "last_failure_at": None, "backoff_until": None, "reset_at": None}
+
+
+def _persist_circuit_state(sb):
+    """Write circuit breaker state to agent_config.config_json so it
+    survives PM2 restarts and code deploys. Read-modify-write to avoid
+    overwriting other config keys."""
+    try:
+        # Read current config, merge circuit_breaker, write back
+        r = sb.table("agent_config").select("config_json").eq("agent_name", "dispatch").limit(1).execute()
+        current_cfg = (r.data[0].get("config_json") or {}) if r.data else {}
+        if not isinstance(current_cfg, dict):
+            current_cfg = {}
+        current_cfg["circuit_breaker"] = dict(_CIRCUIT_STATE)
+        sb.table("agent_config").update({
+            "config_json": current_cfg,
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        }).eq("agent_name", "dispatch").execute()
+    except Exception as e:
+        log.debug(f"[dispatch] persist circuit state failed: {e}")
+
+
+def _circuit_force_reset(reason: str = "operator_manual_reset") -> dict:
+    """Force-reset the circuit breaker. Called by the operator from the SPA.
+    Returns the state before reset for logging."""
+    before = dict(_CIRCUIT_STATE)
+    _circuit_record_success()  # _circuit_record_success handles Telegram alerting
+    return {
+        "before": before,
+        "after": dict(_CIRCUIT_STATE),
+        "reason": reason,
+    }
+
+
+def _circuit_record_success():
+    """Reset circuit breaker on success."""
+    # ── Telegram alert on recovery (only if circuit was previously open) ──
+    was_open = _CIRCUIT_STATE["consecutive_failures"] >= 3
+    prev_failures = _CIRCUIT_STATE["consecutive_failures"]
+    _CIRCUIT_STATE["consecutive_failures"] = 0
+    _CIRCUIT_STATE["last_failure_at"] = None
+    _CIRCUIT_STATE["backoff_until"] = None
+    _CIRCUIT_STATE["reset_at"] = datetime.now(timezone.utc).isoformat()
+    # Persist to agent_config so state survives restarts
+    try:
+        sb = _sb()
+        _persist_circuit_state(sb)
+    except Exception as e:
+        log.debug(f"[dispatch] persist after success failed: {e}")
+
+    if was_open:
+        _send_circuit_telegram("recover", {
+            "consecutive_failures": 0,
+            "consecutive_failures_before_reset": prev_failures,
+            "backoff_until": None,
+        })
+
+
+def circuit_state() -> dict:
+    """Snapshot of circuit breaker state for health endpoint."""
+    return dict(_CIRCUIT_STATE)
+
+
+def _send_circuit_telegram(event: str, state: dict):
+    """Send a Telegram alert when the circuit breaker trips or recovers.
+    Best-effort — failures here are logged but never propagated."""
+    try:
+        tg_token = os.environ.get("TELEGRAM_BOT_TOKEN", "")
+        tg_chat = os.environ.get("TELEGRAM_HOME_CHANNEL", "808657420")
+        if not tg_token:
+            return
+        if event == "trip":
+            emoji = "🔴"
+            title = "Dispatch Circuit Breaker TRIPPED"
+            detail = (
+                f"{state.get('consecutive_failures', 0)} consecutive failures. "
+                f"Backoff until {state.get('backoff_until', '?')}. "
+                f"Dispatch cron is paused — no further attempts until the circuit closes."
+            )
+        elif event == "warn":
+            emoji = "⚠️"
+            title = "Dispatch Circuit Warning"
+            detail = (
+                f"{state.get('consecutive_failures', 0)} consecutive failures. "
+                f"Backoff until {state.get('backoff_until', '?')}."
+            )
+        elif event == "recover":
+            emoji = "🟢"
+            title = "Dispatch Circuit Breaker RECOVERED"
+            detail = (
+                f"Circuit closed after {state.get('consecutive_failures_before_reset', '?')} failures. "
+                f"Dispatch cron is resuming normally."
+            )
+        else:
+            return
+        alert = f"{emoji} *{title}*\n  {detail}"
+        payload = json.dumps({
+            "chat_id": tg_chat, "text": alert,
+            "parse_mode": "Markdown", "disable_web_page_preview": True,
+        }).encode()
+        urllib.request.urlopen(urllib.request.Request(
+            f"https://api.telegram.org/bot{tg_token}/sendMessage",
+            data=payload, method="POST",
+            headers={"Content-Type": "application/json"},
+        ), timeout=8)
+    except Exception as e:
+        log.debug(f"[dispatch] circuit Telegram alert failed: {e}")
+
+
+
 def _sb():
     url = os.getenv("SUPABASE_URL", "")
     key = os.getenv("SUPABASE_SERVICE_KEY", "")
@@ -213,6 +390,21 @@ def run() -> dict:
     sb = _sb()
     cfg = _read_config(sb)
 
+    # ── Restore persisted circuit breaker state ──
+    saved = _load_circuit_state(sb)
+    _CIRCUIT_STATE["consecutive_failures"] = saved.get("consecutive_failures", 0)
+    _CIRCUIT_STATE["last_failure_at"] = saved.get("last_failure_at")
+    _CIRCUIT_STATE["backoff_until"] = saved.get("backoff_until")
+    _CIRCUIT_STATE["reset_at"] = saved.get("reset_at")
+
+    # ── Circuit breaker: skip if we've had repeated failures ──
+    if not _circuit_ok():
+        backoff_until = _CIRCUIT_STATE.get("backoff_until")
+        _log_activity(sb, "dispatch", run_id, started_at, "skipped_circuit_open",
+                      summary=f"circuit open: {_CIRCUIT_STATE['consecutive_failures']} consecutive failures, backoff until {backoff_until}")
+        _update_config(sb, "dispatch", "skipped_circuit_open", datetime.now(timezone.utc).isoformat())
+        return {"status": "skipped_circuit_open", "rows_processed": 0}
+
     if not cfg["enabled"]:
         _log_activity(sb, "dispatch", run_id, started_at, "skipped_disabled",
                       summary="disabled in agent_config")
@@ -371,6 +563,15 @@ def run() -> dict:
                f"{rows_skipped} already-dispatched, {rows_errored} errored")
     if sample_dispatches:
         summary += f". Sample: {json.dumps(sample_dispatches, default=str)[:500]}"
+    # ── Circuit breaker: track outcome ──
+    if rows_errored > 0 and rows_processed == 0:
+        # All rows errored — likely a systemic issue (hub down, DB down)
+        _circuit_record_failure()
+    elif rows_processed > 0:
+        # At least one dispatch succeeded — circuit is healthy
+        _circuit_record_success()
+    # else: no rows to process, neither success nor failure
+
     status = "ok" if rows_errored == 0 else "ok"
     err_field = None if rows_errored == 0 else "; ".join(error_msgs[:5])
 

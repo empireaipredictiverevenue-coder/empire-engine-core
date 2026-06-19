@@ -13,7 +13,7 @@ except ImportError:
     pass
 import asyncio
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import Optional
 
 import httpx as _httpx
@@ -56,6 +56,7 @@ from empire_qc_api import register_qc_routes
 from empire_hermes_api import register_hermes_routes
 from empire_wiki_viewer import register_wiki_routes
 from empire_attribution import register_attribution_routes
+from hub_customer_endpoints import router as customer_router
 from empire_email import EmailEngine, register_email_routes
 from empire_matching import ContractorMatcher, register_matching_routes
 from empire_playbook import register_playbook_routes
@@ -79,7 +80,6 @@ from empire_dream import DreamLoop, set_dream_loop, get_latest_wisdom
 from empire_hourly_digest import HourlyDigestLoop
 from empire_skills_init import skills_framework, build_brain_context
 from bots.seo_agent import run_loop as seo_run_loop
-from bots.backlinks_agent import run_loop as backlinks_run_loop
 from bots.traffic_specialist import run_loop as traffic_specialist_run_loop, register_traffic_specialist_routes
 from bots.affiliate_recruiter import run_loop as affiliate_recruiter_run_loop, register_affiliate_recruiter_routes
 from bots.bounty_tracker import run_loop as bounty_tracker_run_loop, register_bounty_tracker_routes
@@ -246,6 +246,7 @@ def get_db() -> Client:
 # FASTAPI APP
 # ─────────────────────────────────────────────────────────────────────
 app = FastAPI(title="Empire AI · V49", version="49.0.0")
+app.include_router(customer_router)
 
 app.add_middleware(
     CORSMiddleware,
@@ -3038,7 +3039,6 @@ async def _deferred_background_tasks():
     asyncio.create_task(dream_loop.run(), name="dream-loop")
     asyncio.create_task(hourly_digest.run(), name="hourly-digest")
     asyncio.create_task(seo_run_loop(), name="seo-agent")
-    asyncio.create_task(backlinks_run_loop(), name="backlinks-agent")
     asyncio.create_task(traffic_specialist_run_loop(), name="traffic-specialist")
     asyncio.create_task(affiliate_recruiter_run_loop(), name="affiliate-recruiter")
     asyncio.create_task(bounty_tracker_run_loop(), name="bounty-tracker")
@@ -4414,85 +4414,6 @@ async def seo_config_post(req: Request):
         return JSONResponse({"interval_hours": get_seo_interval(), "min": 0.1, "max": 24.0})
     except Exception as e:
         return JSONResponse({"error": str(e)[:80]}, status_code=500)
-
-
-# ── Backlinks Monitoring Routes ───────────────────────────────
-# GET  /api/seo/backlinks/snapshot    — full backlinks dashboard
-# GET  /api/seo/backlinks/scan        — scan a domain for backlinks
-# GET  /api/seo/backlinks/broken      — check known backlinks for broken status
-# GET  /api/seo/backlinks/opportunities — link-building opportunities
-# GET  /api/seo/backlinks/authority   — link authority report (feeds SEO genome)
-# POST /api/seo/backlinks/scan/{url}  — trigger a domain scan
-
-@app.get("/api/seo/backlinks/snapshot")
-async def seo_backlinks_snapshot():
-    """Backlinks dashboard snapshot — stats, tracked backlinks, opportunities."""
-    try:
-        from bots.backlinks_agent import get_backlinks_agent
-        agent = get_backlinks_agent()
-        return JSONResponse(await agent.performance_snapshot())
-    except Exception as e:
-        return JSONResponse({"error": str(e)[:200], "stats": {}, "backlinks": [], "opportunities": []})
-
-
-@app.get("/api/seo/backlinks/broken")
-async def seo_backlinks_broken(limit: int = 30):
-    """Check known backlinks for broken (404) status."""
-    try:
-        from bots.backlinks_agent import get_backlinks_agent
-        agent = get_backlinks_agent()
-        return JSONResponse(await agent.check_broken(limit=min(limit, 100)))
-    except Exception as e:
-        return JSONResponse({"checked": 0, "broken": 0, "error": str(e)[:80]})
-
-
-@app.get("/api/seo/backlinks/opportunities")
-async def seo_backlinks_opportunities(niche: str = ""):
-    """Identify link-building opportunities — broken replacements, unlisted directories."""
-    try:
-        from bots.backlinks_agent import get_backlinks_agent
-        agent = get_backlinks_agent()
-        return JSONResponse({"opportunities": await agent.find_opportunities(niche=niche)})
-    except Exception as e:
-        return JSONResponse({"opportunities": [], "error": str(e)[:80]})
-
-
-@app.get("/api/seo/backlinks/authority")
-async def seo_backlinks_authority():
-    """Link authority report — composite score for SEO genome evolution."""
-    try:
-        from bots.backlinks_agent import get_backlinks_agent
-        agent = get_backlinks_agent()
-        return JSONResponse(await agent.link_authority_report())
-    except Exception as e:
-        return JSONResponse({"link_authority_score": 0.3, "error": str(e)[:80]})
-
-
-@app.post("/api/seo/backlinks/scan/{url:path}")
-async def seo_backlinks_scan(url: str):
-    """Trigger a backlink scan for a specific domain/URL."""
-    try:
-        from bots.backlinks_agent import get_backlinks_agent
-        agent = get_backlinks_agent()
-        return JSONResponse(await agent.scan_domain(url))
-    except Exception as e:
-        return JSONResponse({"backlinks": [], "error": str(e)[:200]})
-
-
-@app.get("/api/seo/backlinks/stats")
-async def seo_backlinks_stats():
-    """Backlinks agent stats — scans run, broken found, opportunities."""
-    try:
-        from bots.backlinks_agent import get_backlinks_agent
-        agent = get_backlinks_agent()
-        snap = agent.stats
-        return JSONResponse({
-            "domains_monitored": snap["domains_monitored"],
-            "backlinks_discovered": snap["backlinks_discovered"],
-            "broken_found": snap["broken_found"],
-            "opportunities_found": snap["opportunities_found"],
-            "scans_run": snap["scans_run"],
-        })
     except Exception as e:
         return JSONResponse({"error": str(e)[:80]})
 
@@ -5602,6 +5523,93 @@ async def hub_diagnostics():
     })
 
 
+# ── DISPATCH HEALTH — circuit breaker state, recent errors, matcher stats ──
+@app.get("/api/v1/dispatch/health")
+async def dispatch_health(
+    auth: bool = Depends(require_auth),
+):
+    """Return dispatch system health: circuit breaker state, recent
+    dispatch counts, error log, hub status."""
+    try:
+        db = get_db()
+
+        # ── Circuit breaker state (from cron dispatcher) ──
+        circuit = {"consecutive_failures": 0, "is_open": False}
+        try:
+            from agents.dispatch.dispatcher import circuit_state
+            cs = circuit_state()
+            circuit = {
+                "consecutive_failures": cs.get("consecutive_failures", 0),
+                "last_failure_at": cs.get("last_failure_at"),
+                "backoff_until": cs.get("backoff_until"),
+                "is_open": cs.get("consecutive_failures", 0) > 0,
+            }
+        except Exception as e:
+            circuit["import_error"] = str(e)[:80]
+
+        # ── Dispatch stats (last 24h) ──
+        from datetime import timedelta
+        cutoff = (datetime.now(timezone.utc) - timedelta(hours=24)).isoformat()
+        dispatched_24h = 0
+        failed_24h = 0
+        recent_errors: list = []
+        try:
+            r = db.table("dispatches").select("id", count="exact")                 .gte("created_at", cutoff).execute()
+            dispatched_24h = r.count if hasattr(r, "count") and r.count is not None else len(r.data or [])
+        except Exception as e:
+            log.debug(f"[dispatch-health] dispatches query: {e}")
+        try:
+            r2 = db.table("outreach_log").select("body_preview, created_at")                 .eq("agent_name", "dispatch")                 .eq("sent_status", "failed")                 .gte("created_at", cutoff)                 .order("created_at", desc=True)                 .limit(10).execute()
+            failed_24h = len(r2.data or [])
+            recent_errors = [
+                {"body": row.get("body_preview", "")[:120],
+                 "at": row.get("created_at")}
+                for row in (r2.data or [])
+            ]
+        except Exception as e:
+            log.debug(f"[dispatch-health] outreach_log query: {e}")
+
+        return JSONResponse({
+            "ok": True,
+            "circuit_breaker": circuit,
+            "dispatched_24h": dispatched_24h,
+            "failed_24h": failed_24h,
+            "recent_errors": recent_errors,
+            "matcher_stats": matcher.stats if matcher else {},
+        })
+    except Exception as e:
+        return JSONResponse({"ok": False, "error": str(e)[:200]}, status_code=500)
+
+
+# ── DISPATCH CIRCUIT RESET — operator manually clears the circuit breaker ──
+@app.post("/api/v1/dispatch/reset-circuit")
+async def dispatch_reset_circuit(
+    request: Request,
+    auth: bool = Depends(require_auth),
+):
+    """Operator-forced circuit breaker reset. Zeroes the failure counter
+    and sends a recovery Telegram alert. Requires operator auth."""
+    try:
+        body = await request.json() if request.headers.get("content-type", "").startswith("application/json") else {}
+    except Exception:
+        body = {}
+    reason = body.get("reason", "manual operator reset from SPA")
+
+    try:
+        from agents.dispatch.dispatcher import _circuit_force_reset
+        result = _circuit_force_reset(reason=str(reason)[:200])
+        return JSONResponse({
+            "ok": True,
+            "circuit_before": result.get("before"),
+            "circuit_after": result.get("after"),
+            "reason": result.get("reason"),
+        })
+    except Exception as e:
+        return JSONResponse({"ok": False, "error": str(e)[:200]}, status_code=500)
+
+
+
+
 # ── Share Click Analytics — contractor portal share button tracking ──
 @app.post("/api/v1/track/share-click")
 async def track_share_click(request: Request):
@@ -5788,3 +5796,12 @@ if __name__ == "__main__":
 async def root():
     return {"status": "Empire AI Hub", "spa": "/command", "login": "/login"}
      
+
+# === Customer Container Reporting Endpoint ===
+@app.post("/api/v1/customer/events")
+async def customer_event(request: Request):
+    data = await request.json()
+    # TODO: Validate API key, store event, trigger AGI analysis
+    print(f"[Hub] Received customer event: {data.get(event_type)}")
+    return {"status": "received"}
+from hub_customer_endpoints import router as customer_router

@@ -6,7 +6,6 @@ monitors trends, detects opportunities, and feeds intelligence to other agents.
 
 Integrates with:
   - bots/research_agent.py     → LLM research & analysis
-  - bots/backlinks_agent.py    → Backlink monitoring
   - bots/storm_predictor.py    → Weather/opportunity scanning
   - empire_business_growth_agent.py → Funnel analysis
 

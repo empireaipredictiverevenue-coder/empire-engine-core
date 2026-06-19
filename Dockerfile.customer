@@ -1,0 +1,32 @@
+# Empire AI - Branded Customer Container (Production Grade)
+FROM python:3.11-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    EMPIRE_MODE=customer \
+    EMPIRE_BRAND=EmpireAI
+
+RUN groupadd -r empire && useradd -r -g empire empire
+
+RUN apt-get update && apt-get install -y --no-install-recommends curl \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+COPY requirements.customer.txt .
+RUN pip install --no-cache-dir -r requirements.customer.txt
+
+COPY customer_container/ /app/
+COPY --chown=empire:empire . /app/
+
+RUN mkdir -p /app/data /app/logs /app/config && \
+    chown -R empire:empire /app
+
+USER empire
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+    CMD python -c "import httpx; httpx.get(http://localhost:8080/health, timeout=5)" || exit 1
+
+EXPOSE 8080
+
+CMD ["python", "main.py"]

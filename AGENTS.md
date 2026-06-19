@@ -254,3 +254,8 @@ durable, queryable, multi-agent queue.
     Resend domain health. Logs to agent_activity; silent on
     success, sends the digest anyway so Phil has a weekly snapshot
     even when nothing is broken.
+
+#### Operator-owned (default profile)
+- `predictive_backlink_agent.py` — every 12h at :30, → `logs/backlinks.log`.
+  Backlink intelligence + opportunity identification + auto-emailing.
+  Run: `python3 -m bots.predictive_backlink_agent`

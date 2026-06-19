@@ -1639,11 +1639,12 @@ const NAV_GROUPS = [
       { id: 'pulse',         label: 'Pulse',         sub: 'Live overview' },
       { id: 'pipeline',      label: 'Pipeline',       sub: 'Email & SMS · state machine' },
       { id: 'dispatch',      label: 'Dispatch',       sub: 'Contractor matching' },
+      { id: 'dispatch-health', label: 'Dispatch Health',  sub: 'Circuit breaker · errors · throughput' },
       { id: 'inbound',       label: 'Inbound',        sub: 'Calls · triage · recordings' },
       { id: 'leads',         label: 'Leads',          sub: 'Inbound leads · pipeline · intake' },
       { id: 'kanban',        label: 'Kanban',         sub: 'Agent task queue · pipeline stages' },
       { id: 'sms-performance', label: 'SMS Performance', sub: 'Niche breakdown · sequence stats' },
-      { id: 'reply-rates',     label: 'Reply Rates',      sub: 'YES reply % by niche · A/B · daily dispatch counts' },
+      { id: 'reply-rates',     label: 'Dispatch Monitor', sub: 'Reply rates · A/B · circuit breaker · dispatch health' },
       { id: 'fleet', label: 'Fleet', sub: 'Agent roles · hierarchy · findings' },
     ]
   },
@@ -3645,6 +3646,45 @@ function Predicted() {
           </div>
         </div>
       ` : ''}
+      ${health && health.ok ? html`
+        <div class="fee-stats" style="margin-bottom:20px">
+          <div class="fee-stat" style="${health.circuit_breaker && health.circuit_breaker.consecutive_failures > 0 ? 'border-color:rgba(255,68,68,0.3)' : ''}">
+            <div class="fee-stat-label">Circuit Breaker</div>
+            <div class="fee-stat-value ${health.circuit_breaker && health.circuit_breaker.consecutive_failures > 0 ? '' : 'teal'}" style="font-size:18px;${health.circuit_breaker && health.circuit_breaker.consecutive_failures > 0 ? 'color:var(--status-red)' : ''}">
+              ${health.circuit_breaker && health.circuit_breaker.is_open ? '⚠ OPEN' : '✓ CLOSED'}
+            </div>
+            <div style="font-size:10px;color:var(--empire-fog);margin-top:4px">
+              ${health.circuit_breaker ? health.circuit_breaker.consecutive_failures + ' consecutive failures' : ''}
+            </div>
+          </div>
+          <div class="fee-stat">
+            <div class="fee-stat-label">Dispatched (24h)</div>
+            <div class="fee-stat-value teal">${health.dispatched_24h || 0}</div>
+          </div>
+          <div class="fee-stat" style="${health.failed_24h > 0 ? 'border-color:rgba(255,184,0,0.2)' : ''}">
+            <div class="fee-stat-label">Failed (24h)</div>
+            <div class="fee-stat-value ${health.failed_24h > 0 ? '' : 'dim'}" style="${health.failed_24h > 0 ? 'color:var(--status-amber)' : ''}">${health.failed_24h || 0}</div>
+          </div>
+          <div class="fee-stat">
+            <div class="fee-stat-label">Matcher Runs</div>
+            <div class="fee-stat-value dim">${health.matcher_stats ? (health.matcher_stats.matches_computed || 0) : 0}</div>
+          </div>
+        </div>
+        ${health.recent_errors && health.recent_errors.length > 0 ? html`
+          <div class="panel" style="margin-bottom:20px;border-color:rgba(255,184,0,0.15)">
+            <div class="panel-head" style="display:flex;justify-content:space-between">
+              <span style="color:var(--status-amber)">⚠ Recent Dispatch Errors</span>
+              <span class="sec-meta" style="margin:0">${health.recent_errors.length} errors</span>
+            </div>
+            ${health.recent_errors.slice(0, 5).map(e => html`
+              <div style="font-family:var(--font-mono);font-size:10px;color:var(--empire-mist);padding:6px 0;border-bottom:1px solid var(--empire-divider);word-break:break-word">
+                <span style="color:var(--empire-fog);font-size:9px">${(e.at || '').slice(0,19)}</span>
+                <span style="margin-left:8px">${(e.body || '').slice(0,100)}</span>
+              </div>
+            `)}
+          </div>
+        ` : null}
+      ` : null}
       <div class="fee-stats">
         <div class="fee-stat"><div class="fee-stat-label">Projected total</div><div class="fee-stat-value teal">${lowConf ? '—' : fmtUsd(data.total_projected_fees_usd)}</div></div>
         <div class="fee-stat"><div class="fee-stat-label">Active sequences</div><div class="fee-stat-value">${data.total_active_sequences.toLocaleString()}</div></div>
@@ -5402,11 +5442,16 @@ function Analytics() {
 function HealthMonitor() {
   const [data, setData] = useState(null);
   const [err, setErr] = useState(null);
+  const [dhealth, setDhealth] = useState(null);
 
   const reload = useCallback(async () => {
     try {
-      const r = await apiFetch('/api/v1/health/mesh').then(x => x.json());
+      const [r, dh] = await Promise.all([
+        apiFetch('/api/v1/health/mesh').then(x => x.json()),
+        apiFetch('/api/v1/dispatch/health').then(x => x.json()).catch(() => null),
+      ]);
       setData(r);
+      if (dh && dh.ok) setDhealth(dh);
       setErr(null);
     } catch (e) {
       if (e.message !== 'Unauthorized') setErr(e.message);
@@ -5511,6 +5556,23 @@ function HealthMonitor() {
             <div class="hm-health-card">
               <div class=${'hm-health-val ' + pm2Cls}>${pm2.healthy}/${pm2.total}</div>
               <div class="hm-health-lbl">PM2 Services</div>
+            <div class="hm-health-card" style="${dhealth && dhealth.ok && dhealth.circuit_breaker && dhealth.circuit_breaker.is_open ? 'border-color:rgba(255,68,68,0.3)' : ''}">
+              <div class="hm-health-val ${dhealth && dhealth.ok && dhealth.circuit_breaker && dhealth.circuit_breaker.is_open ? '' : 'ok'}" style="${dhealth && dhealth.ok && dhealth.circuit_breaker && dhealth.circuit_breaker.is_open ? 'color:var(--status-red)' : ''}">
+                ${dhealth && dhealth.ok ? (dhealth.circuit_breaker && dhealth.circuit_breaker.is_open ? '\u26a0 OPEN' : '\u2713 CLOSED') : '\u2014'}
+              </div>
+              <div class="hm-health-lbl">Circuit Breaker</div>
+              <div style="font-size:8px;color:var(--empire-fog);margin-top:2px;font-family:var(--font-mono)">${dhealth && dhealth.ok && dhealth.circuit_breaker && dhealth.circuit_breaker.reset_at ? 'reset ' + dhealth.circuit_breaker.reset_at.slice(0,16) : ''}</div>
+            </div>
+            <div class="hm-health-card">
+              <div class="hm-health-val ok">${dhealth && dhealth.ok ? dhealth.dispatched_24h || 0 : '\u2014'}</div>
+              <div class="hm-health-lbl">Disp. (24h)</div>
+            </div>
+            <div class="hm-health-card" style="${dhealth && dhealth.ok && dhealth.failed_24h > 0 ? 'border-color:rgba(255,184,0,0.2)' : ''}">
+              <div class="hm-health-val ${dhealth && dhealth.ok && dhealth.failed_24h > 0 ? '' : 'ok'}" style="${dhealth && dhealth.ok && dhealth.failed_24h > 0 ? 'color:var(--status-amber)' : ''}">
+                ${dhealth && dhealth.ok ? dhealth.failed_24h || 0 : '\u2014'}
+              </div>
+              <div class="hm-health-lbl">Disp. Failed</div>
+            </div>
             </div>
             <div class="hm-health-card">
               <div class="hm-health-val ok">${funnel.calls_today ?? 0}</div>
@@ -5556,16 +5618,206 @@ function HealthMonitor() {
 /* ── EMAIL TRACKING SECTION ───────────────────────────────────── */
 
 
+
+// ── DISPATCH HEALTH — circuit breaker, errors, throughput ──
+function DispatchHealth() {
+  const [data, setData] = useState(null);
+  const [err, setErr] = useState(null);
+
+  const reload = useCallback(async () => {
+    try {
+      const r = await apiFetch('/api/v1/dispatch/health').then(x => x.json());
+      setData(r);
+      setErr(null);
+    } catch (e) {
+      if (e.message !== 'Unauthorized') setErr(e.message);
+    }
+  }, []);
+
+  useEffect(() => {
+    reload();
+    const t = setInterval(reload, 30000);
+    return () => clearInterval(t);
+  }, [reload]);
+
+  if (err) return html`<div class="stub"><div class="stub-title">Could not load Dispatch Health</div><div class="stub-body">\${err}</div></div>`;
+  if (!data) return html`<div class="stub"><div class="stub-body">Loading dispatch health…</div></div>`;
+
+  const cb = data.circuit_breaker || {};
+  const isOpen = cb.is_open || cb.consecutive_failures > 0;
+  const failRate = data.dispatched_24h > 0 ? ((data.failed_24h || 0) / data.dispatched_24h * 100).toFixed(1) : '0.0';
+
+  return html`
+    <div>
+      <div class="section-h">
+        <div class="section-title">Dispatch <em>Health</em></div>
+        <div class="section-sub">Refreshes every 30s</div>
+      </div>
+
+      <div class="fee-stats" style="margin-bottom:24px">
+        <div class="fee-stat" style="\${isOpen ? 'border-color:rgba(255,68,68,0.35);background:rgba(255,68,68,0.04)' : 'border-color:rgba(68,229,184,0.2)'}">
+          <div class="fee-stat-label">Circuit Breaker</div>
+          <div class="fee-stat-value \${isOpen ? '' : 'teal'}" style="font-size:20px;\${isOpen ? 'color:var(--status-red)' : ''}">
+            \${isOpen ? '⚠ OPEN' : '✓ CLOSED'}
+          </div>
+          <div style="font-size:10px;color:var(--empire-fog);margin-top:6px">
+            \${cb.consecutive_failures ? cb.consecutive_failures + ' consecutive failures' : 'No recent failures'}
+          </div>
+          \${cb.import_error ? html`
+            <div style="margin-top:8px;padding:8px 10px;background:rgba(255,184,0,0.08);border:1px solid rgba(255,184,0,0.2);border-radius:4px;font-family:var(--font-mono);font-size:9px;color:var(--status-amber);line-height:1.4">
+              ⚠ Circuit state unavailable: \${cb.import_error}
+            </div>
+          ` : null}
+          \${cb.backoff_until ? html`
+            <div style="font-size:9px;color:var(--status-amber);margin-top:4px;font-family:var(--font-mono)">
+              Backoff until \${(cb.backoff_until || '').slice(0,19)}
+            </div>
+          ` : null}
+          \${cb.last_failure_at ? html`
+            <div style="font-size:9px;color:var(--empire-fog);margin-top:2px;font-family:var(--font-mono)">
+              Last failure: \${(cb.last_failure_at || '').slice(0,19)}
+            </div>
+          ` : null}
+        </div>
+        <div class="fee-stat">
+          <div class="fee-stat-label">Dispatched (24h)</div>
+          <div class="fee-stat-value teal">\${data.dispatched_24h || 0}</div>
+          <div class="fee-stat-label" style="margin-top:8px">Throughput</div>
+          <div style="font-size:11px;color:var(--empire-mist);font-family:var(--font-mono)">
+            \${data.dispatched_24h > 0 ? (data.dispatched_24h / 24).toFixed(1) + '/hr' : '—'}
+          </div>
+        </div>
+        <div class="fee-stat" style="\${(data.failed_24h || 0) > 0 ? 'border-color:rgba(255,184,0,0.2)' : ''}">
+          <div class="fee-stat-label">Failed (24h)</div>
+          <div class="fee-stat-value \${(data.failed_24h || 0) > 0 ? '' : 'dim'}" style="\${(data.failed_24h || 0) > 0 ? 'color:var(--status-amber)' : ''}">
+            \${data.failed_24h || 0}
+          </div>
+          <div class="fee-stat-label" style="margin-top:8px">Failure Rate</div>
+          <div style="font-size:11px;color:\${parseFloat(failRate) > 10 ? 'var(--status-red)' : parseFloat(failRate) > 0 ? 'var(--status-amber)' : 'var(--signal-teal)'};font-family:var(--font-mono)">
+            \${failRate}%
+          </div>
+        </div>
+        <div class="fee-stat">
+          <div class="fee-stat-label">Matcher</div>
+          \${data.matcher_stats ? html`
+            <div class="fee-stat-value dim" style="font-size:20px">\${data.matcher_stats.matches_computed || 0} runs</div>
+            <div style="font-size:9px;color:var(--empire-fog);margin-top:4px;font-family:var(--font-mono)">
+              \${data.matcher_stats.dispatches_sent || 0} sent · \${data.matcher_stats.dispatches_accepted || 0} accepted
+            </div>
+            <div style="font-size:9px;color:var(--empire-fog);font-family:var(--font-mono)">
+              Trust updates: \${data.matcher_stats.trust_updates || 0}
+            </div>
+          ` : html`<div class="fee-stat-value dim">—</div>`}
+        </div>
+      </div>
+
+      \${(data.recent_errors || []).length > 0 ? html`
+        <div class="panel" style="margin-bottom:24px;border-color:rgba(255,184,0,0.2)">
+          <div class="panel-head" style="display:flex;justify-content:space-between;align-items:center">
+            <span style="color:var(--status-amber)">⚠ Recent Dispatch Errors</span>
+            <span class="sec-meta" style="margin:0">\${data.recent_errors.length} errors in 24h</span>
+          </div>
+          \${data.recent_errors.map((e, i) => html`
+            <div style="padding:10px 0;border-bottom:1px solid var(--empire-divider);\${i === data.recent_errors.length - 1 ? 'border-bottom:none' : ''}">
+              <div style="display:flex;gap:12px;align-items:baseline;margin-bottom:4px">
+                <span style="font-family:var(--font-mono);font-size:9px;color:var(--empire-fog);flex-shrink:0">\${(e.at || '').slice(0,19)}</span>
+                <span style="font-family:var(--font-mono);font-size:10px;color:var(--status-amber);letter-spacing:.04em">FAILED</span>
+              </div>
+              <div style="font-family:var(--font-mono);font-size:10px;color:var(--empire-mist);word-break:break-word;line-height:1.5;padding-left:90px">
+                \${(e.body || '').slice(0,200)}
+              </div>
+            </div>
+          `)}
+        </div>
+      ` : html`
+        <div class="panel" style="margin-bottom:24px;border-color:rgba(68,229,184,0.1)">
+          <div class="panel-head">
+            <span style="color:var(--signal-teal)">✓ No recent dispatch errors</span>
+          </div>
+          <div style="padding:8px 0;font-family:var(--font-ui);font-size:11px;color:var(--empire-fog);font-style:italic">
+            All dispatches in the last 24 hours completed without errors.
+          </div>
+        </div>
+      `}
+
+      <div class="split">
+        <div class="panel">
+          <div class="panel-head">Matcher Score Breakdown</div>
+          \${data.matcher_stats ? html`
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+              <div style="text-align:center;padding:12px;background:var(--empire-elevated);border-radius:4px">
+                <div style="font-family:var(--font-mono);font-size:22px;color:var(--signal-teal)">\${data.matcher_stats.matches_computed || 0}</div>
+                <div style="font-family:var(--font-mono);font-size:9px;color:var(--empire-fog);margin-top:4px;letter-spacing:.08em;text-transform:uppercase">Matches Computed</div>
+              </div>
+              <div style="text-align:center;padding:12px;background:var(--empire-elevated);border-radius:4px">
+                <div style="font-family:var(--font-mono);font-size:22px;color:var(--strike-cyan)">\${data.matcher_stats.dispatches_sent || 0}</div>
+                <div style="font-family:var(--font-mono);font-size:9px;color:var(--empire-fog);margin-top:4px;letter-spacing:.08em;text-transform:uppercase">Dispatches Sent</div>
+              </div>
+              <div style="text-align:center;padding:12px;background:var(--empire-elevated);border-radius:4px">
+                <div style="font-family:var(--font-mono);font-size:22px;color:\${(data.matcher_stats.dispatches_accepted || 0) > 0 ? 'var(--signal-teal)' : 'var(--empire-mist)'}">\${data.matcher_stats.dispatches_accepted || 0}</div>
+                <div style="font-family:var(--font-mono);font-size:9px;color:var(--empire-fog);margin-top:4px;letter-spacing:.08em;text-transform:uppercase">Accepted</div>
+              </div>
+              <div style="text-align:center;padding:12px;background:var(--empire-elevated);border-radius:4px">
+                <div style="font-family:var(--font-mono);font-size:22px;color:var(--empire-mist)">\${data.matcher_stats.trust_updates || 0}</div>
+                <div style="font-family:var(--font-mono);font-size:9px;color:var(--empire-fog);margin-top:4px;letter-spacing:.08em;text-transform:uppercase">Trust Updates</div>
+              </div>
+            </div>
+          ` : html`<div class="chart-empty">No matcher data yet</div>`}
+        </div>
+        <div class="panel">
+          <div class="panel-head">Circuit Breaker Status</div>
+          <div style="padding:8px 0">
+            <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
+              <div style="width:14px;height:14px;border-radius:50%;background:\${isOpen ? 'var(--status-red)' : 'var(--signal-teal)'};box-shadow:0 0 10px \${isOpen ? 'rgba(255,68,68,0.5)' : 'rgba(68,229,184,0.5)'}"></div>
+              <div>
+                <div style="font-weight:500;font-size:14px;color:\${isOpen ? 'var(--status-red)' : 'var(--signal-teal)'}">
+                  \${isOpen ? 'Circuit Open' : 'Circuit Closed'}
+                </div>
+                <div style="font-size:10px;color:var(--empire-fog);font-family:var(--font-mono);margin-top:2px">
+                  \${isOpen ? 'Dispatch cron is paused' : 'Dispatch cron is running normally'}
+                </div>
+              </div>
+            </div>
+            <div style="font-family:var(--font-mono);font-size:10px;color:var(--empire-mist);line-height:1.7">
+              <div>Consecutive failures: <strong style="color:\${cb.consecutive_failures > 0 ? 'var(--status-red)' : 'var(--signal-teal)'}">\${cb.consecutive_failures || 0}</strong></div>
+              <div>Backoff level: <span style="color:var(--empire-silver)">\${cb.consecutive_failures > 0 ? Math.min(5 * Math.pow(2, cb.consecutive_failures - 1), 60) + ' min' : 'none'}</span></div>
+              <div>Last failure: <span style="color:var(--empire-fog)">\${cb.last_failure_at ? cb.last_failure_at.slice(0,19) : '—'}</span></div>
+              <div>Last reset: <span style="color:var(--empire-fog)">${cb.reset_at ? cb.reset_at.slice(0,19) : '—'}</span></div>
+              <div>Backoff until: <span style="color:var(--empire-fog)">\${cb.backoff_until ? cb.backoff_until.slice(0,19) : '—'}</span></div>
+            </div>
+          
+            </div>
+            <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--empire-divider)">
+              <button class="tbl-action danger" onclick="\${async () => { try { const r = await apiFetch('/api/v1/dispatch/reset-circuit', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ reason: 'Operator reset from SPA' }) }).then(x => x.json()); if (r.ok) { alert('Circuit breaker reset successfully.'); location.reload(); } else { alert('Reset failed: ' + (r.error || 'unknown')); } } catch(e) { alert('Reset request failed: ' + e.message); } }}" style="width:100%;padding:8px 14px;font-size:10px;cursor:pointer">
+                ↻ Reset Circuit Breaker
+              </button>
+              <div style="font-family:var(--font-mono);font-size:8px;color:var(--empire-fog);margin-top:6px;text-align:center">
+                Zeroes the failure counter and resumes dispatch cron
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
 // ── REPLY RATES DASHBOARD — YES reply % by niche, A/B, daily dispatch ──
 function ReplyRates() {
   const [data, setData] = useState(null);
   const [err, setErr] = useState(null);
   const [days, setDays] = useState(30);
 
+  const [health, setHealth] = useState(null);
+
   const reload = useCallback(async () => {
     try {
-      const r = await apiFetch('/api/v1/reply/rates?days=' + days).then(x => x.json());
+      const [r, h] = await Promise.all([
+        apiFetch('/api/v1/reply/rates?days=' + days).then(x => x.json()),
+        apiFetch('/api/v1/dispatch/health').then(x => x.json()).catch(() => ({ok: false})),
+      ]);
       setData(r);
+      if (h.ok) setHealth(h);
       setErr(null);
     } catch (e) {
       if (e.message !== 'Unauthorized') setErr(e.message);
@@ -10027,6 +10279,7 @@ function App() {
             active.id === 'pulse'       ? html`<${Pulse} events=${events} wsConnected=${liveConnected} />` :
             active.id === 'pipeline'    ? html`<${Pipeline} />` :
             active.id === 'dispatch'    ? html`<${Dispatch} />` :
+            active.id === 'dispatch-health' ? html`<${DispatchHealth} />` :
             active.id === 'inbound'     ? html`<${Inbound} />` :
             active.id === 'payouts'     ? html`<${Payouts} />` :
             active.id === 'dispatches'  ? html`<${Dispatches} />` :

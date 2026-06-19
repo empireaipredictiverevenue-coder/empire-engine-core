@@ -1,0 +1,13 @@
+/usr/local/lib/python3.10/dist-packages/requests/__init__.py:102: RequestsDependencyWarning: urllib3 (1.26.20) or chardet (7.4.3)/charset_normalizer (2.0.12) doesn't match a supported version!
+  warnings.warn("urllib3 ({}) or chardet ({})/charset_normalizer ({}) doesn't match a supported "
+Metrics server started on :8002
+[public_adjuster_async] https://www.angi.com/companylist/us/tx/dallas/public-adjusters.htm -> 403
+[restoration_async] https://www.angi.com/companylist/us/tx/dallas/water-damage-restoration.htm -> 403
+/usr/local/lib/python3.10/dist-packages/requests/__init__.py:102: RequestsDependencyWarning: urllib3 (1.26.20) or chardet (7.4.3)/charset_normalizer (2.0.12) doesn't match a supported version!
+  warnings.warn("urllib3 ({}) or chardet ({})/charset_normalizer ({}) doesn't match a supported "
+Metrics server started on :8002
+[public_adjuster_async] https://www.angi.com/companylist/us/tx/dallas/public-adjusters.htm -> 403
+[restoration_async] https://www.angi.com/companylist/us/tx/dallas/water-damage-restoration.htm -> 403
+/usr/local/lib/python3.10/dist-packages/requests/__init__.py:102: RequestsDependencyWarning: urllib3 (1.26.20) or chardet (7.4.3)/charset_normalizer (2.0.12) doesn't match a supported version!
+  warnings.warn("urllib3 ({}) or chardet ({})/charset_normalizer ({}) doesn't match a supported "
+Metrics server started on :8002

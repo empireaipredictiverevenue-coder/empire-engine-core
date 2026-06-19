@@ -43,7 +43,6 @@ sys.path.insert(0, "/root/empire-v49")
 # Lazy imports for research + content + backlinks agents (avoid circular imports at module level)
 _research_agent = None
 _content_agent = None
-_backlinks_agent = None
 
 
 def _get_research_agent():
@@ -60,15 +59,6 @@ def _get_content_agent():
         from bots.content_agent import get_content_agent
         _content_agent = get_content_agent()
     return _content_agent
-
-
-def _get_backlinks_agent():
-    """Lazy import for BacklinksAgent to avoid circular imports."""
-    global _backlinks_agent
-    if _backlinks_agent is None:
-        from bots.backlinks_agent import get_backlinks_agent
-        _backlinks_agent = get_backlinks_agent()
-    return _backlinks_agent
 
 try:
     from dotenv import load_dotenv
@@ -147,6 +137,16 @@ NICHE_KEYWORDS = {
 from bots._llm import llm_json as _llm_json
 
 
+# ── NO-OP BACKLINKS STUB ────────────────────────────────────────────
+# bots/backlinks_agent.py was removed 2026-06-19.
+# This stub prevents the SEO agent from crashing when the _b property
+# is accessed. All backlinks data continues to live in seo_backlinks
+# table and is queried directly by performance_snapshot().
+class _NoOpBacklinks:
+    async def link_authority_report(self) -> dict:
+        return {"link_authority_score": 0.4}
+
+
 # ── SEO AGENT ────────────────────────────────────────────────────────
 class SEOAgent:
     """
@@ -174,7 +174,7 @@ class SEOAgent:
         self._last_evolution: Optional[str] = None
         self._research = None  # lazy ResearchAgent
         self._content = None   # lazy ContentAgent
-        self._backlinks = None # lazy BacklinksAgent
+        self._backlinks = _NoOpBacklinks()  # stub (backlinks_agent.py removed 2026-06-19)
 
     @property
     def _r(self):
@@ -190,9 +190,7 @@ class SEOAgent:
 
     @property
     def _b(self):
-        """Lazy-loaded BacklinksAgent for link_authority signals."""
-        if self._backlinks is None:
-            self._backlinks = _get_backlinks_agent()
+        """BacklinksAgent was removed 2026-06-19. Returns cached no-op stub."""
         return self._backlinks
 
     # ── AUDIT WEBSITE ────────────────────────────────────────────────
@@ -472,19 +470,13 @@ Write a webpage section optimized for the target keyword. Return ONLY JSON:
         self.genome["technical_rigor"] = self._clamp(
             self.genome["technical_rigor"] + (tech_signal - 0.5) * mutation_rate
         )
-        # link_authority: query BacklinksAgent for real backlink health signal
+        # link_authority: use small exploratory drift (backlinks agent parked)
         try:
-            la_report = await self._b.link_authority_report()
-            la_score = la_report.get("link_authority_score", 0.4)
-            # Blend current genome with backlinks signal (60% real data, 40% current)
-            self.genome["link_authority"] = self._clamp(
-                self.genome["link_authority"] * 0.4 + la_score * 0.6
-            )
-        except Exception:
-            # Fall back to small exploratory drift if backlinks agent unavailable
             self.genome["link_authority"] = self._clamp(
                 self.genome["link_authority"] + random.uniform(-0.03, 0.03)
             )
+        except Exception:
+            pass
 
         self._evolution_runs += 1
         self._last_evolution = datetime.now(timezone.utc).isoformat()

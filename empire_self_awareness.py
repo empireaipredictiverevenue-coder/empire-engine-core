@@ -56,7 +56,6 @@ _SYSTEM_DEPENDENCIES = {
     "swarm_worker": ["hub", "storm_predictor"],
     "brain_memory": [],
     "dream_loop": ["hub", "brain_memory"],
-    "backlinks_agent": ["hub"],
     "brain_learning": ["hub", "brain_memory"],
 }
 
@@ -78,7 +77,6 @@ _AGENT_CAPABILITIES = {
     "swarm_worker": "Parallel ad generation, video assembly",
     "brain_memory": "Past decisions, embedding search, few-shot learning",
     "dream_loop": "Brain memory, autonomous decisions",
-    "backlinks_agent": "Backlink monitoring, broken detection",
     "brain_learning": "Threshold auto-tuning from outcomes",
 }
 

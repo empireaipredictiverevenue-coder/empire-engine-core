@@ -340,22 +340,7 @@ ROLE_DEFINITIONS: Dict[str, Dict] = {
         "source_module": "bots/predictive_revenue.py",
         "expected_interval_minutes": 120,
         "is_core": True,
-    },
-    "backlinks_specialist": {
-        "display_name": "Backlinks Specialist",
-        "description": "Backlinks monitoring, broken link detection, opportunity intelligence, link authority scoring",
-        "parent_role": "traffic_director",
-        "priority": 4,
-        "capabilities": [
-            "analyze_backlinks", "track_rankings", "audit_onpage",
-            "broken_link_detection", "opportunity_intel", "link_authority",
-        ],
-        "task_types": ["seo.audit", "seo.optimize", "seo.report"],
-        "source_module": "bots/backlinks_agent.py",
-        "expected_interval_minutes": 360,
-        "is_core": False,
-    },
-    "b2b_lead_scraper": {
+    },    "b2b_lead_scraper": {
         "display_name": "B2B Lead Scraper",
         "description": "Scrapes B2B leads from web directories",
         "parent_role": "cron_controller",

@@ -316,6 +316,17 @@ class ContractorMatcher:
         sms_sent = 0
         email_errors: list[str] = []
 
+        # ── SMS router: create once, reuse across all contractors ──
+        from empire_voice import VoiceRouter
+        _sms_router = VoiceRouter(
+            vonage_api_key=os.environ.get("VONAGE_API_KEY", ""),
+            vonage_api_secret=os.environ.get("VONAGE_API_SECRET", ""),
+            vonage_app_id=os.environ.get("VONAGE_APPLICATION_ID", ""),
+            vonage_private_key_path=os.environ.get("VONAGE_PRIVATE_KEY_PATH", ""),
+            vonage_number=os.environ.get("VONAGE_NUMBER", ""),
+            public_base_url=os.environ.get("PUBLIC_BASE_URL", ""),
+        )
+
         for entry in matched:
             contractor = entry["contractor"]
             score      = entry["score"]
@@ -393,15 +404,6 @@ class ContractorMatcher:
             # The accept-link is the same magic link sent via email.
             try:
                 if contractor.get("phone"):
-                    from empire_voice import VoiceRouter
-                    _sms_router = VoiceRouter(
-                        vonage_api_key=os.environ.get("VONAGE_API_KEY", ""),
-                        vonage_api_secret=os.environ.get("VONAGE_API_SECRET", ""),
-                        vonage_app_id=os.environ.get("VONAGE_APPLICATION_ID", ""),
-                        vonage_private_key_path=os.environ.get("VONAGE_PRIVATE_KEY_PATH", ""),
-                        vonage_number=os.environ.get("VONAGE_NUMBER", ""),
-                        public_base_url=os.environ.get("PUBLIC_BASE_URL", ""),
-                    )
                     sms_body = (
                         f"⚡ Empire AI · New lead in {lead.get('city', 'your area')}: "
                         f"{lead.get('address', 'a property')} · "
@@ -446,8 +448,8 @@ class ContractorMatcher:
                 db.table("contractors").update({
                     "last_dispatched_at": now,
                 }).eq("id", entry["contractor"]["id"]).execute()
-        except Exception:
-            pass
+        except Exception as e:
+            log.debug(f"[matching] update last_dispatched_at failed: {e}")
 
         self.stats["dispatches_sent"] += db_dispatched
 
@@ -624,7 +626,8 @@ class ContractorMatcher:
             res = db.table("metro_adjacency").select("adjacent_to") \
                 .eq("metro", metro).execute()
             return {r["adjacent_to"] for r in (res.data or [])}
-        except Exception:
+        except Exception as e:
+            log.debug(f"[matching] load_adjacency failed: {e}")
             return set()
 
     async def _load_active_dispatch_counts(self, contractor_ids: list[str]) -> dict:
@@ -987,8 +990,8 @@ def register_matching_routes(
                     subject=f"Empire AI · Dispatch confirmed · {lead.get('address', 'lead')}",
                     html=confirm_html,
                 )
-            except Exception:
-                pass
+            except Exception as e:
+                log.debug(f"[matching] accept email failed: {e}")
 
             # Push to operator dashboard
             if broadcaster:
