@@ -1462,6 +1462,143 @@ async def outreach_template_stats(auth: bool = Depends(require_auth)):
         "total_outreach": sum(v["total"] for v in result_variants),
     }
 
+# ── Billing Summary — call_logs stats for SPA billing tab ──
+@app.get("/api/v1/billing/summary")
+async def billing_summary(auth: bool = Depends(require_auth)):
+    """Return billing summary from call_logs for the SPA billing tab.
+
+    Returns schema matches SPA expectations:
+      - calls_today, revenue_today, revenue_week, revenue_month (cards)
+      - by_source: [{source, calls, net_payout, fees, qualified}]
+      - top_calls: [{buyer_name, niche, duration, net_payout, fee}]
+      - buyers: [{id, name, niche, state, payout, fee_rate, calls, billable, fees}]
+    """
+    db = get_db()
+    now = datetime.now(timezone.utc)
+    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    week_start = (today_start - timedelta(days=now.weekday())).replace(hour=0, minute=0, second=0, microsecond=0)
+    month_start = today_start.replace(day=1)
+
+    result = {
+        "calls_today": 0, "revenue_today": 0.0,
+        "revenue_week": 0.0, "revenue_month": 0.0,
+        "by_source": [], "top_calls": [], "buyers": [],
+    }
+
+    try:
+        r = db.table("call_logs").select(
+            "status,is_billable,fee_earned,payout_value,buyer_id,niche,source,duration,created_at"
+        ).execute()
+        rows = r.data or []
+
+        today_rows = []
+        week_rows = []
+        month_rows = []
+
+        for row in rows:
+            created = row.get("created_at") or ""
+            if created >= today_start.isoformat():
+                today_rows.append(row)
+            if created >= week_start.isoformat():
+                week_rows.append(row)
+            if created >= month_start.isoformat():
+                month_rows.append(row)
+
+        # ── Summary cards ──
+        calls_today = len(today_rows)
+        revenue_today = sum(float(row.get("fee_earned") or 0) for row in today_rows)
+        revenue_week = sum(float(row.get("fee_earned") or 0) for row in week_rows)
+        revenue_month = sum(float(row.get("fee_earned") or 0) for row in month_rows)
+
+        # ── By source (using today's rows) ──
+        source_counts: dict = {}
+        for row in today_rows:
+            s = row.get("source") or "unknown"
+            if s not in source_counts:
+                source_counts[s] = {"source": s, "calls": 0, "net_payout": 0.0, "fees": 0.0, "qualified": 0}
+            source_counts[s]["calls"] += 1
+            source_counts[s]["net_payout"] += float(row.get("payout_value") or 0)
+            source_counts[s]["fees"] += float(row.get("fee_earned") or 0)
+            source_counts[s]["qualified"] += 1 if row.get("is_billable") is True else 0
+
+        for v in source_counts.values():
+            v["net_payout"] = round(v["net_payout"], 2)
+            v["fees"] = round(v["fees"], 2)
+
+        # ── Top calls by payout (across all rows) ──
+        all_rows_sorted = sorted(
+            rows,
+            key=lambda r: float(r.get("payout_value") or r.get("fee_earned") or 0),
+            reverse=True,
+        )[:10]
+        top_calls = []
+        top_buyer_ids = set()
+        for row in all_rows_sorted:
+            bid = row.get("buyer_id")
+            if bid:
+                top_buyer_ids.add(bid)
+        # Fetch buyer names for top calls
+        buyer_name_map: dict = {}
+        if top_buyer_ids:
+            try:
+                br = db.table("buyers").select("id,name").in_("id", list(top_buyer_ids)).execute()
+                for b in (br.data or []):
+                    buyer_name_map[b["id"]] = b.get("name", "?")
+            except Exception:
+                pass
+        for row in all_rows_sorted:
+            bid = row.get("buyer_id")
+            top_calls.append({
+                "buyer_name": buyer_name_map.get(bid, row.get("source") or "?"),
+                "niche": row.get("niche") or "-",
+                "duration": row.get("duration") or 0,
+                "net_payout": round(float(row.get("payout_value") or 0), 2),
+                "fee": round(float(row.get("fee_earned") or 0), 2),
+            })
+
+        # ── Buyers ──
+        buyer_ids = set()
+        for row in rows:
+            bid = row.get("buyer_id")
+            if bid:
+                buyer_ids.add(bid)
+
+        buyers = []
+        if buyer_ids:
+            try:
+                br = db.table("buyers").select("id,name,niche,state,payout_value,fee_rate").in_("id", list(buyer_ids)).execute()
+                for b in (br.data or []):
+                    bid = b["id"]
+                    buyer_rows = [row for row in today_rows if row.get("buyer_id") == bid]
+                    buyers.append({
+                        "id": bid,
+                        "name": b.get("name", "?"),
+                        "niche": b.get("niche", ""),
+                        "state": b.get("state", ""),
+                        "payout": float(b.get("payout_value") or 0),
+                        "fee_rate": float(b.get("fee_rate") or 0),
+                        "calls": len(buyer_rows),
+                        "billable": sum(1 for row in buyer_rows if row.get("is_billable") is True),
+                        "fees": round(sum(float(row.get("fee_earned") or 0) for row in buyer_rows), 2),
+                    })
+            except Exception as e:
+                log.debug(f"[billing] buyers query failed: {e}")
+
+        result.update({
+            "calls_today": calls_today,
+            "revenue_today": round(revenue_today, 2),
+            "revenue_week": round(revenue_week, 2),
+            "revenue_month": round(revenue_month, 2),
+            "by_source": sorted(source_counts.values(), key=lambda x: x["calls"], reverse=True),
+            "top_calls": top_calls,
+            "buyers": sorted(buyers, key=lambda x: x["calls"], reverse=True),
+        })
+    except Exception as e:
+        log.warning(f"[billing] summary query failed: {e}")
+
+    return JSONResponse(result)
+
+
 # ── Traffic Specialist — autonomous traffic orchestration ─────────
 register_traffic_specialist_routes(app, require_auth=require_auth)
 

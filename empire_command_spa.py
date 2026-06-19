@@ -1604,6 +1604,62 @@ font-size:7px!important;color:#999!important;margin-top:2px!important
 .et-seq-type.b2b { color: var(--strike-cyan); }
 .et-seq-type.storm { color: var(--signal-teal); }
 .et-empty { font-family: var(--font-ui); font-size: 11px; color: var(--empire-fog); font-style: italic; padding: 32px 0; text-align: center; }
+
+/* ── BILLING DASHBOARD ──────────────────────────────────────────── */
+.bill-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:20px}
+.bill-card{background:var(--empire-surface);border:1px solid var(--empire-border);padding:18px 20px;position:relative;overflow:hidden;transition:border-color .2s var(--ease-snap)}
+.bill-card:hover{border-color:var(--empire-border-hi)}
+.bill-card::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,var(--signal-teal-soft),transparent)}
+.bill-card-label{font-family:var(--font-mono);font-size:9px;color:var(--empire-mist);letter-spacing:.18em;text-transform:uppercase;margin-bottom:10px}
+.bill-card-val{font-family:var(--font-display);font-weight:200;font-size:32px;color:var(--empire-white);line-height:1}
+.bill-card-val.teal{color:var(--signal-teal)}
+.bill-card-val.cyan{color:var(--strike-cyan)}
+.bill-card-val.gold{color:#FFD700}
+.bill-card-val.dim{color:var(--empire-mist)}
+.bill-card-meta{font-family:var(--font-mono);font-size:9px;color:var(--empire-fog);margin-top:6px}
+.bill-split{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px}
+.bill-panel{background:var(--empire-surface);border:1px solid var(--empire-border);padding:18px}
+.bill-panel-h{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid var(--empire-divider)}
+.bill-panel-title{font-weight:500;font-size:13px;letter-spacing:.02em}
+.bill-panel-count{font-family:var(--font-mono);font-size:10px;color:var(--signal-teal)}
+.bill-bar-row{display:grid;grid-template-columns:1fr 80px 60px 60px;gap:10px;align-items:center;padding:8px 0;border-bottom:1px solid var(--empire-divider);font-family:var(--font-mono);font-size:10px}
+.bill-bar-row:last-child{border-bottom:none}
+.bill-bar-name{color:var(--empire-white);font-weight:500;font-size:11px}
+.bill-bar-num{color:var(--signal-teal);text-align:right}
+.bill-bar-num.dim{color:var(--empire-mist)}
+.bill-bar-num.gold{color:#FFD700}
+.bill-buyer-card{background:var(--empire-elevated);border:1px solid var(--empire-divider);padding:12px 14px;margin-bottom:8px;transition:border-color .15s var(--ease-snap)}
+.bill-buyer-card:hover{border-color:var(--empire-border-hi)}
+.bill-buyer-row{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
+.bill-buyer-name{font-size:12px;color:var(--empire-white);font-weight:500}
+.bill-buyer-meta{font-family:var(--font-mono);font-size:9px;color:var(--empire-fog);letter-spacing:.04em;margin-top:2px}
+.bill-buyer-stats{display:flex;gap:10px;font-family:var(--font-mono);font-size:9px;color:var(--empire-mist)}
+.bill-buyer-stats strong{color:var(--signal-teal);font-weight:600}
+.bill-empty{font-family:var(--font-ui);font-size:11px;color:var(--empire-fog);font-style:italic;padding:24px 0;text-align:center}
+
+/* ├─ BILLING DASHBOARD ───────────────────────────────────────── */
+.bill-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:20px}
+.bill-card{background:var(--empire-surface);border:1px solid var(--empire-border);padding:18px 20px;position:relative;overflow:hidden;transition:border-color .2s var(--ease-snap)}
+.bill-card:hover{border-color:var(--empire-border-hi)}
+.bill-card::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,var(--signal-teal-soft),transparent)}
+.bill-card-label{font-family:var(--font-mono);font-size:9px;color:var(--empire-mist);letter-spacing:.12em;text-transform:uppercase;margin-bottom:6px}
+.bill-card-value{font-size:28px;font-weight:500;letter-spacing:-.02em}
+.bill-card-value.dollar::before{content:'$';font-size:16px;opacity:.6;margin-right:2px}
+.bill-card-value.teal{color:var(--signal-teal)}
+.bill-card-value.gold{color:var(--signal-gold)}
+.bill-card-value.green{color:var(--signal-green)}
+.bill-card-value.red{color:var(--signal-red)}
+.bill-card .delta{font-size:11px;margin-left:6px;font-family:var(--font-mono)}
+.bill-card .delta.up{color:var(--signal-green)}
+.bill-card .delta.down{color:var(--signal-red)}
+.bill-section-title{font-family:var(--font-mono);font-size:10px;color:var(--empire-mist);letter-spacing:.14em;text-transform:uppercase;margin:28px 0 14px;padding-bottom:8px;border-bottom:1px solid var(--empire-border)}
+.bill-table{width:100%;border-collapse:collapse;font-size:12px;margin-bottom:20px}
+.bill-table th{font-family:var(--font-mono);font-size:9px;color:var(--empire-mist);letter-spacing:.12em;text-transform:uppercase;text-align:left;padding:8px 10px;border-bottom:1px solid var(--empire-border)}
+.bill-table td{padding:8px 10px;border-bottom:1px solid var(--empire-divider);color:var(--empire-white)}
+.bill-table tr:hover td{background:rgba(255,255,255,.02)}
+.bill-table .num{font-family:var(--font-mono);text-align:right}
+.bill-loading{text-align:center;padding:60px 20px;color:var(--empire-mist);font-family:var(--font-mono);font-size:11px}
+.bill-error{text-align:center;padding:40px 20px;color:var(--signal-red);font-family:var(--font-mono);font-size:11px}
 """
 
 _SPA_JS = r"""
@@ -1951,6 +2007,20 @@ function PainPoints() {
     const iv = setInterval(load, 30000);
     return () => { stop = true; clearInterval(iv); };
   }, []);
+
+  // ── Billing summary fetch ──
+  useEffect(() => {
+    let stop = false;
+    const load = () => {
+      apiFetch('/api/v1/billing/summary').then(r => r.json())
+        .then(d => { if (!stop) { setBillingData(d); setBillingErr(null); } })
+        .catch(e => { if (!stop) setBillingErr(String(e)); });
+    };
+    load();
+    const iv = setInterval(load, 60000);
+    return () => { stop = true; clearInterval(iv); };
+  }, []);
+
   if (err) return html`<div class="stub"><div class="stub-title">Could not load Pain Points</div><div class="stub-body">${err}</div></div>`;
   if (!data) return html`<div class="stub"><div class="stub-title">Loading <em>Pain Points</em></div><div class="stub-body">Fetching pain point profiles...</div></div>`;
 
@@ -9315,13 +9385,29 @@ function PsychologyDashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [activeTab, setActiveTab] = useState('mindmap');
+  const [billData, setBillData] = useState(null);
   const [detectText, setDetectText] = useState('');
-  const [detectResult, setDetectResult] = useState(null);
+  
+  const [billingData, setBillingData] = useState(null);
+  const [billingErr, setBillingErr] = useState(null);const [detectResult, setDetectResult] = useState(null);
 
   useEffect(() => {
     apiFetch('/api/psychology/snapshot')
       .then(d => { setData(d); setLoading(false); })
       .catch(e => { setError(e.message); setLoading(false); });
+  }, []);
+
+  // Fetch billing summary
+  useEffect(() => {
+    let stop = false;
+    const load = () => {
+      apiFetch('/api/v1/billing/summary').then(r => r.json())
+        .then(d => { if (!stop) setBillData(d); })
+        .catch(e => { if (!stop) console.error('billing:', e); });
+    };
+    load();
+    const t = setInterval(load, 30000);
+    return () => { stop = true; clearInterval(t); };
   }, []);
 
   if (loading) return html`<div class="body"><div class="psy-loading">Loading psychology data...</div></div>`;
@@ -9361,6 +9447,8 @@ function PsychologyDashboard() {
         <button class="pulse-tab ${activeTab === 'principles' ? 'active' : ''}" onClick=${() => setActiveTab('principles')}>Principles</button>
         <button class="pulse-tab ${activeTab === 'detect' ? 'active' : ''}" onClick=${() => setActiveTab('detect')}>Detect</button>
         <button class="pulse-tab ${activeTab === 'niches' ? 'active' : ''}" onClick=${() => setActiveTab('niches')}>Niche Profiles</button>
+        <button class="pulse-tab ${activeTab === 'billing' ? 'active' : ''}" onClick=${() => setActiveTab('billing')}>Billing</button>
+        <button class="pulse-tab ${activeTab === 'billing' ? 'active' : ''}" onClick=${() => setActiveTab('billing')}>Billing</button>
       </div>
 
       ${activeTab === 'mindmap' && html`
@@ -9448,7 +9536,37 @@ function PsychologyDashboard() {
             </div>
           `)}
         </div>
-        ${nicheNodes.length === 0 && html`<div class="stub-body">No niche profiles.</div>`}
+        ${nicheNodes.length === 0 && html`<div class="stub-body">No niche profiles.</div>
+
+      ${activeTab === 'billing' && html`
+        <div class="psy-summary-grid">
+          <div class="stat-card"><div class="stat-label">Today's Calls</div><div class="stat-value teal">${billingData?.calls_today ?? 0}</div></div>
+          <div class="stat-card"><div class="stat-label">Today's Revenue</div><div class="stat-value dollar teal">${(billingData?.revenue_today ?? 0).toFixed(2)}</div></div>
+          <div class="stat-card"><div class="stat-label">Week Revenue</div><div class="stat-value dollar gold">${(billingData?.revenue_week ?? 0).toFixed(2)}</div></div>
+          <div class="stat-card"><div class="stat-label">Month Revenue</div><div class="stat-value dollar green">${(billingData?.revenue_month ?? 0).toFixed(2)}</div></div>
+        </div>
+
+        <div class="bill-section-title">Call Breakdown by Source</div>
+        <table class="bill-table">
+          <thead><tr><th>Source</th><th>Calls</th><th class="num">Net Payout</th><th class="num">Fees</th><th class="num">Qualified</th></tr></thead>
+          <tbody>
+            ${billingData?.by_source?.length > 0 ? billingData.by_source.map(s => html`
+              <tr><td>${s.source}</td><td>${s.calls}</td><td class="num">$${s.net_payout.toFixed(2)}</td><td class="num">$${s.fees.toFixed(2)}</td><td class="num">${s.qualified}</td></tr>
+            `).join('') : '<tr><td colspan="5" style="color:var(--empire-mist);text-align:center;padding:20px">No calls today</td></tr>'}
+          </tbody>
+        </table>
+
+        <div class="bill-section-title">Top Calls by Payout</div>
+        <table class="bill-table">
+          <thead><tr><th>Buyer</th><th>Niche</th><th class="num">Duration</th><th class="num">Net Payout</th><th class="num">Fee</th></tr></thead>
+          <tbody>
+            ${billingData?.top_calls?.length > 0 ? billingData.top_calls.map(c => html`
+              <tr><td>${c.buyer_name || c.source}</td><td>${c.niche || '-'}</td><td class="num">${c.duration || 0}s</td><td class="num">$${(c.net_payout || 0).toFixed(2)}</td><td class="num">$${(c.fee || 0).toFixed(2)}</td></tr>
+            `).join('') : '<tr><td colspan="5" style="color:var(--empire-mist);text-align:center;padding:20px">No calls today</td></tr>'}
+          </tbody>
+        </table>
+      `}
+`}
       `}
     </div>
   `;
