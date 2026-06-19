@@ -1130,16 +1130,30 @@ def register_voice_routes(
           5. Invalidate the switchboard's buyers cache
         """
         if duration < _BILLABLE_SECONDS:
+            log.info(
+                f"[voice] billing skipped: {call_uuid[:8]}... "
+                f"duration={duration}s < {_BILLABLE_SECONDS}s threshold"
+            )
             return
         if not get_db:
+            log.warning(f"[voice] billing skipped: {call_uuid[:8]}... no get_db")
             return
         try:
             db = get_db()
+
+            log.info(
+                f"[voice] billing: processing {call_uuid[:8]}... "
+                f"duration={duration}s ≥ {_BILLABLE_SECONDS}s threshold"
+            )
 
             # 1. Find the call_logs record (created by switchboard at route time)
             cl_res = db.table("call_logs").select("id,buyer_id,payout_value,niche,status") \
                 .eq("vonage_call_id", call_uuid).limit(1).execute()
             if not cl_res.data:
+                log.info(
+                    f"[voice] billing: no call_logs record for {call_uuid[:8]}... "
+                    f"(call not routed through switchboard)"
+                )
                 return  # no routing record for this call_uuid
             cl = cl_res.data[0]
             buyer_id = cl.get("buyer_id")
