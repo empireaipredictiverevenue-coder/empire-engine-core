@@ -232,6 +232,23 @@ async def dynamic_config(
     # ── Generate config ──────────────────────────────────────────────
     if optimize and _HAS_ROUTER and (snipes_24h + failures_24h) > 0:
         config = await _optimize_with_llm(stats)
+
+        # ── Blend AutoHedge genome risk management ──
+        try:
+            from bots.autohedge_genome import get_autohedge_genome
+            ah = get_autohedge_genome()
+            ah_config = ah.optimize_sniper_config(stats)
+            # Blend: LLM config takes priority, AutoHedge fills gaps
+            blended = False
+            for key, val in ah_config.items():
+                if key not in config or config[key] == DEFAULT_CONFIG.get(key):
+                    config[key] = val
+                    blended = True
+            if blended:
+                config["generated_by"] = "agi+autohedge"
+                config["reasoning"] = (config.get("reasoning", "") + " | AutoHedge risk-adjusted")[:300]
+        except Exception as e:
+            log.warning(f"[sniper-brain] AutoHedge blend failed: {e}")
     else:
         config = dict(DEFAULT_CONFIG)
         config["generated_at"] = datetime.now(timezone.utc).isoformat()

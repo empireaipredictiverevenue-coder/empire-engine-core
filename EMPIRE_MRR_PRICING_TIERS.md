@@ -1,41 +1,33 @@
 # Empire AI — MRR & One-Time Pricing Tiers (2026)
 
-## Tier Structure
+## Standard Pricing Tiers (Baseline)
 
-### Tier 1 — Core (Starter)
-- **One-time setup**: $4,997 – $9,997
-- **Monthly MRR**: $997 – $2,997
-- Products: LeadScore, Inbound Router, Basic Command Centre
+| Tier          | One-time Setup    | Monthly MRR       | Target |
+|---------------|-------------------|-------------------|--------|
+| **Core**      | $4,997 – $9,997   | $997 – $2,997     | Small businesses |
+| **Growth**    | $14,997 – $24,997 | $3,997 – $7,997   | Growing companies |
+| **Professional** | $29,997 – $49,997 | $9,997 – $19,997 | Established businesses |
+| **Executive** | $74,997 – $149,997| $24,997 – $49,997 | Larger companies |
+| **Enterprise**| $199,997+         | $64,997 – $149,997+| National / Multi-location |
 
-### Tier 2 — Growth
-- **One-time setup**: $14,997 – $24,997
-- **Monthly MRR**: $3,997 – $7,997
-- Products: Strike, Data Vault, Media Engine, Workflow Automation
+## Flexible Enterprise Pricing (Bigger Budgets)
 
-### Tier 3 — Professional (Most Popular)
-- **One-time setup**: $29,997 – $49,997
-- **Monthly MRR**: $9,997 – $19,997
-- Products: Hexstrike, AI Closer, Predictive Revenue Dashboard, AI Visibility Engine
+Added alongside the standard tiers for clients who can pay more:
 
-### Tier 4 — Executive ($25k+ MRR)
-- **One-time setup**: $74,997 – $149,997
-- **Monthly MRR**: $24,997 – $49,997
-- Products: Compliant, Contractor Exchange, National Contractor Exchange, National Lead Marketplace
+- **One-time Setup**: $150k – $500k+
+- **Monthly MRR**: $50k – $200k+
+- **Alternative Models**:
+  - Revenue share (10–20%)
+  - Performance-based bonuses
+  - Multi-year deals with custom terms
 
-### Tier 5 — Enterprise / National
-- **One-time setup**: $199,997+
-- **Monthly MRR**: $64,997 – $149,997+
-- Products: National Expansion, International Expansion, Enterprise Genome, Government Genome, M&A Integration
-
-### Tier 6 — White Label / Franchise
-- **One-time setup**: Custom ($250k+)
-- **Monthly MRR**: Revenue share + platform fee ($25k–$75k+)
-- Products: White Label Platform, Franchise Genome, Channel Partner Genome
+**When to use Flexible Enterprise Pricing:**
+- National or multi-location businesses
+- Insurance companies
+- Large property management groups
+- Healthcare systems
+- Government contracts
+- White Label / Franchise partners
 
 ---
-
-**Notes**
-- All tiers include full Empire Product Genome treatment
-- Higher tiers include dedicated Striker fleet resources + priority AGI optimization
-- One-time fees cover initial genome deployment + integration
-- MRR includes ongoing autonomy, updates, and support
+**Note**: All products include the full Predictive Revenue Fleet treatment.

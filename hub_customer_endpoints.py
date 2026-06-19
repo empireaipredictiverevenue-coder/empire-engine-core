@@ -34,3 +34,23 @@ async def receive_customer_event(
 @router.get("/health")
 async def customer_health():
     return {"status": "ok", "service": "customer-api"}
+# === Enhanced Hub + Customer Container Wiring ===
+@router.post("/command")
+async def send_command_to_customer(request: Request):
+    """Send commands from hub to customer containers"""
+    data = await request.json()
+    # TODO: Forward command to specific container
+    log.info(f"[Hub] Sending command to customer: {data}")
+    return {"status": "command_sent"}
+# === Bidirectional Hub ↔ Customer Container Wiring ===
+@router.post("/report")
+async def customer_report(request: Request):
+    """Receive detailed reports from customer containers"""
+    data = await request.json()
+    log.info(f"[Hub] Detailed report received: {data.get(type)}")
+    return {"status": "report_received"}
+
+@router.get("/config/{container_id}")
+async def get_customer_config(container_id: str):
+    """Send configuration updates to customer containers"""
+    return {"config": {"update_interval": 3600, "enabled": True}}

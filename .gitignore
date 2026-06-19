@@ -66,3 +66,6 @@ integrations/autoresearch/.venv/
 integrations/autoresearch/results.tsv
 integrations/autoresearch/__pycache__/
 solana-meme-sniper/target/
+
+# Third-party integrations (cloned repos — never commit)
+integrations/

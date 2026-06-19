@@ -53,3 +53,9 @@ def main():
 
 if __name__ == "__main__":
     main()
+# Support for camofox-based scraper
+if product == "predictive_camofox_scraper":
+    import asyncio
+    from bots.predictive_camofox_scraper import PredictiveCamofoxScraper
+    scraper = PredictiveCamofoxScraper()
+    asyncio.run(scraper.run_continuously())
