@@ -1652,6 +1652,26 @@ font-size:7px!important;color:#999!important;margin-top:2px!important
 .bill-card .delta{font-size:11px;margin-left:6px;font-family:var(--font-mono)}
 .bill-card .delta.up{color:var(--signal-green)}
 .bill-card .delta.down{color:var(--signal-red)}
+
+/* ── BILLING CHART ────────────────────────────────────────────── */
+.bill-chart-wrap{background:var(--empire-surface);border:1px solid var(--empire-border);padding:20px;margin:20px 0;position:relative}
+.bill-chart-wrap::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,var(--signal-teal-soft),transparent)}
+.bill-chart-h{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:16px;padding-bottom:10px;border-bottom:1px solid var(--empire-divider)}
+.bill-chart-title{font-family:var(--font-mono);font-size:10px;color:var(--empire-mist);letter-spacing:.14em;text-transform:uppercase}
+.bill-chart-tag{font-family:var(--font-mono);font-size:9px;color:var(--empire-fog)}
+.bill-chart{display:flex;align-items:flex-end;gap:3px;height:140px;padding:8px 0 0;overflow-x:auto}
+.bill-chart-bar-wrap{display:flex;flex-direction:column;align-items:center;flex-shrink:0;min-width:28px}
+.bill-chart-bar{width:18px;border-radius:2px 2px 0 0;min-height:2px;transition:height .4s var(--ease-snap),background .2s;cursor:pointer;position:relative}
+.bill-chart-bar:hover{opacity:.8}
+.bill-chart-bar.rev{background:var(--signal-teal)}
+.bill-chart-bar.calls{background:var(--strike-cyan);opacity:.5}
+.bill-chart-bar-label{font-family:var(--font-mono);font-size:7px;color:var(--empire-fog);margin-top:4px;white-space:nowrap}
+.bill-chart-tooltip{position:absolute;bottom:100%;left:50%;transform:translateX(-50%);background:#000;color:var(--empire-white);padding:4px 8px;font-family:var(--font-mono);font-size:9px;border-radius:3px;white-space:nowrap;pointer-events:none;opacity:0;transition:opacity .15s;z-index:10;margin-bottom:4px}
+.bill-chart-bar-wrap:hover .bill-chart-tooltip{opacity:1}
+.bill-chart-empty{text-align:center;padding:50px 20px;color:var(--empire-mist);font-family:var(--font-mono);font-size:11px}
+.bill-chart-legend{display:flex;gap:16px;margin-top:10px;padding-top:10px;border-top:1px solid var(--empire-divider)}
+.bill-chart-legend-item{display:flex;align-items:center;gap:6px;font-family:var(--font-mono);font-size:8px;color:var(--empire-mist);letter-spacing:.08em}
+.bill-chart-legend-dot{width:8px;height:8px;border-radius:2px;flex-shrink:0}
 .bill-section-title{font-family:var(--font-mono);font-size:10px;color:var(--empire-mist);letter-spacing:.14em;text-transform:uppercase;margin:28px 0 14px;padding-bottom:8px;border-bottom:1px solid var(--empire-border)}
 .bill-table{width:100%;border-collapse:collapse;font-size:12px;margin-bottom:20px}
 .bill-table th{font-family:var(--font-mono);font-size:9px;color:var(--empire-mist);letter-spacing:.12em;text-transform:uppercase;text-align:left;padding:8px 10px;border-bottom:1px solid var(--empire-border)}
@@ -2020,6 +2040,20 @@ function PainPoints() {
     const iv = setInterval(load, 60000);
     return () => { stop = true; clearInterval(iv); };
   }, []);
+
+  // ── Billing timeseries fetch (30-day chart) ──
+  useEffect(() => {
+    let stop = false;
+    const load = () => {
+      apiFetch('/api/v1/billing/timeseries?days=30').then(r => r.json())
+        .then(d => { if (!stop) { setBillTimeseries(d); } })
+        .catch(e => { if (!stop) console.warn('timeseries fetch:', e); });
+    };
+    load();
+    const iv = setInterval(load, 120000);
+    return () => { stop = true; clearInterval(iv); };
+  }, []);
+
 
   if (err) return html`<div class="stub"><div class="stub-title">Could not load Pain Points</div><div class="stub-body">${err}</div></div>`;
   if (!data) return html`<div class="stub"><div class="stub-title">Loading <em>Pain Points</em></div><div class="stub-body">Fetching pain point profiles...</div></div>`;
@@ -9389,7 +9423,8 @@ function PsychologyDashboard() {
   const [detectText, setDetectText] = useState('');
   
   const [billingData, setBillingData] = useState(null);
-  const [billingErr, setBillingErr] = useState(null);const [detectResult, setDetectResult] = useState(null);
+  const [billingErr, setBillingErr] = useState(null);
+  const [billTimeseries, setBillTimeseries] = useState(null);const [detectResult, setDetectResult] = useState(null);
 
   useEffect(() => {
     apiFetch('/api/psychology/snapshot')
@@ -11132,6 +11167,32 @@ function QC() {
             </tbody>
           </table>
         </div>
+
+        <div class="bill-chart-wrap">
+          <div class="bill-chart-h">
+            <span class="bill-chart-title">Daily Revenue &middot; 30-Day</span>
+            <span class="bill-chart-tag">${billTimeseries ? billTimeseries.total_revenue.toLocaleString('en-US', {style:'currency',currency:'USD',minimumFractionDigits:0}) + ' total' : ''}</span>
+          </div>
+          ${!billTimeseries ? html`<div class="bill-chart-empty">Loading chart data&hellip;</div>` : billTimeseries.series.length === 0 ? html`<div class="bill-chart-empty">No billing data in the last 30 days</div>` : html`
+          <div class="bill-chart">
+            ${(() => {
+              const maxRev = Math.max(...billTimeseries.series.map(d => d.revenue), 1);
+              return billTimeseries.series.map(d => html`
+                <div class="bill-chart-bar-wrap">
+                  <div class="bill-chart-tooltip">${d.date}: $${d.revenue.toFixed(0)} · ${d.calls} calls · ${d.billable} billable</div>
+                  <div class="bill-chart-bar rev" style="height:${Math.max(3, (d.revenue / maxRev) * 130)}px"></div>
+                  <div class="bill-chart-bar-label">${d.date.slice(5)}</div>
+                </div>
+              `).join('');
+            })()}
+          </div>
+          <div class="bill-chart-legend">
+            <div class="bill-chart-legend-item"><div class="bill-chart-legend-dot" style="background:var(--signal-teal)"></div>Revenue</div>
+            <div class="bill-chart-legend-item"><span style="color:var(--empire-mist)">${billTimeseries.total_calls} calls · ${billTimeseries.days} days with data</span></div>
+          </div>
+          `}
+        </div>
+
       `}
     </div>
   `;

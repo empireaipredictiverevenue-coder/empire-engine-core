@@ -1599,6 +1599,67 @@ async def billing_summary(auth: bool = Depends(require_auth)):
     return JSONResponse(result)
 
 
+# ── Billing Timeseries — daily aggregates for the billing chart ──
+@app.get("/api/v1/billing/timeseries")
+async def billing_timeseries(days: int = 30, auth: bool = Depends(require_auth)):
+    """Return daily billing aggregates for the last N days for the billing chart.
+
+    Returns:
+      - series: [{date, revenue, calls, billable}]
+      - total_revenue: sum across all days
+      - total_calls: sum across all days
+      - days: number of days returned
+    """
+    from collections import defaultdict
+    
+    db = get_db()
+    now = datetime.now(timezone.utc)
+    cutoff = (now - timedelta(days=days)).isoformat()
+    
+    result = {
+        "series": [],
+        "total_revenue": 0.0,
+        "total_calls": 0,
+        "days": 0,
+    }
+    
+    try:
+        r = db.table("call_logs").select(
+            "fee_earned,is_billable,status,created_at"
+        ).gte("created_at", cutoff).execute()
+        rows = r.data or []
+        
+        buckets: dict = defaultdict(lambda: {"date": "", "revenue": 0.0, "calls": 0, "billable": 0})
+        for row in rows:
+            d = (row.get("created_at") or "")[:10]
+            if not d:
+                continue
+            b = buckets[d]
+            b["date"] = d
+            b["revenue"] += float(row.get("fee_earned") or 0)
+            b["calls"] += 1
+            if row.get("is_billable") is True:
+                b["billable"] += 1
+        
+        series = sorted(buckets.values(), key=lambda x: x["date"])
+        for s in series:
+            s["revenue"] = round(s["revenue"], 2)
+        
+        total_revenue = sum(s["revenue"] for s in series)
+        total_calls = sum(s["calls"] for s in series)
+        
+        result.update({
+            "series": series,
+            "total_revenue": round(total_revenue, 2),
+            "total_calls": total_calls,
+            "days": len(series),
+        })
+    except Exception as e:
+        log.warning(f"[billing] timeseries query failed: {e}")
+    
+    return JSONResponse(result)
+
+
 # ── Traffic Specialist — autonomous traffic orchestration ─────────
 register_traffic_specialist_routes(app, require_auth=require_auth)
 
