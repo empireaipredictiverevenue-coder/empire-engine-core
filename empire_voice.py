@@ -185,8 +185,8 @@ class VonageAdapter:
             return {"ok": False, "error": "JWT generation failed"}
 
         payload = {
-            "to":   [{"type": "phone", "number": to_number.lstrip("+")}],
-            "from": {"type": "phone", "number": self.from_number.lstrip("+")},
+            "to":   [{"type": "phone", "number": to_number}],
+            "from": {"type": "phone", "number": self.from_number},
             "ncco": ncco,
             # Advanced machine detection — async mode means NO silence at call start.
             # Detection runs in the background while the NCCO plays immediately.
@@ -249,8 +249,8 @@ class VonageAdapter:
             return {"ok": False, "error": "JWT generation failed"}
 
         payload = {
-            "to":   [{"type": "phone", "number": to_number.lstrip("+")}],
-            "from": {"type": "phone", "number": self.from_number.lstrip("+")},
+            "to":   [{"type": "phone", "number": to_number}],
+            "from": {"type": "phone", "number": self.from_number},
             "ncco": ncco,
             "advanced_machine_detection": {
                 "behavior": "continue",
@@ -301,8 +301,8 @@ class VonageAdapter:
             return {"ok": False, "error": "JWT generation failed"}
 
         payload = {
-            "from":         self.from_number.lstrip("+"),
-            "to":           to_number.lstrip("+"),
+            "from":         self.from_number,
+            "to":           to_number,
             "message_type": "text",
             "text":         message[:1600],  # SMS hard limit
             "channel":      "sms",
@@ -373,7 +373,7 @@ def ncco_inbound_strike(
             "from":        "",  # Vonage uses the DID
             "endpoint":    [{
                 "type":   "phone",
-                "number": forward_to.lstrip("+"),
+                "number": forward_to,
             }],
             "timeout":     30,
             "limit":       1800,  # 30-minute call cap
@@ -415,7 +415,7 @@ def ncco_outbound_strike(
             "action":   "connect",
             "endpoint": [{
                 "type":   "phone",
-                "number": operator_number.lstrip("+"),
+                "number": operator_number,
             }],
             "timeout":  30,
             "limit":    1800,
@@ -478,7 +478,7 @@ def ncco_stream_tts(
     if op:
         ncco.append({
             "action":   "connect",
-            "endpoint": [{"type": "phone", "number": op.lstrip("+")}],
+            "endpoint": [{"type": "phone", "number": op}],
             "timeout":  30,
             "limit":    1800,
             # AMD: hang up on voicemail so the stream NCCO (below) doesn't
@@ -568,7 +568,7 @@ def ncco_dynamic_inbound(
             "from": "",
             "endpoint": [{
                 "type": "phone",
-                "number": operator_number.lstrip("+"),
+                "number": operator_number,
             }],
             "timeout": 30,
             "limit": 1800,
@@ -620,7 +620,7 @@ def ncco_dynamic_outbound(
     if op:
         ncco.append({
             "action":   "connect",
-            "endpoint": [{"type": "phone", "number": op.lstrip("+")}],
+            "endpoint": [{"type": "phone", "number": op}],
             "timeout":  30,
             "limit":    1800,
         })
@@ -1202,7 +1202,7 @@ def register_voice_routes(
         status     = event.get("status", "unknown")
         call_uuid  = event.get("uuid", "")
         direction  = event.get("direction", "")
-        duration   = event.get("duration", 0)
+        duration   = int(event.get("duration", 0) or 0)
 
         # ── Update stats ────────────────────────────────────────────
         if status == "completed":

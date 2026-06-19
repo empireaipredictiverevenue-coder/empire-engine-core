@@ -93,8 +93,8 @@ async def _send_referrer_sms(phone: str, referrer_name: str, bounty_amount: floa
                 data={
                     "api_key": vonage_key,
                     "api_secret": vonage_secret,
-                    "from": vonage_from.lstrip("+"),
-                    "to": phone.lstrip("+"),
+                    "from": vonage_from,
+                    "to": phone,
                     "text": sms_text[:1600],
                 },
             )

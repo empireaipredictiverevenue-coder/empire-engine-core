@@ -326,7 +326,7 @@ class TrafficSpecialist:
             active_sms = sum(1 for s in sms_data if s.get("status") == "active")
 
             # Strike campaigns
-            campaigns = sb.table("strike_campaigns").select("status").execute()
+            campaigns = sb.table("ad_campaigns").select("status").execute()
             camp_data = campaigns.data or []
             active_camps = sum(1 for c in camp_data if c.get("status") in ("active", "running"))
 

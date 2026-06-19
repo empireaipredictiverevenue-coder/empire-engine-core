@@ -194,7 +194,7 @@ def build_forward_ncco(operator_number: str, lead_addr: str = "") -> list:
         {"action": "talk", "text": intro, "voiceName": "Amy"},
         {
             "action":   "connect",
-            "endpoint": [{"type": "phone", "number": operator_number.lstrip("+")}],
+            "endpoint": [{"type": "phone", "number": operator_number}],
             "timeout":  30,
             "limit":    1800,
         },

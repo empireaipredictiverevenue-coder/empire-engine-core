@@ -338,6 +338,7 @@ class AffiliateRecruiter:
                 .execute()
             return [
                 {
+                    "id": str(a["id"]),
                     "source": "dormant_affiliate",
                     "source_id": str(a["id"]),
                     "name": a.get("name", ""),

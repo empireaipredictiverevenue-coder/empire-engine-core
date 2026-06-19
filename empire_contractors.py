@@ -882,8 +882,8 @@ async def _notify_referral_signup(
                         data={
                             "api_key": vonage_key,
                             "api_secret": vonage_secret,
-                            "from": vonage_from.lstrip("+"),
-                            "to": referrer_phone.lstrip("+"),
+                            "from": vonage_from,
+                            "to": referrer_phone,
                             "text": sms_text[:1600],
                         },
                     )

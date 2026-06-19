@@ -209,7 +209,7 @@ def initiate_storm_call(lead_phone: str, storm_type: str):
         # Warm-forward: connect first so human-answered calls skip the TTS
         ncco.append({
             "action":   "connect",
-            "endpoint": [{"type": "phone", "number": operator_number.lstrip("+")}],
+            "endpoint": [{"type": "phone", "number": operator_number}],
             "timeout":  30,
             "limit":    1800,
         })
@@ -238,7 +238,7 @@ def initiate_legal_call(lead_phone: str, device_name: str):
     if operator_number:
         ncco.append({
             "action":   "connect",
-            "endpoint": [{"type": "phone", "number": operator_number.lstrip("+")}],
+            "endpoint": [{"type": "phone", "number": operator_number}],
             "timeout":  30,
             "limit":    1800,
         })
@@ -314,7 +314,7 @@ def initiate_contractor_recruit_call(contractor: dict) -> dict:
         if operator_number:
             ncco.append({
                 "action":   "connect",
-                "endpoint": [{"type": "phone", "number": operator_number.lstrip("+")}],
+                "endpoint": [{"type": "phone", "number": operator_number}],
                 "timeout":  20,
                 "limit":    1800,
             })
