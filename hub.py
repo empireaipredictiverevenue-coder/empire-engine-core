@@ -1546,11 +1546,13 @@ async def billing_summary(auth: bool = Depends(require_auth)):
                 top_buyer_ids.add(bid)
         # Fetch buyer names for top calls
         buyer_name_map: dict = {}
+        buyer_pmr_map: dict = {}
         if top_buyer_ids:
             try:
-                br = db.table("buyers").select("id,name").in_("id", list(top_buyer_ids)).execute()
+                br = db.table("buyers").select("id,name,per_minute_rate").in_("id", list(top_buyer_ids)).execute()
                 for b in (br.data or []):
                     buyer_name_map[b["id"]] = b.get("name", "?")
+                    buyer_pmr_map[b["id"]] = float(b.get("per_minute_rate") or 0)
             except Exception:
                 pass
         for row in all_rows_sorted:
@@ -1576,6 +1578,7 @@ async def billing_summary(auth: bool = Depends(require_auth)):
                 "net_payout": round(float(row.get("payout_value") or 0), 2),
                 "settlement_fee": round(settlement_fee, 2),
                 "per_minute_fee": round(per_minute_fee, 2),
+                "per_minute_rate": round(buyer_pmr_map.get(bid, 0), 2),
                 "lead_fee": round(lead_fee, 2),
                 "schedule_fee": round(schedule_fee, 2),
                 "fee": round(fee_earned, 2),

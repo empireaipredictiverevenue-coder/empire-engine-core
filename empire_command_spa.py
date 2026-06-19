@@ -9636,10 +9636,10 @@ function PsychologyDashboard() {
 
         <div class="bill-section-title">Top Calls by Payout</div>
         <table class="bill-table">
-          <thead><tr><th>Buyer</th><th>Niche</th><th class="num">Duration</th><th class="num">Net Payout</th><th class="num">Settlement</th><th class="num">Per-Min</th><th class="num">Lead</th><th class="num">Sched</th><th class="num">Fee</th><th>Model</th></tr></thead>
+          <thead><tr><th>Buyer</th><th>Niche</th><th class="num">Duration</th><th class="num">Net Payout</th><th class="num">Settlement</th><th class="num">Per-Min</th><th class="num">Rate</th><th class="num">Lead</th><th class="num">Sched</th><th class="num">Fee</th><th>Model</th></tr></thead>
           <tbody>
             ${billingData?.top_calls?.length > 0 ? billingData.top_calls.map(c => html`
-              <tr><td>${c.buyer_name || c.source}</td><td>${c.niche || '-'}</td><td class="num">${c.duration || 0}s</td><td class="num">$${(c.net_payout || 0).toFixed(2)}</td><td class="num">$${(c.settlement_fee || 0).toFixed(2)}</td><td class="num">$${(c.per_minute_fee || 0).toFixed(2)}</td><td class="num">$${(c.lead_fee || 0).toFixed(2)}</td><td class="num">$${(c.schedule_fee || 0).toFixed(2)}</td><td class="num">$${(c.fee || 0).toFixed(2)}</td><td class="num">${c.fee_model ? c.fee_model.split('+').map(m => ({'per_minute':'⏱PM','settlement':'📋Stl','ppl':'📄Ld','schedule':'📅Sch'})[m] || m).join(' ') : '—'}</td></tr>
+              <tr><td>${c.buyer_name || c.source}</td><td>${c.niche || '-'}</td><td class="num">${c.duration || 0}s</td><td class="num">$${(c.net_payout || 0).toFixed(2)}</td><td class="num">$${(c.settlement_fee || 0).toFixed(2)}</td><td class="num">$${(c.per_minute_fee || 0).toFixed(2)}</td><td class="num">${c.per_minute_rate ? '$' + c.per_minute_rate.toFixed(2) + '/min' : '-'}</td><td class="num">$${(c.lead_fee || 0).toFixed(2)}</td><td class="num">$${(c.schedule_fee || 0).toFixed(2)}</td><td class="num">$${(c.fee || 0).toFixed(2)}</td><td class="num">${c.fee_model ? c.fee_model.split('+').map(m => ({'per_minute':'⏱PM','settlement':'📋Stl','ppl':'📄Ld','schedule':'📅Sch'})[m] || m).join(' ') : '—'}</td></tr>
             `).join('') : '<tr><td colspan="8" style="color:var(--empire-mist);text-align:center;padding:20px">No calls today</td></tr>'}
           </tbody>
         </table>
