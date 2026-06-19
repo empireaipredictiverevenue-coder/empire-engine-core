@@ -1630,11 +1630,11 @@ async def billing_timeseries(days: int = 30, auth: bool = Depends(require_auth))
     
     try:
         r = db.table("call_logs").select(
-            "fee_earned,is_billable,status,created_at"
+            "fee_earned,settlement_fee,per_minute_fee,is_billable,status,created_at"
         ).gte("created_at", cutoff).execute()
         rows = r.data or []
         
-        buckets: dict = defaultdict(lambda: {"date": "", "revenue": 0.0, "calls": 0, "billable": 0})
+        buckets: dict = defaultdict(lambda: {"date": "", "revenue": 0.0, "settlement_revenue": 0.0, "per_minute_revenue": 0.0, "calls": 0, "billable": 0})
         for row in rows:
             d = (row.get("created_at") or "")[:10]
             if not d:
@@ -1642,6 +1642,8 @@ async def billing_timeseries(days: int = 30, auth: bool = Depends(require_auth))
             b = buckets[d]
             b["date"] = d
             b["revenue"] += float(row.get("fee_earned") or 0)
+            b["settlement_revenue"] += float(row.get("settlement_fee") or 0)
+            b["per_minute_revenue"] += float(row.get("per_minute_fee") or 0)
             b["calls"] += 1
             if row.get("is_billable") is True:
                 b["billable"] += 1
@@ -1649,6 +1651,8 @@ async def billing_timeseries(days: int = 30, auth: bool = Depends(require_auth))
         series = sorted(buckets.values(), key=lambda x: x["date"])
         for s in series:
             s["revenue"] = round(s["revenue"], 2)
+            s["settlement_revenue"] = round(s["settlement_revenue"], 2)
+            s["per_minute_revenue"] = round(s["per_minute_revenue"], 2)
         
         total_revenue = sum(s["revenue"] for s in series)
         total_calls = sum(s["calls"] for s in series)

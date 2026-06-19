@@ -1663,7 +1663,10 @@ font-size:7px!important;color:#999!important;margin-top:2px!important
 .bill-chart-bar-wrap{display:flex;flex-direction:column;align-items:center;flex-shrink:0;min-width:28px}
 .bill-chart-bar{width:18px;border-radius:2px 2px 0 0;min-height:2px;transition:height .4s var(--ease-snap),background .2s;cursor:pointer;position:relative}
 .bill-chart-bar:hover{opacity:.8}
-.bill-chart-bar.rev{background:var(--signal-teal)}
+
+.bill-chart-bar.settlement{background:var(--signal-teal);opacity:.85;border-radius:0 0 2px 2px}
+.bill-chart-bar.per-minute{background:var(--strike-cyan);opacity:.5;border-radius:2px 2px 0 0;margin-top:1px}
+.bill-chart-bar-stack{display:flex;flex-direction:column-reverse;align-items:center;width:18px;min-height:3px}
 .bill-chart-bar.calls{background:var(--strike-cyan);opacity:.5}
 .bill-chart-bar-label{font-family:var(--font-mono);font-size:7px;color:var(--empire-fog);margin-top:4px;white-space:nowrap}
 .bill-chart-tooltip{position:absolute;bottom:100%;left:50%;transform:translateX(-50%);background:#000;color:var(--empire-white);padding:4px 8px;font-family:var(--font-mono);font-size:9px;border-radius:3px;white-space:nowrap;pointer-events:none;opacity:0;transition:opacity .15s;z-index:10;margin-bottom:4px}
@@ -11181,7 +11184,7 @@ function QC() {
 
         <div class="bill-chart-wrap">
           <div class="bill-chart-h">
-            <span class="bill-chart-title">Daily Revenue &middot; 30-Day</span>
+            <span class="bill-chart-title">Daily Fee Breakdown &middot; 30-Day</span>
             <span class="bill-chart-tag">${billTimeseries ? billTimeseries.total_revenue.toLocaleString('en-US', {style:'currency',currency:'USD',minimumFractionDigits:0}) + ' total' : ''}</span>
           </div>
           ${!billTimeseries ? html`<div class="bill-chart-empty">Loading chart data&hellip;</div>` : billTimeseries.series.length === 0 ? html`<div class="bill-chart-empty">No billing data in the last 30 days</div>` : html`
@@ -11196,8 +11199,11 @@ function QC() {
               return html`
                 ${series.map(d => html`
                   <div class="bill-chart-bars" style="display:flex;align-items:flex-end;gap:3px;grid-area:chart"><div class="bill-chart-bar-wrap">
-                    <div class="bill-chart-tooltip">${d.date}: $${d.revenue.toFixed(0)} · ${d.calls} calls · ${d.billable} billable</div>
-                    <div class="bill-chart-bar rev" style="height:${Math.max(3, (d.revenue / maxRev) * chartH)}px"></div>
+                    <div class="bill-chart-tooltip">${d.date}: $${d.revenue.toFixed(0)} total · S:$${d.settlement_revenue.toFixed(0)} PM:$${d.per_minute_revenue.toFixed(0)} · ${d.calls} calls · ${d.billable} billable</div>
+                    <div class="bill-chart-bar-stack" style="height:${Math.max(3, (d.revenue / maxRev) * chartH)}px">
+                    <div class="bill-chart-bar per-minute" style="height:${Math.max(0, (d.per_minute_revenue / maxRev) * chartH)}px"></div>
+                    <div class="bill-chart-bar settlement" style="height:${Math.max(3, (d.settlement_revenue / maxRev) * chartH)}px"></div>
+                  </div>
                     <div class="bill-chart-bar-label">${d.date.slice(5)}</div>
                   </div>
                 `).join('')}
@@ -11218,7 +11224,8 @@ function QC() {
             })()}
           </div>
           <div class="bill-chart-legend">
-            <div class="bill-chart-legend-item"><div class="bill-chart-legend-dot" style="background:var(--signal-teal)"></div>Revenue</div>
+            <div class="bill-chart-legend-item"><div class="bill-chart-legend-dot" style="background:var(--signal-teal);opacity:.85"></div>Settlement</div>
+            <div class="bill-chart-legend-item"><div class="bill-chart-legend-dot" style="background:var(--strike-cyan);opacity:.5"></div>Per-Min</div>
             <div class="bill-chart-legend-item"><div class="bill-chart-legend-dot" style="background:var(--strike-cyan);opacity:.7;height:2px;border-radius:1px"></div>Call Volume</div>
             <div class="bill-chart-legend-item"><span style="color:var(--empire-mist)">${billTimeseries.total_calls} calls · ${billTimeseries.days} days with data</span></div>
           </div>
