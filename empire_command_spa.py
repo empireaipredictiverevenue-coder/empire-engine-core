@@ -1667,6 +1667,11 @@ font-size:7px!important;color:#999!important;margin-top:2px!important
 .bill-chart-bar.settlement{background:var(--signal-teal);opacity:.85;border-radius:0 0 2px 2px}
 .bill-chart-bar.premium{background:var(--status-amber);opacity:.7;border-radius:2px 2px 0 0;position:absolute;bottom:0;left:0;right:0}
 .bill-chart-legend-dot.premium-dot{background:var(--status-amber);opacity:.7}
+.bill-chart-legend-item.clickable{cursor:pointer;transition:opacity .15s var(--ease-snap)}
+.bill-chart-legend-item.clickable:hover:not(.dimmed){opacity:.7}
+.bill-chart-legend-item.clickable.dimmed{opacity:.35}
+.bill-chart-line-forecast{fill:none;stroke:var(--signal-teal);stroke-width:1.5px;opacity:.6;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:5 4}
+.bill-chart-line-dot-forecast{fill:var(--signal-teal);opacity:.7}
 .bill-chart-bar.per-minute{background:var(--strike-cyan);opacity:.5;border-radius:2px 2px 0 0;margin-top:1px;position:relative}
 .bill-chart-bar-stack{display:flex;flex-direction:column-reverse;align-items:center;width:18px;min-height:3px}
 .bill-chart-bar.calls{background:var(--strike-cyan);opacity:.5}
@@ -3282,7 +3287,16 @@ function Pipeline() {
               <circle cx="0" cy="0" r="${innerR}" class="pipe-orbit-ring"/>
               ${svgLines}
               ${arrows}
-            </svg>
+            
+                  ${showCumulative ? () => {
+                    const lastIdx = series.length - 1;
+                    if (lastIdx < 1) return '';
+                    const lastX = (barStep / 2) + lastIdx * (barStep + 3);
+                    const forecastX = lastX + (barStep + 3);
+                    const lastCumulY = chartH - (totalCumul / totalCumul) * chartH;
+                    const forecastY = chartH - ((totalCumul + forecastRev) / totalCumul) * chartH;
+                    return '<polyline class="bill-chart-line-forecast" points="' + lastX.toFixed(1) + ',' + lastCumulY.toFixed(1) + ' ' + forecastX.toFixed(1) + ',' + forecastY.toFixed(1) + '" vector-effect="non-scaling-stroke"/><circle class="bill-chart-line-dot-forecast" cx="' + forecastX.toFixed(1) + '" cy="' + forecastY.toFixed(1) + '" r="3"/>';
+                  })()} : ""}                  </svg>
             
             <!-- Boss card: conversion rate -->
             <div class="pipe-boss-card">
@@ -9448,7 +9462,9 @@ function PsychologyDashboard() {
   const [billingData, setBillingData] = useState(null);
   const [billingErr, setBillingErr] = useState(null);
   const [billTimeseries, setBillTimeseries] = useState(null);const [billWindow, setBillWindow] = useState("30d");
-      const [chartMode, setChartMode] = useState("stacked");const [detectResult, setDetectResult] = useState(null);
+      const [chartMode, setChartMode] = useState("stacked");
+      const [showCumulative, setShowCumulative] = useState(true);
+      const [showCalls, setShowCalls] = useState(true);const [detectResult, setDetectResult] = useState(null);
 
   useEffect(() => {
     apiFetch('/api/psychology/snapshot')
@@ -11216,27 +11232,31 @@ function QC() {
               const barStep = 28;
               const chartH = 130;
               const series = billTimeseries.series;
+              const cumulData = (() => { let r = 0; return series.map(d => { r += d.revenue; return r; }); })();
+              const totalCumul = cumulData[cumulData.length - 1] || 1;
+              const last3Avg = series.length >= 3 ? (series[series.length - 1].revenue + series[series.length - 2].revenue + series[series.length - 3].revenue) / 3 : (series.length > 0 ? series[0].revenue : 0);
+              const forecastRev = Math.max(0, last3Avg * 1.05);
               return html`
-                ${series.map(d => html`
+                ${series.map((d, idx) => html`
                   <div class="bill-chart-bars" style="display:flex;align-items:flex-end;gap:3px;grid-area:chart"><div class="bill-chart-bar-wrap">
-                    <div class="bill-chart-tooltip">${d.date}: $${d.revenue.toFixed(0)} total · S:$${d.settlement_revenue.toFixed(0)} PM:$${d.per_minute_revenue.toFixed(0)}${d.per_minute_revenue > d.settlement_revenue ? ' Δ+$' + (d.per_minute_revenue - d.settlement_revenue).toFixed(0) : ''} · ${d.calls} calls · ${d.billable} billable</div>
+                    <div class="bill-chart-tooltip">${d.date}: $${d.revenue.toFixed(0)} total · C:$${cumulData[idx].toFixed(0)} · S:$${d.settlement_revenue.toFixed(0)} PM:$${d.per_minute_revenue.toFixed(0)}${d.per_minute_revenue > d.settlement_revenue ? ' Δ+$' + (d.per_minute_revenue - d.settlement_revenue).toFixed(0) : ''} · ${d.calls} calls · ${d.billable} billable</div>
                     ${chartMode === "stacked" ? html`<div class="bill-chart-bar-stack" style="height:${Math.max(3, (d.revenue / maxRev) * chartH)}px"><div class="bill-chart-bar per-minute" style="height:${Math.max(0, (d.per_minute_revenue / maxRev) * chartH)}px">${d.per_minute_revenue > d.settlement_revenue ? html`<div class="bill-chart-bar premium" style="height:${Math.max(2, ((d.per_minute_revenue - d.settlement_revenue) / maxRev) * chartH)}px"></div>` : }</div><div class="bill-chart-bar settlement" style="height:${Math.max(3, (d.settlement_revenue / maxRev) * chartH)}px"></div></div>` : html`<div class="bill-chart-bars-side" style="display:flex;gap:3px;align-items:flex-end;height:${Math.max(3, (Math.max(d.settlement_revenue, d.per_minute_revenue) / maxRev) * chartH)}px;width:100%"><div class="bill-chart-bar settlement side" style="height:${Math.max(3, (d.settlement_revenue / maxRev) * chartH)}px;flex:1;min-width:6px;border-radius:2px 2px 0 0"></div><div class="bill-chart-bar per-minute side" style="height:${Math.max(0, (d.per_minute_revenue / maxRev) * chartH)}px;flex:1;min-width:6px;border-radius:2px 2px 0 0;position:relative">${d.per_minute_revenue > d.settlement_revenue ? html`<div class="bill-chart-bar premium" style="height:${Math.max(2, ((d.per_minute_revenue - d.settlement_revenue) / maxRev) * chartH)}px;position:absolute;bottom:0;left:0;right:0;background:var(--status-amber);opacity:.7;border-radius:2px 2px 0 0"></div>` : }</div></div>`}
                     <div class="bill-chart-bar-label">${d.date.slice(5)}</div>
                   </div>
                 `).join('')}
                 </div>
                 <svg class="bill-chart-line-svg" width="${Math.max(series.length * (barStep + 3), 50)}" height="130" viewBox="0 0 ${Math.max(series.length * (barStep + 3), 50)} 130"
-                  <polyline class="bill-chart-line" points="${series.map((d, i) => {
+                  <polyline ${showCalls ? html`class="bill-chart-line" points="${series.map((d, i) => {
                     const x = (barStep / 2) + i * (barStep + 3);
                     const y = chartH - (d.calls / maxCalls) * chartH;
                     return x.toFixed(1) + ',' + y.toFixed(1);
-                  }).join(' ')}" vector-effect="non-scaling-stroke"/>
-                  ${series.map((d, i) => {
+                  }).join(' ')}" vector-effect="non-scaling-stroke"/>` : ""}
+                  ${showCalls ? ${series.map((d, i) => {
                     const x = (barStep / 2) + i * (barStep + 3);
                     const y = chartH - (d.calls / maxCalls) * chartH;
                     return '<circle class="bill-chart-line-dot" cx="' + x.toFixed(1) + '" cy="' + y.toFixed(1) + '" r="2.5"/>';
                   }).join('')}
-                </svg>
+ : ""}                </svg>
               `;
             })()}
           </div>
@@ -11244,9 +11264,10 @@ function QC() {
             <div class="bill-chart-legend-item"><div class="bill-chart-legend-dot" style="background:var(--signal-teal);opacity:.85"></div>Settlement</div>
             <div class="bill-chart-legend-item"><div class="bill-chart-legend-dot" style="background:var(--strike-cyan);opacity:.5"></div>Per-Min</div>
             <div class="bill-chart-legend-item"><div class="bill-chart-legend-dot premium-dot"></div>Premium</div>
-            <div class="bill-chart-legend-item"><div class="bill-chart-legend-dot" style="background:var(--status-amber);opacity:.7;height:2px;border-radius:1px;border:1px dashed var(--status-amber)"></div>Cumulative Fees</div>
-            <div class="bill-chart-legend-item"><div class="bill-chart-legend-dot" style="background:var(--strike-cyan);opacity:.7;height:2px;border-radius:1px"></div>Call Volume</div>
-            <div class="bill-chart-legend-item"><span style="color:var(--empire-mist)">${billTimeseries.total_calls} calls · ${billTimeseries.days} days with data</span></div>
+            <div class="bill-chart-legend-item clickable${showCumulative ? '' : ' dimmed'}" onClick=${() => setShowCumulative(!showCumulative)}><div class="bill-chart-legend-dot" style="background:var(--status-amber);opacity:.6;height:2px;border-radius:1px;border:1px dashed var(--status-amber)"></div>Cumulative Fees</div>
+            <div class="bill-chart-legend-item clickable${showCalls ? '' : ' dimmed'}" onClick=${() => setShowCalls(!showCalls)}><div class="bill-chart-legend-dot" style="background:var(--strike-cyan);opacity:.4;height:2px;border-radius:1px"></div>Call Volume</div>
+            <div class="bill-chart-legend-item"><div class="bill-chart-legend-dot" style="background:var(--signal-teal);opacity:.6;height:2px;border-radius:1px;border:1px dashed var(--signal-teal)"></div>Forecast</div>
+            <div class="bill-chart-legend-item"><span style="color:var(--empire-mist)">${billTimeseries.total_calls} calls · ${billTimeseries.days} days · $${billTimeseries.total_revenue.toFixed(0)} total fees</span></div>
           </div>
           `}
         </div>
