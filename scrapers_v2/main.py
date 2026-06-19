@@ -20,13 +20,12 @@ cost = CostAnalytics()
 async def main():
     logger.info("Elite Scraper v2 started")
     start_metrics_server(8002)
-
     try:
         results = await breaker.call(run_all_sources)
         for lead in results:
             record_lead(lead.vertical, lead.source)
             quant.record_lead(lead)
-            cost.record(lead.source, 0.5)  # placeholder cost
+            cost.record(lead.source, 0.5)
         logger.info(f"Completed. New leads: {len(results)}")
         logger.info("Cost per lead", summary=cost.summary())
     except Exception as e:

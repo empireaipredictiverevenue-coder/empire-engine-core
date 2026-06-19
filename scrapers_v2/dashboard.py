@@ -33,7 +33,6 @@ if st.button("🚀 RUN FULL SCRAPE", use_container_width=True):
 
 st.divider()
 st.subheader("📡 Live Lead Feed")
-
 placeholder = st.empty()
 if st.button("Start Live Feed"):
     async def live():
