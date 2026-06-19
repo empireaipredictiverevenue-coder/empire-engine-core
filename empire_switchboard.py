@@ -188,6 +188,7 @@ def register_switchboard_routes(app, require_auth=None):
                 "hours_close": int(payload.get("hours_close", 20)),
                 "base_payout": float(payload.get("base_payout", 0)),
                 "fee_rate": float(payload.get("fee_rate", COMMISSION_RATE)),
+                "per_minute_rate": float(payload["per_minute_rate"]) if payload.get("per_minute_rate") is not None else None,
                 "destination_phone": payload.get("destination_phone",""),
                 "daily_cap": int(payload.get("daily_cap", 100)),
                 "is_active": True,
@@ -208,6 +209,34 @@ def register_switchboard_routes(app, require_auth=None):
             _sb.table("buyers").update({"is_active": newv}).eq("id", buyer_id).execute()
             _invalidate_buyers_cache()
             return {"ok": True, "is_active": newv}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    @app.patch("/api/switchboard/buyers/{buyer_id}")
+    async def update_buyer(buyer_id: str, payload: dict):
+        try:
+            cur = _sb.table("buyers").select("id").eq("id", buyer_id).limit(1).execute()
+            if not cur.data:
+                return {"ok": False, "error": "buyer not found"}
+            updates = {}
+            for field in ("buyer_name", "niche", "state_coverage", "timezone",
+                         "hours_open", "hours_close", "base_payout", "fee_rate",
+                         "destination_phone", "daily_cap", "is_active"):
+                if field in payload:
+                    val = payload[field]
+                    if field in ("hours_open", "hours_close", "daily_cap"):
+                        val = int(val)
+                    elif field in ("base_payout", "fee_rate"):
+                        val = float(val)
+                    updates[field] = val
+            if "per_minute_rate" in payload:
+                pmr = payload["per_minute_rate"]
+                updates["per_minute_rate"] = float(pmr) if pmr is not None else None
+            if not updates:
+                return {"ok": False, "error": "no fields to update"}
+            _sb.table("buyers").update(updates).eq("id", buyer_id).execute()
+            _invalidate_buyers_cache()
+            return {"ok": True, "updated": updates}
         except Exception as e:
             return {"ok": False, "error": str(e)}
 
