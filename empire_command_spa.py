@@ -9574,6 +9574,9 @@ function PsychologyDashboard() {
         ${nicheNodes.length === 0 && html`<div class="stub-body">No niche profiles.</div>
 
       ${activeTab === 'billing' && html`
+                ${billingErr ? html`<div class="bill-error">⚠ ${billingErr}</div>` : ''}
+        ${!billingErr && !billingData ? html`<div class="bill-loading">Loading billing data…</div>` : ''}
+        ${billingData ? html`
         <div class="psy-summary-grid">
           <div class="stat-card"><div class="stat-label">Today's Calls</div><div class="stat-value teal">${billingData?.calls_today ?? 0}</div></div>
           <div class="stat-card"><div class="stat-label">Today's Revenue</div><div class="stat-value dollar teal">${(billingData?.revenue_today ?? 0).toFixed(2)}</div></div>
@@ -9601,7 +9604,8 @@ function PsychologyDashboard() {
           </tbody>
         </table>
       `}
-`}
+` : ''}
+      `}
       `}
     </div>
   `;
