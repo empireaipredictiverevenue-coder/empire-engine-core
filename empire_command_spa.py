@@ -1678,6 +1678,10 @@ font-size:7px!important;color:#999!important;margin-top:2px!important
 .bill-chart-inner{position:relative;flex:0 0 auto;height:130px}
 .bill-chart-bars{display:flex;align-items:flex-end;gap:3px;position:relative;z-index:1}
 .bill-chart-empty{text-align:center;padding:50px 20px;color:var(--empire-mist);font-family:var(--font-mono);font-size:11px}
+.bill-chart-window{display:flex;gap:4px;margin-left:auto}
+.bill-chart-window-btn{padding:4px 10px;font-family:var(--font-mono);font-size:9px;letter-spacing:.1em;text-transform:uppercase;border:1px solid var(--empire-border);background:transparent;color:var(--empire-mist);cursor:pointer;border-radius:4px;transition:all .15s var(--ease-snap)}
+.bill-chart-window-btn:hover{color:var(--empire-white);border-color:var(--empire-border-hi)}
+.bill-chart-window-btn.active{color:var(--signal-teal);border-color:var(--signal-teal-soft);background:rgba(68,229,184,0.06)}
 .bill-chart-legend{display:flex;gap:16px;margin-top:10px;padding-top:10px;border-top:1px solid var(--empire-divider)}
 .bill-chart-legend-item{display:flex;align-items:center;gap:6px;font-family:var(--font-mono);font-size:8px;color:var(--empire-mist);letter-spacing:.08em}
 .bill-chart-legend-dot{width:8px;height:8px;border-radius:2px;flex-shrink:0}
@@ -2054,14 +2058,14 @@ function PainPoints() {
   useEffect(() => {
     let stop = false;
     const load = () => {
-      apiFetch('/api/v1/billing/timeseries?days=30').then(r => r.json())
+      apiFetch('/api/v1/billing/timeseries?days=' + (billWindow === '90d' ? 90 : billWindow === '7d' ? 7 : 30)).then(r => r.json())
         .then(d => { if (!stop) { setBillTimeseries(d); } })
         .catch(e => { if (!stop) console.warn('timeseries fetch:', e); });
     };
     load();
     const iv = setInterval(load, 120000);
     return () => { stop = true; clearInterval(iv); };
-  }, []);
+  }, [billWindow]);
 
 
   if (err) return html`<div class="stub"><div class="stub-title">Could not load Pain Points</div><div class="stub-body">${err}</div></div>`;
@@ -2255,7 +2259,7 @@ function SwarmGate() {
         setFireResult(fr);
         reload();
       } else {
-        setFireResult({ ok: true, jobs: [], count: 0, message: 'No storm targets found' });
+        setFireResult({ ok: true, jobs: [billWindow], count: 0, message: 'No storm targets found' });
       }
     } catch (e) {
       setFireResult({ ok: false, error: String(e) });
@@ -9434,7 +9438,7 @@ function PsychologyDashboard() {
   
   const [billingData, setBillingData] = useState(null);
   const [billingErr, setBillingErr] = useState(null);
-  const [billTimeseries, setBillTimeseries] = useState(null);const [detectResult, setDetectResult] = useState(null);
+  const [billTimeseries, setBillTimeseries] = useState(null);const [billWindow, setBillWindow] = useState("30d");const [detectResult, setDetectResult] = useState(null);
 
   useEffect(() => {
     apiFetch('/api/psychology/snapshot')
@@ -11184,10 +11188,15 @@ function QC() {
 
         <div class="bill-chart-wrap">
           <div class="bill-chart-h">
-            <span class="bill-chart-title">Daily Fee Breakdown &middot; 30-Day</span>
+            <span class="bill-chart-title">Daily Fee Breakdown &middot; ${billWindow === '90d' ? '90' : billWindow === '7d' ? '7' : '30'}-Day</span>
+            <div class="bill-chart-window">
+              <button class="bill-chart-window-btn ${billWindow === '7d' ? 'active' : ''}" onClick=${() => setBillWindow('7d')}>7d</button>
+              <button class="bill-chart-window-btn ${billWindow === '30d' ? 'active' : ''}" onClick=${() => setBillWindow('30d')}>30d</button>
+              <button class="bill-chart-window-btn ${billWindow === '90d' ? 'active' : ''}" onClick=${() => setBillWindow('90d')}>90d</button>
+            </div>
             <span class="bill-chart-tag">${billTimeseries ? billTimeseries.total_revenue.toLocaleString('en-US', {style:'currency',currency:'USD',minimumFractionDigits:0}) + ' total' : ''}</span>
           </div>
-          ${!billTimeseries ? html`<div class="bill-chart-empty">Loading chart data&hellip;</div>` : billTimeseries.series.length === 0 ? html`<div class="bill-chart-empty">No billing data in the last 30 days</div>` : html`
+          ${!billTimeseries ? html`<div class="bill-chart-empty">Loading chart data&hellip;</div>` : billTimeseries.series.length === 0 ? html`<div class="bill-chart-empty">${`No billing data in the last ${billWindow === '90d' ? 90 : billWindow === '7d' ? 7 : 30} days`}</div>` : html`
           <div class="bill-chart">
           <div class="bill-chart-inner">
             ${(() => {
