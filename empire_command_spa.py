@@ -9590,17 +9590,17 @@ function PsychologyDashboard() {
           <tbody>
             ${billingData?.by_source?.length > 0 ? billingData.by_source.map(s => html`
               <tr><td>${s.source}</td><td>${s.calls}</td><td class="num">$${s.net_payout.toFixed(2)}</td><td class="num">$${s.fees.toFixed(2)}</td><td class="num">${s.qualified}</td></tr>
-            `).join('') : '<tr><td colspan="5" style="color:var(--empire-mist);text-align:center;padding:20px">No calls today</td></tr>'}
+            `).join('') : '<tr><td colspan="8" style="color:var(--empire-mist);text-align:center;padding:20px">No calls today</td></tr>'}
           </tbody>
         </table>
 
         <div class="bill-section-title">Top Calls by Payout</div>
         <table class="bill-table">
-          <thead><tr><th>Buyer</th><th>Niche</th><th class="num">Duration</th><th class="num">Net Payout</th><th class="num">Fee</th></tr></thead>
+          <thead><tr><th>Buyer</th><th>Niche</th><th class="num">Duration</th><th class="num">Net Payout</th><th class="num">Settlement</th><th class="num">Per-Min</th><th class="num">Fee</th><th>Model</th></tr></thead>
           <tbody>
             ${billingData?.top_calls?.length > 0 ? billingData.top_calls.map(c => html`
-              <tr><td>${c.buyer_name || c.source}</td><td>${c.niche || '-'}</td><td class="num">${c.duration || 0}s</td><td class="num">$${(c.net_payout || 0).toFixed(2)}</td><td class="num">$${(c.fee || 0).toFixed(2)}</td></tr>
-            `).join('') : '<tr><td colspan="5" style="color:var(--empire-mist);text-align:center;padding:20px">No calls today</td></tr>'}
+              <tr><td>${c.buyer_name || c.source}</td><td>${c.niche || '-'}</td><td class="num">${c.duration || 0}s</td><td class="num">$${(c.net_payout || 0).toFixed(2)}</td><td class="num">$${(c.settlement_fee || 0).toFixed(2)}</td><td class="num">$${(c.per_minute_fee || 0).toFixed(2)}</td><td class="num">$${(c.fee || 0).toFixed(2)}</td><td class="num">${c.fee_model === 'per_minute' ? '⏱ Per-Min' : '📋 Settlement'}</td></tr>
+            `).join('') : '<tr><td colspan="8" style="color:var(--empire-mist);text-align:center;padding:20px">No calls today</td></tr>'}
           </tbody>
         </table>
       `}

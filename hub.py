@@ -1548,12 +1548,17 @@ async def billing_summary(auth: bool = Depends(require_auth)):
                 pass
         for row in all_rows_sorted:
             bid = row.get("buyer_id")
+            settlement_fee = float(row.get("settlement_fee") or 0)
+            per_minute_fee = float(row.get("per_minute_fee") or 0)
             top_calls.append({
                 "buyer_name": buyer_name_map.get(bid, row.get("source") or "?"),
                 "niche": row.get("niche") or "-",
                 "duration": row.get("duration") or 0,
                 "net_payout": round(float(row.get("payout_value") or 0), 2),
+                "settlement_fee": round(settlement_fee, 2),
+                "per_minute_fee": round(per_minute_fee, 2),
                 "fee": round(float(row.get("fee_earned") or 0), 2),
+                "fee_model": "per_minute" if per_minute_fee > settlement_fee else "settlement",
             })
 
         # ── Buyers ──
