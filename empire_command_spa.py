@@ -9636,10 +9636,10 @@ function PsychologyDashboard() {
 
         <div class="bill-section-title">Top Calls by Payout</div>
         <table class="bill-table">
-          <thead><tr><th>Buyer</th><th>Niche</th><th class="num">Duration</th><th class="num">Net Payout</th><th class="num">Settlement</th><th class="num">Per-Min</th><th class="num">Fee</th><th>Model</th></tr></thead>
+          <thead><tr><th>Buyer</th><th>Niche</th><th class="num">Duration</th><th class="num">Net Payout</th><th class="num">Settlement</th><th class="num">Per-Min</th><th class="num">Lead</th><th class="num">Sched</th><th class="num">Fee</th><th>Model</th></tr></thead>
           <tbody>
             ${billingData?.top_calls?.length > 0 ? billingData.top_calls.map(c => html`
-              <tr><td>${c.buyer_name || c.source}</td><td>${c.niche || '-'}</td><td class="num">${c.duration || 0}s</td><td class="num">$${(c.net_payout || 0).toFixed(2)}</td><td class="num">$${(c.settlement_fee || 0).toFixed(2)}</td><td class="num">$${(c.per_minute_fee || 0).toFixed(2)}</td><td class="num">$${(c.fee || 0).toFixed(2)}</td><td class="num">${c.fee_model === 'per_minute' ? '⏱ Per-Min' : '📋 Settlement'}</td></tr>
+              <tr><td>${c.buyer_name || c.source}</td><td>${c.niche || '-'}</td><td class="num">${c.duration || 0}s</td><td class="num">$${(c.net_payout || 0).toFixed(2)}</td><td class="num">$${(c.settlement_fee || 0).toFixed(2)}</td><td class="num">$${(c.per_minute_fee || 0).toFixed(2)}</td><td class="num">$${(c.lead_fee || 0).toFixed(2)}</td><td class="num">$${(c.schedule_fee || 0).toFixed(2)}</td><td class="num">$${(c.fee || 0).toFixed(2)}</td><td class="num">${c.fee_model ? c.fee_model.split('+').map(m => ({'per_minute':'⏱PM','settlement':'📋Stl','ppl':'📄Ld','schedule':'📅Sch'})[m] || m).join(' ') : '—'}</td></tr>
             `).join('') : '<tr><td colspan="8" style="color:var(--empire-mist);text-align:center;padding:20px">No calls today</td></tr>'}
           </tbody>
         </table>
@@ -11266,8 +11266,10 @@ function QC() {
             <div class="bill-chart-legend-item"><div class="bill-chart-legend-dot premium-dot"></div>Premium</div>
             <div class="bill-chart-legend-item clickable${showCumulative ? '' : ' dimmed'}" onClick=${() => setShowCumulative(!showCumulative)}><div class="bill-chart-legend-dot" style="background:var(--status-amber);opacity:.6;height:2px;border-radius:1px;border:1px dashed var(--status-amber)"></div>Cumulative Fees</div>
             <div class="bill-chart-legend-item clickable${showCalls ? '' : ' dimmed'}" onClick=${() => setShowCalls(!showCalls)}><div class="bill-chart-legend-dot" style="background:var(--strike-cyan);opacity:.4;height:2px;border-radius:1px"></div>Call Volume</div>
+            <div class="bill-chart-legend-item"><div class="bill-chart-legend-dot" style="background:var(--status-amber);opacity:.5;height:2px;border-radius:1px;border:none"></div>Lead (PPL)</div>
+            <div class="bill-chart-legend-item"><div class="bill-chart-legend-dot" style="background:var(--strike-cyan);opacity:.3;height:2px;border-radius:1px;border:none;width:7px"></div>Schedule</div>
             <div class="bill-chart-legend-item"><div class="bill-chart-legend-dot" style="background:var(--signal-teal);opacity:.6;height:2px;border-radius:1px;border:1px dashed var(--signal-teal)"></div>Forecast</div>
-            <div class="bill-chart-legend-item"><span style="color:var(--empire-mist)">${billTimeseries.total_calls} calls · ${billTimeseries.days} days · $${billTimeseries.total_revenue.toFixed(0)} total fees</span></div>
+            <div class="bill-chart-legend-item"><span style="color:var(--empire-mist)">${billTimeseries.total_calls} calls · ${billTimeseries.days} days · $${billTimeseries.total_revenue.toFixed(0)} total fees${billTimeseries.total_lead_revenue > 0 ? " · L:$" + billTimeseries.total_lead_revenue.toFixed(0) : ""}${billTimeseries.total_schedule_revenue > 0 ? " · Sched:$" + billTimeseries.total_schedule_revenue.toFixed(0) : ""}</span></div>
           </div>
           `}
         </div>

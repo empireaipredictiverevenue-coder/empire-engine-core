@@ -1483,6 +1483,7 @@ async def billing_summary(auth: bool = Depends(require_auth)):
         "calls_today": 0, "revenue_today": 0.0,
         "revenue_week": 0.0, "revenue_month": 0.0,
         "by_source": [], "top_calls": [], "buyers": [],
+        "lead_revenue_today": 0.0, "schedule_revenue_today": 0.0,
     }
 
     try:
@@ -1509,6 +1510,8 @@ async def billing_summary(auth: bool = Depends(require_auth)):
         revenue_today = sum(float(row.get("fee_earned") or 0) for row in today_rows)
         revenue_week = sum(float(row.get("fee_earned") or 0) for row in week_rows)
         revenue_month = sum(float(row.get("fee_earned") or 0) for row in month_rows)
+        lead_revenue_today = sum(float(row.get("lead_fee") or 0) for row in today_rows)
+        schedule_revenue_today = sum(float(row.get("schedule_fee") or 0) for row in today_rows)
 
         # ── By source (using today's rows) ──
         source_counts: dict = {}
@@ -1524,6 +1527,10 @@ async def billing_summary(auth: bool = Depends(require_auth)):
         for v in source_counts.values():
             v["net_payout"] = round(v["net_payout"], 2)
             v["fees"] = round(v["fees"], 2)
+
+        # ── Lead + Schedule revenue today ──
+        lead_revenue_today = sum(float(row.get("lead_fee") or 0) for row in today_rows)
+        schedule_revenue_today = sum(float(row.get("schedule_fee") or 0) for row in today_rows)
 
         # ── Top calls by payout (across all rows) ──
         all_rows_sorted = sorted(
@@ -1550,6 +1557,18 @@ async def billing_summary(auth: bool = Depends(require_auth)):
             bid = row.get("buyer_id")
             settlement_fee = float(row.get("settlement_fee") or 0)
             per_minute_fee = float(row.get("per_minute_fee") or 0)
+            lead_fee = float(row.get("lead_fee") or 0)
+            schedule_fee = float(row.get("schedule_fee") or 0)
+            fee_earned = float(row.get("fee_earned") or 0)
+            fee_models = []
+            if per_minute_fee > settlement_fee:
+                fee_models.append("per_minute")
+            elif settlement_fee > 0:
+                fee_models.append("settlement")
+            if lead_fee > 0:
+                fee_models.append("ppl")
+            if schedule_fee > 0:
+                fee_models.append("schedule")
             top_calls.append({
                 "buyer_name": buyer_name_map.get(bid, row.get("source") or "?"),
                 "niche": row.get("niche") or "-",
@@ -1557,8 +1576,10 @@ async def billing_summary(auth: bool = Depends(require_auth)):
                 "net_payout": round(float(row.get("payout_value") or 0), 2),
                 "settlement_fee": round(settlement_fee, 2),
                 "per_minute_fee": round(per_minute_fee, 2),
-                "fee": round(float(row.get("fee_earned") or 0), 2),
-                "fee_model": "per_minute" if per_minute_fee > settlement_fee else "settlement",
+                "lead_fee": round(lead_fee, 2),
+                "schedule_fee": round(schedule_fee, 2),
+                "fee": round(fee_earned, 2),
+                "fee_model": "+".join(fee_models) if fee_models else "none",
             })
 
         # ── Buyers ──
@@ -1594,6 +1615,8 @@ async def billing_summary(auth: bool = Depends(require_auth)):
             "revenue_today": round(revenue_today, 2),
             "revenue_week": round(revenue_week, 2),
             "revenue_month": round(revenue_month, 2),
+            "lead_revenue_today": round(lead_revenue_today, 2),
+            "schedule_revenue_today": round(schedule_revenue_today, 2),
             "by_source": sorted(source_counts.values(), key=lambda x: x["calls"], reverse=True),
             "top_calls": top_calls,
             "buyers": sorted(buyers, key=lambda x: x["calls"], reverse=True),
@@ -1630,11 +1653,11 @@ async def billing_timeseries(days: int = 30, auth: bool = Depends(require_auth))
     
     try:
         r = db.table("call_logs").select(
-            "fee_earned,settlement_fee,per_minute_fee,is_billable,status,created_at"
+            "fee_earned,settlement_fee,per_minute_fee,lead_fee,schedule_fee,is_billable,status,created_at"
         ).gte("created_at", cutoff).execute()
         rows = r.data or []
         
-        buckets: dict = defaultdict(lambda: {"date": "", "revenue": 0.0, "settlement_revenue": 0.0, "per_minute_revenue": 0.0, "calls": 0, "billable": 0})
+        buckets: dict = defaultdict(lambda: {"date": "", "revenue": 0.0, "settlement_revenue": 0.0, "per_minute_revenue": 0.0, "lead_revenue": 0.0, "schedule_revenue": 0.0, "premium_revenue": 0.0, "calls": 0, "billable": 0})
         for row in rows:
             d = (row.get("created_at") or "")[:10]
             if not d:
@@ -1644,6 +1667,8 @@ async def billing_timeseries(days: int = 30, auth: bool = Depends(require_auth))
             b["revenue"] += float(row.get("fee_earned") or 0)
             b["settlement_revenue"] += float(row.get("settlement_fee") or 0)
             b["per_minute_revenue"] += float(row.get("per_minute_fee") or 0)
+            b["lead_revenue"] += float(row.get("lead_fee") or 0)
+            b["schedule_revenue"] += float(row.get("schedule_fee") or 0)
             b["calls"] += 1
             if row.get("is_billable") is True:
                 b["billable"] += 1
@@ -1653,6 +1678,9 @@ async def billing_timeseries(days: int = 30, auth: bool = Depends(require_auth))
             s["revenue"] = round(s["revenue"], 2)
             s["settlement_revenue"] = round(s["settlement_revenue"], 2)
             s["per_minute_revenue"] = round(s["per_minute_revenue"], 2)
+            s["lead_revenue"] = round(s["lead_revenue"], 2)
+            s["schedule_revenue"] = round(s["schedule_revenue"], 2)
+            s["premium_revenue"] = max(0, s["per_minute_revenue"] - s["settlement_revenue"])
         
         total_revenue = sum(s["revenue"] for s in series)
         total_calls = sum(s["calls"] for s in series)
