@@ -70,3 +70,7 @@ solana-meme-sniper/target/
 # Third-party integrations (cloned repos — never commit)
 integrations/
 data/
+
+# Graphify knowledge graph — generated, 22MB, regenerated on extract
+# Do not commit — run `python3 -m graphify extract` to rebuild
+graphify-out/

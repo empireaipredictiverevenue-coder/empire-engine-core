@@ -193,6 +193,7 @@ from products.trial_conversion import TrialConversionEngine
 from products.meetily import MeetilyProduct, MeetilyRoutes
 from products.elite_scraper import EliteScraperProduct, EliteScraperRoutes
 from products.agent_reach_enrichment import AgentReachEnricher, AgentReachRoutes
+from products.graphify_bridge import GraphifyBridge, GraphifyRoutes
 from hook_analytics import HookRoutes
 
 # Strategist & Analytics Agents
@@ -2043,6 +2044,10 @@ EliteScraperRoutes(suite_elite_scraper, require_auth=require_auth).register(app)
 
 # Agent-Reach Enrichment Layer — 9-channel intelligence for Elite Scraper
 agent_reach_enricher = AgentReachEnricher(get_db=get_db)
+
+# Graphify Knowledge Graph — codebase mapping for AI agents
+graphify_bridge = GraphifyBridge(graph_path="/root/empire-v49/graphify-out/graph.json")
+GraphifyRoutes(graphify_bridge, require_auth=require_auth).register(app)
 AgentReachRoutes(agent_reach_enricher, require_auth=require_auth).register(app)
 
 # Wire Agent-Reach enricher into Elite Scraper for tier-aware enrichment
