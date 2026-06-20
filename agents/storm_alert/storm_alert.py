@@ -342,7 +342,32 @@ def run_once(dry_run_override: Optional[bool] = None) -> dict:
     }
 
 
-# ── CLI ────────────────────────────────────────────────────────────────
+# ── DEFAULT INTERVAL ───────────────────────────────────────────────────
+DEFAULT_INTERVAL_SECONDS = 1800  # 30 min
+
+
+# ── Loop mode ───────────────────────────────────────────────────────────
+
+async def run_loop(interval_seconds: Optional[int] = None):
+    """Run storm_alert.run_once() in an infinite loop with the given interval.
+
+    Reads interval from agent_config.config_json.interval_seconds at startup
+    (if set), otherwise uses the provided or default interval.
+    """
+    delay = interval_seconds or DEFAULT_INTERVAL_SECONDS
+    log.info(f"[{AGENT_NAME}] running in loop mode (interval={delay}s)")
+    while True:
+        started = datetime.now(timezone.utc)
+        try:
+            result = run_once(dry_run_override=None)
+            elapsed = (datetime.now(timezone.utc) - started).total_seconds()
+            log.info(f"[{AGENT_NAME}] cycle done in {elapsed:.1f}s — status={result.get('status')}")
+        except Exception as e:
+            log.exception(f"[{AGENT_NAME}] cycle failed: {e}")
+        # Sleep for the interval (adjust for run time)
+        slept = (datetime.now(timezone.utc) - started).total_seconds()
+        await asyncio.sleep(max(10, delay - slept))
+
 
 def show_status():
     """Print agent status and recent run history."""
@@ -388,7 +413,13 @@ def main():
     p = argparse.ArgumentParser(description="Empire AI Storm Alert Agent (Phase 1)")
     p.add_argument("--dry-run", action="store_true", help="report only, no DB writes")
     p.add_argument("--status", action="store_true", help="print last run + stats")
+    p.add_argument("--loop", action="store_true", help="run in loop mode (replaces cron)")
+    p.add_argument("--interval", type=int, default=None,
+                   help=f"loop interval in seconds (default: {DEFAULT_INTERVAL_SECONDS})")
     args = p.parse_args()
+    if args.loop:
+        asyncio.run(run_loop(interval_seconds=args.interval))
+        return
     if args.status:
         show_status()
         return

@@ -114,48 +114,265 @@ _METRO_ALIASES: Dict[str, List[str]] = {
     "Indianapolis":        ["indianapolis", "fishers", "carmel", "noblesville", "greenwood", "plainfield", "avon in", "in"],
     "Columbus":            ["columbus oh", "dublin", "gahanna", "westerville", "hilliard", "grove city"],
     "Louisville":          ["louisville", "lexington ky", "bowling green", "owensboro", "elizabethtown", "ky"],
-    # ── County-name variants from NWS storm_alert ────────────────────
-    # NWS areaDesc uses county names (e.g. "Dallas, TX") not metro names.
-    # These entries bridge the gap so storm_log_to_targets can match
-    # county-name entries written by storm_alert into storm_risk_log.
-    # Lists share references with parent metro entries (immutable at runtime).
-    "Dallas, TX":        ["dallas", "dfw", "arlington", "plano", "irving", "garland", "mesquite", "carrollton", "frisco", "mckinney", "denton", "lewisville", "richardson", "allen"],
-    "Collin, TX":        ["plano", "frisco", "mckinney", "allen", "richardson", "wylie", "princeton", "celina", "anna", "melissa", "fairview", "lucas", "parker", "dallas"],
+    # ── County-name entries with unique alias lists ───────────────────
+    # These counties have city names not covered by parent metro alias lists,
+    # so they need their own entries. Most other TX counties resolve via
+    # _COUNTY_TO_METRO below.
     "Hunt, TX":          ["greenville tx", "commerce tx", "quinlan", "caddo mills", "lone oak", "wolfe city"],
-    "Tarrant, TX":       ["fort worth", "arlington", "ft worth", "bedford", "euless", "grapevine", "hurst", "colleyville", "southlake", "keller", "north richland hills"],
-    "Denton, TX":        ["denton", "lewisville", "flower mound", "highland village", "coppell", "the colony", "frisco", "little elm", "lake dallas"],
-    "Ellis, TX":         ["waxahachie", "ennis", "midlothian", "red oak", "lancaster", "italy tx", "ferris"],
-    "Johnson, TX":       ["cleburne", "burleson", "alvarado", "keene"],
-    "Rockwall, TX":      ["rockwall", "rowlett", "garland", "heath", "fate"],
-    "Kaufman, TX":       ["kaufman", "terrell", "forney", "crandall", "talty", "mesquite"],
-    "Parker, TX":        ["weatherford", "aledo", "willow park", "hudson oaks"],
-    "Harris, TX":        ["houston", "sugar land", "pearland", "pasadena", "cypress", "katy", "spring", "missouri city"],
-    "Montgomery, TX":    ["the woodlands", "conroe", "spring", "magnolia", "montgomery tx", "splendora"],
-    "Fort Bend, TX":     ["sugar land", "missouri city", "richmond tx", "rosenberg", "stafford", "katy"],
-    "Brazoria, TX":      ["pearland", "alvin", "angleton", "lake jackson", "freeport", "clute"],
-    "Galveston, TX":     ["galveston", "texas city", "league city", "la marque", "santa fe", "dickinson"],
-    "Travis, TX":        ["austin", "rollingwood", "sunset valley"],
-    "Williamson, TX":    ["round rock", "cedar park", "georgetown", "leander", "hutto", "taylor", "pflugerville"],
-    "Hays, TX":          ["san marcos", "kyle", "buda", "dripping springs", "wimberley"],
-    "Bexar, TX":         ["san antonio", "schertz", "converse", "cibolo"],
-    "Comal, TX":         ["new braunfels", "garden ridge", "bulverde", "canyon lake"],
-    "Guadalupe, TX":     ["schertz", "cibolo", "seguin", "marion", "new berlin"],
-    "Bastrop, TX":       ["bastrop", "elgin", "smithville"],
-    "Caldwell, TX":      ["lockhart", "luling"],
-    "McLennan, TX":      ["waco", "woodway", "hewitt", "robinson", "bellmead", "mcgregor", "west tx"],
-    "Bell, TX":          ["temple tx", "belton", "harker heights", "killeen", "copperas cove", "nolanville"],
     "Coryell, TX":       ["gatesville", "copperas cove", "oglesby"],
-    "Smith, TX":         ["tyler tx", "whitehouse", "bullard", "lindale"],
     "Gregg, TX":         ["longview", "white oak", "kilgore"],
     "Bowie, TX":         ["texarkana"],
-    "Lubbock, TX":       ["lubbock", "wolfforth", "shallowater", "slaton"],
-    "Potter, TX":        ["amarillo"],
-    "Randall, TX":       ["canyon"],
-    "El Paso, TX":       ["el paso", "socorro", "horizon city"],
-    "Nueces, TX":        ["corpus christi", "portland tx", "kingsville", "robstown", "agua dulce"],
     "Webb, TX":          ["laredo"],
     "Hidalgo, TX":       ["mcallen", "edinburg", "pharr", "mission", "weslaco", "donna"],
     "Cameron, TX":       ["brownsville", "harlingen", "san benito", "los fresnos"],
+}
+
+# ── NWS county-name → metro alias map ──────────────────────────────────
+# NWS areaDesc uses county names (e.g. "Dallas, TX") not metro names.
+# storm_alert writes these into storm_risk_log. This map resolves them
+# to existing _METRO_ALIASES keys, avoiding duplicated alias lists.
+# Add new counties here — not as duplicated lists in _METRO_ALIASES.
+_COUNTY_TO_METRO: Dict[str, str] = {
+    # ── DFW metro counties ──
+    "Dallas, TX":      "Dallas-Fort Worth",
+    "Collin, TX":      "Dallas-Fort Worth",
+    "Tarrant, TX":     "Dallas-Fort Worth",
+    "Denton, TX":      "Dallas-Fort Worth",
+    "Ellis, TX":       "Dallas-Fort Worth",
+    "Johnson, TX":     "Dallas-Fort Worth",
+    "Rockwall, TX":    "Dallas-Fort Worth",
+    "Kaufman, TX":     "Dallas-Fort Worth",
+    "Parker, TX":      "Dallas-Fort Worth",
+    # ── Houston metro counties ──
+    "Harris, TX":      "Houston",
+    "Montgomery, TX":  "Houston",
+    "Fort Bend, TX":   "Houston",
+    "Brazoria, TX":    "Houston",
+    "Galveston, TX":   "Houston",
+    # ── Austin metro counties ──
+    "Travis, TX":      "Austin",
+    "Williamson, TX":  "Austin",
+    "Hays, TX":        "Austin",
+    "Bastrop, TX":     "Austin",
+    "Caldwell, TX":    "Austin",
+    # ── San Antonio metro counties ──
+    "Bexar, TX":       "San Antonio",
+    "Comal, TX":       "San Antonio",
+    "Guadalupe, TX":   "San Antonio",
+    # ── Central / West Texas ──
+    "McLennan, TX":    "Waco",
+    "Bell, TX":        "Temple",
+    "Smith, TX":       "Tyler",
+    "Lubbock, TX":     "Lubbock",
+    "Potter, TX":      "Amarillo",
+    "Randall, TX":     "Amarillo",
+    "El Paso, TX":     "El Paso",
+    "Nueces, TX":      "Corpus Christi",
+    # ── Oklahoma ──
+    # OKC metro counties
+    "Oklahoma, OK":    "Oklahoma City",
+    "Cleveland, OK":   "Oklahoma City",
+    "Canadian, OK":    "Oklahoma City",
+    "McClain, OK":     "Oklahoma City",
+    "Logan, OK":       "Oklahoma City",
+    "Grady, OK":       "Oklahoma City",
+    "Kingfisher, OK":  "Oklahoma City",
+    "Lincoln, OK":     "Oklahoma City",
+    "Pottawatomie, OK":"Oklahoma City",
+    "Seminole, OK":    "Oklahoma City",
+    "Pontotoc, OK":    "Oklahoma City",     # Ada
+    "Comanche, OK":    "Oklahoma City",     # Lawton
+    "Stephens, OK":    "Oklahoma City",     # Duncan
+    "Garvin, OK":      "Oklahoma City",     # Pauls Valley
+    "Carter, OK":      "Oklahoma City",     # Ardmore
+    # Tulsa metro counties
+    "Tulsa, OK":       "Tulsa",
+    "Rogers, OK":      "Tulsa",
+    "Wagoner, OK":     "Tulsa",
+    "Creek, OK":       "Tulsa",
+    "Osage, OK":       "Tulsa",
+    "Okmulgee, OK":    "Tulsa",
+    "Washington, OK":  "Tulsa",             # Bartlesville
+    "Nowata, OK":      "Tulsa",
+    "Mayes, OK":       "Tulsa",             # Pryor Creek
+    "Pawnee, OK":      "Tulsa",
+    # Southern OK → DFW corridor
+    "Bryan, OK":       "Dallas-Fort Worth", # Durant — southern I-35 corridor into TX
+    "Love, OK":        "Dallas-Fort Worth", # Marietta
+    "Marshall, OK":    "Dallas-Fort Worth", # Madill
+    "Johnston, OK":    "Dallas-Fort Worth", # Tishomingo
+    "Choctaw, OK":     "Dallas-Fort Worth", # Hugo
+    "McCurtain, OK":   "Dallas-Fort Worth", # Idabel — far SE OK
+    # Northern OK → Wichita corridor
+    "Kay, OK":         "Wichita",           # Ponca City
+    # ── Kansas ──
+    "Sedgwick, KS":    "Wichita",
+    "Butler, KS":      "Wichita",
+    "Harvey, KS":      "Wichita",
+    "Johnson, KS":     "Kansas City",
+    "Wyandotte, KS":   "Kansas City",
+    # ── Missouri ──
+    "Jackson, MO":     "Kansas City",
+    "Clay, MO":        "Kansas City",
+    "Platte, MO":      "Kansas City",
+    "Greene, MO":      "Springfield MO",
+    "Christian, MO":   "Springfield MO",
+    "Webster, MO":     "Springfield MO",
+    "St. Louis, MO":   "St. Louis",
+    "St. Charles, MO": "St. Louis",
+    "Jefferson, MO":   "St. Louis",
+    "Franklin, MO":    "St. Louis",
+    # ── Arkansas ──
+    # Central AR — Little Rock metro
+    "Pulaski, AR":     "Little Rock",
+    "Faulkner, AR":    "Little Rock",
+    "Saline, AR":      "Little Rock",
+    "Lonoke, AR":      "Little Rock",
+    "Grant, AR":       "Little Rock",
+    "Jefferson, AR":   "Little Rock",       # Pine Bluff
+    "Garland, AR":     "Little Rock",       # Hot Springs
+    "Conway, AR":      "Little Rock",       # Morrilton
+    "Perry, AR":       "Little Rock",
+    "Hot Spring, AR":  "Little Rock",       # Malvern
+    "Clark, AR":       "Little Rock",       # Arkadelphia
+    "Dallas, AR":      "Little Rock",
+    "Cleveland, AR":   "Little Rock",
+    "Lincoln, AR":     "Little Rock",
+    "Desha, AR":       "Little Rock",
+    "Drew, AR":        "Little Rock",       # Monticello
+    "Bradley, AR":     "Little Rock",       # Warren
+    "Ouachita, AR":    "Little Rock",       # Camden
+    "Calhoun, AR":     "Little Rock",
+    "Union, AR":       "Little Rock",       # El Dorado
+    "Columbia, AR":    "Little Rock",       # Magnolia
+    "Nevada, AR":      "Little Rock",
+    "Hempstead, AR":   "Little Rock",       # Hope
+    "Howard, AR":      "Little Rock",       # Nashville
+    "Sevier, AR":      "Little Rock",       # De Queen
+    "Little River, AR":"Little Rock",       # Ashdown
+    "Miller, AR":      "Dallas-Fort Worth", # Texarkana — TX border
+    "Lafayette, AR":   "Dallas-Fort Worth", # Lewisville, south AR near TX
+    # Eastern AR — Memphis corridor
+    "Crittenden, AR":  "Memphis",           # West Memphis — part of Memphis metro
+    "Mississippi, AR": "Memphis",           # Blytheville
+    "Poinsett, AR":    "Memphis",           # Harrisburg
+    "Cross, AR":       "Memphis",           # Wynne
+    "St. Francis, AR": "Memphis",           # Forrest City
+    "Craighead, AR":   "Memphis",           # Jonesboro — closer to Memphis than LR
+    "Greene, AR":      "Memphis",           # Paragould
+    "Clay, AR":        "Memphis",           # Corning/Piggott
+    # ── Louisiana ──
+    # New Orleans metro parishes
+    "Orleans, LA":     "New Orleans",
+    "Jefferson, LA":   "New Orleans",
+    "St. Tammany, LA": "New Orleans",
+    "St. Bernard, LA": "New Orleans",
+    "Plaquemines, LA": "New Orleans",
+    "St. Charles, LA": "New Orleans",
+    "St. John the Baptist, LA": "New Orleans",  # LaPlace
+    "St. James, LA":   "New Orleans",
+    "Lafourche, LA":   "New Orleans",           # Thibodaux
+    "Terrebonne, LA":  "New Orleans",           # Houma
+    "Tangipahoa, LA":  "New Orleans",           # Hammond
+    "Washington, LA":  "New Orleans",           # Bogalusa
+    "Assumption, LA":  "New Orleans",           # Napoleonville
+    "St. Mary, LA":    "New Orleans",           # Morgan City
+    # Baton Rouge metro parishes
+    "East Baton Rouge, LA": "Baton Rouge",
+    "Livingston, LA":  "Baton Rouge",
+    "Ascension, LA":   "Baton Rouge",
+    "West Baton Rouge, LA": "Baton Rouge",      # Port Allen
+    "Iberville, LA":   "Baton Rouge",           # Plaquemine
+    "Pointe Coupee, LA": "Baton Rouge",         # New Roads
+    "East Feliciana, LA": "Baton Rouge",        # Clinton
+    "West Feliciana, LA": "Baton Rouge",        # St. Francisville
+    "St. Helena, LA":  "Baton Rouge",
+    "Iberia, LA":      "Baton Rouge",           # New Iberia
+    "St. Martin, LA":  "Baton Rouge",           # St. Martinville
+    "Lafayette, LA":   "Baton Rouge",           # Lafayette — Acadiana region
+    "Acadia, LA":      "Baton Rouge",           # Crowley
+    "Vermilion, LA":   "Baton Rouge",           # Abbeville
+    "St. Landry, LA":  "Baton Rouge",           # Opelousas
+    "Evangeline, LA":  "Baton Rouge",           # Ville Platte
+    "Avoyelles, LA":   "Baton Rouge",           # Marksville
+    "Rapides, LA":     "Baton Rouge",           # Alexandria
+    # ── Mississippi ──
+    "Hinds, MS":       "Jackson MS",
+    "Rankin, MS":      "Jackson MS",
+    "Madison, MS":     "Jackson MS",
+    "Harrison, MS":    "Gulfport",
+    "Hancock, MS":     "Gulfport",
+    "Jackson, MS":     "Gulfport",
+    # ── Alabama ──
+    "Mobile, AL":      "Mobile",
+    "Baldwin, AL":     "Mobile",
+    "Jefferson, AL":   "Birmingham",
+    "Shelby, AL":      "Birmingham",
+    # ── Georgia ──
+    "Fulton, GA":      "Atlanta",
+    "DeKalb, GA":      "Atlanta",
+    "Cobb, GA":        "Atlanta",
+    "Gwinnett, GA":    "Atlanta",
+    "Clayton, GA":     "Atlanta",
+    "Cherokee, GA":    "Atlanta",
+    "Forsyth, GA":     "Atlanta",
+    # ── Florida ──
+    "Miami-Dade, FL":  "Miami",
+    "Broward, FL":     "Miami",
+    "Palm Beach, FL":  "Miami",
+    "Hillsborough, FL": "Tampa",
+    "Pinellas, FL":    "Tampa",
+    "Pasco, FL":      "Tampa",
+    "Orange, FL":      "Orlando",
+    "Seminole, FL":    "Orlando",
+    "Duval, FL":       "Jacksonville",
+    "St. Johns, FL":  "Jacksonville",
+    "Lee, FL":         "Fort Myers",
+    "Collier, FL":     "Fort Myers",
+    "Escambia, FL":    "Pensacola",
+    "Santa Rosa, FL":  "Pensacola",
+    "Leon, FL":        "Tallahassee",
+    # ── South Carolina ──
+    "Richland, SC":    "Columbia",
+    "Lexington, SC":   "Columbia",
+    "Charleston, SC":  "Charleston",
+    "Berkeley, SC":    "Charleston",
+    "Dorchester, SC":  "Charleston",
+    "Horry, SC":       "Myrtle Beach",
+    # ── North Carolina ──
+    "Mecklenburg, NC": "Charlotte",
+    "Cabarrus, NC":    "Charlotte",
+    "Union, NC":       "Charlotte",
+    "Gaston, NC":      "Charlotte",
+    "Wake, NC":        "Raleigh",
+    "Durham, NC":      "Raleigh",
+    "Orange, NC":      "Raleigh",
+    "Johnston, NC":    "Raleigh",
+    "New Hanover, NC": "Wilmington",
+    "Brunswick, NC":   "Wilmington",
+    # ── Tennessee ──
+    "Davidson, TN":    "Nashville",
+    "Williamson, TN":  "Nashville",
+    "Rutherford, TN":  "Nashville",
+    "Wilson, TN":      "Nashville",
+    "Sumner, TN":      "Nashville",
+    "Shelby, TN":      "Memphis",
+    "DeSoto, MS":     "Memphis",
+    # ── Virginia / Mid-Atlantic ──
+    "Henrico, VA":     "Richmond",
+    "Chesterfield, VA": "Richmond",
+    "Norfolk, VA":     "Virginia Beach",
+    "Chesapeake, VA":  "Virginia Beach",
+    # ── Colorado / Plains ──
+    "Denver, CO":      "Denver",
+    "Arapahoe, CO":    "Denver",
+    "Jefferson, CO":   "Denver",
+    "Douglas, NE":     "Omaha",
+    "Polk, IA":        "Des Moines",
+    # ── Ohio Valley ──
+    "Marion, IN":      "Indianapolis",
+    "Franklin, OH":    "Columbus",
+    "Jefferson, KY":   "Louisville",
 }
 
 # ── Risk rank → damage_severity + urgency_score mapping ──────────────────
@@ -313,9 +530,17 @@ def run_once(dry_run_override: Optional[bool] = None) -> dict:
     updates_to_apply: Dict[str, Tuple[str, int]] = {}  # target_id → (severity, urgency)
 
     for metro in qualifying:
-        aliases = _METRO_ALIASES.get(metro["metro"])
+        metro_name = metro["metro"]
+        aliases = _METRO_ALIASES.get(metro_name)
+        # Fall back: check if it's a county name that maps to a metro
         if not aliases:
-            log.debug(f"[{AGENT_NAME}] no alias map for metro={metro['metro']}, skipping")
+            parent = _COUNTY_TO_METRO.get(metro_name)
+            if parent:
+                aliases = _METRO_ALIASES.get(parent)
+                if aliases:
+                    log.info(f"[{AGENT_NAME}] resolved county '{metro_name}' -> metro '{parent}'")
+        if not aliases:
+            log.debug(f"[{AGENT_NAME}] no alias map for metro={metro_name}, skipping")
             continue
 
         targets = _find_targets_for_metro(sb, metro["metro"], aliases)
@@ -396,7 +621,27 @@ def run_once(dry_run_override: Optional[bool] = None) -> dict:
     }
 
 
-# ── CLI ────────────────────────────────────────────────────────────────
+# ── DEFAULT INTERVAL ───────────────────────────────────────────────────
+DEFAULT_INTERVAL_SECONDS = 3600  # 1 hour
+
+
+# ── Loop mode ───────────────────────────────────────────────────────────
+
+async def run_loop(interval_seconds: Optional[int] = None):
+    """Run storm_log_to_targets.run_once() in an infinite loop."""
+    delay = interval_seconds or DEFAULT_INTERVAL_SECONDS
+    log.info(f"[{AGENT_NAME}] running in loop mode (interval={delay}s)")
+    while True:
+        started = datetime.now(timezone.utc)
+        try:
+            result = run_once(dry_run_override=None)
+            elapsed = (datetime.now(timezone.utc) - started).total_seconds()
+            log.info(f"[{AGENT_NAME}] cycle done in {elapsed:.1f}s — status={result.get('status')}")
+        except Exception as e:
+            log.exception(f"[{AGENT_NAME}] cycle failed: {e}")
+        slept = (datetime.now(timezone.utc) - started).total_seconds()
+        await asyncio.sleep(max(10, delay - slept))
+
 
 def show_status():
     """Print agent status and recent run history."""
@@ -447,7 +692,14 @@ def main():
                    help="report only, no DB writes")
     p.add_argument("--status", action="store_true",
                    help="print last run + stats")
+    p.add_argument("--loop", action="store_true",
+                   help="run in loop mode (replaces cron)")
+    p.add_argument("--interval", type=int, default=None,
+                   help=f"loop interval in seconds (default: {DEFAULT_INTERVAL_SECONDS})")
     args = p.parse_args()
+    if args.loop:
+        asyncio.run(run_loop(interval_seconds=args.interval))
+        return
     if args.status:
         show_status()
         return

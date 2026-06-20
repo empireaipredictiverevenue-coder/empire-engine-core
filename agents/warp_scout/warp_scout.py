@@ -51,6 +51,7 @@ AGENT_NAME = "warp_scout"
 
 # Risk levels that warrant a Telegram alert (Slight or higher)
 ALERT_THRESHOLD_RANK = 4  # Slight=4 in bots.storm_predictor.RISK_RANK
+DEFAULT_INTERVAL_SECONDS = 7200  # 2 hours
 
 
 def _sb():
@@ -197,6 +198,24 @@ def run_once(dry_run_override=None) -> dict:
     }
 
 
+# ── Loop mode ───────────────────────────────────────────────────────────
+
+async def run_loop(interval_seconds: Optional[int] = None):
+    """Run warp_scout.run_once() in an infinite loop."""
+    delay = interval_seconds or DEFAULT_INTERVAL_SECONDS
+    log.info(f"[{AGENT_NAME}] running in loop mode (interval={delay}s)")
+    while True:
+        started = datetime.now(timezone.utc)
+        try:
+            result = run_once(dry_run_override=None)
+            elapsed = (datetime.now(timezone.utc) - started).total_seconds()
+            log.info(f"[{AGENT_NAME}] cycle done in {elapsed:.1f}s — status={result.get('status')}")
+        except Exception as e:
+            log.exception(f"[{AGENT_NAME}] cycle failed: {e}")
+        slept = (datetime.now(timezone.utc) - started).total_seconds()
+        await asyncio.sleep(max(10, delay - slept))
+
+
 def show_status():
     sb = _sb()
     r = sb.table("agent_config").select("*").eq("agent_name", AGENT_NAME).limit(1).execute()
@@ -235,7 +254,13 @@ def main():
     p = argparse.ArgumentParser(description="Empire AI Warp Scout (storm risk predictor)")
     p.add_argument("--dry-run", action="store_true", help="score and report, don't write")
     p.add_argument("--status", action="store_true", help="print last run + stats")
+    p.add_argument("--loop", action="store_true", help="run in loop mode (replaces cron)")
+    p.add_argument("--interval", type=int, default=None,
+                   help=f"loop interval in seconds (default: {DEFAULT_INTERVAL_SECONDS})")
     args = p.parse_args()
+    if args.loop:
+        asyncio.run(run_loop(interval_seconds=args.interval))
+        return
     if args.status:
         show_status()
         return

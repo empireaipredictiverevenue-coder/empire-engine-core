@@ -1,6 +1,14 @@
 """
-Empire AI · Daily Billing Summary
+Empire AI · Daily Billing Digest
 ==================================
+Queries the call_logs table for the last 24 hours of billing activity
+and sends a Telegram digest to the operator chat.
+
+Can run via:
+  - Cron (legacy: 07:00 UTC daily)
+  - Loop mode: python3 agents_billing_daily.py --loop
+  - Agent runner: python3 -m agents.agent_runner
+
 Runs daily at 07:00 UTC via cron. Queries the call_logs table for
 the last 24 hours of billing activity and sends a Telegram digest
 to the operator chat.
@@ -18,11 +26,13 @@ Logs to agent_activity so the operator SPA can chart it.
 import os
 import sys
 import uuid
+import argparse
 import asyncio
 import logging
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from collections import Counter
+from typing import Optional
 
 sys.path.insert(0, str(Path("/root/empire-v49").resolve()))
 
@@ -46,6 +56,7 @@ logging.basicConfig(
 )
 
 AGENT_NAME = "billing_daily_digest"
+DEFAULT_INTERVAL_SECONDS = 86400  # 24 hours
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "")
 TELEGRAM_CHAT_ID = os.environ.get("OPERATOR_TELEGRAM_CHAT_ID", "808657420")
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "")
@@ -268,7 +279,26 @@ def log_to_agent_activity(started_at, status: str, summary: str) -> None:
         log.error(f"failed to log to agent_activity: {e}")
 
 
-def main() -> int:
+# ── Loop mode ───────────────────────────────────────────────────────────
+
+async def run_loop(interval_seconds: Optional[int] = None):
+    """Run billing daily digest in an infinite loop."""
+    delay = interval_seconds or DEFAULT_INTERVAL_SECONDS
+    log.info(f"[{AGENT_NAME}] running in loop mode (interval={delay}s = {delay/3600:.0f}h)")
+    while True:
+        started = datetime.now(timezone.utc)
+        try:
+            exit_code = await _run_once_async()
+            elapsed = (datetime.now(timezone.utc) - started).total_seconds()
+            log.info(f"[{AGENT_NAME}] cycle done in {elapsed:.1f}s — exit_code={exit_code}")
+        except Exception as e:
+            log.exception(f"[{AGENT_NAME}] cycle failed: {e}")
+        slept = (datetime.now(timezone.utc) - started).total_seconds()
+        await asyncio.sleep(max(30, delay - slept))
+
+
+async def _run_once_async() -> int:
+    """Run one billing cycle asynchronously (safe for both loop mode and sync main())."""
     started_at = datetime.now(timezone.utc)
     log.info(f"running at {started_at.isoformat()}")
 
@@ -280,15 +310,13 @@ def main() -> int:
         )
     except Exception as e:
         log.error(f"fetch failed: {e}")
-        asyncio.run(send_telegram(
-            f"🔴 Billing daily: fetch failed\n\n<code>{e}</code>"
-        ))
+        await send_telegram(f"🔴 Billing daily: fetch failed\n\n<code>{e}</code>")
         return 1
 
     message = build_message(data)
     log.info(f"built message ({len(message)} chars)")
 
-    sent_ok = asyncio.run(send_telegram(message))
+    sent_ok = await send_telegram(message)
 
     summary = (
         f"today_routed={data['today_routed']} "
@@ -300,6 +328,18 @@ def main() -> int:
     log_to_agent_activity(started_at, "ok" if sent_ok else "warn", summary)
     log.info(f"done: {summary}")
     return 0 if sent_ok else 1
+
+
+def main() -> int:
+    p = argparse.ArgumentParser(description="Empire AI Daily Billing Digest")
+    p.add_argument("--loop", action="store_true", help="run in loop mode (replaces cron)")
+    p.add_argument("--interval", type=int, default=None,
+                   help=f"loop interval in seconds (default: {DEFAULT_INTERVAL_SECONDS})")
+    args, _ = p.parse_known_args()
+    if args.loop:
+        asyncio.run(run_loop(interval_seconds=args.interval))
+        return 0
+    return asyncio.run(_run_once_async())
 
 
 if __name__ == "__main__":
