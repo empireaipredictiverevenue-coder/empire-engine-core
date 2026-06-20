@@ -54,11 +54,11 @@ AGENT_NAME = "storm_log_to_targets"
 
 # ── Metro name → city alias matching (sync with empire_satellite_strike.py) ──
 _METRO_ALIASES: Dict[str, List[str]] = {
-    "Dallas-Fort Worth":   ["dallas", "fort worth", "dfw", "arlington", "plano", "irving", "garland", "mesquite", "carrollton", "frisco", "mckinney", "denton", "lewisville", "richardson", "allen"],
+    "Dallas-Fort Worth":   ["dallas", "fort worth", "dfw", "arlington", "plano", "irving", "garland", "mesquite", "carrollton", "frisco", "mckinney", "denton", "lewisville", "richardson", "allen", "sherman", "denison"],
     "Dallas":              ["dallas", "dfw"],
     "Fort Worth":          ["fort worth", "ft worth"],
     "Houston":             ["houston", "sugar land", "the woodlands", "conroe", "pearland", "pasadena", "cypress", "katy", "spring"],
-    "Austin":              ["austin", "round rock", "cedar park", "pflugerville", "san marcos", "kyle", "buda"],
+    "Austin":              ["austin", "round rock", "cedar park", "pflugerville", "san marcos", "kyle", "buda", "georgetown"],
     "San Antonio":         ["san antonio", "sa", "new braunfels", "schertz", "converse", "cibolo"],
     "Wichita":             ["wichita", "derby", "haysville", "andover", "maize"],
     "Oklahoma City":       ["oklahoma city", "okc", "norman", "edmond", "moore", "midwest city", "enid", "stillwater"],
@@ -109,7 +109,7 @@ _METRO_ALIASES: Dict[str, List[str]] = {
     "Omaha":               ["omaha", "lincoln", "council bluffs", "bellevue", "papillion", "la vista"],
     "Des Moines":          ["des moines", "ankeny", "west des moines", "urbandale", "clive", "johnston", "ia"],
     "Waco":                ["waco", "woodway", "hewitt", "robinson", "bellmead", "mcgill"],
-    "Temple":              ["temple tx", "belton", "harker heights", "nolanville"],
+    "Temple":              ["temple tx", "belton", "harker heights", "nolanville", "killeen", "copperas cove"],
     "Bryan/College Station": ["bryan", "college station", "b/cs"],
     "Tyler":               ["tyler tx", "whitehouse", "bullard"],
     "Lubbock":             ["lubbock", "wolfforth", "shallowater", "slaton"],
