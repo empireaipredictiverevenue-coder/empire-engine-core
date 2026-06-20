@@ -37,6 +37,18 @@ METROS = {
     "Amarillo": (35.20, -101.83),
     "El Paso": (31.76, -106.49),
     "Corpus Christi": (27.80, -97.40),
+    # ── I-35 Fill-ins ──
+    "San Marcos": (29.88, -97.94),
+    "New Braunfels": (29.70, -98.12),
+    "Round Rock": (30.51, -97.67),
+    "Georgetown": (30.63, -97.68),
+    "Killeen": (31.12, -97.73),
+    "Denton": (33.21, -97.13),
+    "Sherman": (33.63, -96.61),
+    # ── Rio Grande Valley ──
+    "McAllen": (26.20, -98.24),
+    "Brownsville": (25.93, -97.48),
+    "Laredo": (27.50, -99.50),
     # ── Louisiana ──
     "Shreveport": (32.52, -93.75),
     "Lafayette LA": (30.22, -92.02),
