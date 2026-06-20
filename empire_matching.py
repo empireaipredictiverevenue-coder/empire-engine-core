@@ -117,6 +117,7 @@ Supabase schema additions:
 """
 
 import os
+import json
 import uuid
 import time
 import logging
@@ -160,6 +161,198 @@ TRUST_DEFAULT = 5.0
 DEFAULT_TOP_N        = 5
 DEFAULT_MAX_CONCUR   = 3
 DEFAULT_LINK_TTL     = 60 * 60 * 24  # 24h to accept
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# PPL FEE COMPUTATION — Pay-per-Lead fee charged on lead delivery
+# ─────────────────────────────────────────────────────────────────────────────
+async def charge_ppl_fee(
+    db,
+    lead: dict,
+    niche: str = "",
+) -> dict:
+    """
+    Charge a PPL fee when a lead is dispatched (confirmed delivered) to
+    contractors via SMS/email.
+
+    Looks up the first active buyer whose niche + state_coverage matches the
+    lead's niche and state. If that buyer has `per_lead_rate` set, creates a
+    `call_logs` entry with `lead_fee = buyer.per_lead_rate` for billing.
+
+    Returns: {charged: bool, amount: float, buyer_name: str or None, error: str or None}
+    """
+    # ── Resolve niche from lead data if not provided ──
+    if not niche:
+        # Try enriched_lead meta first
+        meta = lead.get("meta") or {}
+        if isinstance(meta, dict):
+            niche = meta.get("niche", "")
+        elif isinstance(meta, str):
+            try:
+                meta_obj = json.loads(meta)
+                niche = meta_obj.get("niche", "")
+            except (json.JSONDecodeError, TypeError):
+                pass
+        # Fallback: look up enriched_leads by phone
+        if not niche:
+            phone = lead.get("phone", "")
+            if phone:
+                try:
+                    r = db.table("enriched_leads").select("niche,meta").eq("phone", phone).limit(1).execute()
+                    if r.data:
+                        niche = r.data[0].get("niche", "")
+                        if not niche:
+                            m = r.data[0].get("meta", {})
+                            if isinstance(m, dict):
+                                niche = m.get("niche", "")
+                except Exception:
+                    pass
+
+    state = lead.get("state", "")
+
+    if not niche or not state:
+        return {"charged": False, "error": f"niche={niche!r} state={state!r} — one or both missing", "amount": 0}
+
+    # ── Find first active buyer matching niche + state_coverage ──
+    buyer = None
+    try:
+        res = db.table("buyers").select("*").eq("is_active", True).eq("niche", niche).execute()
+        for b in (res.data or []):
+            coverage = b.get("state_coverage") or []
+            if state in coverage:
+                buyer = b
+                break
+    except Exception as e:
+        return {"charged": False, "error": f"buyer query: {str(e)[:80]}", "amount": 0}
+
+    if not buyer:
+        return {"charged": False, "error": f"no buyer for niche={niche!r} state={state!r}", "amount": 0}
+
+    rate = buyer.get("per_lead_rate")
+    if not rate or float(rate) <= 0:
+        return {"charged": False, "error": f"buyer {buyer.get('buyer_name','?')} has no per_lead_rate set", "amount": 0}
+
+    amount = float(rate)
+
+    # ── Create call_logs entry for the PPL fee ──
+    try:
+        now = datetime.now(timezone.utc).isoformat()
+        db.table("call_logs").insert({
+            "buyer_id":      buyer["id"],
+            "niche":         niche,
+            "caller_state":  state,
+            "caller_number": lead.get("phone", ""),
+            "status":        "delivered",
+            "payout_value":  amount,
+            "fee_earned":    amount,
+            "lead_fee":      amount,
+            "is_billable":   True,
+            "source":        "ppl_dispatch",
+            "created_at":    now,
+        }).execute()
+        log.info(
+            f"[ppl] charged ${amount:.2f} on {buyer.get('buyer_name','?')} "
+            f"for niche={niche!r} state={state!r}"
+        )
+        return {"charged": True, "amount": amount, "buyer_name": buyer.get("buyer_name", "")}
+    except Exception as e:
+        log.warning(f"[ppl] call_logs insert failed: {e}")
+        return {"charged": False, "error": f"call_logs insert: {str(e)[:80]}", "amount": 0}
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# PER-SCHEDULE FEE COMPUTATION — charged when a dispatch is accepted (appointment booked)
+# ─────────────────────────────────────────────────────────────────────────────
+async def charge_schedule_fee(
+    db,
+    lead: dict,
+    niche: str = "",
+) -> dict:
+    """
+    Charge a per-schedule fee when a contractor accepts a dispatch
+    (appointment is booked/confirmed).
+
+    Looks up the first active buyer whose niche + state_coverage matches the
+    lead's niche and state. If that buyer has `per_schedule_rate` set, creates
+    a `call_logs` entry with `schedule_fee = buyer.per_schedule_rate`.
+
+    Returns: {charged: bool, amount: float, buyer_name: str or None, error: str or None}
+    """
+    # ── Resolve niche from lead data if not provided ──
+    if not niche:
+        meta = lead.get("meta") or {}
+        if isinstance(meta, dict):
+            niche = meta.get("niche", "")
+        elif isinstance(meta, str):
+            try:
+                meta_obj = json.loads(meta)
+                niche = meta_obj.get("niche", "")
+            except (json.JSONDecodeError, TypeError):
+                pass
+        if not niche:
+            phone = lead.get("phone", "")
+            if phone:
+                try:
+                    r = db.table("enriched_leads").select("niche,meta").eq("phone", phone).limit(1).execute()
+                    if r.data:
+                        niche = r.data[0].get("niche", "")
+                        if not niche:
+                            m = r.data[0].get("meta", {})
+                            if isinstance(m, dict):
+                                niche = m.get("niche", "")
+                except Exception:
+                    pass
+
+    state = lead.get("state", "")
+
+    if not niche or not state:
+        return {"charged": False, "error": f"niche={niche!r} state={state!r} — one or both missing", "amount": 0}
+
+    # ── Find first active buyer matching niche + state_coverage ──
+    buyer = None
+    try:
+        res = db.table("buyers").select("*").eq("is_active", True).eq("niche", niche).execute()
+        for b in (res.data or []):
+            coverage = b.get("state_coverage") or []
+            if state in coverage:
+                buyer = b
+                break
+    except Exception as e:
+        return {"charged": False, "error": f"buyer query: {str(e)[:80]}", "amount": 0}
+
+    if not buyer:
+        return {"charged": False, "error": f"no buyer for niche={niche!r} state={state!r}", "amount": 0}
+
+    rate = buyer.get("per_schedule_rate")
+    if not rate or float(rate) <= 0:
+        return {"charged": False, "error": f"buyer {buyer.get('buyer_name','?')} has no per_schedule_rate set", "amount": 0}
+
+    amount = float(rate)
+
+    # ── Create call_logs entry for the per-schedule fee ──
+    try:
+        now = datetime.now(timezone.utc).isoformat()
+        db.table("call_logs").insert({
+            "buyer_id":      buyer["id"],
+            "niche":         niche,
+            "caller_state":  state,
+            "caller_number": lead.get("phone", ""),
+            "status":        "scheduled",
+            "payout_value":  amount,
+            "fee_earned":    amount,
+            "schedule_fee":  amount,
+            "is_billable":   True,
+            "source":        "ppl_schedule",
+            "created_at":    now,
+        }).execute()
+        log.info(
+            f"[schedule] charged ${amount:.2f} on {buyer.get('buyer_name','?')} "
+            f"for niche={niche!r} state={state!r}"
+        )
+        return {"charged": True, "amount": amount, "buyer_name": buyer.get("buyer_name", "")}
+    except Exception as e:
+        log.warning(f"[schedule] call_logs insert failed: {e}")
+        return {"charged": False, "error": f"call_logs insert: {str(e)[:80]}", "amount": 0}
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -469,6 +662,17 @@ class ContractorMatcher:
                 })
             except Exception as e:
                 log.debug(f"[matching] broadcast failed: {e}")
+
+        # ── Charge PPL fee on successful dispatch ──
+        # Always call charge_ppl_fee even if niche is empty — it has internal
+        # fallback logic to resolve niche from enriched_leads by phone.
+        if db_dispatched > 0:
+            try:
+                ppl_result = await charge_ppl_fee(db, lead, niche=niche)
+                if ppl_result.get("charged"):
+                    log.info(f"[matching] PPL fee charged: ${ppl_result['amount']:.2f} from {ppl_result.get('buyer_name','?')}")
+            except Exception as e:
+                log.debug(f"[matching] PPL fee charge failed: {e}")
 
         return {
             "ok":              True,
@@ -949,9 +1153,23 @@ def register_matching_routes(
             matcher.stats["dispatches_accepted"] += 1
 
             # Get the lead for the success page
-            lead_res = db.table("radar_targets").select("address, city, phone") \
+            lead_res = db.table("radar_targets").select("address, city, phone, state") \
                 .eq("id", lead_id).limit(1).execute()
             lead = lead_res.data[0] if lead_res.data else {}
+
+            # ── Charge per-schedule fee on accepted dispatch ──
+            # Appointment booked = contractor accepted the lead via magic link
+            try:
+                _disp_meta = dispatch.get("meta") or {}
+                if isinstance(_disp_meta, dict):
+                    _sched_niche = _disp_meta.get("niche", "")
+                else:
+                    _sched_niche = ""
+                sched_result = await charge_schedule_fee(db, lead, niche=_sched_niche)
+                if sched_result.get("charged"):
+                    log.info(f"[matching] schedule fee charged: ${sched_result['amount']:.2f} from {sched_result.get('buyer_name','?')}")
+            except Exception as e:
+                log.debug(f"[matching] schedule fee charge failed: {e}")
 
             # Get the contractor
             ctr_res = db.table("contractors").select("name, email") \

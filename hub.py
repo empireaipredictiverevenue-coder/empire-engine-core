@@ -70,7 +70,9 @@ from empire_claims import register_claims_routes
 from empire_claim_webhook import register_claim_webhook
 from empire_abtest import register_ab_test_routes
 from empire_predictive import register_predictive_routes, register_organic_signal_routes
-from empire_carrier import register_mock_carrier_routes
+# Mock carrier routes disabled 2026-06-19 — system locked down for production.
+# Re-enable only for local dev/testing with the mock carrier.
+# from empire_carrier import register_mock_carrier_routes
 from empire_inbound_monitor import register_inbound_monitor_routes
 from empire_auth import AuthEngine, register_auth_routes, require_role
 from empire_inbound import InboundCallTriage, register_inbound_routes
@@ -531,6 +533,13 @@ async def _on_sms_yes_reply(phone: str, body: str, sequence: dict):
             log.info(f"[sms\u2192dispatch] no contractors matched for {phone} ({lead.get('city', '?')})")
             return
 
+        # ── Resolve niche for PPL fee computation ──
+        _niche = ""
+        if enriched_lead_row:
+            _el_meta = enriched_lead_row.get("meta") or {}
+            if isinstance(_el_meta, dict):
+                _niche = _el_meta.get("niche", "")
+
         # Fan out dispatch — use critical email tier so dispatch
         # always goes out even when marketing quota is exhausted
         result = await matcher.dispatch_to_matched(
@@ -541,6 +550,7 @@ async def _on_sms_yes_reply(phone: str, body: str, sequence: dict):
             send_email=_send_email_critical,
             public_base_url=PUBLIC_BASE_URL,
             broadcaster=live_broadcaster,
+            niche=_niche,
         )
         email_sent = result.get("email_sent", 0)
         sms_sent = result.get("sms_sent", 0)
@@ -1145,7 +1155,8 @@ async def sms_reply_monitor(auth: bool = Depends(require_auth)):
 register_ab_test_routes(app, require_auth=require_auth, get_db=get_db)
 register_predictive_routes(app, require_auth=require_auth, get_db=get_db)
 register_organic_signal_routes(app, require_auth=require_auth, get_db=get_db)  # /api/v1/signal/organic
-register_mock_carrier_routes(app, require_auth=require_auth, get_db=get_db)
+# Disabled 2026-06-19 — mock carrier routes removed for production lockdown.
+# register_mock_carrier_routes(app, require_auth=require_auth, get_db=get_db)
 register_carrier_enrollment_routes(app, require_auth=require_auth)
 
 # ── Carrier Webhook Enroll SPA — self-service for carriers ──────────────
@@ -1547,12 +1558,14 @@ async def billing_summary(auth: bool = Depends(require_auth)):
         # Fetch buyer names for top calls
         buyer_name_map: dict = {}
         buyer_pmr_map: dict = {}
+        buyer_sr_map: dict = {}
         if top_buyer_ids:
             try:
-                br = db.table("buyers").select("id,name,per_minute_rate").in_("id", list(top_buyer_ids)).execute()
+                br = db.table("buyers").select("id,name,per_minute_rate,settlement_rate").in_("id", list(top_buyer_ids)).execute()
                 for b in (br.data or []):
                     buyer_name_map[b["id"]] = b.get("name", "?")
                     buyer_pmr_map[b["id"]] = float(b.get("per_minute_rate") or 0)
+                    buyer_sr_map[b["id"]] = float(b.get("settlement_rate") or 0)
             except Exception:
                 pass
         for row in all_rows_sorted:
@@ -1572,6 +1585,7 @@ async def billing_summary(auth: bool = Depends(require_auth)):
             if schedule_fee > 0:
                 fee_models.append("schedule")
             top_calls.append({
+                "buyer_id": bid,
                 "buyer_name": buyer_name_map.get(bid, row.get("source") or "?"),
                 "niche": row.get("niche") or "-",
                 "duration": row.get("duration") or 0,
@@ -1579,6 +1593,7 @@ async def billing_summary(auth: bool = Depends(require_auth)):
                 "settlement_fee": round(settlement_fee, 2),
                 "per_minute_fee": round(per_minute_fee, 2),
                 "per_minute_rate": round(buyer_pmr_map.get(bid, 0), 2),
+                "settlement_rate": round(buyer_sr_map.get(bid, 0), 2),
                 "lead_fee": round(lead_fee, 2),
                 "schedule_fee": round(schedule_fee, 2),
                 "fee": round(fee_earned, 2),

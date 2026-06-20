@@ -75,6 +75,7 @@ def register_fee_routes(
         auth: bool = Depends(require_auth),
     ):
         """Webhook entry point for settled-claim events. Writes a fee_events row."""
+        _started_at = datetime.now(timezone.utc)
         try:
             body = await request.json()
         except Exception:
@@ -115,6 +116,24 @@ def register_fee_routes(
             inserted_id = r.data[0]["id"] if r.data else None
             log.info(f"[fee] claim-settled webhook: claim={claim_id} amount=${claim_amount} fee=${fee} contractor={contractor_id} lead={lead_id}")
 
+            # ── Log to agent_activity for audit trail ──
+            try:
+                db.table("agent_activity").insert({
+                    "agent_name": "claim_webhook",
+                    "run_id": str(uuid.uuid4()),
+                    "started_at": _started_at.isoformat(),
+                    "finished_at": datetime.now(timezone.utc).isoformat(),
+                    "status": "ok",
+                    "rows_seen": 1,
+                    "rows_processed": 1,
+                    "rows_errored": 0,
+                    "error": None,
+                    "summary": f"claim_webhook: claim={claim_id} amount=${claim_amount} fee=${fee} source={source}",
+                    "meta": {"claim_id": claim_id, "amount": claim_amount, "fee": fee, "contractor_id": str(contractor_id) if contractor_id else None, "source": source},
+                }).execute()
+            except Exception:
+                pass  # non-fatal: logging failure shouldn't break the webhook response
+
             # ── Referral bounty check: if this is the contractor's first fee_event,
             # automatically mark any pending referral bounties as 'earned' ────
             if contractor_id and inserted_id:
@@ -133,6 +152,23 @@ def register_fee_routes(
                 },
             }
         except Exception as e:
+            # Log failure to agent_activity
+            try:
+                db.table("agent_activity").insert({
+                    "agent_name": "claim_webhook",
+                    "run_id": str(uuid.uuid4()),
+                    "started_at": _started_at.isoformat(),
+                    "finished_at": datetime.now(timezone.utc).isoformat(),
+                    "status": "error",
+                    "rows_seen": 1,
+                    "rows_processed": 0,
+                    "rows_errored": 1,
+                    "error": str(e)[:500],
+                    "summary": f"claim_webhook ERROR: claim={claim_id} error={str(e)[:80]}",
+                    "meta": {"claim_id": claim_id, "amount": claim_amount, "source": source, "error": str(e)[:500]},
+                }).execute()
+            except Exception:
+                pass
             log.error(f"[fee] webhook insert failed: {e}")
             raise HTTPException(500, f"insert failed: {e}")
 

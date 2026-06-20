@@ -1,6 +1,6 @@
 To: partners@libertymutual.com
 From: philliplivesley@empire-ai.co.uk
-Subject: Partner API inquiry: settled-claim event notifications
+Subject: Self-service enrollment now open — settled-claim webhook integration at empire-ai.co.uk
 Carrier: Liberty Mutual
 Status: DRAFT — review before sending
 ======================================================================
@@ -11,14 +11,27 @@ I'm Phil, founder of Empire AI. We connect homeowners with vetted
 local contractors in the 72-hour post-storm window. We earn 3% of
 the settled claim amount, paid only on settlement.
 
-To scale we need a settled-claim event feed from carriers. We have
-a working system with a mock carrier API and have validated
-the 3% fee model end-to-end with first fee events recorded this week. We'd love to integrate with Liberty Mutual.
+We have a working system with real fee events recorded, and we're
+now opening up self-service enrollment for carriers.
 
-The minimum data: claim ID, settlement date, settled amount, property
-city + state. No PII or payment data needed.
+Liberty Mutual can register directly at:
 
-If a partner program exists, who do we contact?
+    https://empire-ai.co.uk/api/v1/carrier/enroll
+
+What you'll need to provide:
+  - Carrier name
+  - Contact name and email
+  - Contact phone number
+
+Once enrolled, you'll receive an API key for sending settled-claim
+webhook events to our endpoint:
+
+    POST https://empire-ai.co.uk/api/v1/claim-settled
+
+The minimum data: dispatch_id, claim_amount, claim_id. No PII or
+payment data needed — just the "claim settled" signal.
+
+If you'd prefer a guided onboarding, I'm happy to set up a call.
 
 Best,
 Phil

@@ -71,7 +71,7 @@ def _print_summary(result: Dict[str, Any], elapsed_sec: float) -> None:
     print()
 
     # Per-niche breakdown
-    if by_niche:
+    if by_niche and any(by_niche.values()):
         max_niche_count: int = max(by_niche.values()) if by_niche else 1
         print("  ── By Niche ──")
         for niche in sorted(by_niche, key=lambda n: by_niche[n], reverse=True):
@@ -81,7 +81,7 @@ def _print_summary(result: Dict[str, Any], elapsed_sec: float) -> None:
         print()
 
     # Per-metro breakdown
-    if by_metro:
+    if by_metro and any(by_metro.values()):
         max_metro_count: int = max(by_metro.values()) if by_metro else 1
         print("  ── By Metro ──")
         for metro in sorted(by_metro, key=lambda m: by_metro[m], reverse=True):

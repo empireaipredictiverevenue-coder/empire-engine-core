@@ -31,6 +31,7 @@ Returns: {"ok": true, "fee_event": {...}, "dispatch_id": "<uuid>"}
 import asyncio
 import logging
 import os
+import uuid
 from datetime import datetime, timezone
 from typing import Callable, Optional
 
@@ -65,6 +66,7 @@ def register_operator_mark_settled(
         request: Request,
         op: dict = Depends(require_auth),
     ):
+        _started_at = datetime.now(timezone.utc)
         try:
             body = await request.json()
         except Exception:
@@ -140,6 +142,24 @@ def register_operator_mark_settled(
 
             log.info(f"[fee] operator-mark-settled: dispatch={dispatch_id} amount=${claim_amount} fee=${fee} contractor={dispatch.get('contractor_id')} lead={enriched_lead_id}")
 
+            # ── Log to agent_activity for audit trail ──
+            try:
+                db.table("agent_activity").insert({
+                    "agent_name": "operator_mark_settled",
+                    "run_id": str(uuid.uuid4()),
+                    "started_at": _started_at.isoformat(),
+                    "finished_at": datetime.now(timezone.utc).isoformat(),
+                    "status": "ok",
+                    "rows_seen": 1,
+                    "rows_processed": 1,
+                    "rows_errored": 0,
+                    "error": None,
+                    "summary": f"operator-mark-settled: dispatch={dispatch_id} amount=${claim_amount} fee=${fee} contractor={dispatch.get('contractor_id')}",
+                    "meta": {"dispatch_id": dispatch_id, "amount": claim_amount, "fee": fee, "contractor_id": str(dispatch.get('contractor_id')) if dispatch.get('contractor_id') else None, "claim_id": claim_id},
+                }).execute()
+            except Exception:
+                pass  # non-fatal: logging failure shouldn't break the response
+
             # ── Referral bounty check: if this is the contractor's first fee_event,
             # automatically mark any pending referral bounties as 'earned' ────
             if dispatch.get("contractor_id") and inserted_id:
@@ -161,5 +181,22 @@ def register_operator_mark_settled(
         except HTTPException:
             raise
         except Exception as e:
+            # Log failure to agent_activity
+            try:
+                db.table("agent_activity").insert({
+                    "agent_name": "operator_mark_settled",
+                    "run_id": str(uuid.uuid4()),
+                    "started_at": _started_at.isoformat(),
+                    "finished_at": datetime.now(timezone.utc).isoformat(),
+                    "status": "error",
+                    "rows_seen": 1,
+                    "rows_processed": 0,
+                    "rows_errored": 1,
+                    "error": str(e)[:500],
+                    "summary": f"operator-mark-settled ERROR: dispatch={dispatch_id} error={str(e)[:80]}",
+                    "meta": {"dispatch_id": dispatch_id, "amount": claim_amount, "error": str(e)[:500]},
+                }).execute()
+            except Exception:
+                pass
             log.error(f"[fee] operator-mark-settled failed: {e}")
             raise HTTPException(500, f"failed: {e}")

@@ -243,11 +243,11 @@ def run() -> dict:
         # oldest first — that meant dedup ate them all because they were
         # already in enriched_leads).
         in_fallback = True
-        log.info(f"scanner: no radar_targets in last {cfg['lookback_hours']}h — falling back to all-time, NEWEST first")
+        log.info(f"scanner: no radar_targets in last {cfg['lookback_hours']}h — falling back to all-time, OLDEST-first to backfill unscanned targets")
         fb_res = (sb.table("radar_targets")
                     .select("id, address, city, state, phone, email, warehouse_name, asset_value, status, created_at, meta, source")
                     .eq("status", "active")
-                    .order("created_at", desc=True)   # newest first in fallback
+                    .order("created_at", desc=False)  # oldest first in fallback (backfill unscanned)
                     .limit(cfg["max_per_run"] * 2)
                     .execute())
         candidates = fb_res.data or []

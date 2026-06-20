@@ -189,6 +189,9 @@ def register_switchboard_routes(app, require_auth=None):
                 "base_payout": float(payload.get("base_payout", 0)),
                 "fee_rate": float(payload.get("fee_rate", COMMISSION_RATE)),
                 "per_minute_rate": float(payload["per_minute_rate"]) if payload.get("per_minute_rate") is not None else None,
+                "per_lead_rate": float(payload["per_lead_rate"]) if payload.get("per_lead_rate") is not None else None,
+                "per_schedule_rate": float(payload["per_schedule_rate"]) if payload.get("per_schedule_rate") is not None else None,
+            "settlement_rate": float(payload["settlement_rate"]) if payload.get("settlement_rate") is not None else None,
                 "destination_phone": payload.get("destination_phone",""),
                 "daily_cap": int(payload.get("daily_cap", 100)),
                 "is_active": True,
@@ -232,6 +235,15 @@ def register_switchboard_routes(app, require_auth=None):
             if "per_minute_rate" in payload:
                 pmr = payload["per_minute_rate"]
                 updates["per_minute_rate"] = float(pmr) if pmr is not None else None
+            if "per_lead_rate" in payload:
+                plr = payload["per_lead_rate"]
+                updates["per_lead_rate"] = float(plr) if plr is not None else None
+            if "per_schedule_rate" in payload:
+                psr = payload["per_schedule_rate"]
+                updates["per_schedule_rate"] = float(psr) if psr is not None else None
+            if "settlement_rate" in payload:
+                sr = payload["settlement_rate"]
+                updates["settlement_rate"] = float(sr) if sr is not None else None
             if not updates:
                 return {"ok": False, "error": "no fields to update"}
             _sb.table("buyers").update(updates).eq("id", buyer_id).execute()

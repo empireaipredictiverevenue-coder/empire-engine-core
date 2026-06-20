@@ -945,6 +945,18 @@ _SPA_CSS = """
 .pc-tooltip-framing{font-size:10px;color:var(--empire-silver);line-height:1.5;margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid var(--empire-divider)}
 .pc-tooltip-stats{display:flex;gap:12px;flex-wrap:wrap;font-family:var(--font-mono);font-size:9px;color:var(--empire-mist);margin-bottom:4px}
 .pc-tooltip-stats span{white-space:nowrap}
+/* ── Convergence Chart Tooltip ── */
+.pc-converge-line.roll-avg{stroke-width:1.5px;stroke-dasharray:4 3;transition:opacity .25s var(--ease-snap)}
+.pc-chart-tooltip{background:var(--empire-elevated);border:1px solid var(--empire-border);border-radius:8px;padding:10px 14px;box-shadow:0 8px 32px rgba(0,0,0,0.5);pointer-events:none;animation:pc-agent-enter .1s var(--ease-out-empire);z-index:9999}
+.pc-chart-tooltip-title{font-family:var(--font-mono);font-size:9px;color:var(--empire-white);font-weight:500;margin-bottom:6px;padding-bottom:6px;border-bottom:1px solid var(--empire-divider)}
+.pc-chart-tooltip-row{display:flex;align-items:center;gap:8px;padding:2px 0}
+.pc-chart-tooltip-swatch{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.pc-chart-tooltip-id{font-family:var(--font-mono);font-size:9px;color:var(--empire-mist);min-width:30px}
+.pc-chart-tooltip-val{font-family:var(--font-mono);font-size:9px;color:var(--empire-white)}
+.pc-chart-tooltip-avg{font-family:var(--font-mono);font-size:8px;color:var(--empire-fog)}
+.pc-chart-overlay{cursor:crosshair}
+.pc-roll-toggle{font-family:var(--font-mono);font-size:8px;letter-spacing:.1em;text-transform:uppercase;padding:4px 10px;border-radius:4px;cursor:pointer;font-weight:600;transition:all .15s var(--ease-snap);background:transparent;border:1px solid var(--empire-border);color:var(--empire-mist);margin-left:auto}
+.pc-roll-toggle.on{color:var(--signal-teal);border-color:var(--signal-teal-soft);background:rgba(68,229,184,0.04)}
 /* ── Selected agent ── */
 .pc-orbital-agent.selected{border-color:var(--strike-cyan)!important;box-shadow:0 0 16px rgba(90,200,250,0.3);z-index:5!important}
 /* ── Agent detail panel ── */
@@ -1670,8 +1682,8 @@ font-size:7px!important;color:#999!important;margin-top:2px!important
 .bill-chart-legend-item.clickable{cursor:pointer;transition:opacity .15s var(--ease-snap)}
 .bill-chart-legend-item.clickable:hover:not(.dimmed){opacity:.7}
 .bill-chart-legend-item.clickable.dimmed{opacity:.35}
-.bill-chart-line-forecast{fill:none;stroke:var(--signal-teal);stroke-width:1.5px;opacity:.6;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:5 4}
-.bill-chart-line-dot-forecast{fill:var(--signal-teal);opacity:.7}
+.bill-chart-line-forecast{fill:none;stroke:var(--signal-teal);stroke-width:1.5px;opacity:.6;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:5 4;transition:opacity .25s var(--ease-out-empire)}
+.bill-chart-line-dot-forecast{fill:var(--signal-teal);opacity:.7;transition:opacity .25s var(--ease-out-empire);}
 .bill-chart-bar.per-minute{background:var(--strike-cyan);opacity:.5;border-radius:2px 2px 0 0;margin-top:1px;position:relative}
 .bill-chart-bar-stack{display:flex;flex-direction:column-reverse;align-items:center;width:18px;min-height:3px}
 .bill-chart-bar.calls{background:var(--strike-cyan);opacity:.5}
@@ -1679,15 +1691,25 @@ font-size:7px!important;color:#999!important;margin-top:2px!important
 .bill-chart-tooltip{position:absolute;bottom:100%;left:50%;transform:translateX(-50%);background:#000;color:var(--empire-white);padding:4px 8px;font-family:var(--font-mono);font-size:9px;border-radius:3px;white-space:nowrap;pointer-events:none;opacity:0;transition:opacity .15s;z-index:10;margin-bottom:4px}
 .bill-chart-bar-wrap:hover .bill-chart-tooltip{opacity:1}
 .bill-chart-line-svg{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:2}
-.bill-chart-line{fill:none;stroke:var(--strike-cyan);stroke-width:1.5px;stroke-linecap:round;stroke-linejoin:round;opacity:.7}
-.bill-chart-line-dot{fill:var(--strike-cyan);opacity:.8;transition:r .15s var(--ease-snap)}
+.bill-chart-line{fill:none;stroke:var(--strike-cyan);stroke-width:1.5px;stroke-linecap:round;stroke-linejoin:round;opacity:.7;transition:opacity .25s var(--ease-out-empire)}
+.bill-chart-line-dot{fill:var(--strike-cyan);opacity:.8;transition:opacity .25s var(--ease-out-empire),r .15s var(--ease-snap)}
 .bill-chart-line-cumul{fill:none;stroke:var(--status-amber);stroke-width:1.5px;opacity:.7;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:4 3}
+.bill-chart-roll7-set{fill:none;stroke:var(--signal-teal);stroke-width:1.5px;opacity:.5;stroke-linecap:round;stroke-linejoin:round;transition:opacity .25s var(--ease-out-empire)}
+.bill-chart-roll30-set{fill:none;stroke:var(--signal-teal);stroke-width:1.5px;opacity:.3;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:6 4;transition:opacity .25s var(--ease-out-empire)}
+.bill-chart-roll7-pm{fill:none;stroke:var(--strike-cyan);stroke-width:1.5px;opacity:.5;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:3 3;transition:opacity .25s var(--ease-out-empire)}
+.bill-chart-roll30-pm{fill:none;stroke:var(--strike-cyan);stroke-width:1.5px;opacity:.3;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:6 4;transition:opacity .25s var(--ease-out-empire)}
+.bill-chart-roll30-dot-set{fill:var(--signal-teal);opacity:.3}
+.bill-chart-roll30-dot-pm{fill:var(--strike-cyan);opacity:.3}
+.bill-chart-roll7-dot-set{fill:var(--signal-teal);opacity:.5}
+.bill-chart-roll7-dot-pm{fill:var(--strike-cyan);opacity:.5}
 .bill-chart-line-dot-cumul{fill:var(--status-amber);opacity:.6;transition:r .15s var(--ease-snap)}
 .bill-chart-bars:hover ~ .bill-chart-line-svg .bill-chart-line-dot,.bill-chart-bars:hover ~ .bill-chart-line-svg .bill-chart-line-dot-cumul{r:3.5}
 .bill-chart-inner{position:relative;flex:0 0 auto;height:130px}
 .bill-chart-bars{display:flex;align-items:flex-end;gap:3px;position:relative;z-index:1}
 .bill-chart-empty{text-align:center;padding:50px 20px;color:var(--empire-mist);font-family:var(--font-mono);font-size:11px}
-.bill-chart-window{display:flex;gap:4px;margin-left:auto}
+.bill-chart-window{display:flex;gap:6px}
+.bill-csv-btn{font-family:var(--font-mono);font-size:9px;letter-spacing:.1em;text-transform:uppercase;padding:4px 10px;border-radius:4px;cursor:pointer;font-weight:600;transition:all .15s var(--ease-snap);background:transparent;color:var(--empire-mist);border:1px solid var(--empire-border);margin-left:auto}
+.bill-csv-btn:hover{color:var(--signal-teal);border-color:var(--signal-teal-soft);background:rgba(68,229,184,0.04)}
 .bill-chart-window-btn{padding:4px 10px;font-family:var(--font-mono);font-size:9px;letter-spacing:.1em;text-transform:uppercase;border:1px solid var(--empire-border);background:transparent;color:var(--empire-mist);cursor:pointer;border-radius:4px;transition:all .15s var(--ease-snap)}
 .bill-chart-window-btn:hover{color:var(--empire-white);border-color:var(--empire-border-hi)}
 .bill-chart-window-btn.active{color:var(--signal-teal);border-color:var(--signal-teal-soft);background:rgba(68,229,184,0.06)}
@@ -1905,6 +1927,9 @@ function useLiveSocket(onEvent) {
 function Closer() {
   const [stats, setStats] = useState(null);
   const [err, setErr] = useState(null);
+  const [sortCol, setSortCol] = useState(null);
+  const [sortDir, setSortDir] = useState('asc');
+  const [genomeHistory, setGenomeHistory] = useState(null);
   const [usdcData, setUsdcData] = useState(null);
   const [usdcErr, setUsdcErr] = useState(null);
   const [cryptoStats, setCryptoStats] = useState(null);
@@ -2442,6 +2467,8 @@ function Pulse({ events, wsConnected }) {
   const [stats, setStats] = useState(null);
   const [err, setErr] = useState(null);
   const [tab, setTab] = useState('overview');
+  const [sortCol, setSortCol] = useState(null);
+  const [sortDir, setSortDir] = useState('asc');
   const [pulseDim, setPulseDim] = useState('niche');
   const [pulseWindow, setPulseWindow] = useState('24h');
   const [pulseBreakdown, setPulseBreakdown] = useState(null);
@@ -3288,15 +3315,42 @@ function Pipeline() {
               ${svgLines}
               ${arrows}
             
-                  ${showCumulative ? () => {
+                  <g style="opacity:${showCumulative ? 1 : 0}">${() => {
                     const lastIdx = series.length - 1;
                     if (lastIdx < 1) return '';
+                    const forecastDays = 14;
                     const lastX = (barStep / 2) + lastIdx * (barStep + 3);
-                    const forecastX = lastX + (barStep + 3);
-                    const lastCumulY = chartH - (totalCumul / totalCumul) * chartH;
-                    const forecastY = chartH - ((totalCumul + forecastRev) / totalCumul) * chartH;
-                    return '<polyline class="bill-chart-line-forecast" points="' + lastX.toFixed(1) + ',' + lastCumulY.toFixed(1) + ' ' + forecastX.toFixed(1) + ',' + forecastY.toFixed(1) + '" vector-effect="non-scaling-stroke"/><circle class="bill-chart-line-dot-forecast" cx="' + forecastX.toFixed(1) + '" cy="' + forecastY.toFixed(1) + '" r="3"/>';
-                  })()} : ""}                  </svg>
+                    const step = barStep + 3;
+                    const growthRate = forecastRev / Math.max(last3Avg, 1);
+                    const baseRev = series[lastIdx] ? series[lastIdx].revenue : 0;
+                    let pts = '';
+                    let dots = '';
+                    let cumulTotal = totalCumul;
+                    for (let i = 1; i <= forecastDays; i++) {
+                      const fx = lastX + i * step;
+                      const projRev = i === 1 ? forecastRev : baseRev * (1 + (growthRate - 1) * Math.max(0, 1 - (i - 1) / forecastDays));
+                      cumulTotal += projRev;
+                      const fy = chartH - (cumulTotal / totalCumul) * chartH;
+                      if (i === 1) {
+                        const ly = chartH - (totalCumul / totalCumul) * chartH;
+                        pts += lastX.toFixed(1) + ',' + ly.toFixed(1) + ' ';
+                      }
+                      pts += fx.toFixed(1) + ',' + fy.toFixed(1) + ' ';
+                      dots += '<circle class="bill-chart-line-dot-forecast" cx="' + fx.toFixed(1) + '" cy="' + fy.toFixed(1) + '" r="2"/>';
+                    }
+                    return '<polyline class="bill-chart-line-forecast" points="' + pts.trim() + '" vector-effect="non-scaling-stroke"/>' + dots;
+                  })()}}</g> }                  
+                  ${(() => {
+                    const ptsSet = roll7Set.map((v, i) => { const x = (barStep / 2) + i * (barStep + 3); const y = chartH - (v / maxRoll7) * chartH; return x.toFixed(1) + ',' + y.toFixed(1); }).join(' ');
+                    const ptsPM = roll7PM.map((v, i) => { const x = (barStep / 2) + i * (barStep + 3); const y = chartH - (v / maxRoll7) * chartH; return x.toFixed(1) + ',' + y.toFixed(1); }).join(' ');
+                    return '<polyline class="bill-chart-roll7-set" points="' + ptsSet + '" vector-effect="non-scaling-stroke"/><polyline class="bill-chart-roll7-pm" points="' + ptsPM + '" vector-effect="non-scaling-stroke"/>';
+                  })()}
+                  ${(() => {
+                    return roll7Set.map((v, i) => { const x = (barStep / 2) + i * (barStep + 3); const y = chartH - (v / maxRoll7) * chartH; return '<circle class="bill-chart-roll7-dot-set" cx="' + x.toFixed(1) + '" cy="' + y.toFixed(1) + '" r="2"/>'; }).join('');
+                  })()}
+                  ${(() => {
+                    return roll7PM.map((v, i) => { const x = (barStep / 2) + i * (barStep + 3); const y = chartH - (v / maxRoll7) * chartH; return '<circle class="bill-chart-roll7-dot-pm" cx="' + x.toFixed(1) + '" cy="' + y.toFixed(1) + '" r="2"/>'; }).join('');
+                  })()}<</g>/svg>
             
             <!-- Boss card: conversion rate -->
             <div class="pipe-boss-card">
@@ -4157,6 +4211,8 @@ function Partners() {
   const [busy, setBusy] = useState(null);
   const [filter, setFilter] = useState('all');
   const [focusId, setFocusId] = useState(null);
+  const [editingId, setEditingId] = useState(null);
+  const [editValues, setEditValues] = useState({ per_lead_rate: '', per_schedule_rate: '' });
 
   function getFocusParam() {
     const hash = window.location.hash;
@@ -4212,6 +4268,34 @@ function Partners() {
     setBusy(null);
   };
 
+  const saveRates = async (id) => {
+    const body = {};
+    const plr = parseFloat(editValues.per_lead_rate);
+    const psr = parseFloat(editValues.per_schedule_rate);
+    if (!isNaN(plr)) body.per_lead_rate = plr;
+    if (!isNaN(psr)) body.per_schedule_rate = psr;
+    if (Object.keys(body).length === 0) { setEditingId(null); return; }
+    setBusy(id);
+    try {
+      await apiFetch(`/api/switchboard/buyers/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      await reload();
+    } catch (e) { alert('Failed to save rates: ' + e.message); }
+    setBusy(null);
+    setEditingId(null);
+  };
+
+  const startEdit = (p) => {
+    setEditingId(p.id);
+    setEditValues({
+      per_lead_rate: p.per_lead_rate != null ? String(p.per_lead_rate) : '',
+      per_schedule_rate: p.per_schedule_rate != null ? String(p.per_schedule_rate) : '',
+    });
+  };
+
   if (err) return html`<div class="stub"><div class="stub-body">${err}</div></div>`;
   if (!partners) return html`<div class="stub"><div class="stub-body">Loading…</div></div>`;
 
@@ -4232,7 +4316,7 @@ function Partners() {
       ${displayedPartners.length === 0
         ? html`<div class="tbl-empty">No partners found.</div>`
         : html`<table class="tbl"><thead><tr>
-            <th>Business</th><th>Contact</th><th>Niche</th><th>State</th><th>Applied</th><th>Status</th><th>Actions</th>
+            <th>Business</th><th>Contact</th><th>Niche</th><th>State</th><th>Lead Rate</th><th>Sched Rate</th><th>Applied</th><th>Status</th><th>Actions</th>
           </tr></thead><tbody>
           ${displayedPartners.map(p => html`<tr key=${p.id}>
             <td>
@@ -4245,6 +4329,8 @@ function Partners() {
             </td>
             <td class="tbl-mono">${p.niche || '—'}</td>
             <td class="tbl-mono">${Array.isArray(p.state_coverage) ? p.state_coverage.join(', ') : (p.state_coverage || '—')}</td>
+            <td class="tbl-num">${p.per_lead_rate ? '$' + parseFloat(p.per_lead_rate).toFixed(2) : '—'}</td>
+            <td class="tbl-num">${p.per_schedule_rate ? '$' + parseFloat(p.per_schedule_rate).toFixed(2) : '—'}</td>
             <td class="tbl-mono">${(p.created_at || '').slice(0,10)}</td>
             <td><span class=${'bdg ' + (p.status || 'unknown')}>${p.status || '—'}</span></td>
             <td>
@@ -4252,7 +4338,23 @@ function Partners() {
                 <button class="tbl-action go" disabled=${busy === p.id} onClick=${() => act(p.id, 'approve')}>Approve</button>
                 <button class="tbl-action danger" disabled=${busy === p.id} onClick=${() => act(p.id, 'reject')}>Reject</button>
               ` : html`
-                ${p.status === 'active' ? html`<span class="tbl-mono" style=${{color: 'var(--signal-teal)'}}>✓ Active</span>` : ''}
+                ${p.status === 'active' ? html`
+                  ${editingId === p.id ? html`
+                    <div style=${{display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap'}}>
+                      <input type="number" step="0.01" min="0" placeholder="PPL $" value=${editValues.per_lead_rate}
+                        onInput=${(e) => setEditValues(v => ({...v, per_lead_rate: e.target.value}))}
+                        style=${{width: '60px', padding: '2px 4px', background: '#1a2a4a', border: '1px solid #2a4a7a', color: '#e4e4e7', borderRadius: '3px', fontSize: '10px'}} />
+                      <input type="number" step="0.01" min="0" placeholder="Sched $" value=${editValues.per_schedule_rate}
+                        onInput=${(e) => setEditValues(v => ({...v, per_schedule_rate: e.target.value}))}
+                        style=${{width: '60px', padding: '2px 4px', background: '#1a2a4a', border: '1px solid #2a4a7a', color: '#e4e4e7', borderRadius: '3px', fontSize: '10px'}} />
+                      <button class="tbl-action go" disabled=${busy === p.id} onClick=${() => saveRates(p.id)} style=${{fontSize: '9px'}}>Save</button>
+                      <button class="tbl-action danger" onClick=${() => setEditingId(null)} style=${{fontSize: '9px'}}>X</button>
+                    </div>
+                  ` : html`
+                    <button class="tbl-action" onClick=${() => startEdit(p)} style=${{fontSize: '9px'}}>Set Rates</button>
+                    <span class="tbl-mono" style=${{color: 'var(--signal-teal)', fontSize: '10px'}}>✓ Active</span>
+                  `}
+                ` : ''}
                 ${p.status === 'rejected' ? html`<span class="tbl-mono" style=${{color: 'var(--status-red)'}}>✗ Rejected</span>` : ''}
               `}
             </td>
@@ -7425,6 +7527,9 @@ function PanelCourtPanel() {
   const [hoverPos, setHoverPos] = useState({x:0,y:0});
   const [expanded, setExpanded] = useState(null);
   const [highlighted, setHighlighted] = useState(null);
+  const [showRollAvg, setShowRollAvg] = useState(true);
+  const [chartHoverCycle, setChartHoverCycle] = useState(null);
+  const [chartHoverPos, setChartHoverPos] = useState({x:0,y:0});
   const chartDrawn = useRef(false);
 
   useEffect(() => {
@@ -7677,6 +7782,16 @@ function PanelCourtPanel() {
         // Agent color palette
         const agentColors = ['#44E5B8','#FFB800','#FF6444','#5AC8FA','#C8A2C8','#FF8C42',
                               '#7B68EE','#FF69B4','#20B2AA','#F0E68C'];
+        // Rolling average (3-cycle trailing window)
+        const rollAvg = agents.map((_, ai) => {
+          return history.map((_, c) => {
+            let sum = 0, count = 0;
+            for (let pc = Math.max(0, c - 2); pc <= c; pc++) {
+              if (history[pc] && history[pc][ai] != null) { sum += history[pc][ai]; count++; }
+            }
+            return count > 0 ? sum / count : null;
+          });
+        });
         
         // Line paths for each agent
         const agentLines = agents.map((a, ai) => {
@@ -7695,6 +7810,24 @@ function PanelCourtPanel() {
           const drawStyle = !chartDrawn.current ? {strokeDasharray:'1000',strokeDashoffset:'1000',animation:'pc-chart-draw 1.2s var(--ease-out-empire) '+(ai * 0.08)+'s forwards'} : {};
           return html`<path key=${'line'+a.id} d="${d}" class="pc-converge-line" stroke="${color}" opacity="${lineOpacity}" style=${drawStyle}/>`;
         });
+        
+        // Rolling average overlay lines (3-cycle smoothed)
+        const rollAvgLines = showRollAvg ? agents.map((a, ai) => {
+          const color = agentColors[ai % agentColors.length];
+          const pts = [];
+          for (let c = 0; c < maxCycles; c++) {
+            if (rollAvg[ai][c] != null) {
+              const x = padL + (c / (maxCycles - 1 || 1)) * plotW;
+              const y = padT + plotH * (1 - (rollAvg[ai][c] - tempMin) / tempSpan);
+              pts.push(x.toFixed(1) + ',' + y.toFixed(1));
+            }
+          }
+          if (pts.length < 2) return '';
+          const d = 'M' + pts.join(' L');
+          const rollLineOpacity = highlighted != null ? (highlighted === ai ? 1 : 0.15) : 1;
+          return html`<path key=${'roll'+a.id} d="${d}" class="pc-converge-line roll-avg" stroke="${color}" opacity="${rollLineOpacity * 0.7}"/>`;
+        }) : [];
+        
         
         // Legend
         const legendItems = agents.map((a, ai) => {
@@ -7741,7 +7874,10 @@ function PanelCourtPanel() {
 <div class="pc-converge-panel">
           <div class="pc-converge-head">
             <span class="pc-converge-title">Temperature Convergence</span>
-            <span class="pc-converge-count">${maxCycles} cycles · ${agents.length} agents</span>
+            <div style="display:flex;align-items:center;gap:12px">
+              <span class="pc-converge-count">${maxCycles} cycles · ${agents.length} agents</span>
+              <span class="pc-roll-toggle" onClick=${() => setShowRollAvg(!showRollAvg)} style=${showRollAvg?"color:var(--signal-teal);border-color:var(--signal-teal-soft);background:rgba(68,229,184,0.04)":""}>${showRollAvg?"● Smoothed":"○ Smoothed"}</span>
+            </div>
           </div>
           <div class="pc-converge-chart">
             <svg class="pc-converge-svg" viewBox="0 0 ${chartW} ${chartH}" preserveAspectRatio="xMidYMid meet">
@@ -7749,7 +7885,22 @@ function PanelCourtPanel() {
               ${yLabelEls}
               ${xLabels}
               ${agentLines}
+              ${rollAvgLines}
+              <rect class="pc-chart-overlay" x="${padL}" y="${padT}" width="${plotW}" height="${plotH}" fill="transparent"
+                onMouseMove=${(e) => { const r=e.currentTarget.getBoundingClientRect(); const rx=(e.clientX-r.left)/r.width; const c=Math.round(rx*(maxCycles-1)); if(c>=0&&c<maxCycles){setChartHoverCycle(c);setChartHoverPos({x:e.clientX,y:e.clientY});}}}
+                onMouseLeave=${() => setChartHoverCycle(null)}/>
             </svg>
+            ${chartHoverCycle != null ? html`
+              <div class="pc-chart-tooltip" style=${{position:"fixed",left:Math.min(chartHoverPos.x+14, window.innerWidth-280)+"px",top:Math.min(chartHoverPos.y-10,window.innerHeight-280)+"px"}}>
+                <div class="pc-chart-tooltip-title">Cycle ${chartHoverCycle}</div>
+                ${agents.map((a, ai) => {
+                  const rawTemp = history[chartHoverCycle] && history[chartHoverCycle][ai] != null ? history[chartHoverCycle][ai] : null;
+                  const avgTemp = rollAvg[ai] && rollAvg[ai][chartHoverCycle] != null ? rollAvg[ai][chartHoverCycle] : null;
+                  if (rawTemp == null) return "";
+                  const color = agentColors[ai % agentColors.length];
+                  return html`<div class="pc-chart-tooltip-row"><span class="pc-chart-tooltip-swatch" style=${{background:color}}></span><span class="pc-chart-tooltip-id">#${a.id}</span><span class="pc-chart-tooltip-val">${rawTemp.toFixed(3)}°</span>${avgTemp!=null?html`<span class="pc-chart-tooltip-avg">(3c avg ${avgTemp.toFixed(3)}°)</span>`:""}</div>`;
+                })}
+              </div>` : ""}
           </div>
           <div class="pc-converge-legend">
             ${legendItems}
@@ -7763,6 +7914,15 @@ function PanelCourtPanel() {
         <div class="pc-decision-head">
           <span class="pc-decision-title">Ensemble History</span>
           <span class="pc-decision-count">${data.length} decisions</span>
+          <button class="rv-export-btn csv" onClick=${() => {
+            const rows = [["Lead","Lead ID","Score","Verdict","Winner Agent"]];
+            data.forEach(d => { rows.push([d.lead_summary || "", d.lead_id || "", d.score, d.verdict, d.winner_agent_id || ""]); });
+            const csv = rows.map(r => r.map(v => String(v).replace(/,/g," ")).join(",")).join("\n");
+            const blob = new Blob([csv], {type:"text/csv"});
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a"); a.href = url; a.download = "panel-court-decisions.csv"; a.click();
+            URL.revokeObjectURL(url);
+          }}>CSV</button>
         </div>
         ${data.length === 0 ? html`
           <div class="tbl-empty">No ensemble decisions yet — run the dispatcher to see Panel Court in action.</div>
@@ -7862,7 +8022,41 @@ function SEOPanel() {
     apiFetch('/api/seo/genome-history?limit=10').then(r => r.json()).then(gh => setGenomeHistory(gh)).catch(() => {})
   }, []);
 
-  if (err) return html`<div class="stub"><div class="stub-title">Could not load SEO data</div><div class="stub-body">${err}</div></div>`;
+  if (err) 
+  const toggleSort = (col) => {
+    if (sortCol === col) {
+      setSortDir(d => d === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortCol(col);
+      setSortDir('asc');
+    }
+  };
+  const sortIcon = (col) => sortCol === col ? (sortDir === 'asc' ? ' ▲' : ' ▼') : '';
+
+  const exportSEO_CSV = () => {
+    const rows = [['Variant','Tone','Split %','Sent','Followups','Reactivated','Rate %']];
+    variants.forEach(v => {
+      rows.push([v.name, v.tone, v.weight + '%', v.sent, v.followups_sent, v.reactivations, (v.reactivation_rate * 100).toFixed(1) + '%']);
+    });
+    const csv = rows.map(r => r.map(c => '"' + String(c).replace(/"/g,'""') + '"').join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'seo_ab_test_results.csv';
+    a.click(); URL.revokeObjectURL(url);
+  };
+
+  const variants = data.win_back_stats?.variants ? [...data.win_back_stats.variants] : [];
+  if (sortCol) {
+    variants.sort((a, b) => {
+      const va = a[sortCol] ?? '';
+      const vb = b[sortCol] ?? '';
+      const cmp = typeof va === 'number' ? va - vb : String(va).localeCompare(String(vb));
+      return sortDir === 'asc' ? cmp : -cmp;
+    });
+  }
+
+return html`<div class="stub"><div class="stub-title">Could not load SEO data</div><div class="stub-body">${err}</div></div>`;
   if (!data) return html`<div class="stub"><div class="stub-body">Loading…</div></div>`;
 
   const s = data.stats || {};
@@ -7988,22 +8182,22 @@ function SEOPanel() {
             ` : ''}
       ${data.win_back_stats && data.win_back_stats.variants && data.win_back_stats.variants.length > 0 ? html`
         <div class="panel" style="margin-bottom:20px">
-          <div class="panel-head">A/B Test Results</div>
+          <div class="panel-head">A/B Test Results</div>\n          <button class="rv-export-btn csv" onClick=${exportSEO_CSV} style=${{marginLeft: '12px', marginBottom: '8px'}}>CSV</button>
           <div style="overflow-x:auto">
             <table class="tbl" style="margin-top:4px">
               <thead>
                 <tr>
-                  <th>Variant</th>
-                  <th>Tone</th>
-                  <th>Split</th>
-                  <th>Sent</th>
-                  <th>Followups</th>
-                  <th>Reactivated</th>
-                  <th>Rate</th>
+                  <th class="clickable" onClick=${() => toggleSort("name")}>Variant${sortIcon("name")}</th>
+                  <th class="clickable" onClick=${() => toggleSort("tone")}>Tone${sortIcon("tone")}</th>
+                  <th class="clickable" onClick=${() => toggleSort("weight")}>Split${sortIcon("weight")}</th>
+                  <th class="clickable" onClick=${() => toggleSort("sent")}>Sent${sortIcon("sent")}</th>
+                  <th class="clickable" onClick=${() => toggleSort("followups_sent")}>Followups${sortIcon("followups_sent")}</th>
+                  <th class="clickable" onClick=${() => toggleSort("reactivations")}>Reactivated${sortIcon("reactivations")}</th>
+                  <th class="clickable" onClick=${() => toggleSort("reactivation_rate")}>Rate${sortIcon("reactivation_rate")}</th>
                 </tr>
               </thead>
               <tbody>
-                ${data.win_back_stats.variants.map(v => html`
+                ${variants.map(v => html`
                   <tr>
                     <td><strong>${v.name}</strong></td>
                     <td class="tbl-mono">${v.tone}</td>
@@ -8018,9 +8212,9 @@ function SEOPanel() {
                   <td><em style="color:var(--empire-fog)">Total</em></td>
                   <td></td>
                   <td></td>
-                  <td class="tbl-num" style="color:var(--empire-white)">${data.win_back_stats.variants.reduce((s,v) => s + v.sent, 0)}</td>
-                  <td class="tbl-num" style="color:var(--empire-white)">${data.win_back_stats.variants.reduce((s,v) => s + v.followups_sent, 0)}</td>
-                  <td class="tbl-num" style="color:var(--empire-white)">${data.win_back_stats.variants.reduce((s,v) => s + v.reactivations, 0)}</td>
+                  <td class="tbl-num" style="color:var(--empire-white)">${variants.reduce((s,v) => s + v.sent, 0)}</td>
+                  <td class="tbl-num" style="color:var(--empire-white)">${variants.reduce((s,v) => s + v.followups_sent, 0)}</td>
+                  <td class="tbl-num" style="color:var(--empire-white)">${variants.reduce((s,v) => s + v.reactivations, 0)}</td>
                   <td class="tbl-num" style="color:var(--signal-teal)">${(data.win_back_stats.reactivation_rate * 100).toFixed(1)}%</td>
                 </tr>
               </tbody>
@@ -9465,6 +9659,10 @@ function PsychologyDashboard() {
       const [chartMode, setChartMode] = useState("stacked");
       const [showCumulative, setShowCumulative] = useState(true);
       const [showCalls, setShowCalls] = useState(true);const [detectResult, setDetectResult] = useState(null);
+  const [editingRateBuyerId, setEditingRateBuyerId] = useState(null);
+  const [editingRateValue, setEditingRateValue] = useState('');
+  const [editingSrBuyerId, setEditingSrBuyerId] = useState(null);
+  const [editingSrValue, setEditingSrValue] = useState('');
 
   useEffect(() => {
     apiFetch('/api/psychology/snapshot')
@@ -9485,6 +9683,66 @@ function PsychologyDashboard() {
     return () => { stop = true; clearInterval(t); };
   }, []);
 
+  // ── Inline rate edit: save per-minute rate ──
+    const savingRef = useRef(false);
+  const saveRate = async (buyerId) => {
+    if (!buyerId || savingRef.current) return;
+    savingRef.current = true;
+    const val = parseFloat(editingRateValue);
+    if (isNaN(val) || val < 0) {
+      setEditingRateBuyerId(null);
+      savingRef.current = false;
+      return;
+    }
+    try {
+      await apiFetch(`/api/switchboard/buyers/${buyerId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ per_minute_rate: val }),
+      });
+    } catch (e) {
+      console.error('Failed to save rate:', e);
+    }
+    setEditingRateBuyerId(current => current === buyerId ? null : current);
+    savingRef.current = false;
+    // Refresh billing data
+    apiFetch('/api/v1/billing/summary').then(r => r.json())
+      .then(d => setBillData(d))
+      .catch(e => console.error('refresh billing:', e));
+  };
+  const saveSettlementRate = async (buyerId) => {
+    if (!buyerId || savingRef.current) return;
+    savingRef.current = true;
+    const val = parseFloat(editingSrValue);
+    if (isNaN(val) || val < 0) {
+      setEditingSrBuyerId(null);
+      savingRef.current = false;
+      return;
+    }
+    try {
+      await apiFetch(`/api/switchboard/buyers/${buyerId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ settlement_rate: val }),
+      });
+    } catch (e) {
+      console.error("Failed to save settlement rate:", e);
+    }
+    setEditingSrBuyerId(current => current === buyerId ? null : current);
+    savingRef.current = false;
+    // Refresh billing data
+    apiFetch("/api/v1/billing/summary").then(r => r.json())
+      .then(d => setBillData(d))
+      .catch(e => console.error("refresh billing:", e));
+  };
+
+  // ── Shared rolling average helper ──
+  const rollingAvg = (arr, key, window) => {
+    return arr.map((d, i) => {
+      const slice = arr.slice(Math.max(0, i - (window - 1)), i + 1);
+      return slice.reduce((s, x) => s + (x[key] || 0), 0) / slice.length;
+    });
+  };
   if (loading) return html`<div class="body"><div class="psy-loading">Loading psychology data...</div></div>`;
   if (error) return html`<div class="body"><div class="psy-error">Error: ${error}</div></div>`;
   if (!data) return html`<div class="body"><div class="psy-error">No data</div></div>`;
@@ -9636,10 +9894,30 @@ function PsychologyDashboard() {
 
         <div class="bill-section-title">Top Calls by Payout</div>
         <table class="bill-table">
-          <thead><tr><th>Buyer</th><th>Niche</th><th class="num">Duration</th><th class="num">Net Payout</th><th class="num">Settlement</th><th class="num">Per-Min</th><th class="num">Rate</th><th class="num">Lead</th><th class="num">Sched</th><th class="num">Fee</th><th>Model</th></tr></thead>
+          <thead><tr><th>Buyer</th><th>Niche</th><th class="num">Duration</th><th class="num">Net Payout</th><th class="num">Settlement</th><th class="num">Per-Min</th><th class="num">Rate</th><th class="num">Settl Rate</th><th class="num">Lead</th><th class="num">Sched</th><th class="num">Fee</th><th>Model</th></tr></thead>
           <tbody>
             ${billingData?.top_calls?.length > 0 ? billingData.top_calls.map(c => html`
-              <tr><td>${c.buyer_name || c.source}</td><td>${c.niche || '-'}</td><td class="num">${c.duration || 0}s</td><td class="num">$${(c.net_payout || 0).toFixed(2)}</td><td class="num">$${(c.settlement_fee || 0).toFixed(2)}</td><td class="num">$${(c.per_minute_fee || 0).toFixed(2)}</td><td class="num">${c.per_minute_rate ? '$' + c.per_minute_rate.toFixed(2) + '/min' : '-'}</td><td class="num">$${(c.lead_fee || 0).toFixed(2)}</td><td class="num">$${(c.schedule_fee || 0).toFixed(2)}</td><td class="num">$${(c.fee || 0).toFixed(2)}</td><td class="num">${c.fee_model ? c.fee_model.split('+').map(m => ({'per_minute':'⏱PM','settlement':'📋Stl','ppl':'📄Ld','schedule':'📅Sch'})[m] || m).join(' ') : '—'}</td></tr>
+              <tr><td>${c.buyer_name || c.source}</td><td>${c.niche || '-'}</td><td class="num">${c.duration || 0}s</td><td class="num">$${(c.net_payout || 0).toFixed(2)}</td><td class="num">$${(c.settlement_fee || 0).toFixed(2)}</td><td class="num">$${(c.per_minute_fee || 0).toFixed(2)}</td><td class="num" style=${c.fee_model && c.fee_model.includes("per_minute") ? {color: "var(--signal-teal)", fontWeight: "600"} : {}}>${editingRateBuyerId === c.buyer_id ? html`
+              <input type="number" step="0.01" min="0" 
+                value=${editingRateValue}
+                onInput=${e => setEditingRateValue(e.target.value)}
+                onKeyDown=${e => { if(e.key === 'Enter') { saveRate(c.buyer_id); } if(e.key === 'Escape') { setEditingRateBuyerId(null); } }}
+                onBlur=${() => saveRate(c.buyer_id)}
+                autofocus
+                style=${{width: '80px', background: '#0f1e33', color: '#f0f4f8', border: '1px solid #2a4a7f', borderRadius: '4px', padding: '2px 6px', fontSize: 'inherit', textAlign: 'right'}}
+              />` : html`<span 
+                onClick=${() => { setEditingRateBuyerId(c.buyer_id); setEditingRateValue(c.per_minute_rate ? String(c.per_minute_rate) : ''); }} 
+                style=${{cursor: 'pointer', borderBottom: '1px dashed rgba(100,180,255,0.3)'}}>${c.per_minute_rate ? '$' + c.per_minute_rate.toFixed(2) + '/min' : '-'}</span>`}</td><td class="num" style=${c.fee_model && c.fee_model.includes("settlement") ? {color: "#f59e0b", fontWeight: "600"} : {}}>${editingSrBuyerId === c.buyer_id ? html`
+              <input type="number" step="0.01" min="0" 
+                value=${editingSrValue}
+                onInput=${e => setEditingSrValue(e.target.value)}
+                onKeyDown=${e => { if(e.key === "Enter") { saveSettlementRate(c.buyer_id); } if(e.key === "Escape") { setEditingSrBuyerId(null); } }}
+                onBlur=${() => saveSettlementRate(c.buyer_id)}
+                autofocus
+                style=${{width: "80px", background: "#0f1e33", color: "#f0f4f8", border: "1px solid #2a4a7f", borderRadius: "4px", padding: "2px 6px", fontSize: "inherit", textAlign: "right"}}
+              />` : html`<span 
+                onClick=${() => { setEditingSrBuyerId(c.buyer_id); setEditingSrValue(c.settlement_rate ? String(c.settlement_rate) : ""); }} 
+                style=${{cursor: "pointer", borderBottom: "1px dashed rgba(245,158,11,0.3)"}}>${c.settlement_rate ? "$" + c.settlement_rate.toFixed(2) + "/stl" : "-"}</span>`}</td><td class="num">$${(c.lead_fee || 0).toFixed(2)}</td><td class="num">$${(c.schedule_fee || 0).toFixed(2)}</td><td class="num">$${(c.fee || 0).toFixed(2)}</td><td class="num">${c.fee_model ? c.fee_model.split('+').map(m => ({'per_minute':'⏱PM','settlement':'📋Stl','ppl':'📄Ld','schedule':'📅Sch'})[m] || m).join(' ') : '—'}</td></tr>
             `).join('') : '<tr><td colspan="8" style="color:var(--empire-mist);text-align:center;padding:20px">No calls today</td></tr>'}
           </tbody>
         </table>
@@ -9820,12 +10098,31 @@ function SelfAwarenessDashboard() {
 
   const allThoughts = [...initialThoughts, ...narrative];
 
+  // CSV export
+  const exportSACsv = (type) => {
+    if (type === "anomalies") {
+      const rows = [["Severity","Message","Agent","Timestamp"]];
+      (anomalies || []).forEach(a => rows.push([a.severity || "", (a.message || "").replace(/,/g," "), a.agent || "", a.ts || ""]));
+      const csv = rows.map(r => r.join(",")).join("\n");
+      const b = new Blob([csv], {type:"text/csv"}); const u = URL.createObjectURL(b); const a = document.createElement("a"); a.href = u; a.download = "self-awareness-anomalies.csv"; a.click(); URL.revokeObjectURL(u);
+    } else if (type === "agents") {
+      const rows = [["Agent","Status","Capabilities","Last Ping"]];
+      (agents || []).forEach(a => rows.push([a.name || "", a.status || "", (a.capabilities || "").replace(/,/g,"; "), a.last_ping || ""]));
+      const csv = rows.map(r => r.join(",")).join("\n");
+      const b = new Blob([csv], {type:"text/csv"}); const u = URL.createObjectURL(b); const a = document.createElement("a"); a.href = u; a.download = "self-awareness-agents.csv"; a.click(); URL.revokeObjectURL(u);
+    }
+  };
+
   return html`
     <div class="body">
       <div class="section-h">
         <div>
           <div class="section-title"><em>Claude OS</em> · Self-Awareness</div>
           <div class="section-sub">Live system model · Narrative · Dependency graph · Decisions</div>
+          <div class="sec-actions">
+            <button class="rv-export-btn csv" onClick=${() => exportSACsv("anomalies")} style="font-size:8px;padding:4px 8px">Anomalies CSV</button>
+            <button class="rv-export-btn csv" onClick=${() => exportSACsv("agents")} style="font-size:8px;padding:4px 8px">Agents CSV</button>
+          </div>
         </div>
         <div style="display:flex;align-items:center;gap:14px">
           <span class="${liveConnected ? 'sa-live-dot' : 'sa-live-dot paused'}"></span>
@@ -10259,6 +10556,39 @@ function BusinessPlannerDashboard() {
   const criticalNiches = niches.filter(n => n.priority === 'critical');
   const highNiches = niches.filter(n => n.priority === 'high');
   const healthLabel = curr.health_label || 'unknown';
+
+  // Sort helpers
+  const toggleSort = (col) => {
+    if (sortCol === col) setSortDir(sortDir === 'asc' ? 'desc' : 'asc');
+    else { setSortCol(col); setSortDir('asc'); }
+  };
+  const sortIcon = (col) => sortCol === col ? (sortDir === 'asc' ? '▲' : '▼') : '';
+  const sortData = (arr, col) => {
+    if (!sortCol || sortCol !== col) return arr;
+    return [...arr].sort((a, b) => {
+      const va = a[col] ?? ''; const vb = b[col] ?? '';
+      const cmp = typeof va === 'number' ? va - vb : String(va).localeCompare(String(vb));
+      return sortDir === 'asc' ? cmp : -cmp;
+    });
+  };
+
+  // CSV export for each table
+  const exportNicheCSV = () => {
+    const rows = [['Niche','Priority','Score','Verdict','Est. Monthly','Actions']];
+    niches.forEach(n => rows.push([n.niche, n.priority, n.rank_rent_score, n.verdict, n.current_monthly_revenue_est || 0, (n.actions || []).length]));
+    const csv = rows.map(r => r.join(',')).join('\n'); const b = new Blob([csv], {type:'text/csv'}); const u = URL.createObjectURL(b); const a = document.createElement('a'); a.href = u; a.download = 'business-planner-niches.csv'; a.click(); URL.revokeObjectURL(u);
+  };
+  const exportActionCSV = () => {
+    const rows = [['ID','Action','Category','Priority','Timeline']];
+    actions.forEach(a => rows.push([a.id, a.action, a.category, a.priority, a.timeline || '']));
+    const csv = rows.map(r => r.join(',')).join('\n'); const b = new Blob([csv], {type:'text/csv'}); const u = URL.createObjectURL(b); const a = document.createElement('a'); a.href = u; a.download = 'business-planner-actions.csv'; a.click(); URL.revokeObjectURL(u);
+  };
+  const exportRiskCSV = () => {
+    const rows = [['Risk','Severity','Recommendation']];
+    (risks.risks || []).forEach(r => rows.push([r.risk, r.severity, r.recommended_action || '']));
+    const csv = rows.map(r => r.join(',')).join('\n'); const b = new Blob([csv], {type:'text/csv'}); const u = URL.createObjectURL(b); const a = document.createElement('a'); a.href = u; a.download = 'business-planner-risks.csv'; a.click(); URL.revokeObjectURL(u);
+  };
+
   return html`
     <div class="body">
       <div class="section-h">
@@ -10295,11 +10625,12 @@ function BusinessPlannerDashboard() {
       ${tab === 'niches' ? html`
         <div class="cpl-service-summary" style="margin-bottom: 14px;">
           <span class="cpl-service-count">${niches.length}</span><span class="cpl-service-label">niches planned</span>
+          <button class="rv-export-btn csv" onClick=${exportNicheCSV} style="margin-left:auto;font-size:8px;padding:3px 8px">CSV</button>
           ${criticalNiches.length > 0 ? html`<span class="cpl-badge ppc">${criticalNiches.length} critical</span>` : ''}
           ${highNiches.length > 0 ? html`<span class="cpl-badge ppl">${highNiches.length} high</span>` : ''}
         </div>
-        <table class="cpl-table"><thead><tr><th>Niche</th><th>Priority</th><th>Score</th><th>Verdict</th><th>Est. Monthly</th><th>Actions</th></tr></thead><tbody>
-          ${niches.map(n => html`<tr key=${n.niche}>
+        <table class="cpl-table"><thead><tr><th class="clickable" onClick=${() => toggleSort("niche")}>Niche${sortIcon("niche")}</th><th class="clickable" onClick=${() => toggleSort("priority")}>Priority${sortIcon("priority")}</th><th class="clickable" onClick=${() => toggleSort("rank_rent_score")}>Score${sortIcon("rank_rent_score")}</th><th class="clickable" onClick=${() => toggleSort("verdict")}>Verdict${sortIcon("verdict")}</th><th class="clickable" onClick=${() => toggleSort("current_monthly_revenue_est")}>Est. Monthly${sortIcon("current_monthly_revenue_est")}</th><th>Actions</th></tr></thead><tbody>
+          ${sortData(niches, sortCol).map(n => html`<tr key=${n.niche}>
             <td style="font-weight: 500;">${n.niche}</td>
             <td><span class="cpl-badge ${n.priority === 'critical' ? 'ppc' : n.priority === 'high' ? 'ppl' : ''}">${n.priority}</span></td>
             <td style="font-family: var(--font-mono);">${n.rank_rent_score}</td>
@@ -10313,9 +10644,10 @@ function BusinessPlannerDashboard() {
       ${tab === 'actions' ? html`
         <div class="cpl-service-summary" style="margin-bottom: 14px;">
           <span class="cpl-service-count">${actions.length}</span><span class="cpl-service-label">action items</span>
+          <button class="rv-export-btn csv" onClick=${exportActionCSV} style="margin-left:auto;font-size:8px;padding:3px 8px">CSV</button>
         </div>
-        <table class="cpl-table"><thead><tr><th>ID</th><th>Action</th><th>Category</th><th>Priority</th><th>Timeline</th></tr></thead><tbody>
-          ${actions.map(a => html`<tr key=${a.id}>
+        <table class="cpl-table"><thead><tr><th class="clickable" onClick=${() => toggleSort("id")}>ID${sortIcon("id")}</th><th class="clickable" onClick=${() => toggleSort("action")}>Action${sortIcon("action")}</th><th class="clickable" onClick=${() => toggleSort("category")}>Category${sortIcon("category")}</th><th class="clickable" onClick=${() => toggleSort("priority")}>Priority${sortIcon("priority")}</th><th class="clickable" onClick=${() => toggleSort("timeline")}>Timeline${sortIcon("timeline")}</th></tr></thead><tbody>
+          ${sortData(actions, sortCol).map(a => html`<tr key=${a.id}>
             <td style="font-family: var(--font-mono); font-size: 9px; color: var(--empire-fog);">${a.id}</td>
             <td style="font-size: 10px;">${a.action.slice(0, 80)}${a.action.length > 80 ? '…' : ''}</td>
             <td style="color: var(--empire-mist); font-size: 10px;">${a.category}</td>
@@ -10328,10 +10660,11 @@ function BusinessPlannerDashboard() {
       ${tab === 'risks' ? html`
         <div class="cpl-service-summary" style="margin-bottom: 14px;">
           <span class="cpl-service-count">${risks.total_risks || 0}</span><span class="cpl-service-label">risks identified</span>
+          <button class="rv-export-btn csv" onClick=${exportRiskCSV} style="margin-left:auto;font-size:8px;padding:3px 8px">CSV</button>
           ${risks.critical_risks > 0 ? html`<span class="cpl-badge ppc">${risks.critical_risks} critical</span>` : ''}
         </div>
-        <table class="cpl-table"><thead><tr><th>Risk</th><th>Severity</th><th>Recommendation</th></tr></thead><tbody>
-          ${(risks.risks || []).map(r => html`<tr key=${r.risk}>
+        <table class="cpl-table"><thead><tr><th class="clickable" onClick=${() => toggleSort("risk")}>Risk${sortIcon("risk")}</th><th class="clickable" onClick=${() => toggleSort("severity")}>Severity${sortIcon("severity")}</th><th class="clickable" onClick=${() => toggleSort("recommended_action")}>Recommendation${sortIcon("recommended_action")}</th></tr></thead><tbody>
+          ${sortData((risks.risks || []), sortCol).map(r => html`<tr key=${r.risk}>
             <td style="font-weight: 500; font-size: 10px;">${r.risk}</td>
             <td><span class="cpl-badge ${r.severity === 'critical' ? 'ppc' : 'ppl'}">${r.severity}</span></td>
             <td style="color: var(--empire-mist); font-size: 10px;">${r.recommended_action || '-'}</td>
@@ -11212,6 +11545,40 @@ function QC() {
           </table>
         </div>
 
+        ${
+          const exportBillingCSV = () => { if (!billTimeseries || !billTimeseries.series) return;
+            const rows = [['Date','Revenue','Settlement','Per-Minute','Premium','Calls','Lead','Schedule','7dAvgSettl','7dAvgPM','30dAvgSettl','30dAvgPM']];
+            const series = billTimeseries.series || [];
+            const csvRoll7Set = rollingAvg(series, "settlement_revenue", 7);
+            const csvRoll7PM = rollingAvg(series, "per_minute_revenue", 7);
+            const csvRoll30Set = rollingAvg(series, "settlement_revenue", 30);
+            const csvRoll30PM = rollingAvg(series, "per_minute_revenue", 30);
+            series.forEach((d, i) => {
+              rows.push([
+                d.date || '',
+                (d.revenue || 0).toFixed(2),
+                (d.settlement_revenue || 0).toFixed(2),
+                (d.per_minute_revenue || 0).toFixed(2),
+                (Math.max(0, (d.per_minute_revenue || 0) - (d.settlement_revenue || 0))).toFixed(2),
+                (d.calls || 0).toString(),
+                (d.lead_revenue || 0).toFixed(2),
+                (d.schedule_revenue || 0).toFixed(2),
+                csvRoll7Set[i].toFixed(2),
+                csvRoll7PM[i].toFixed(2),
+                csvRoll30Set[i].toFixed(2),
+                csvRoll30PM[i].toFixed(2)
+              ]);
+            });
+            rows.push(['TOTALS',billTimeseries.total_revenue.toFixed(2),'','','','',billTimeseries.total_lead_revenue.toFixed(2),billTimeseries.total_schedule_revenue.toFixed(2),'','','','']);
+            const csv = rows.map(r => r.map(c => '"' + String(c).replace(/"/g,'""') + '"').join(',')).join('\n');
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url; a.download = 'empire_billing_' + new Date().toISOString().split('T')[0] + '.csv';
+            document.body.appendChild(a); a.click();
+            document.body.removeChild(a); URL.revokeObjectURL(url);
+          };
+          html`
         <div class="bill-chart-wrap">
           <div class="bill-chart-h">
             <span class="bill-chart-title">Daily Fee Breakdown &middot; ${billWindow === '90d' ? '90' : billWindow === '7d' ? '7' : '30'}-Day</span>
@@ -11221,6 +11588,8 @@ function QC() {
               <button class="bill-chart-window-btn ${billWindow === '90d' ? 'active' : ''}" onClick=${() => setBillWindow('90d')}>90d</button>
             </div>
             <button class="bill-chart-mode-btn" onClick=${() => setChartMode(chartMode === "stacked" ? "side" : "stacked")}>${chartMode === "stacked" ? "Side-by-Side" : "Stacked"}</button>
+            <button class="bill-csv-btn" onClick=${exportBillingCSV} title="Download billing data as CSV">CSV</button>
+            <button class="bill-csv-btn" onClick=${exportBillingCSV} title="Download billing data as CSV">CSV</button>
             <span class="bill-chart-tag">${billTimeseries ? billTimeseries.total_revenue.toLocaleString('en-US', {style:'currency',currency:'USD',minimumFractionDigits:0}) + ' total' + (billTimeseries.total_premium > 0 ? ' · +$' + billTimeseries.total_premium.toFixed(0) + ' PM' : '') : ''}</span>
           </div>
           ${!billTimeseries ? html`<div class="bill-chart-empty">Loading chart data&hellip;</div>` : billTimeseries.series.length === 0 ? html`<div class="bill-chart-empty">${`No billing data in the last ${billWindow === '90d' ? 90 : billWindow === '7d' ? 7 : 30} days`}</div>` : html`
@@ -11236,27 +11605,51 @@ function QC() {
               const totalCumul = cumulData[cumulData.length - 1] || 1;
               const last3Avg = series.length >= 3 ? (series[series.length - 1].revenue + series[series.length - 2].revenue + series[series.length - 3].revenue) / 3 : (series.length > 0 ? series[0].revenue : 0);
               const forecastRev = Math.max(0, last3Avg * 1.05);
+              const roll7Set = rollingAvg(series, "settlement_revenue", 7);
+              const roll7PM = rollingAvg(series, "per_minute_revenue", 7);
+              const roll30Set = rollingAvg(series, "settlement_revenue", 30);
+              const roll30PM = rollingAvg(series, "per_minute_revenue", 30);
+              const maxRoll7 = Math.max(Math.max(...roll7Set, 0), Math.max(...roll7PM, 0), Math.max(...roll30Set, 0), Math.max(...roll30PM, 0), 1);
               return html`
                 ${series.map((d, idx) => html`
                   <div class="bill-chart-bars" style="display:flex;align-items:flex-end;gap:3px;grid-area:chart"><div class="bill-chart-bar-wrap">
-                    <div class="bill-chart-tooltip">${d.date}: $${d.revenue.toFixed(0)} total · C:$${cumulData[idx].toFixed(0)} · S:$${d.settlement_revenue.toFixed(0)} PM:$${d.per_minute_revenue.toFixed(0)}${d.per_minute_revenue > d.settlement_revenue ? ' Δ+$' + (d.per_minute_revenue - d.settlement_revenue).toFixed(0) : ''} · ${d.calls} calls · ${d.billable} billable</div>
+                    <div class="bill-chart-tooltip">${d.date}: $${d.revenue.toFixed(0)} total · C:$${cumulData[idx].toFixed(0)} · S:$${d.settlement_revenue.toFixed(0)} PM:$${d.per_minute_revenue.toFixed(0)}${d.per_minute_revenue > d.settlement_revenue ? ' Δ+$' + (d.per_minute_revenue - d.settlement_revenue).toFixed(0) : ''} · ${d.calls} calls · ${d.billable} billable · 7dAvg: S:$${roll7Set[idx].toFixed(0)} PM:$${roll7PM[idx].toFixed(0)} · 30dAvg: S:$${roll30Set[idx].toFixed(0)} PM:$${roll30PM[idx].toFixed(0)}${roll30Set[idx] > roll7Set[idx] ? " ▲" : roll30Set[idx] < roll7Set[idx] ? " ▼" : " →"}</div>
                     ${chartMode === "stacked" ? html`<div class="bill-chart-bar-stack" style="height:${Math.max(3, (d.revenue / maxRev) * chartH)}px"><div class="bill-chart-bar per-minute" style="height:${Math.max(0, (d.per_minute_revenue / maxRev) * chartH)}px">${d.per_minute_revenue > d.settlement_revenue ? html`<div class="bill-chart-bar premium" style="height:${Math.max(2, ((d.per_minute_revenue - d.settlement_revenue) / maxRev) * chartH)}px"></div>` : }</div><div class="bill-chart-bar settlement" style="height:${Math.max(3, (d.settlement_revenue / maxRev) * chartH)}px"></div></div>` : html`<div class="bill-chart-bars-side" style="display:flex;gap:3px;align-items:flex-end;height:${Math.max(3, (Math.max(d.settlement_revenue, d.per_minute_revenue) / maxRev) * chartH)}px;width:100%"><div class="bill-chart-bar settlement side" style="height:${Math.max(3, (d.settlement_revenue / maxRev) * chartH)}px;flex:1;min-width:6px;border-radius:2px 2px 0 0"></div><div class="bill-chart-bar per-minute side" style="height:${Math.max(0, (d.per_minute_revenue / maxRev) * chartH)}px;flex:1;min-width:6px;border-radius:2px 2px 0 0;position:relative">${d.per_minute_revenue > d.settlement_revenue ? html`<div class="bill-chart-bar premium" style="height:${Math.max(2, ((d.per_minute_revenue - d.settlement_revenue) / maxRev) * chartH)}px;position:absolute;bottom:0;left:0;right:0;background:var(--status-amber);opacity:.7;border-radius:2px 2px 0 0"></div>` : }</div></div>`}
                     <div class="bill-chart-bar-label">${d.date.slice(5)}</div>
                   </div>
                 `).join('')}
                 </div>
-                <svg class="bill-chart-line-svg" width="${Math.max(series.length * (barStep + 3), 50)}" height="130" viewBox="0 0 ${Math.max(series.length * (barStep + 3), 50)} 130"
-                  <polyline ${showCalls ? html`class="bill-chart-line" points="${series.map((d, i) => {
-                    const x = (barStep / 2) + i * (barStep + 3);
-                    const y = chartH - (d.calls / maxCalls) * chartH;
-                    return x.toFixed(1) + ',' + y.toFixed(1);
-                  }).join(' ')}" vector-effect="non-scaling-stroke"/>` : ""}
-                  ${showCalls ? ${series.map((d, i) => {
+                <svg class="bill-chart-line-svg" width="${Math.max(series.length * (barStep + 3), 50) + 14 * (barStep + 3)}" height="130" viewBox="0 0 ${Math.max(series.length * (barStep + 3), 50) + 14 * (barStep + 3)} 130"
+                  <polyline class="bill-chart-line" points="${series.map((d, i) => {\n                    const x = (barStep / 2) + i * (barStep + 3);\n                    const y = chartH - (d.calls / maxCalls) * chartH;\n                    return x.toFixed(1) + "," + y.toFixed(1);\n                  }).join(" ")}" vector-effect="non-scaling-stroke" style="opacity:${showCalls ? 0.7 : 0}"/>
+                  ${`<g style="opacity:${showCalls ? 0.8 : 0}">${series.map((d, i) => {
                     const x = (barStep / 2) + i * (barStep + 3);
                     const y = chartH - (d.calls / maxCalls) * chartH;
                     return '<circle class="bill-chart-line-dot" cx="' + x.toFixed(1) + '" cy="' + y.toFixed(1) + '" r="2.5"/>';
                   }).join('')}
- : ""}                </svg>
+</g>`
+                  ${(() => {
+                    const pts7Set = roll7Set.map((v, i) => { const x = (barStep / 2) + i * (barStep + 3); const y = chartH - (v / maxRoll7) * chartH; return x.toFixed(1) + ',' + y.toFixed(1); }).join(' ');
+                    const pts7PM = roll7PM.map((v, i) => { const x = (barStep / 2) + i * (barStep + 3); const y = chartH - (v / maxRoll7) * chartH; return x.toFixed(1) + ',' + y.toFixed(1); }).join(' ');
+                    return '<polyline class="bill-chart-roll7-set" points="' + pts7Set + '" vector-effect="non-scaling-stroke"/><polyline class="bill-chart-roll7-pm" points="' + pts7PM + '" vector-effect="non-scaling-stroke"/>';
+                  })()}
+                  ${(() => {
+                    return roll7Set.map((v, i) => { const x = (barStep / 2) + i * (barStep + 3); const y = chartH - (v / maxRoll7) * chartH; return '<circle class="bill-chart-roll7-dot-set" cx="' + x.toFixed(1) + '" cy="' + y.toFixed(1) + '" r="2"/>'; }).join('');
+                  })()}
+                  ${(() => {
+                    return roll7PM.map((v, i) => { const x = (barStep / 2) + i * (barStep + 3); const y = chartH - (v / maxRoll7) * chartH; return '<circle class="bill-chart-roll7-dot-pm" cx="' + x.toFixed(1) + '" cy="' + y.toFixed(1) + '" r="2"/>'; }).join('');
+                  })()}
+                  <g style="opacity:${showRoll30 ? 0.85 : 0}">
+                  ${(() => {
+                    const pts30Set = roll30Set.map((v, i) => { const x = (barStep / 2) + i * (barStep + 3); const y = chartH - (v / maxRoll7) * chartH; return x.toFixed(1) + ',' + y.toFixed(1); }).join(' ');
+                    const pts30PM = roll30PM.map((v, i) => { const x = (barStep / 2) + i * (barStep + 3); const y = chartH - (v / maxRoll7) * chartH; return x.toFixed(1) + ',' + y.toFixed(1); }).join(' ');
+                    return '<polyline class="bill-chart-roll30-set" points="' + pts30Set + '" vector-effect="non-scaling-stroke"/><polyline class="bill-chart-roll30-pm" points="' + pts30PM + '" vector-effect="non-scaling-stroke"/>';
+                  })()}
+                  ${(() => {
+                    return roll30Set.map((v, i) => { const x = (barStep / 2) + i * (barStep + 3); const y = chartH - (v / maxRoll7) * chartH; return '<circle class="bill-chart-roll30-dot-set" cx="' + x.toFixed(1) + '" cy="' + y.toFixed(1) + '" r="2"/>'; }).join('');
+                  })()}
+                  ${(() => {
+                    return roll30PM.map((v, i) => { const x = (barStep / 2) + i * (barStep + 3); const y = chartH - (v / maxRoll7) * chartH; return '<circle class="bill-chart-roll30-dot-pm" cx="' + x.toFixed(1) + '" cy="' + y.toFixed(1) + '" r="2"/>'; }).join('');
+                  })()}</svg>
               `;
             })()}
           </div>
@@ -11269,7 +11662,11 @@ function QC() {
             <div class="bill-chart-legend-item"><div class="bill-chart-legend-dot" style="background:var(--status-amber);opacity:.5;height:2px;border-radius:1px;border:none"></div>Lead (PPL)</div>
             <div class="bill-chart-legend-item"><div class="bill-chart-legend-dot" style="background:var(--strike-cyan);opacity:.3;height:2px;border-radius:1px;border:none;width:7px"></div>Schedule</div>
             <div class="bill-chart-legend-item"><div class="bill-chart-legend-dot" style="background:var(--signal-teal);opacity:.6;height:2px;border-radius:1px;border:1px dashed var(--signal-teal)"></div>Forecast</div>
-            <div class="bill-chart-legend-item"><span style="color:var(--empire-mist)">${billTimeseries.total_calls} calls · ${billTimeseries.days} days · $${billTimeseries.total_revenue.toFixed(0)} total fees${billTimeseries.total_lead_revenue > 0 ? " · L:$" + billTimeseries.total_lead_revenue.toFixed(0) : ""}${billTimeseries.total_schedule_revenue > 0 ? " · Sched:$" + billTimeseries.total_schedule_revenue.toFixed(0) : ""}</span></div>
+            <div class="bill-chart-legend-item"><div class="bill-chart-legend-dot" style="background:var(--signal-teal);opacity:.4;height:3px;border-radius:1px;border:1px solid var(--signal-teal);width:7px"></div>7d Avg Settlement</div>
+            <div class="bill-chart-legend-item"><div class="bill-chart-legend-dot" style="background:var(--strike-cyan);opacity:.4;height:3px;border-radius:1px;border:1px solid var(--strike-cyan);width:7px"></div>7d Avg Per-Min</div>
+            <div class="bill-chart-legend-item clickable${showRoll30 ? '' : ' dimmed'}" onClick=${() => setShowRoll30(s => !s)}><div class="bill-chart-legend-dot" style="background:var(--signal-teal);opacity:.25;height:3px;border-radius:1px;border:1px dashed var(--signal-teal);width:7px"></div>30d Avg Settlement</div>
+            <div class="bill-chart-legend-item clickable${showRoll30 ? '' : ' dimmed'}" onClick=${() => setShowRoll30(s => !s)}><div class="bill-chart-legend-dot" style="background:var(--strike-cyan);opacity:.25;height:3px;border-radius:1px;border:1px dashed var(--strike-cyan);width:7px"></div>30d Avg Per-Min</div>
+            <span class="bill-chart-statsries.total_calls} calls · ${billTimeseries.days} days · $${billTimeseries.total_revenue.toFixed(0)} total fees${billTimeseries.total_lead_revenue > 0 ? " · L:$" + billTimeseries.total_lead_revenue.toFixed(0) : ""}${billTimeseries.total_schedule_revenue > 0 ? " · Sched:$" + billTimeseries.total_schedule_revenue.toFixed(0) : ""}</span></div>
           </div>
           `}
         </div>

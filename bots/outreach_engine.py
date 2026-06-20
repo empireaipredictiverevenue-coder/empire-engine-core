@@ -1,24 +1,25 @@
-from proxy_governor import ProxyGovernor
-from local_brain import LocalBrain
+"""EMPIRE V49 · OUTREACH ENGINE (ELITE)
+Main engine for sending compliant outreach at scale.
+"""
 
-class OutreachEngine:
-    def __init__(self):
-        self.pg = ProxyGovernor()
-        self.brain = LocalBrain()
+import asyncio
+from bots.outreach_writer import process_task
 
-    def craft_message(self, lead_data):
-        # Inject dynamic context to make the outreach feel human
-        prompt = f"Write a 1-sentence hook for {lead_data['name']} who works in {lead_data['niche']}."
-        return self.brain.think(prompt)
+async def run_outreach_cycle():
+    # TODO: Pull tasks from agent_task_queue or Supabase
+    print("[Outreach Engine] Running outreach cycle")
+    # Example:
+    # await process_task({...})
 
-    def send(self, message, target):
-        proxy = self.pg.get_proxy()
-        # Simulation: send message via proxy
-        print(f"[OUTREACH] Sending via {proxy} to {target}")
+if __name__ == "__main__":
+    asyncio.run(run_outreach_cycle())
+# === Compliance Wiring ===
+from bots.outreach_writer import is_unsubscribed
 
-from security_layer import SecurityLayer
-
-# Inside OutreachEngine class:
-    def get_secure_headers(self):
-        sec = SecurityLayer()
-        return sec.get_headers()
+async def send_with_compliance(email: str, subject: str, body: str) -> bool:
+    if is_unsubscribed(email):
+        log.warning(f"[Outreach] Blocked unsubscribed email: {email}")
+        return False
+    # TODO: Send via empire_email.py with full compliance
+    log.info(f"[Outreach] Compliant send to {email}")
+    return True

@@ -246,6 +246,11 @@ def support_page() -> str:
           <h3>Live chat</h3>
           <p>Open the chat bubble below — powered by Empire AI</p>
         </div>
+        <div class="sp-card">
+          <div class="sp-card-icon">📡</div>
+          <h3>Carriers</h3>
+          <p><a href="/carrier/enroll">Webhook enrollment →</a></p>
+        </div>
       </div>
     </section>
 

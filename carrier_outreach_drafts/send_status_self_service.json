@@ -1,0 +1,27 @@
+{
+  "sent_at": "2026-06-20T00:02:15.187260+00:00",
+  "campaign": "self_service_enrollment_notification",
+  "total": 3,
+  "success": 3,
+  "failed": 0,
+  "results": [
+    {
+      "carrier": "State Farm",
+      "to": "partners@statefarm.com",
+      "ok": true,
+      "id": "42257a39-d296-4e7d-a7cc-3cd0f820adc8"
+    },
+    {
+      "carrier": "Allstate",
+      "to": "vendorpartners@allstate.com",
+      "ok": true,
+      "id": "840d6781-2e12-43ee-b964-9e572c46acb6"
+    },
+    {
+      "carrier": "Liberty Mutual",
+      "to": "partners@libertymutual.com",
+      "ok": true,
+      "id": "c48c475e-5c84-407f-9b2b-7d9704cc0bd2"
+    }
+  ]
+}

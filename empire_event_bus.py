@@ -230,7 +230,7 @@ class EventBus:
         # ── 4. WebSocket broadcast ────────────────────────────────────
         if self._broadcaster is not None:
             try:
-                self._broadcaster.broadcast({
+                await self._broadcaster.broadcast({
                     "type": f"event.{event_type}",
                     "event_type": event_type,
                     "severity": severity,

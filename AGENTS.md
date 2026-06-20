@@ -73,8 +73,8 @@ The fleet is bigger than the two agents. Last enumerated 2026-06-13
     strike pipeline, predictive revenue modules, AGI calibration. Email:
     empireaipredictiverevenue@proton.me (git audit only; not a chat).
 
-### Cron-driven agents (15 entries, NOT counted as "live services")
-Last refreshed 2026-06-17 by default profile. NOTE: the actual crontab
+### Cron-driven agents (17 entries, NOT counted as "live services")
+Last refreshed 2026-06-20 by default profile. NOTE: the actual crontab
 has more entries than the AGENTS.md doc tracks (drift). Run
 `crontab -l | grep -v '^#' | awk '{print $6}'` to see all cron targets.
 
@@ -112,8 +112,23 @@ has more entries than the AGENTS.md doc tracks (drift). Run
     → `logs/agent_contractor_outreach.log`. Re-engagement + winback sequences.
   - `agents/retarget/cron.sh` — every 6h on :07, → `logs/agent_retarget.log`.
     Re-targeting dormant leads.
-  - `agents/warp_scout/cron.sh` — every 6h on :50, → `logs/agent_warp_scout.log`.
-    Forward-looking market expansion scanner.
+  - `agents/warp_scout/cron.sh` — every 2h on :50 (storm season frequency),
+    → `logs/agent_warp_scout.log`. Forward-looking market expansion scanner.
+    Polls NOAA NWS forecasts and writes risk data to storm_risk_log.
+  - `agents/storm_alert/cron.sh` — every 30min, → `logs/agent_storm_alert.log`.
+    Real-time NWS severe weather alert → radar_targets updater. Fetches active
+    NWS alerts, spatial-matches against radar_targets with WKT location data
+    using shapely polygon intersection. Updates damage_severity and urgency_score
+    (upgrades only). Writes alert summaries to storm_risk_log. Covers targets
+    with spatial location data (~1% of dataset).
+  - `agents/storm_log_to_targets/cron.sh` — every hour at :25,
+    → `logs/agent_storm_log_to_targets.log`. City-name based storm risk
+    propagation. Reads storm_risk_log, aggregates per-metro max risk_rank,
+    maps risk_level → damage_severity + urgency_score, updates active
+    radar_targets in metro areas via city alias matching. Covers the ~99%
+    of targets with city data but no WKT coordinates. County-name NWS alert
+    entries (e.g. "Dallas, TX", "Collin, TX") are resolved against 37 TX
+    county→city alias maps.
   - `agents/fee_watcher/cron.sh` — every 6h on :55, → `logs/agent_fee_watcher.log`.
     Polls for settled-claim events. **Disabled** (see comments).
   - `agents_ab_monitor.py` — every 6h on :52, → `logs/agent_ab_monitor.log`.

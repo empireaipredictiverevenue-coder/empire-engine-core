@@ -200,6 +200,7 @@ def _pick_sequence(lead: dict) -> str:
 def _pick_channel(lead: dict, channels: list) -> str:
     """Pick the channel. SMS first if phone, voice as backup,
     email for leads that have email but no phone.
+    If no contact info at all, skip (returns None so caller can handle).
     """
     if "sms" in channels and lead.get("phone"):
         return "sms"
@@ -207,7 +208,7 @@ def _pick_channel(lead: dict, channels: list) -> str:
         return "voice"
     if "email" in channels and lead.get("email"):
         return "email"
-    return "sms"  # fallback; will be caught by compliance
+    return None  # no reachable channel — skip
 
 
 def _render_message(template: str, lead: dict) -> str:
@@ -407,6 +408,10 @@ def run(dry_run_override: bool = None) -> dict:
     for lead in rows:
         try:
             channel = _pick_channel(lead, cfg["channels"])
+            if channel is None:
+                # No reachable channel (no phone, no email) — skip silently
+                # rather than permanently blocking the lead
+                continue
             sequence = _pick_sequence(lead)
 
             # compliance gate

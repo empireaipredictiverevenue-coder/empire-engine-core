@@ -258,6 +258,10 @@ def splash_page(redirect_to: str = "/command") -> str:
     .splash-foot a:hover {
       color: var(--signal-teal);
     }
+    .splash-foot-sep {
+      margin: 0 10px;
+      color: var(--empire-fog);
+    }
 
     /* Native Ad — subtle card at bottom-right */
     .splash-ad {
@@ -410,6 +414,8 @@ def splash_page(redirect_to: str = "/command") -> str:
 
 <div class="splash-foot">
   <a href="https://empire-ai.co.uk">Autonomous Engine</a>
+  <span class="splash-foot-sep">·</span>
+  <a href="/carrier/enroll">Carrier Webhook</a>
 </div>
 
 <!-- Native Ad Container — loaded via /api/v1/ads/serve -->

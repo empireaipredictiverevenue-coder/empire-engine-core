@@ -77,8 +77,10 @@ NICHE_QUERY_SUFFIX: Dict[str, str] = {
 log = logging.getLogger("empire.prospector")
 
 
-# Supported prospecting niches (mirrors empire_contractors.TRADE_ENUM)
+# Supported prospecting niches — storm-response + B2B + legal + insurance
+# Each niche must have a matching entry in NICHE_QUERY_SUFFIX above.
 NICHES: List[str] = [
+    # ── Storm-response (core) ──
     "roofing",
     "general contractor",
     "restoration",
@@ -86,9 +88,42 @@ NICHES: List[str] = [
     "electrical",
     "plumbing",
     "hvac",
+    "gutter",
+    "tree removal",
+    "emergency services",
+    "public insurance adjuster",
+    # ── Solar / commercial ──
     "solar",
+    "solar installer",
+    "commercial solar",
+    "commercial roofing",
     "paving",
-    "fencing",
+    # ── Legal / mass tort ──
+    "personal injury lawyer",
+    "mass tort lawyer",
+    "class action lawyer",
+    "workers comp lawyer",
+    "medical malpractice lawyer",
+    # ── Insurance ──
+    "medicare advantage agent",
+    "life insurance agent",
+    "final expense insurance",
+    # ── Financial ──
+    "debt consolidation",
+    "debt relief",
+    "business loan broker",
+    "mortgage broker",
+    # ── Senior care / healthcare ──
+    "assisted living",
+    "home health agency",
+    "addiction treatment center",
+    "mental health clinic",
+    "medical alert system",
+    # ── Education / B2B ─-
+    "cdl truck driving school",
+    "nursing school",
+    "managed it",
+    "staffing",
 ]
 
 

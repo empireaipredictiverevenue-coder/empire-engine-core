@@ -92,7 +92,7 @@ def emit_agent_event(
         },
     }
 
-    # ── Primary: POST to the hub's event bus ──────────────────────────
+    # ── Hub emit (real-time broadcast, best-effort) ────────────────────
     hub_url = _hub_base()
     hub_token = _hub_token()
     if hub_url and hub_token:
@@ -114,18 +114,22 @@ def emit_agent_event(
                         "[event_emitter] emitted %s via hub",
                         event_payload["event_type"],
                     )
-                    return finished_at
-                log.warning(
-                    "[event_emitter] hub returned %s, falling back to agent_activity",
-                    resp.status,
-                )
+                else:
+                    log.warning(
+                        "[event_emitter] hub returned %s",
+                        resp.status,
+                    )
         except Exception as exc:
             log.warning(
-                "[event_emitter] hub unreachable (%s), falling back to agent_activity",
+                "[event_emitter] hub unreachable (%s)",
                 exc,
             )
 
-    # ── Fallback: direct Supabase insert ──────────────────────────────
+    # ── Direct Supabase insert (always — durable audit trail) ─────────
+    # NOTE: always writes directly to agent_activity. The hub emit above
+    # is purely for real-time WebSocket broadcast (the hub's event bus
+    # persistence loop is unreliable). This ensures cron agent audit logs
+    # are never lost regardless of hub state.
     try:
         sb.table("agent_activity").insert(
             {
@@ -143,6 +147,6 @@ def emit_agent_event(
             }
         ).execute()
     except Exception as exc:
-        log.warning("[event_emitter] agent_activity insert also failed: %s", exc)
+        log.warning("[event_emitter] agent_activity insert failed: %s", exc)
 
     return finished_at

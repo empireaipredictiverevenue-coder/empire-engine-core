@@ -1,5 +1,5 @@
 #!/bin/bash
-# Warp Scout — every 6h on :50 (offset from other 6h agents)
+# Warp Scout — every 2h on :50 (storm season frequency)
 # Queries NOAA Storm Prediction Center for per-metro storm risk (day 1-3)
 # Writes history to storm_risk_log, logs to agent_activity.
 set -e

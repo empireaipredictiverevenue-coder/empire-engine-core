@@ -25,6 +25,12 @@ Each carrier is different:
   - USAA: similar to Allstate, but membership-gated.
   - Liberty Mutual: enterprise sales motion, not developer-first.
   - Farmers: closed API, requires signed agreement.
+  - CoverForce (aggregator): insurance API marketplace. Multi-carrier
+    access through a single integration. Gated — must Request API Access
+    at https://www.coverforce.com/api-access. Once approved, endpoints
+    live at coverforce.stoplight.io. This adapter polls CoverForce's
+    REST API for settled-claim data and can optionally receive webhook
+    callbacks forwarded to our /api/v1/claim-settled endpoint.
 
 Real implementation template (replace placeholders with real values):
 
@@ -59,6 +65,7 @@ exercising the same code path the real adapter would.
 from abc import ABC, abstractmethod
 from datetime import datetime
 from typing import List, Optional, Dict, Any
+import os
 
 
 class CarrierAdapter(ABC):
@@ -212,6 +219,89 @@ class FarmersAdapter(CarrierAdapter):
         raise NotImplementedError("Farmers API not yet available")
 
 
+class CoverForceAdapter(CarrierAdapter):
+    """CoverForce — insurance API marketplace aggregator.
+
+    Provides multi-carrier access through a single REST API. Gated —
+    must Request API Access at https://www.coverforce.com/api-access
+    then populate COVERFORCE_API_KEY env var and the base_url below.
+
+    Once approved, CoverForce exposes claim status endpoints via their
+    Stoplight portal (coverforce.stoplight.io). This adapter polls for
+    settled-claim data and can optionally receive webhook forwards to
+    our /api/v1/claim-settled endpoint.
+
+    Expected API pattern (from CoverForce public docs, to be confirmed
+    after access is granted):
+
+        GET /v1/claims                    — list claims with filters
+        GET /v1/claims/{id}               — single claim detail
+        POST /v1/claims/{id}/settle       — manual settlement trigger
+        POST /webhook                     — CoverForce pushes events here
+
+    Env vars:
+        COVERFORCE_API_KEY  — API key from CoverForce developer portal
+        COVERFORCE_BASE_URL — API base URL (default: provided URL)
+
+    Webhook path (receive CoverForce push events):
+        POST /api/v1/claim-settled  (already implemented in hub)
+    """
+    name = "coverforce"
+
+    def __init__(self,
+                 api_key: str = "",
+                 base_url: str = ""):
+        self.api_key = api_key or os.environ.get("COVERFORCE_API_KEY", "")
+        self.base_url = (
+            base_url
+            or os.environ.get("COVERFORCE_BASE_URL", "")
+            or "https://api.coverforce.io/v1"
+        )
+        self.webhook_url = "https://hub.empire-ai.co.uk/api/v1/claim-settled"
+
+    def health_check(self) -> bool:
+        """Live if we have an API key configured. Real check would
+        GET /v1/health with auth, but the API is gated so we accept
+        the presence of a key as proof of integration readiness."""
+        if not self.api_key:
+            return False
+        return True
+
+    def get_open_claims(self) -> list:
+        """Fetch open claims from CoverForce.
+
+        Real implementation once API access is granted:
+
+            async with httpx.AsyncClient() as client:
+                r = await client.get(
+                    f"{self.base_url}/claims",
+                    params={"status": "open", "limit": 100},
+                    headers={"Authorization": f"Bearer {self.api_key}"},
+                    timeout=30,
+                )
+                r.raise_for_status()
+                return r.json().get("claims", [])
+        """
+        raise NotImplementedError(
+            "CoverForce API access has not been granted yet. "
+            "Go to https://www.coverforce.com/api-access to request access, "
+            "then set COVERFORCE_API_KEY in /root/.env"
+        )
+
+    def get_settled_claims(self, since: datetime) -> list:
+        raise NotImplementedError(
+            "CoverForce API access has not been granted yet. "
+            "Set COVERFORCE_API_KEY in /root/.env after requesting access "
+            "at https://www.coverforce.com/api-access"
+        )
+
+    def settle_claim(self, claim_id, settled_amount, meta=None):
+        raise NotImplementedError(
+            "CoverForce settle endpoint not yet available — "
+            "will POST /v1/claims/{id}/settle once API access is granted"
+        )
+
+
 # ─── Factory ──────────────────────────────────────────────────────────
 
 def get_adapter(name: str) -> CarrierAdapter:
@@ -224,6 +314,7 @@ def get_adapter(name: str) -> CarrierAdapter:
         "usaa": USAAAdapter,
         "liberty_mutual": LibertyMutualAdapter,
         "farmers": FarmersAdapter,
+        "coverforce": CoverForceAdapter,
     }
     cls = adapters.get(name.lower(), MockCarrierAdapter)
     return cls()

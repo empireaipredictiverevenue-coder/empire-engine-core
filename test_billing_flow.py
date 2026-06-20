@@ -48,6 +48,7 @@ try:
         "hours_close": 22,
         "base_payout": 150.00,
         "fee_rate": 0.05,
+        "per_minute_rate": 4.00,  # $4/min → at 120s: $8.00 > $7.50 settlement fee
         "destination_phone": "+12145551234",
         "daily_cap": 100,
         "is_active": True,
@@ -56,7 +57,7 @@ try:
     buyer_id = buyer["id"]
     check("Buyer created", buyer_id is not None, buyer_id)
     print(f"     Buyer ID: {buyer_id}")
-    print(f"     Base payout: $150.00, Fee rate: 5%")
+    print(f"     Base payout: $150.00, Fee rate: 5%, Per-minute rate: $4.00")
 except Exception as e:
     check("Buyer created", False, str(e))
     sys.exit(1)
@@ -118,19 +119,33 @@ try:
 except Exception as e:
     check("Post completed event", False, str(e))
 
-# Step 4: Verify billing update
+# Step 4: Verify billing update (MAX fee logic: per-minute $8.00 > settlement $7.50)
 print(f"\nStep 4: Verify call_logs billing update (wait 2s)")
+print(f"     Expected: per_minute_fee = 120/60 * $4.00 = $8.00 > settlement_fee = $150 * 5% = $7.50")
 time.sleep(2)
 try:
     cl_res = sb.table("call_logs").select("*").eq("vonage_call_id", test_call_id).execute()
     cl = cl_res.data[0]
     check("is_billable = True", cl.get("is_billable") == True, f"got {cl.get('is_billable')}")
-    expected_fee = round(150.00 * 0.05, 2)
-    actual_fee = float(cl.get("fee_earned", 0))
-    check(f"fee_earned = ${expected_fee}", actual_fee == expected_fee, f"got ${actual_fee}")
+    
+    # Verify both fee components are stored as expected:
+    #   settlement_fee = $150 * 0.05 = $7.50
+    #   per_minute_fee = 120/60 * $4.00 = $8.00
+    #   fee_earned = max($7.50, $8.00) = $8.00 ← per-minute model wins
+    settlement_fee = float(cl.get("settlement_fee", 0))
+    per_minute_fee = float(cl.get("per_minute_fee", 0))
+    fee_earned = float(cl.get("fee_earned", 0))
+    
+    check("settlement_fee = $7.50", round(settlement_fee, 2) == 7.50, f"got ${settlement_fee}")
+    check("per_minute_fee = $8.00", round(per_minute_fee, 2) == 8.00, f"got ${per_minute_fee}")
+    check("fee_earned = $8.00 (MAX wins)", round(fee_earned, 2) == 8.00, f"got ${fee_earned}")
+    check("per_minute > settlement (model verified)", per_minute_fee > settlement_fee, f"per_minute=${per_minute_fee} vs settlement=${settlement_fee}")
+    
     check("status = completed", cl.get("status") == "completed", f"got {cl.get('status')}")
     print(f"     is_billable: {cl.get('is_billable')}")
-    print(f"     fee_earned: ${actual_fee}")
+    print(f"     settlement_fee: ${settlement_fee}")
+    print(f"     per_minute_fee: ${per_minute_fee}")
+    print(f"     fee_earned (MAX): ${fee_earned} ← per-minute model")
 except Exception as e:
     check("Billing update", False, str(e))
 
