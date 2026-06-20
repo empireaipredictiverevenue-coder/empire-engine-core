@@ -330,9 +330,8 @@ class GraphifyRoutes:
             return JSONResponse(result)
 
         @app.get("/graphify/tree", response_class=HTMLResponse)
-        async def graphify_tree_page(
-            auth: bool = Depends(self.require_auth) if self.require_auth else None):
-            """Serve the D3 collapsible tree visualization."""
+        async def graphify_tree_page():
+            """Serve the D3 collapsible tree visualization (public)."""
             path = self.bridge.tree_html_path
             if not path:
                 raise HTTPException(404, "GRAPH_TREE.html not found. Run: python3 -m graphify tree")
