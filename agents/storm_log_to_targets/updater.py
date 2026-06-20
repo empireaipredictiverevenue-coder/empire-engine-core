@@ -528,6 +528,7 @@ def run_once(dry_run_override: Optional[bool] = None) -> dict:
     # ── 2. Find targets per qualifying metro ──────────────────────────
     total_targets_found = 0
     updates_to_apply: Dict[str, Tuple[str, int]] = {}  # target_id → (severity, urgency)
+    severity_fill: Dict[str, str] = {}  # target_id → severity (fill when missing)
 
     for metro in qualifying:
         metro_name = metro["metro"]
@@ -554,28 +555,24 @@ def run_once(dry_run_override: Optional[bool] = None) -> dict:
             old_sev = (t.get("damage_severity") or "").lower()
             old_urg = int(t.get("urgency_score") or 0)
 
-            # Upgrade only: never downgrade
+            # Case 1: urgency needs upgrading → set both severity and urgency
             current = updates_to_apply.get(tid)
             current_urg = current[1] if current else old_urg
 
             if urg > current_urg:
                 updates_to_apply[tid] = (sev, urg)
+            # Case 2: urgency already at or above threshold, but severity missing
+            # → fill severity without changing urgency
+            elif not old_sev or old_sev == "":
+                severity_fill[tid] = sev
 
-    if not updates_to_apply:
-        summary = (
-            f"Found {total_targets_found} targets across {len(qualifying)} metros, "
-            f"none needed upgrade"
-        )
-        log.info(summary)
-        _log_activity(sb, run_id, started_at, "ok",
-                      rows_seen=total_targets_found, summary=summary)
-        return {"status": "ok", "note": summary, "targets_checked": total_targets_found}
-
-    # ── 3. Apply updates ─────────────────────────────────────────────
+    # ── 3. Apply updates (urgency + severity) ─────────────────────────
     updated = 0
     errors = 0
     if not dry_run:
         now_iso = datetime.now(timezone.utc).isoformat()
+
+        # Apply urgency upgrades (existing behavior)
         for tid, (sev, urg) in updates_to_apply.items():
             try:
                 sb.table("radar_targets").update({
@@ -588,11 +585,33 @@ def run_once(dry_run_override: Optional[bool] = None) -> dict:
                 log.warning(f"Failed to update target {tid[:12]}: {e}")
                 errors += 1
 
+        # Apply severity-only fills (targets with urgency already high enough)
+        filled = 0
+        for tid, sev in severity_fill.items():
+            # Don't double-update if this target was already in updates_to_apply
+            if tid in updates_to_apply:
+                continue
+            try:
+                sb.table("radar_targets").update({
+                    "damage_severity": sev,
+                    "updated_at": now_iso,
+                }).eq("id", tid).execute()
+                filled += 1
+                updated += 1
+            except Exception as e:
+                log.warning(f"Failed to severity-fill target {tid[:12]}: {e}")
+                errors += 1
+
+        if filled:
+            log.info(f"[{AGENT_NAME}] severity_fill: set damage_severity on {filled} targets (urgency already sufficient)")
+
+    total_upgraded = len(updates_to_apply) + len(severity_fill)
     summary = (
         f"[{'DRY-RUN' if dry_run else 'LIVE'}] "
         f"metros={len(qualifying)} "
         f"targets_found={total_targets_found} "
         f"targets_upgraded={len(updates_to_apply)} "
+        f"severity_filled={len(severity_fill)} "
         f"targets_updated={updated} "
         f"errors={errors}"
     )
@@ -615,6 +634,7 @@ def run_once(dry_run_override: Optional[bool] = None) -> dict:
         ],
         "targets_found": total_targets_found,
         "targets_upgraded": len(updates_to_apply),
+        "severity_filled": len(severity_fill),
         "targets_updated": updated,
         "errors": errors,
         "dry_run": dry_run,

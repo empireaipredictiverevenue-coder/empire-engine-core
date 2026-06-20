@@ -30,6 +30,7 @@ import logging
 import argparse
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Optional
 
 REPO = Path(__file__).resolve().parents[2]
 if str(REPO) not in sys.path:
