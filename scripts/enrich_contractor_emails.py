@@ -346,6 +346,11 @@ def enrich(dry_run: bool = True) -> dict:
 if __name__ == "__main__":
     dry_run = "--apply" not in sys.argv
     run_agent_reach = "--agent-reach" in sys.argv
+    limit = 0
+    if "--limit" in sys.argv:
+        idx = sys.argv.index("--limit")
+        if idx + 1 < len(sys.argv):
+            limit = int(sys.argv[idx + 1])
     result = enrich(dry_run=dry_run)
     print(f"\n{'DRY RUN' if result['dry_run'] else 'APPLIED'} — use {'--apply' if result['dry_run'] else '(already applied)'} to {'write' if result['dry_run'] else 're-run'}")
 
@@ -358,5 +363,7 @@ if __name__ == "__main__":
         cmd = [sys.executable, script]
         if not dry_run:
             cmd.append("--apply")
+        if limit > 0:
+            cmd.extend(["--limit", str(limit)])
         print(f"  Running: {' '.join(cmd)}")
         subprocess.run(cmd)
