@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Empire AI — Payment Instructions</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: #f5f5f5;
+    font-family: 'Inter', -apple-system, system-ui, sans-serif;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    padding: 24px;
+  }
+  .card {
+    max-width: 640px;
+    width: 100%;
+    background: #ffffff;
+    border-radius: 12px;
+    padding: 48px 40px;
+    box-shadow: 0 2px 24px rgba(0,0,0,0.06);
+  }
+  .brand {
+    font-size: 10px;
+    letter-spacing: 0.3em;
+    text-transform: uppercase;
+    color: #6b7280;
+    margin-bottom: 28px;
+  }
+  h1 {
+    font-size: 24px;
+    font-weight: 600;
+    letter-spacing: -0.03em;
+    color: #111827;
+    margin-bottom: 8px;
+  }
+  .subtitle {
+    font-size: 14px;
+    color: #6b7280;
+    line-height: 1.6;
+    margin-bottom: 32px;
+  }
+  .section {
+    margin-bottom: 28px;
+  }
+  .section:last-of-type { margin-bottom: 0; }
+  .label {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: #6b7280;
+    margin-bottom: 6px;
+  }
+  .value {
+    font-family: 'JetBrains Mono', 'SF Mono', 'Fira Code', monospace;
+    font-size: 14px;
+    color: #111827;
+    background: #f3f4f6;
+    border-radius: 8px;
+    padding: 14px 16px;
+    word-break: break-all;
+    line-height: 1.5;
+    border: 1px solid #e5e7eb;
+  }
+  .value.wallet {
+    font-size: 13px;
+  }
+  .step-box {
+    background: #f3f4f6;
+    border-radius: 8px;
+    padding: 20px;
+    margin-bottom: 12px;
+    border-left: 3px solid #6366f1;
+  }
+  .step-box:last-child { margin-bottom: 0; }
+  .step-num {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: 700;
+    color: #ffffff;
+    background: #6366f1;
+    border-radius: 4px;
+    padding: 2px 8px;
+    margin-bottom: 8px;
+  }
+  .step-box p {
+    font-size: 14px;
+    color: #374151;
+    line-height: 1.6;
+  }
+  .code-block {
+    font-family: 'JetBrains Mono', 'SF Mono', 'Fira Code', monospace;
+    font-size: 13px;
+    background: #1e1e2e;
+    color: #cdd6f4;
+    border-radius: 6px;
+    padding: 14px 16px;
+    margin-top: 8px;
+    word-break: break-all;
+    line-height: 1.6;
+    overflow-x: auto;
+  }
+  .code-block .comment { color: #6c7086; }
+  .code-block .kw      { color: #cba6f7; }
+  .code-block .str     { color: #a6e3a1; }
+  .divider {
+    border: none;
+    border-top: 1px solid #e5e7eb;
+    margin: 32px 0;
+  }
+  .footer {
+    font-size: 11px;
+    color: #9ca3af;
+    line-height: 1.6;
+    margin-top: 28px;
+    padding-top: 20px;
+    border-top: 1px solid #e5e7eb;
+  }
+  .footer strong { color: #6b7280; }
+  @media print {
+    body { background: white; padding: 0; }
+    .card { box-shadow: none; padding: 32px; }
+  }
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="brand">Empire AI · Predictive Revenue</div>
+  <h1>Payment Instructions</h1>
+  <p class="subtitle">
+    Remit your 3% success fee via USDC (Solana network).<br>
+    Use the dispatch reference below to tag the payment.
+  </p>
+
+  <!-- DISPATCH REFERENCE -->
+  <div class="section">
+    <div class="label">Dispatch Reference</div>
+    <div class="value" id="dispatch-value">REPLACE_WITH_DISPATCH_UUID</div>
+  </div>
+
+  <!-- INSTRUCTIONS -->
+  <div class="section">
+    <div class="label">Steps</div>
+
+    <div class="step-box">
+      <div class="step-num">1</div>
+      <p><strong>Send 3% USDC</strong> to the vault wallet address below on the <strong>Solana</strong> network.</p>
+      <div class="label" style="margin-top:12px;">Vault Wallet (Solana / USDC)</div>
+      <div class="value wallet" id="wallet-value">egJ1t9NZkDs8FvMbfnQTqXzC4KNuhAc9XSfpG9y9AZM</div>
+    </div>
+
+    <div class="step-box">
+      <div class="step-num">2</div>
+      <p><strong>Notify Empire AI</strong> by POSTing the settlement details to our webhook.</p>
+      <p style="font-size:13px;color:#6b7280;margin-top:4px;">
+        Include your dispatch UUID so we can match the payment.
+      </p>
+      <div class="code-block">
+<span class="comment"># Replace the values below</span><br>
+curl -X POST <span class="str">https://empire-ai.co.uk/api/v1/claim-settled</span> \<br>
+&nbsp;&nbsp;-H <span class="str">"Authorization: Bearer YOUR_API_KEY"</span> \<br>
+&nbsp;&nbsp;-H <span class="str">"Content-Type: application/json"</span> \<br>
+&nbsp;&nbsp;-d <span class="str">'{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;"dispatch_id": "<span id="dispatch-inline">REPLACE_WITH_DISPATCH_UUID</span>",<br>
+&nbsp;&nbsp;&nbsp;&nbsp;"claim_amount": 125000.00,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;"claim_id": "YOUR_REF_001",<br>
+&nbsp;&nbsp;&nbsp;&nbsp;"settled_at": "2026-06-20T00:00:00Z"<br>
+&nbsp;&nbsp;}'</span>
+      </div>
+    </div>
+  </div>
+
+  <hr class="divider">
+
+  <!-- QUICK REFERENCE -->
+  <div class="section">
+    <div class="label">Quick Reference</div>
+    <table style="width:100%;border-collapse:collapse;font-size:13px;">
+      <tr>
+        <td style="padding:8px 0;color:#6b7280;width:120px;">Webhook URL</td>
+        <td style="padding:8px 0;font-family:monospace;word-break:break-all;color:#111827;">
+          https://empire-ai.co.uk/api/v1/claim-settled
+        </td>
+      </tr>
+      <tr>
+        <td style="padding:8px 0;color:#6b7280;">Network</td>
+        <td style="padding:8px 0;font-family:monospace;color:#111827;">Solana (mainnet-beta)</td>
+      </tr>
+      <tr>
+        <td style="padding:8px 0;color:#6b7280;">Token</td>
+        <td style="padding:8px 0;font-family:monospace;color:#111827;">USDC (EPjFWdd5...)</td>
+      </tr>
+      <tr>
+        <td style="padding:8px 0;color:#6b7280;">Fee</td>
+        <td style="padding:8px 0;color:#111827;">3% of settled claim amount</td>
+      </tr>
+    </table>
+  </div>
+
+  <div class="footer">
+    <strong>Empire AI Ltd</strong> · empire-ai.co.uk · Questions? Reply to your SMS or email from us.
+  </div>
+</div>
+
+<script>
+  // Fill in dispatch UUID from URL parameter ?dispatch=<uuid>
+  const params = new URLSearchParams(window.location.search);
+  const dispatch = params.get('dispatch');
+  if (dispatch) {
+    document.getElementById('dispatch-value').textContent = dispatch;
+    document.getElementById('dispatch-inline').textContent = dispatch;
+    document.title = 'Empire AI — Payment Instructions · ' + dispatch.slice(0, 8);
+  }
+</script>
+</body>
+</html>
