@@ -297,17 +297,19 @@ async def run_followups(
 
     contractors: dict = {}
     if contractor_ids:
-        for cid in contractor_ids:
-            cr = sb.table("contractors").select("id, name, phone, email").eq("id", cid).limit(1).execute()
-            if cr.data:
-                contractors[cid] = cr.data[0]
+        # Batch query — single IN query instead of N individual queries
+        cr = sb.table("contractors").select("id, name, phone, email") \
+            .in_("id", contractor_ids).limit(500).execute()
+        for row in (cr.data or []):
+            contractors[row["id"]] = row
 
     leads: dict = {}
     if lead_ids:
-        for lid in lead_ids:
-            lr = sb.table("radar_targets").select("id, address, city, damage_severity").eq("id", lid).limit(1).execute()
-            if lr.data:
-                leads[lid] = lr.data[0]
+        # Batch query — single IN query instead of N individual queries
+        lr = sb.table("radar_targets").select("id, address, city, damage_severity") \
+            .in_("id", lead_ids).limit(500).execute()
+        for row in (lr.data or []):
+            leads[row["id"]] = row
 
     # ── 3. Build the public base URL for accept links ───────────────────
     public_base_url = os.getenv("PUBLIC_BASE_URL", "https://empire-ai.co.uk").rstrip("/")
