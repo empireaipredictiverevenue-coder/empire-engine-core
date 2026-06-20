@@ -88,25 +88,25 @@ CHANNELS = {
                       "https://www.v2ex.com/api/topics/hot.json"],
     },
     "bilibili_search": {
-        "description": "Search Bilibili videos (needs `bili` CLI installed)",
+        "description": "Search Bilibili videos via bili CLI",
         "cost": "free",
         "rate_limit": "20/min",
-        "installed": False,
-        "install_note": "Install: pip install bilibili-cli  or  brew install bili",
+        "installed": True,
+        "test_cmd": ["bili", "search", "test", "--type", "video", "-n", "1"],
     },
     "twitter_search": {
-        "description": "Search Twitter/X (needs `twitter` CLI installed)",
+        "description": "Search Twitter/X via twitter CLI (needs browser cookie auth)",
         "cost": "free",
         "rate_limit": "15/min",
-        "installed": False,
-        "install_note": "Install: pip install twitter-cli",
+        "installed": True,
+        "auth_note": "Requires Twitter browser cookies. Run: twitter auth --browser chrome",
     },
     "reddit_search": {
-        "description": "Search Reddit (needs `opencli` or `rdt` CLI installed)",
+        "description": "Search Reddit via rdt CLI (needs OAuth setup)",
         "cost": "free",
         "rate_limit": "30/min",
-        "installed": False,
-        "install_note": "Install: pip install opencli  or  pip install rdt-cli",
+        "installed": True,
+        "auth_note": "Requires Reddit OAuth. Run: rdt --authenticate  or  export RDT_REFRESH_TOKEN=...",
     },
 }
 
@@ -358,7 +358,7 @@ class AgentReachEnricher:
     # ── Channels Requiring Extra CLI Installation ────────────────
 
     async def bilibili_search(self, query: str, max_results: int = 10) -> dict:
-        """Search Bilibili videos (needs `bili` CLI)."""
+        """Search Bilibili videos via bili CLI."""
         if not self._check_rate("bilibili_search"):
             return {"ok": False, "error": "rate limited", "channel": "bilibili_search"}
         self._record_call("bilibili_search")
@@ -366,41 +366,33 @@ class AgentReachEnricher:
         return await self._run_cmd(
             "bili", "search", query,
             "--type", "video", "-n", str(max_results),
-            timeout=20,
+            timeout=25,
             channel="bilibili_search",
         )
 
     async def twitter_search(self, query: str, max_results: int = 10) -> dict:
-        """Search Twitter/X (needs `twitter` CLI)."""
+        """Search Twitter/X via twitter CLI."""
         if not self._check_rate("twitter_search"):
             return {"ok": False, "error": "rate limited", "channel": "twitter_search"}
         self._record_call("twitter_search")
 
         return await self._run_cmd(
             "twitter", "search", query, "-n", str(max_results),
-            timeout=25,
+            timeout=30,
             channel="twitter_search",
         )
 
     async def reddit_search(self, query: str, max_results: int = 10) -> dict:
-        """Search Reddit (needs `opencli` or `rdt` CLI)."""
+        """Search Reddit via rdt CLI."""
         if not self._check_rate("reddit_search"):
             return {"ok": False, "error": "rate limited", "channel": "reddit_search"}
         self._record_call("reddit_search")
 
-        # Try opencli first, fall back to rdt
-        result = await self._run_cmd(
-            "opencli", "reddit", "search", query, "-f", "yaml",
-            timeout=25,
+        return await self._run_cmd(
+            "rdt", "search", query, "--limit", str(max_results),
+            timeout=30,
             channel="reddit_search",
         )
-        if not result.get("ok") and "not found" in str(result.get("error", "")).lower():
-            result = await self._run_cmd(
-                "rdt", "search", query, "--limit", str(max_results),
-                timeout=25,
-                channel="reddit_search",
-            )
-        return result
 
     # ── Unified Enrichment ───────────────────────────────────────
 
@@ -594,6 +586,7 @@ class AgentReachEnricher:
                 "rate_limit": cfg["rate_limit"],
                 "installed": cfg["installed"],
                 "install_note": cfg.get("install_note", ""),
+                "auth_note": cfg.get("auth_note", ""),
                 "available_in": [tier for tier, channels in TIER_CHANNELS.items()
                                  if name in channels],
             }
