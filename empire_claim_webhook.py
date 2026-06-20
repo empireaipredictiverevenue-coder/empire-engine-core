@@ -223,8 +223,27 @@ def register_claim_webhook(
                         "message": f"Dispatch {dispatch_id} already settled",
                     }
 
-            # Resolve contractor_id
+            # Resolve contractor_id + contact info for meta
             contractor_id = dispatch.get("contractor_id")
+            contractor_name = None
+            contractor_phone = None
+            contractor_email = None
+            if contractor_id:
+                try:
+                    c_res = (
+                        db.table("contractors")
+                        .select("name, phone, email")
+                        .eq("id", contractor_id)
+                        .limit(1)
+                        .execute()
+                    )
+                    if c_res.data:
+                        c_data = c_res.data[0]
+                        contractor_name = c_data.get("name")
+                        contractor_phone = c_data.get("phone")
+                        contractor_email = c_data.get("email")
+                except Exception:
+                    pass
 
             # Resolve lead_id (dispatch.lead_id is radar_targets.id;
             # we want enriched_leads.id)
@@ -255,6 +274,9 @@ def register_claim_webhook(
                 "webhook_source": True,
                 "dispatch_id": str(dispatch_id),
                 "loss_description": loss_description or None,
+                "contractor_name": contractor_name,
+                "contractor_phone": contractor_phone,
+                "contractor_email": contractor_email,
             }
 
             fee_event = {

@@ -122,6 +122,9 @@ def _create_fee_event(sb, claim: dict, dry_run: bool, fee_percent: float) -> dic
     # Resolve contractor_id and lead_id from dispatches
     contractor_id = None
     lead_id = None
+    contractor_name = None
+    contractor_phone = None
+    contractor_email = None
     if dispatch_id:
         try:
             dr = sb.table("dispatches").select("contractor_id, lead_id").eq("id", dispatch_id).limit(1).execute()
@@ -134,6 +137,17 @@ def _create_fee_event(sb, claim: dict, dry_run: bool, fee_percent: float) -> dic
                     el = sb.table("enriched_leads").select("id").eq("radar_target_id", lead_id).limit(1).execute()
                     if el.data:
                         lead_id = el.data[0]["id"]
+                # Resolve contractor contact info for meta
+                if contractor_id:
+                    try:
+                        cr = sb.table("contractors").select("name, phone, email").eq("id", contractor_id).limit(1).execute()
+                        if cr.data:
+                            c_data = cr.data[0]
+                            contractor_name = c_data.get("name")
+                            contractor_phone = c_data.get("phone")
+                            contractor_email = c_data.get("email")
+                    except Exception:
+                        pass
         except Exception as e:
             log.warning(f"[fee_watcher] dispatch lookup failed for {dispatch_id}: {e}")
 
@@ -151,6 +165,9 @@ def _create_fee_event(sb, claim: dict, dry_run: bool, fee_percent: float) -> dic
         "meta": {
             "carrier_claim_id": str(claim_id),
             "dispatch_id": dispatch_id,
+            "contractor_name": contractor_name,
+            "contractor_phone": contractor_phone,
+            "contractor_email": contractor_email,
         },
     }
 

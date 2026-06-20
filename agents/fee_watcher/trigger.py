@@ -31,6 +31,22 @@ def main():
 
     sb = create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_SERVICE_KEY"])
     fee = round(args.claim_amount * 0.03, 2)
+
+    # Resolve contractor contact info for meta
+    contractor_name = None
+    contractor_phone = None
+    contractor_email = None
+    if args.contractor_id:
+        try:
+            c_res = sb.table("contractors").select("name, phone, email").eq("id", args.contractor_id).limit(1).execute()
+            if c_res.data:
+                c_data = c_res.data[0]
+                contractor_name = c_data.get("name")
+                contractor_phone = c_data.get("phone")
+                contractor_email = c_data.get("email")
+        except Exception:
+            pass
+
     claim = {
         "id": args.claim_id or f"synth-{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}",
         "contractor_id": args.contractor_id,
@@ -49,6 +65,11 @@ def main():
         "settled_at": claim["settled_at"],
         "source": "fee_watcher_trigger",
         "status": "pending",
+        "meta": {
+            "contractor_name": contractor_name,
+            "contractor_phone": contractor_phone,
+            "contractor_email": contractor_email,
+        },
     }
     if args.dry_run:
         print("[DRY-RUN] would create fee_event:")

@@ -96,6 +96,19 @@ def register_fee_routes(
         source = body.get("source") or "webhook"
         meta = body.get("meta") or {}
 
+        # Resolve contractor contact info for meta if contractor_id provided
+        if contractor_id:
+            try:
+                db_meta = _db()
+                c_res = db_meta.table("contractors").select("name, phone, email").eq("id", contractor_id).limit(1).execute()
+                if c_res.data:
+                    c_data = c_res.data[0]
+                    meta["contractor_name"] = c_data.get("name")
+                    meta["contractor_phone"] = c_data.get("phone")
+                    meta["contractor_email"] = c_data.get("email")
+            except Exception:
+                pass
+
         fee_event = {
             "claim_id": claim_id,
             "contractor_id": contractor_id,

@@ -108,6 +108,20 @@ def register_operator_mark_settled(
             meta["dispatch_id"] = str(dispatch_id)
             meta["source"] = "operator_mark_settled"
 
+            # Resolve contractor contact info for meta
+            cid = dispatch.get("contractor_id")
+            if cid:
+                try:
+                    c_res = db.table("contractors").select("name, phone, email").eq("id", cid).limit(1).execute()
+                    if c_res.data:
+                        c_data = c_res.data[0]
+                        meta["contractor_name"] = c_data.get("name")
+                        meta["contractor_phone"] = c_data.get("phone")
+                        meta["contractor_email"] = c_data.get("email")
+                        meta["resolved_contractor_id"] = str(cid)
+                except Exception:
+                    pass
+
             fee = round(claim_amount * fee_percent, 2)
             fee_event = {
                 "claim_id": claim_id,

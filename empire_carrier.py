@@ -166,9 +166,23 @@ def register_mock_carrier_routes(app, *, require_auth, get_db=None):
             dispatch = db.table("dispatches").select("contractor_id,lead_id").eq("id", c["dispatch_id"]).limit(1).execute()
             contractor_id = None
             lead_id = None
+            contractor_name = None
+            contractor_phone = None
+            contractor_email = None
             if dispatch.data:
                 contractor_id = dispatch.data[0].get("contractor_id")
                 lead_id = dispatch.data[0].get("lead_id")
+                # Resolve contractor contact info for meta
+                if contractor_id:
+                    try:
+                        c_res = db.table("contractors").select("name, phone, email").eq("id", contractor_id).limit(1).execute()
+                        if c_res.data:
+                            c_data = c_res.data[0]
+                            contractor_name = c_data.get("name")
+                            contractor_phone = c_data.get("phone")
+                            contractor_email = c_data.get("email")
+                    except Exception:
+                        pass
             fee_event = {
                 "id": str(uuid.uuid4()),
                 "claim_id": f"carrier-{c['id']}",
@@ -178,6 +192,11 @@ def register_mock_carrier_routes(app, *, require_auth, get_db=None):
                 "settled_at": c["settled_at"],
                 "source": "mock_carrier",
                 "created_at": _dt.now(_tz.utc).isoformat(),
+                "meta": {
+                    "contractor_name": contractor_name,
+                    "contractor_phone": contractor_phone,
+                    "contractor_email": contractor_email,
+                },
             }
             if contractor_id:
                 fee_event["contractor_id"] = contractor_id
