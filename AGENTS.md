@@ -297,6 +297,12 @@ durable, queryable, multi-agent queue.
 - `predictive_backlink_agent.py` — every 12h at :30, → `logs/backlinks.log`.
   Backlink intelligence + opportunity identification + auto-emailing.
   Run: `python3 -m bots.predictive_backlink_agent`
+- `scripts/enrich_contractor_agent_reach.py` — weekly Sunday 06:30 UTC,
+  → `logs/enrich_contractor_agent_reach.log`. Runs Agent-Reach multi-source
+  intel (semantic_search via Exa) on contractors with real emails but no
+  intel yet. Writes results to `contractors.meta.agent_reach_intel`.
+  Idempotent — skips contractors already enriched. Rate-limited at 3.5s/
+  contractor (~17/min). Added 2026-06-20.
 
 ## graphify
 
