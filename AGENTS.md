@@ -160,6 +160,10 @@ has more entries than the AGENTS.md doc tracks (drift). Run
   - `agents/prospector` — every 6h at :05. Contractor acquisition across
     27 metros × 7 niches (expanded from 3 metros × 1 niche 2026-06-20).
     Writes to prospects table; prospector_bridge moves to contractors.
+  - `python3 -m graphify update .` — daily 04:00 UTC,
+    → `logs/graphify_update.log`. Updates the knowledge graph
+    (graphify-out/graph.json) to keep codebase mapping in sync with code
+    changes. AST-only extraction, no API cost. Added 2026-06-20.
 
 #### Pipeline-side (live in /opt/empire-pipeline/, not empire-v49 repo)
   - `storm_url_refresh_cron.sh` — every 6h on :15, → `logs/storm_url_refresh.log`.
