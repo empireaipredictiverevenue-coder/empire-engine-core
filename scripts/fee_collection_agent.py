@@ -145,15 +145,13 @@ async def _send_sms_vonage(
         token = pyjwt.encode(payload, private_key, algorithm="RS256")
 
         # Build Messages API request
+        number = vonage_number.lstrip("+")
         payload = {
-            "from": {"type": "sms", "number": vonage_number.lstrip("+")},
-            "to": {"type": "sms", "number": to_number.lstrip("+")},
-            "message": {
-                "content": {
-                    "type": "text",
-                    "text": message[:1000],
-                }
-            },
+            "from": number,
+            "to": to_number.lstrip("+"),
+            "message_type": "text",
+            "text": message[:1000],
+            "channel": "sms",
         }
 
         async with httpx.AsyncClient(timeout=10) as client:
