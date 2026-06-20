@@ -20,13 +20,13 @@ The claim webhook is how they POST the settlement:
     Authorization: Bearer <CLAIM_WEBHOOK_SECRET>
 
 Env vars:
-    CLAIM_WEBHOOK_SECRET  — shared secret for the webhook auth
-    VONAGE_API_KEY        — Vonage API key (for SMS sending)
-    VONAGE_API_SECRET     — Vonage API secret
-    VONAGE_NUMBER         — Vonage sender phone number
-    RESEND_API_KEY        — Resend API key (for email fallback)
-    FROM_ADDRESS          — Sender email address (default: noreply@empire-ai.co.uk)
-    FROM_NAME             — Sender display name (default: Empire AI Operations)
+    CLAIM_WEBHOOK_SECRET        — shared secret for the webhook auth
+    VONAGE_APPLICATION_ID       — Vonage application ID (for JWT auth)
+    VONAGE_PRIVATE_KEY_PATH     — path to Vonage private key file (default: /root/vonage_private.key)
+    VONAGE_NUMBER               — Vonage sender phone number
+    RESEND_API_KEY              — Resend API key (for email fallback)
+    FROM_ADDRESS                — Sender email address (default: noreply@empire-ai.co.uk)
+    FROM_NAME                   — Sender display name (default: Empire AI Operations)
     (falls back to logging-only if no channel configured)
 """
 
@@ -114,35 +114,66 @@ def _build_payment_body(
 async def _send_sms_vonage(
     to_number: str,
     message: str,
-    vonage_key: str,
-    vonage_secret: str,
     vonage_number: str,
 ) -> dict:
-    """Send SMS via Vonage SMS API."""
-    if not vonage_key or not vonage_secret or not vonage_number:
-        return {"ok": False, "error": "Vonage credentials not configured"}
+    """Send SMS via Vonage Messages API (JWT auth)."""
+    app_id = os.getenv("VONAGE_APPLICATION_ID", "")
+    key_path = os.getenv("VONAGE_PRIVATE_KEY_PATH", "/root/vonage_private.key")
+
+    if not app_id or not os.path.exists(key_path):
+        return {"ok": False, "error": "Vonage JWT credentials not configured"}
+    if not vonage_number:
+        return {"ok": False, "error": "VONAGE_NUMBER not set"}
 
     try:
+        # Read private key
+        with open(key_path, "r") as f:
+            private_key = f.read()
+
+        # Generate JWT
+        import jwt as pyjwt
+        import time as _time
+
+        now = int(_time.time())
+        jti = str(uuid.uuid4())
+        payload = {
+            "iat": now,
+            "exp": now + 180,  # 3 minute expiry
+            "jti": jti,
+            "application_id": app_id,
+        }
+        token = pyjwt.encode(payload, private_key, algorithm="RS256")
+
+        # Build Messages API request
+        payload = {
+            "from": {"type": "sms", "number": vonage_number.lstrip("+")},
+            "to": {"type": "sms", "number": to_number.lstrip("+")},
+            "message": {
+                "content": {
+                    "type": "text",
+                    "text": message[:1000],
+                }
+            },
+        }
+
         async with httpx.AsyncClient(timeout=10) as client:
             r = await client.post(
-                "https://rest.nexmo.com/sms/json",
-                data={
-                    "api_key": vonage_key,
-                    "api_secret": vonage_secret,
-                    "from": vonage_number,
-                    "to": to_number.lstrip("+"),
-                    "text": message[:1600],
-                    "type": "text",
+                "https://api.nexmo.com/v1/messages",
+                headers={
+                    "Authorization": f"Bearer {token}",
+                    "Content-Type": "application/json",
                 },
+                json=payload,
             )
             result = r.json()
-            messages = result.get("messages", [{}])
-            status = messages[0].get("status", "99") if messages else "99"
-            if status == "0":
-                return {"ok": True, "message_id": messages[0].get("message-id", "")}
+            # Successful: 202 Accepted with message_uuid
+            if r.status_code == 202:
+                msg_uuid = result.get("message_uuid", "")
+                return {"ok": True, "message_id": msg_uuid}
             else:
-                err = messages[0].get("error-text", "unknown") if messages else "unknown"
-                return {"ok": False, "error": f"Vonage {status}: {err}"}
+                detail = result.get("detail", str(result)[:200])
+                title = result.get("title", "")
+                return {"ok": False, "error": f"Vonage {r.status_code}: {title} {detail}"}
     except Exception as e:
         return {"ok": False, "error": str(e)}
 
@@ -240,10 +271,10 @@ async def run_collection(
     started_at = datetime.now(timezone.utc)
 
     # ── Channel config ──────────────────────────────────────────────────
-    vonage_key = os.getenv("VONAGE_API_KEY", "")
-    vonage_secret = os.getenv("VONAGE_API_SECRET", "")
     vonage_number = os.getenv("VONAGE_NUMBER", "")
-    sms_enabled = bool(vonage_key and vonage_secret and vonage_number)
+    app_id = os.getenv("VONAGE_APPLICATION_ID", "")
+    key_path = os.getenv("VONAGE_PRIVATE_KEY_PATH", "/root/vonage_private.key")
+    sms_enabled = bool(app_id and os.path.exists(key_path) and vonage_number)
 
     resend_key = os.getenv("RESEND_API_KEY", "")
     email_from = os.getenv("FROM_ADDRESS", "noreply@empire-ai.co.uk")
@@ -412,7 +443,7 @@ async def run_collection(
             # Try SMS first (faster attention)
             if sms_enabled and phone:
                 result = await _send_sms_vonage(
-                    phone, body, vonage_key, vonage_secret, vonage_number
+                    phone, body, vonage_number
                 )
                 if result.get("ok"):
                     success = True
