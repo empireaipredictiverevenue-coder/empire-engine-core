@@ -76,5 +76,18 @@ def run():
         time.sleep(1800)
 
 
+_run_once_total = 0
+
+def run_once():
+    """Single cycle for agent_runner loop mode."""
+    global _run_once_total
+    print("[ANGI] Scraper cycle...")
+    count = scrape_angi()
+    _run_once_total += count
+    heartbeat(_run_once_total)
+    print(f"[ANGI] Cycle done. Leads this cycle: {count}, total: {_run_once_total}")
+    return {"status": "ok", "leads_found": count, "total": _run_once_total}
+
+
 if __name__ == "__main__":
     run()

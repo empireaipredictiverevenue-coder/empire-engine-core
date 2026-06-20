@@ -990,7 +990,16 @@ def run(
     return asyncio.run(run_async(sub_niches, metros, dry_run))
 
 
+# ── Agent runner compatibility ────────────────────────────────────────
+
+
+def run_once():
+    """Single cycle for agent_runner loop mode."""
+    return run()
+
+
 # ── CLI ────────────────────────────────────────────────────────────────
+
 
 def main():
     """CLI entry point."""

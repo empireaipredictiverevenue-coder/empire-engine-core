@@ -109,6 +109,21 @@ async def run_continuously(interval_minutes: int = 360):
             log.error(f"[Camofox] Error: {e}")
         await asyncio.sleep(interval_minutes * 60)
 
+def run_once():
+    """Single cycle for agent_runner loop mode."""
+    async def _run():
+        scraper = PredictiveCamofoxScraper()
+        result = await scraper.run_cycle()
+        return result
+    return asyncio.run(_run())
+
+
+def run_loop(interval_seconds: int = 3600):
+    """Loop wrapper for agent_runner — converts seconds to minutes."""
+    minutes = max(60, interval_seconds // 60)
+    asyncio.run(run_continuously(interval_minutes=minutes))
+
+
 if __name__ == "__main__":
     asyncio.run(run_continuously())
 

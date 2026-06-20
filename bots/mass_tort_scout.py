@@ -16,6 +16,13 @@ def fetch_latest_recall():
         return {"error": str(e)}
     return None
 
+def run_once():
+    """Single cycle for agent_runner loop mode."""
+    result = fetch_latest_recall()
+    print(f"[MASS TORT SCOUT] Result: {result}")
+    return {"status": "ok", "result": result}
+
+
 if __name__ == "__main__":
     live_lead = fetch_latest_recall()
     print(f"[MASS TORT SCOUT] Live Target Found: {live_lead}")

@@ -39,6 +39,21 @@ if __name__ == "__main__":
     agent = PredictiveBacklinkAgent()
     asyncio.run(agent.run_cycle())
 
+# === Agent runner compatibility ===
+def run_once():
+    """Single cycle for agent_runner loop mode."""
+    async def _run():
+        agent = PredictiveBacklinkAgent()
+        return await agent.run_cycle()
+    return asyncio.run(_run())
+
+
+def run_loop(interval_seconds: int = 43200):
+    """Loop wrapper for agent_runner — converts seconds to minutes."""
+    minutes = max(60, interval_seconds // 60)
+    asyncio.run(run_continuously(interval_minutes=minutes))
+
+
 # === Continuous Background Service Mode ===
 async def run_continuously(interval_minutes: int = 720):  # Default: every 12 hours
     agent = PredictiveBacklinkAgent()

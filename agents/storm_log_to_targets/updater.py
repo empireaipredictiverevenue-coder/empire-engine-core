@@ -76,9 +76,21 @@ _METRO_ALIASES: Dict[str, List[str]] = {
     "Fort Myers":          ["fort myers", "cape coral", "naples", "bonita springs", "estero"],
     "Pensacola":           ["pensacola", "gulf breeze", "navarre", "pace", "milton fl"],
     "Tallahassee":         ["tallahassee", "crawfordville", "havana"],
+    # ── Alabama ──
+    "Montgomery":          ["montgomery", "prattville", "millbrook", "wetumpka", "troy al", "pike road"],
+    "Huntsville":          ["huntsville", "madison al", "decatur al", "athens al", "florence al", "muscle shoals", "scottsboro", "fort payne", "cullman"],
+    "Tuscaloosa":          ["tuscaloosa", "northport", "al"],
+    "Dothan":              ["dothan", "enterprise", "ozark", "geneva al", "andalusia"],
+    # ── Florida Panhandle ──
+    "Panama City":         ["panama city", "panama city beach", "lynn haven", "callaway", "destin", "fort walton beach", "niceville"],
+    # ── Mississippi ──
+    "Tupelo":              ["tupelo", "corinth", "starkville", "columbus ms", "greenwood ms", "oxford ms"],
+    "Hattiesburg":         ["hattiesburg", "laurel ms", "petal", "purvis", "columbia ms"],
     # ── Gulf Coast ──
     "Mobile":              ["mobile", "daphne", "fairhope", "foley", "spanish fort", "al"],
     "Birmingham":          ["birmingham", "hoover", "bessemer", "vestavia", "alabaster", "birmingham al"],
+    "Shreveport":          ["shreveport", "bossier city", "benton la", "haughton", "minden la", "natchitoches"],
+    "Lafayette LA":        ["lafayette", "new iberia", "broussard", "youngsville", "carencro", "scott la", "crowley", "abbeville", "opelousas"],
     "Baton Rouge":         ["baton rouge", "prarieville", "zachary", "central", "walker", "denham springs", "la"],
     "Jackson MS":          ["jackson ms", "clinton", "byram", "richland", "ridgeland"],
     "Gulfport":            ["gulfport", "biloxi", "ocean springs", "long beach ms", "pass christian", "diberville", "ms"],
@@ -277,6 +289,44 @@ _COUNTY_TO_METRO: Dict[str, str] = {
     "Washington, LA":  "New Orleans",           # Bogalusa
     "Assumption, LA":  "New Orleans",           # Napoleonville
     "St. Mary, LA":    "New Orleans",           # Morgan City
+    # Shreveport / Northwest Louisiana parishes
+    "Caddo, LA":       "Shreveport",
+    "Bossier, LA":     "Shreveport",
+    "Webster, LA":     "Shreveport",            # Minden
+    "Claiborne, LA":   "Shreveport",            # Homer
+    "Bienville, LA":   "Shreveport",            # Arcadia
+    "Red River, LA":   "Shreveport",            # Coushatta
+    "DeSoto, LA":      "Shreveport",            # Mansfield
+    "Sabine, LA":      "Shreveport",            # Many
+    "Natchitoches, LA": "Shreveport",           # Natchitoches
+    "Winn, LA":        "Shreveport",            # Winnfield
+    "Grant, LA":       "Shreveport",            # Colfax — could also be Baton Rouge/Alexandria
+    "Caldwell, LA":    "Shreveport",            # Columbia — panhandle border
+    "La Salle, LA":    "Shreveport",            # Jena
+    "Jackson, LA":     "Shreveport",            # Jonesboro
+    "Lincoln, LA":     "Shreveport",            # Ruston
+    "Union, LA":       "Shreveport",            # Farmerville
+    "Morehouse, LA":   "Shreveport",            # Bastrop
+    "Ouachita, LA":    "Shreveport",            # Monroe — NE LA hub
+    "Richland, LA":    "Shreveport",            # Rayville
+    "Franklin, LA":    "Shreveport",            # Winnsboro
+    "Madison, LA":     "Shreveport",            # Tallulah
+    "Tensas, LA":      "Shreveport",            # St. Joseph
+    "Catahoula, LA":   "Shreveport",            # Harrisonburg
+    "Concordia, LA":   "Shreveport",            # Vidalia
+    # Lafayette / Acadiana parishes
+    "Lafayette, LA":   "Lafayette LA",          # Lafayette
+    "Acadia, LA":      "Lafayette LA",          # Crowley
+    "Vermilion, LA":   "Lafayette LA",          # Abbeville
+    "St. Martin, LA":  "Lafayette LA",          # St. Martinville
+    "Iberia, LA":      "Lafayette LA",          # New Iberia
+    "St. Landry, LA":  "Lafayette LA",          # Opelousas
+    "Evangeline, LA":  "Lafayette LA",          # Ville Platte
+    "Jefferson Davis, LA": "Lafayette LA",      # Jennings
+    "Allen, LA":       "Lafayette LA",          # Oberlin
+    "Beauregard, LA":  "Lafayette LA",          # DeRidder
+    "Calcasieu, LA":   "Lafayette LA",          # Lake Charles — SW LA hub
+    "Cameron, LA":     "Lafayette LA",          # Cameron
     # Baton Rouge metro parishes
     "East Baton Rouge, LA": "Baton Rouge",
     "Livingston, LA":  "Baton Rouge",
@@ -287,27 +337,167 @@ _COUNTY_TO_METRO: Dict[str, str] = {
     "East Feliciana, LA": "Baton Rouge",        # Clinton
     "West Feliciana, LA": "Baton Rouge",        # St. Francisville
     "St. Helena, LA":  "Baton Rouge",
-    "Iberia, LA":      "Baton Rouge",           # New Iberia
-    "St. Martin, LA":  "Baton Rouge",           # St. Martinville
-    "Lafayette, LA":   "Baton Rouge",           # Lafayette — Acadiana region
-    "Acadia, LA":      "Baton Rouge",           # Crowley
-    "Vermilion, LA":   "Baton Rouge",           # Abbeville
-    "St. Landry, LA":  "Baton Rouge",           # Opelousas
-    "Evangeline, LA":  "Baton Rouge",           # Ville Platte
     "Avoyelles, LA":   "Baton Rouge",           # Marksville
     "Rapides, LA":     "Baton Rouge",           # Alexandria
     # ── Mississippi ──
-    "Hinds, MS":       "Jackson MS",
-    "Rankin, MS":      "Jackson MS",
-    "Madison, MS":     "Jackson MS",
-    "Harrison, MS":    "Gulfport",
-    "Hancock, MS":     "Gulfport",
-    "Jackson, MS":     "Gulfport",
+    # Jackson MS metro
+    "Hinds, MS":        "Jackson MS",
+    "Rankin, MS":       "Jackson MS",
+    "Madison, MS":      "Jackson MS",
+    "Copiah, MS":       "Jackson MS",
+    "Yazoo, MS":        "Jackson MS",
+    "Warren, MS":       "Jackson MS",    # Vicksburg
+    "Simpson, MS":      "Jackson MS",
+    "Lincoln, MS":      "Jackson MS",    # Brookhaven
+    "Claiborne, MS":    "Jackson MS",    # Port Gibson
+    "Adams, MS":        "Jackson MS",    # Natchez
+    "Wilkinson, MS":    "Jackson MS",    # Woodville
+    "Amite, MS":        "Jackson MS",    # Liberty
+    "Pike, MS":         "Jackson MS",    # McComb
+    "Franklin, MS":     "Jackson MS",    # Meadville
+    "Issaquena, MS":    "Jackson MS",
+    "Sharkey, MS":      "Jackson MS",    # Rolling Fork
+    "Humphreys, MS":    "Jackson MS",    # Belzoni
+    "Holmes, MS":       "Jackson MS",    # Durant
+    "Carroll, MS":      "Jackson MS",    # Vaiden
+    "Montgomery, MS":   "Jackson MS",    # Winona
+    "Grenada, MS":      "Jackson MS",    # Grenada
+    "Yalobusha, MS":    "Jackson MS",    # Coffeeville
+    "Leflore, MS":      "Jackson MS",    # Greenwood
+    "Attala, MS":       "Jackson MS",    # Kosciusko
+    "Leake, MS":        "Jackson MS",    # Carthage
+    "Scott, MS":        "Jackson MS",    # Forest
+    "Lawrence, MS":     "Jackson MS",    # Monticello
+    # Gulfport / MS Coast
+    "Harrison, MS":     "Gulfport",
+    "Hancock, MS":      "Gulfport",
+    "Jackson, MS":      "Gulfport",
+    "Pearl River, MS":  "Gulfport",      # Picayune
+    "Stone, MS":        "Gulfport",
+    "George, MS":       "Gulfport",
+    "Greene, MS":       "Gulfport",
+    "Wayne, MS":        "Gulfport",       # Waynesboro
+    # Hattiesburg / Pine Belt
+    "Forrest, MS":      "Hattiesburg",    # Hattiesburg
+    "Lamar, MS":        "Hattiesburg",    # Lumberton
+    "Perry, MS":        "Hattiesburg",
+    "Jones, MS":        "Hattiesburg",    # Laurel
+    "Covington, MS":    "Hattiesburg",    # Collins
+    "Jefferson Davis, MS": "Hattiesburg", # Prentiss
+    "Marion, MS":       "Hattiesburg",    # Columbia
+    "Walthall, MS":     "Hattiesburg",    # Tylertown
+    "Smith, MS":        "Hattiesburg",
+    "Jasper, MS":       "Hattiesburg",    # Bay Springs
+    "Clarke, MS":       "Hattiesburg",    # Quitman
+    "Lauderdale, MS":   "Hattiesburg",    # Meridian
+    "Kemper, MS":       "Hattiesburg",
+    "Neshoba, MS":      "Hattiesburg",    # Philadelphia
+    "Winston, MS":      "Hattiesburg",    # Louisville
+    "Noxubee, MS":      "Hattiesburg",    # Macon
+    # Tupelo / Northeast MS
+    "Lee, MS":          "Tupelo",
+    "Pontotoc, MS":     "Tupelo",
+    "Union, MS":        "Tupelo",        # New Albany
+    "Prentiss, MS":     "Tupelo",        # Booneville
+    "Alcorn, MS":       "Tupelo",        # Corinth
+    "Tishomingo, MS":   "Tupelo",        # Iuka
+    "Itawamba, MS":     "Tupelo",        # Fulton
+    "Monroe, MS":       "Tupelo",        # Amory
+    "Chickasaw, MS":    "Tupelo",        # Houston
+    "Calhoun, MS":      "Tupelo",        # Pittsboro
+    "Lafayette, MS":    "Tupelo",        # Oxford
+    "Marshall, MS":     "Tupelo",        # Holly Springs
+    "Benton, MS":       "Tupelo",
+    "Tippah, MS":       "Tupelo",        # Ripley
+    "Washington, MS":   "Tupelo",        # Greenville
+    "Sunflower, MS":    "Tupelo",        # Indianola
+    "Bolivar, MS":      "Tupelo",        # Cleveland
+    "Coahoma, MS":      "Tupelo",        # Clarksdale
+    "Quitman, MS":      "Tupelo",        # Marks
+    "Tallahatchie, MS": "Tupelo",        # Charleston
+    "Panola, MS":       "Tupelo",        # Batesville
+    "Tate, MS":         "Tupelo",        # Senatobia
+    "Oktibbeha, MS":    "Tupelo",        # Starkville
+    "Lowndes, MS":      "Tupelo",        # Columbus MS
+    "Clay, MS":         "Tupelo",        # West Point
+    "Webster, MS":      "Tupelo",
+    "Choctaw, MS":      "Tupelo",        # Ackerman
+
     # ── Alabama ──
-    "Mobile, AL":      "Mobile",
-    "Baldwin, AL":     "Mobile",
-    "Jefferson, AL":   "Birmingham",
-    "Shelby, AL":      "Birmingham",
+    # Mobile metro
+    "Mobile, AL":       "Mobile",
+    "Baldwin, AL":      "Mobile",
+    "Washington, AL":   "Mobile",       # Chatom
+    "Clarke, AL":       "Mobile",       # Grove Hill
+    "Monroe, AL":       "Mobile",       # Monroeville
+    "Conecuh, AL":      "Mobile",       # Evergreen
+    "Choctaw, AL":      "Mobile",       # Butler
+    "Escambia, AL":     "Mobile",       # Atmore / Brewton
+    # Birmingham metro
+    "Jefferson, AL":    "Birmingham",
+    "Shelby, AL":       "Birmingham",
+    "St. Clair, AL":    "Birmingham",    # Pell City
+    "Blount, AL":       "Birmingham",    # Oneonta
+    "Walker, AL":       "Birmingham",    # Jasper
+    "Bibb, AL":         "Birmingham",    # Centreville
+    "Talladega, AL":    "Birmingham",    # Talladega
+    "Calhoun, AL":      "Birmingham",    # Anniston
+    "Chilton, AL":      "Birmingham",    # Clanton
+    "Coosa, AL":        "Birmingham",    # Rockford
+    "Tallapoosa, AL":   "Birmingham",    # Alexander City
+    "Clay, AL":         "Birmingham",    # Ashland
+    "Randolph, AL":     "Birmingham",    # Roanoke
+    "Cleburne, AL":     "Birmingham",    # Heflin
+    "Etowah, AL":       "Birmingham",    # Gadsden
+    # Montgomery metro
+    "Montgomery, AL":   "Montgomery",
+    "Autauga, AL":      "Montgomery",    # Prattville
+    "Elmore, AL":       "Montgomery",    # Wetumpka
+    "Lowndes, AL":      "Montgomery",    # Hayneville
+    "Macon, AL":        "Montgomery",    # Tuskegee
+    "Bullock, AL":      "Montgomery",    # Union Springs
+    "Pike, AL":         "Montgomery",    # Troy
+    "Dallas, AL":       "Montgomery",    # Selma
+    "Wilcox, AL":       "Montgomery",    # Camden
+    "Butler, AL":       "Montgomery",    # Greenville
+    "Crenshaw, AL":     "Montgomery",    # Luverne
+    "Chambers, AL":     "Montgomery",    # Valley / Lafayette
+    "Lee, AL":          "Montgomery",    # Auburn / Opelika
+    # Huntsville / North Alabama
+    "Madison, AL":      "Huntsville",
+    "Limestone, AL":    "Huntsville",    # Athens
+    "Morgan, AL":       "Huntsville",    # Decatur
+    "Marshall, AL":     "Huntsville",    # Albertville
+    "Jackson, AL":      "Huntsville",    # Scottsboro
+    "DeKalb, AL":       "Huntsville",    # Fort Payne
+    "Lauderdale, AL":   "Huntsville",    # Florence
+    "Colbert, AL":      "Huntsville",    # Muscle Shoals
+    "Franklin, AL":     "Huntsville",    # Russellville
+    "Lawrence, AL":     "Huntsville",    # Moulton
+    "Marion, AL":       "Huntsville",    # Hamilton
+    "Winston, AL":      "Huntsville",    # Double Springs
+    "Cullman, AL":      "Huntsville",    # Cullman
+    "Cherokee, AL":     "Huntsville",    # Centre
+    # Tuscaloosa / West Alabama
+    "Tuscaloosa, AL":   "Tuscaloosa",
+    "Pickens, AL":      "Tuscaloosa",    # Carrollton
+    "Greene, AL":       "Tuscaloosa",    # Eutaw
+    "Hale, AL":         "Tuscaloosa",    # Greensboro
+    "Sumter, AL":       "Tuscaloosa",    # Livingston
+    "Marengo, AL":      "Tuscaloosa",    # Linden
+    "Perry, AL":        "Tuscaloosa",    # Marion
+    "Fayette, AL":      "Tuscaloosa",    # Fayette
+    "Lamar, AL":        "Tuscaloosa",    # Vernon
+    # Dothan / Southeast Alabama
+    "Houston, AL":      "Dothan",
+    "Geneva, AL":       "Dothan",
+    "Henry, AL":        "Dothan",       # Abbeville
+    "Barbour, AL":      "Dothan",       # Eufaula
+    "Russell, AL":      "Dothan",       # Phenix City
+    "Dale, AL":         "Dothan",       # Ozark
+    "Coffee, AL":       "Dothan",       # Enterprise
+    "Covington, AL":    "Dothan",       # Andalusia
+
     # ── Georgia ──
     "Fulton, GA":      "Atlanta",
     "DeKalb, GA":      "Atlanta",
@@ -331,7 +521,33 @@ _COUNTY_TO_METRO: Dict[str, str] = {
     "Collier, FL":     "Fort Myers",
     "Escambia, FL":    "Pensacola",
     "Santa Rosa, FL":  "Pensacola",
+    "Okaloosa, FL":    "Pensacola",    # Fort Walton Beach / Destin
     "Leon, FL":        "Tallahassee",
+    "Wakulla, FL":     "Tallahassee",   # Crawfordville
+    "Jefferson, FL":   "Tallahassee",   # Monticello
+    "Madison, FL":     "Tallahassee",   # Madison
+    "Taylor, FL":      "Tallahassee",   # Perry
+    "Lafayette, FL":   "Tallahassee",   # Mayo
+    "Suwannee, FL":    "Tallahassee",   # Live Oak
+    "Hamilton, FL":    "Tallahassee",   # Jasper
+    "Columbia, FL":    "Tallahassee",   # Lake City
+    "Baker, FL":       "Tallahassee",   # Macclenny
+    "Union, FL":       "Tallahassee",   # Lake Butler
+    "Bradford, FL":    "Tallahassee",   # Starke
+    "Gilchrist, FL":   "Tallahassee",   # Trenton
+    "Dixie, FL":       "Tallahassee",   # Cross City
+    "Levy, FL":        "Tallahassee",   # Bronson
+    "Gadsden, FL":     "Tallahassee",   # Quincy
+    "Liberty, FL":     "Tallahassee",   # Bristol
+    "Jackson, FL":     "Tallahassee",   # Marianna
+    "Walton, FL":      "Panama City",   # DeFuniak Springs
+    "Bay, FL":         "Panama City",   # Panama City
+    "Gulf, FL":        "Panama City",   # Port St. Joe
+    "Franklin, FL":    "Panama City",   # Apalachicola
+    "Calhoun, FL":     "Panama City",   # Blountstown
+    "Holmes, FL":      "Panama City",   # Bonifay
+    "Washington, FL":  "Panama City",   # Chipley
+
     # ── South Carolina ──
     "Richland, SC":    "Columbia",
     "Lexington, SC":   "Columbia",

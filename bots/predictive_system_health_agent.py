@@ -59,6 +59,27 @@ class PredictiveSystemHealthAgent:
                 log.error(f"[Health] Error: {e}")
             await asyncio.sleep(interval_minutes * 60)
 
+async def run_loop(interval_seconds: int = 1800):
+    """Loop wrapper for agent_runner."""
+    agent = PredictiveSystemHealthAgent()
+    minutes = max(15, interval_seconds // 60)
+    while True:
+        try:
+            result = await agent.run_cycle()
+            log.info(f"[Health] Cycle result: {result}")
+        except Exception as e:
+            log.error(f"[Health] Error: {e}")
+        await asyncio.sleep(minutes * 60)
+
+
+def run_once():
+    """Single cycle for agent_runner loop mode."""
+    async def _run():
+        agent = PredictiveSystemHealthAgent()
+        return await agent.run_cycle()
+    return asyncio.run(_run())
+
+
 if __name__ == "__main__":
     agent = PredictiveSystemHealthAgent()
     asyncio.run(agent.run_continuously())

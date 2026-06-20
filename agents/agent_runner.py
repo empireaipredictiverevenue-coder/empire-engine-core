@@ -159,6 +159,71 @@ AGENT_REGISTRY: List[Dict] = [
         "default_interval": 900,       # 15 min
         "description": "Carrier claims → fee events",
     },
+    # ── Scouts ──
+    {
+        "module": "bots.mesh_scout",
+        "function": "run_loop",
+        "agent_name": "mesh_scout",
+        "default_interval": 3600,      # 1 hour
+        "description": "Storm damage scouting via local LLM + NWS data",
+    },
+    {
+        "module": "bots.angi_scraper",
+        "function": "run_loop",
+        "agent_name": "angi_scraper",
+        "default_interval": 1800,      # 30 min
+        "description": "Angi.com lead scraping for restoration/storm niches",
+    },
+    {
+        "module": "bots.b2b_lead_scraper",
+        "function": "run_loop",
+        "agent_name": "b2b_lead_scraper",
+        "default_interval": 21600,     # 6 hours
+        "description": "B2B lead scraping via Google Places (6 niches)",
+    },
+    {
+        "module": "bots.predictive_camofox_scraper",
+        "function": "run_loop",
+        "agent_name": "camofox_scraper",
+        "default_interval": 7200,      # 2 hours
+        "description": "Stealth web scraping across niches via Camofox browser",
+    },
+    {
+        "module": "bots.youtube_scraper",
+        "function": "run_loop",
+        "agent_name": "youtube_scraper",
+        "default_interval": 86400,     # 24 hours
+        "description": "YouTube scraper status check",
+    },
+    # ── Agents ──
+    {
+        "module": "bots.seo_agent",
+        "function": "run_loop",
+        "agent_name": "seo_agent",
+        "default_interval": 21600,     # 6 hours
+        "description": "SEO optimization cycles via SerpAPI + LLM content gen",
+    },
+    {
+        "module": "bots.predictive_backlink_agent",
+        "function": "run_loop",
+        "agent_name": "backlink_agent",
+        "default_interval": 43200,     # 12 hours
+        "description": "Backlink intelligence + opportunity identification",
+    },
+    {
+        "module": "bots.predictive_system_health_agent",
+        "function": "run_loop",
+        "agent_name": "system_health_agent",
+        "default_interval": 1800,      # 30 min
+        "description": "Self-healing: scan for broken patterns + auto-fix",
+    },
+    {
+        "module": "bots.mass_tort_scout",
+        "function": "run_loop",
+        "agent_name": "mass_tort_scout",
+        "default_interval": 86400,     # 24 hours
+        "description": "FDA recall monitoring for mass tort opportunities",
+    },
 ]
 
 # ── Dynamic import helper ─────────────────────────────────────────────
