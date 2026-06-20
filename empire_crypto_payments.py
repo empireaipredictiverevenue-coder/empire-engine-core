@@ -52,53 +52,86 @@ from fastapi import FastAPI, HTTPException, Depends, Query
 log = logging.getLogger("empire.crypto_payments")
 
 
+# ── MOONPAY CONFIG ──────────────────────────────────────────────────
+# MoonPay is the card-to-USDC on-ramp provider. Users pay by card,
+# MoonPay sends USDC to the vault wallet. The Helius webhook then
+# matches by memo or amount proximity and activates the subscription.
+#
+# To enable: set MOONPAY_API_KEY in /root/.env
+#
+# The MoonPay public key is exposed to the frontend for the widget.
+# The secret key is used server-side for webhook signature verification.
+MOONPAY_PUBLIC_KEY = os.environ.get("MOONPAY_PUBLIC_KEY", "")
+MOONPAY_SECRET_KEY = os.environ.get("MOONPAY_SECRET_KEY", "")
+MOONPAY_WEBHOOK_SECRET = os.environ.get("MOONPAY_WEBHOOK_SECRET", "")
+_has_moonpay = bool(MOONPAY_PUBLIC_KEY and MOONPAY_SECRET_KEY)
+
 # ── TIER → PRICE MAPPING (fallback if product_metadata unavailable) ──
 TIER_PRICES_USDC = {
-    # Suite Products (from pricing page)
+    # ── MRR Suite Products (synced with empire_mrr_page.py) ──────
+    # Inbound Router
     "ROUTER_SaaS":             499.00,
+    # Data Vault
     "DATA_ENTERPRISE":         799.00,
+    # Buyer Spy AI
     "SPY_DATA":               1499.00,
+    # All Access
     "ALL_ACCESS":             2499.00,
-    # Advanced Products
+    # LeadScore AI
+    "LEADSCORE_STARTER":       299.00,
+    "LEADSCORE_GROWTH":        599.00,
+    "LEADSCORE_ENTERPRISE":    999.00,
+    # Compliant
+    "COMPLIANT_STARTER":       199.00,
+    "COMPLIANT_GROWTH":        499.00,
+    "COMPLIANT_ENTERPRISE":    999.00,
+    # Strike Campaigns
+    "STRIKE_STARTER":           99.00,
+    "STRIKE_GROWTH":           249.00,
+    "STRIKE_ENTERPRISE":       499.00,
+    # Forecast
+    "FORECAST_LITE":           199.00,
+    "FORECAST_PRO":            499.00,
+    "FORECAST_ENTERPRISE":     999.00,
+    # Market Eye
+    "MARKET_EYE_STARTER":      199.00,
+    "MARKET_EYE_GROWTH":       499.00,
+    "MARKET_EYE_ENTERPRISE":   999.00,
+    # Content Pulse
+    "CONTENT_PULSE_STARTER":    99.00,
+    "CONTENT_PULSE_GROWTH":    249.00,
+    "CONTENT_PULSE_ENTERPRISE": 499.00,
+    # Contractor Exchange
+    "CONTRACTOR_EXCHANGE_STARTER": 299.00,
+    "CONTRACTOR_EXCHANGE_GROWTH":  599.00,
+    "CONTRACTOR_EXCHANGE_ENTERPRISE": 999.00,
+    # HexStrike AI
+    "HEXSTRIKE_STARTER":        99.00,
+    "HEXSTRIKE_GROWTH":        249.00,
+    "HEXSTRIKE_ENTERPRISE":    499.00,
+    # Analyzer Agent
+    "ANALYZER_LITE":            49.00,
+    "ANALYZER_GROWTH":         149.00,
+    "ANALYZER_ENTERPRISE":     399.00,
+    # Meetily AI
+    "MEETILY_STARTER":          99.00,
+    "MEETILY_PRO":             299.00,
+    "MEETILY_ENTERPRISE":      999.00,
+    # Elite Scraper v2
+    "SCRAPER_STARTER":         149.00,
+    "SCRAPER_PRO":             499.00,
+    "SCRAPER_ENTERPRISE":     1999.00,
+    # SEO Optimizer
+    "SEO_STARTER":              99.00,
+    "SEO_GROWTH":              199.00,
+    "SEO_PRO":                 499.00,
+    # ── Legacy / standalone (not on MRR page, kept for backward compat) ──
     "OMNI_BRIDGE":             999.00,
     "AGENT_ORCHESTRATOR":     1999.00,
     "B2B_PRO":                2999.00,
-    # Strike Packs
     "STRIKE_STANDARD":         499.00,
     "STRIKE_COMBO":            999.00,
     "STRIKE_WHALE":           2999.00,
-    "STRIKE_ENTERPRISE":      7999.00,
-    # SEO products
-    "SEO_STARTER":             299.00,
-    "SEO_GROWTH":              599.00,
-    "SEO_PRO":                1199.00,
-    # Standalone products
-    "LEADSCORE_STARTER":       199.00,
-    "LEADSCORE_GROWTH":        499.00,
-    "LEADSCORE_ENTERPRISE":   1499.00,
-    "COMPLIANT_STARTER":       299.00,
-    "COMPLIANT_GROWTH":        699.00,
-    "COMPLIANT_ENTERPRISE":   1999.00,
-    "STRIKE_STARTER":          399.00,
-    "STRIKE_GROWTH":           899.00,
-    "FORECAST_LITE":           199.00,
-    "FORECAST_PRO":            499.00,
-    "FORECAST_ENTERPRISE":    1499.00,
-    "MARKET_EYE_STARTER":      399.00,
-    "MARKET_EYE_GROWTH":       999.00,
-    "MARKET_EYE_ENTERPRISE":  2999.00,
-    "CONTENT_PULSE_STARTER":   199.00,
-    "CONTENT_PULSE_GROWTH":    499.00,
-    "CONTENT_PULSE_ENTERPRISE": 1499.00,
-    "CONTRACTOR_EXCHANGE_STARTER": 199.00,
-    "CONTRACTOR_EXCHANGE_GROWTH":  499.00,
-    "CONTRACTOR_EXCHANGE_ENTERPRISE": 1999.00,
-    "HEXSTRIKE_STARTER":       299.00,
-    "HEXSTRIKE_GROWTH":        799.00,
-    "HEXSTRIKE_ENTERPRISE":   2499.00,
-    "ANALYZER_LITE":           199.00,
-    "ANALYZER_GROWTH":         499.00,
-    "ANALYZER_ENTERPRISE":    1499.00,
 }
 
 

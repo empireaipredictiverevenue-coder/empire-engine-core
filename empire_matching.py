@@ -120,6 +120,7 @@ import os
 import json
 import uuid
 import time
+import random
 import logging
 from datetime import datetime, timezone, timedelta
 from typing import Callable, Optional
@@ -426,6 +427,11 @@ class ContractorMatcher:
         # Load active dispatch counts per contractor for capacity scoring
         active_loads = await self._load_active_dispatch_counts([c["id"] for c in candidates])
 
+        # Load total historical dispatch counts (batch — one query for all candidates)
+        total_sent_counts, has_accepts = await self._load_total_dispatch_counts(
+            [c["id"] for c in candidates]
+        )
+
         scored = []
         for contractor in candidates:
             score, components = self._score_contractor(
@@ -436,14 +442,32 @@ class ContractorMatcher:
                 active_load=active_loads.get(contractor["id"], 0),
             )
 
+            # ── QUALITY FILTERS (reduce noise, boost response rate) ──
+            # Hard exclusion: no phone number — can't receive dispatch SMS
+            if not contractor.get("phone") or not str(contractor.get("phone", "")).strip():
+                continue
+
+            # Hard exclusion: trust score below 1.0 — clear bad actor / ghost
+            trust_raw_filter = float(contractor.get("trust_score") or TRUST_DEFAULT)
+            if trust_raw_filter < 1.0:
+                continue
+
+            # Soft filter: skip contractors dispatched 3+ times total with zero ever accepted
+            # Uses batched data from _load_total_dispatch_counts — no per-contractor DB query
+            total_sent = total_sent_counts.get(contractor["id"], 0)
+            if total_sent >= 3 and not has_accepts.get(contractor["id"], False):
+                # 3+ total dispatches, 0 ever accepted — likely dead number / wrong contact
+                continue
+
             # Hard exclusion: zero metro match AND zero specialty overlap
             # means this contractor genuinely cannot serve this lead.
             if components["metro_match"] == 0 and components["specialty_match"] == 0:
                 continue
 
             # Hard exclusion: contractor at or above max capacity
+            active_count = active_loads.get(contractor["id"], 0)
             max_concurrent = contractor.get("max_concurrent") or DEFAULT_MAX_CONCUR
-            if active_loads.get(contractor["id"], 0) >= max_concurrent:
+            if active_count >= max_concurrent:
                 continue
 
             scored.append({
@@ -536,12 +560,17 @@ class ContractorMatcher:
             token = sign_token(token_payload)
             accept_link = f"{public_base_url.rstrip('/')}/dispatch/accept?t={token}"
 
+            # ── Pick A/B test variant upfront (used in both dispatch_meta and SMS body)
+            variant = random.choice(["A", "B", "C"])
+
             # Insert dispatch row
             try:
                 dispatch_meta = {
                     "urgency":     urgency,
                     "lead_addr":   lead.get("address"),
                     "lead_metro":  lead.get("city"),
+                    "sms_variant": variant,  # A/B test tracking
+                    "follow_up_due": (datetime.now(timezone.utc) + timedelta(hours=24)).isoformat(),
                 }
                 if strategy:
                     dispatch_meta["strategy"] = strategy
@@ -597,13 +626,32 @@ class ContractorMatcher:
             # The accept-link is the same magic link sent via email.
             try:
                 if contractor.get("phone"):
-                    sms_body = (
-                        f"⚡ Empire AI · New lead in {lead.get('city', 'your area')}: "
-                        f"{lead.get('address', 'a property')} · "
-                        f"urgency {urgency}/10. "
-                        f"Accept: {accept_link[:160]} "
-                        f"STOP to opt out"
-                    )
+                    first_name = (contractor.get("name") or "Contractor").split()[0]
+                    lead_city = lead.get('city', 'your area')
+                    lead_addr = lead.get('address', 'a property')
+
+                    # ── A/B test: use the variant picked above ──
+                    if variant == "A":
+                        sms_body = (
+                            f"{first_name}, new lead in {lead_city}: "
+                            f"{lead_addr}. "
+                            f"Accept: {accept_link[:180]} "
+                            f"STOP to opt out"
+                        )
+                    elif variant == "B":
+                        sms_body = (
+                            f"{first_name}, urgent {lead_city} lead "
+                            f"(U{urgency}/10). 24h to claim. "
+                            f"Accept: {accept_link[:180]} "
+                            f"STOP to opt out"
+                        )
+                    else:  # variant C
+                        sms_body = (
+                            f"{first_name}, {lead_city} dispatch — "
+                            f"{lead_addr}. First to accept wins. "
+                            f"Accept: {accept_link[:180]} "
+                            f"STOP to opt out"
+                        )
                     sms_result = await _sms_router.send_sms(contractor["phone"], sms_body)
                     if sms_result.get("ok"):
                         # outreach_log: dispatch event audit
@@ -612,14 +660,14 @@ class ContractorMatcher:
                             "agent_name": "matching_dispatch_sms",
                             "run_id": str(uuid.uuid4()),
                             "channel": "sms",
-                            "sequence": "manual_dispatch",
+                            "sequence": f"dispatch_variant_{variant}",
                             "step": 0,
                             "body_preview": sms_body[:200],
                             "compliance_passed": True,
                             "mode": "live",
                             "sent_at": datetime.now(timezone.utc).isoformat(),
                             "sent_status": "sent",
-                            "meta": {"dispatch_id": str(ins.data[0]["id"]) if ins.data else None, "contractor_id": str(contractor["id"])},
+                            "meta": {"dispatch_id": str(ins.data[0]["id"]) if ins.data else None, "contractor_id": str(contractor["id"]), "sms_variant": variant},
                         }).execute()
                         # sms_log: actual SMS audit (for reply rate tracking)
                         db.table("sms_log").insert({
@@ -629,6 +677,7 @@ class ContractorMatcher:
                             "step":          0,
                             "message_uuid":  sms_result.get("message_uuid"),
                             "delivered":     True,
+                            "sms_variant":   variant,  # A/B test: correlate inbound YES to variant
                         }).execute()
                         sms_sent += 1
             except Exception as e:
@@ -851,6 +900,33 @@ class ContractorMatcher:
         except Exception as e:
             log.debug(f"[matching] load active counts failed: {e}")
             return {}
+
+    async def _load_total_dispatch_counts(
+        self, contractor_ids: list[str]
+    ) -> tuple[dict[str, int], dict[str, bool]]:
+        """Batch-query total historical dispatches per contractor.
+
+        Returns (total_sent: {cid: count}, has_accepted: {cid: bool}).
+        All statuses counted for total_sent; has_accepted is True if ANY
+        dispatch has status='accepted' (they converted at least once).
+        """
+        if not contractor_ids:
+            return {}, {}
+        try:
+            db = self.get_db()
+            res = db.table("dispatches").select("contractor_id, status") \
+                .in_("contractor_id", contractor_ids).limit(2000).execute()
+            total_sent: dict[str, int] = {cid: 0 for cid in contractor_ids}
+            has_accepted: dict[str, bool] = {cid: False for cid in contractor_ids}
+            for row in (res.data or []):
+                cid = row["contractor_id"]
+                total_sent[cid] = total_sent.get(cid, 0) + 1
+                if row.get("status") == "accepted":
+                    has_accepted[cid] = True
+            return total_sent, has_accepted
+        except Exception as e:
+            log.debug(f"[matching] load total counts failed: {e}")
+            return {}, {}
 
     def _render_dispatch_email(
         self,

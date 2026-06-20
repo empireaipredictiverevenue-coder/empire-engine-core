@@ -7,9 +7,10 @@ dispatches, and sends SMS/email payment requests with the vault wallet
 address and claim-settled webhook URL.
 
 Run modes:
-    python3 scripts/fee_collection_agent.py                # live — sends SMS/email
-    python3 scripts/fee_collection_agent.py --dry-run       # report only
-    python3 scripts/fee_collection_agent.py --follow-up     # re-send to pending >7d
+    python3 scripts/fee_collection_agent.py                       # live — sends SMS/email
+    python3 scripts/fee_collection_agent.py --dry-run              # report only
+    python3 scripts/fee_collection_agent.py --follow-up            # re-send on cadence (3/7/14d)
+    python3 scripts/fee_collection_agent.py --follow-up --now      # force re-send NOW (skip cadence)
     python3 scripts/fee_collection_agent.py --force --fee-id <uuid>  # single fee
 
 The vault wallet is where contractors send 3% USDC:
@@ -262,6 +263,7 @@ async def _log_collection_attempt(
 async def run_collection(
     dry_run: bool = False,
     follow_up: bool = False,
+    force_now: bool = False,
     force_fee_id: Optional[str] = None,
 ) -> dict:
     """Main collection pipeline."""
@@ -381,33 +383,43 @@ async def run_collection(
 
         if follow_up:
             if not last_attempt:
-                log.info(f"  SKIP {fee_id[:12]}: {name[:20]} — no initial attempt, skipping follow-up")
-                skipped_already_contacted += 1
-                continue
+                if not force_now:
+                    log.info(f"  SKIP {fee_id[:12]}: {name[:20]} — no initial attempt, skipping follow-up")
+                    skipped_already_contacted += 1
+                    continue
+                else:
+                    log.info(f"  ⚡ FORCE-NOW {fee_id[:12]}: {name[:20]} — no prior contact, sending as initial")
+                    attempt_type = "initial"
+                    # fall through to send
+            else:
+                last_ts = last_attempt.get("sent_at", "")
+                if not last_ts:
+                    skipped_already_contacted += 1
+                    continue
 
-            last_ts = last_attempt.get("sent_at", "")
-            if not last_ts:
-                skipped_already_contacted += 1
-                continue
+                days_since = (datetime.now(timezone.utc) - datetime.fromisoformat(last_ts)).days
+                attempt_num = len(collection_history)
 
-            days_since = (datetime.now(timezone.utc) - datetime.fromisoformat(last_ts)).days
-            attempt_num = len(collection_history)
+                if attempt_num > len(FOLLOW_UP_DAYS):
+                    log.info(f"  SKIP {fee_id[:12]}: {name[:20]} — max follow-ups reached ({attempt_num})")
+                    skipped_already_contacted += 1
+                    continue
 
-            if attempt_num > len(FOLLOW_UP_DAYS):
-                log.info(f"  SKIP {fee_id[:12]}: {name[:20]} — max follow-ups reached ({attempt_num})")
-                skipped_already_contacted += 1
-                continue
+                expected_days = FOLLOW_UP_DAYS[attempt_num - 1]
+                if not force_now and days_since < expected_days:
+                    log.info(
+                        f"  SKIP {fee_id[:12]}: {name[:20]} — follow-up {attempt_num} "
+                        f"needs {expected_days}d, only {days_since}d since last"
+                    )
+                    skipped_already_contacted += 1
+                    continue
+                elif force_now and days_since < expected_days:
+                    log.info(
+                        f"  ⚡ FORCE-NOW {fee_id[:12]}: {name[:20]} — follow-up {attempt_num} "
+                        f"(cadence {expected_days}d bypassed, {days_since}d since last)"
+                    )
 
-            expected_days = FOLLOW_UP_DAYS[attempt_num - 1]
-            if days_since < expected_days:
-                log.info(
-                    f"  SKIP {fee_id[:12]}: {name[:20]} — follow-up {attempt_num} "
-                    f"needs {expected_days}d, only {days_since}d since last"
-                )
-                skipped_already_contacted += 1
-                continue
-
-            attempt_type = f"follow_up_{attempt_num}"
+                attempt_type = f"follow_up_{attempt_num}"
         else:
             if last_attempt:
                 log.info(f"  SKIP {fee_id[:12]}: {name[:20]} — already contacted")
@@ -549,6 +561,7 @@ async def run_collection(
         "total_fees_usd": round(total_fees, 2),
         "total_claims_usd": round(total_claims, 2),
         "follow_up_mode": follow_up,
+        "force_now": force_now,
         "sms_enabled": sms_enabled,
         "email_enabled": email_enabled,
         "dry_run": dry_run,
@@ -567,6 +580,8 @@ async def run_collection(
     log.info(f"Skipped (contacted):  {skipped_already_contacted}")
     log.info(f"Errors:               {errors}")
     log.info(f"Follow-up mode:       {follow_up}")
+    if force_now:
+        log.info(f"Force-now:            YES (cadence bypassed)")
     log.info(f"SMS via Vonage:       {'yes' if sms_enabled else 'no'}")
     log.info(f"Email via Resend:     {'yes' if email_enabled else 'no'}")
     log.info(f"Elapsed:              {elapsed:.1f}s")
@@ -584,13 +599,16 @@ def main():
                     help="Send follow-ups to fee_events already contacted")
     p.add_argument("--force", action="store_true",
                     help="Force processing (overrides duplicate-send guard)")
+    p.add_argument("--now", action="store_true",
+                    help="Force send NOW — bypasses cadence timing and no-contact guard")
     p.add_argument("--fee-id", type=str, default=None,
                     help="Process a specific fee_event by UUID")
     args = p.parse_args()
 
     result = asyncio.run(run_collection(
         dry_run=args.dry_run,
-        follow_up=args.follow_up,
+        follow_up=args.follow_up or args.now,
+        force_now=args.now,
         force_fee_id=args.fee_id,
     ))
     print(json.dumps(result, indent=2, default=str))
