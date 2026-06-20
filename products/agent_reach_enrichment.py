@@ -439,6 +439,12 @@ class AgentReachEnricher:
 
         # Run channels in parallel (skip cached ones)
         remaining = [c for c in channels if c not in (cache_hit or {})]
+        results = dict(cache_hit or {})  # Start with cached results, fill the rest
+
+        # Pre-flight: determine if query looks like a URL
+        is_url = query.startswith("http://") or query.startswith("https://")
+        is_youtube = is_url and ("youtube.com" in query or "youtu.be" in query)
+
         tasks = []
         for channel in remaining:
             if channel == "semantic_search":
@@ -446,13 +452,26 @@ class AgentReachEnricher:
             elif channel == "github_search":
                 tasks.append((channel, self.github_search(query, max_results)))
             elif channel == "jina_read":
-                tasks.append((channel, self.jina_read(query)))  # query is URL
+                if is_url:
+                    tasks.append((channel, self.jina_read(query)))
+                else:
+                    results[channel] = {"ok": True, "skipped": True, "reason": "query is not a URL"}
             elif channel == "rss_fetch":
-                tasks.append((channel, self.rss_fetch(query, max_results)))  # query is feed URL
+                if is_url:
+                    tasks.append((channel, self.rss_fetch(query, max_results)))
+                else:
+                    results[channel] = {"ok": True, "skipped": True, "reason": "query is not a feed URL"}
             elif channel == "youtube_transcript":
-                tasks.append((channel, self.youtube_transcript(query)))  # query is video URL
+                if is_youtube:
+                    tasks.append((channel, self.youtube_transcript(query)))
+                else:
+                    results[channel] = {"ok": True, "skipped": True, "reason": "query is not a YouTube URL"}
             elif channel == "v2ex_browse":
-                tasks.append((channel, self.v2ex_browse(query, max_results)))  # query is node
+                # V2EX nodes don't have spaces; empty means hot topics
+                if " " not in query:
+                    tasks.append((channel, self.v2ex_browse(query, max_results)))
+                else:
+                    results[channel] = {"ok": True, "skipped": True, "reason": "query is not a valid V2EX node name"}
             elif channel == "bilibili_search":
                 tasks.append((channel, self.bilibili_search(query, max_results)))
             elif channel == "twitter_search":
