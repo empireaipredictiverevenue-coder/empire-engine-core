@@ -130,7 +130,8 @@ has more entries than the AGENTS.md doc tracks (drift). Run
     entries (e.g. "Dallas, TX", "Collin, TX") are resolved against 37 TX
     county→city alias maps.
   - `agents/fee_watcher/cron.sh` — every 6h on :55, → `logs/agent_fee_watcher.log`.
-    Polls for settled-claim events. **Disabled** (see comments).
+    Polls for settled-claim events. **Re-enabled 2026-06-20** — now runs every
+    30 min via direct python module invocation (see Operator-owned section).
   - `agents_ab_monitor.py` — every 6h on :52, → `logs/agent_ab_monitor.log`.
     A/B reply-rate comparison log.
 
@@ -147,10 +148,18 @@ has more entries than the AGENTS.md doc tracks (drift). Run
     reminder to contractors on 24h/72h/7d cadence. Tracks follow_up_history
     in dispatches.meta. Auto-expires after 3 follow-ups or if unreachable.
     Added 2026-06-20 as part of dispatch response-rate improvements.
+  - `agents/fee_watcher` — every 30 min at :00 and :30,
+    → `logs/agent_fee_watcher.log`. Polls carrier_claims for settled
+    claims without fee_events, auto-creates fee_events at 3%. Runs via
+    `python3 -m agents.fee_watcher`. Re-enabled 2026-06-20 after being
+    disabled; agent_config.enabled=true, dry_run=false.
   - `scripts/fee_collection_agent.py --follow-up` — every 6h at :55,
     → `logs/agent_fee_collection.log`. Re-sends SMS/email payment
     requests to contractors with pending fee_events on 3d/7d/14d cadence.
     Tracks collection_history in fee_events.meta. Added 2026-06-20.
+  - `agents/prospector` — every 6h at :05. Contractor acquisition across
+    27 metros × 7 niches (expanded from 3 metros × 1 niche 2026-06-20).
+    Writes to prospects table; prospector_bridge moves to contractors.
 
 #### Pipeline-side (live in /opt/empire-pipeline/, not empire-v49 repo)
   - `storm_url_refresh_cron.sh` — every 6h on :15, → `logs/storm_url_refresh.log`.
