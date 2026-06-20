@@ -2,7 +2,8 @@
 EMPIRE V49 · PRODUCT: ELITE SCRAPER V2 (Predictive Revenue Fleet)
 ==================================================================
 AI-powered predictive scraper fleet using camofox-browser for stealth
-scraping across 36+ lanes + Agent-Reach multi-channel intelligence.
+scraping across 36+ lanes + Agent-Reach multi-channel intelligence
++ AGI Governor strategy routing + SI Strategy genome enrichment.
 
 Scraper agents in the fleet:
   - bots/predictive_camofox_scraper.py — Main B2B scraper using camofox-browser.
@@ -18,12 +19,20 @@ Scraper agents in the fleet:
     Supports 36+ niches with AGI self-improvement.
 
   - products/agent_reach_enrichment.py — Agent-Reach multi-channel intelligence.
-    7 free channels: GitHub search, semantic search, Jina Reader, RSS feeds,
-    YouTube transcripts, V2EX, Bilibili. No paid API keys required.
+    9 channels: GitHub search, semantic search, Jina Reader, RSS feeds,
+    YouTube transcripts, V2EX, Bilibili, Twitter, Reddit.
+
+  - empire_agi_governor.py — AGI Governor: per-niche strategy selection
+    via SI StrategyEvolution, win-rate tracking, outcome recording.
+
+  - empire_si_strategy.py — SI StrategyEvolution: genome-driven strategy
+    evolution with mutation, cross-pollination, and deactivation.
 
 Empire AI provides:
   - Hosted camofox-browser infrastructure
-  - Agent-Reach multi-channel intelligence layer (7 channels)
+  - Agent-Reach multi-channel intelligence layer (9 channels)
+  - AGI Governor strategy routing per niche
+  - SI Strategy genome enrichment + outcome feedback loop
   - Managed data pipelines into Supabase
   - Centralized user management + billing
   - Custom niche/metro configuration per client
@@ -144,6 +153,7 @@ class EliteScraperProduct:
                 webhook_url: optional,
                 use_agent_reach: bool (default: True) — run Agent-Reach enrichment,
                 agent_reach_query: str — optional custom query for enrichment,
+                use_agi_si: bool (default: True) — AGI strategy + SI genome enrichment,
             }
         """
         tier = config.get("tier", "SCRAPER_STARTER")
@@ -164,9 +174,39 @@ class EliteScraperProduct:
         metros = config.get("metros", [])
         max_leads = min(config.get("max_leads", 100), 5000)
         use_agent_reach = config.get("use_agent_reach", True)
+        use_agi_si = config.get("use_agi_si", True)
 
         self.stats["jobs_run"] += 1
         self.stats["leads_collected"] += max_leads
+
+        # ── AGI + SI Strategy Routing (per-niche best strategy) ──
+        agi_strategies = {}
+        agi_genomes = {}
+        if use_agi_si and niches:
+            try:
+                from empire_agi_governor import governor as _agi_gov
+                si_strategy = _agi_gov.get_si_strategy()
+                for niche in niches:
+                    # Get the best evolved strategy for this niche from AGI Governor
+                    strategy = _agi_gov.strategy_for_niche(niche)
+                    agi_strategies[niche] = strategy
+                    # Get the strategy genome (aggressiveness, risk_tolerance, etc.)
+                    if si_strategy:
+                        genome = si_strategy.get_genome(strategy, niche)
+                        agi_genomes[niche] = {
+                            "strategy": strategy,
+                            "genome": genome,
+                            "win_rate": _agi_gov.get_niche_win_rate(niche),
+                        }
+                    else:
+                        agi_genomes[niche] = {
+                            "strategy": strategy,
+                            "genome": {},
+                            "win_rate": 0.0,
+                        }
+                log.info(f"[elite_scraper] AGI strategies: {agi_strategies}")
+            except Exception as e:
+                log.warning(f"[elite_scraper] AGI strategy lookup failed: {e}")
 
         # ── Agent-Reach Enrichment (if enricher is wired) ──
         agent_reach_result = None
@@ -187,6 +227,7 @@ class EliteScraperProduct:
                         "account_id": account_id,
                         "niches": niches,
                         "metros": metros,
+                        "agi_strategies": agi_strategies,
                     },
                 )
                 if agent_reach_result.get("ok"):
@@ -197,6 +238,27 @@ class EliteScraperProduct:
             except Exception as e:
                 log.warning(f"[elite_scraper] Agent-Reach enrichment failed: {e}")
                 agent_reach_result = {"ok": False, "error": str(e)[:200]}
+
+        # ── AGI + SI Outcome Recording (close the feedback loop) ──
+        # Only record outcomes when Agent-Reach actually executed
+        outcome_recorded = 0
+        if use_agi_si and agi_strategies and agent_reach_result is not None:
+            try:
+                from empire_agi_governor import governor as _agi_gov
+                for niche, strategy in agi_strategies.items():
+                    # Record a positive outcome when Agent-Reach succeeds
+                    success = bool(agent_reach_result.get("ok"))
+                    revenue = float(tier_config.get("price", 0) or 0)
+                    _agi_gov.record_strategy_outcome(
+                        strategy=strategy,
+                        niche=niche,
+                        success=success,
+                        revenue=revenue,
+                    )
+                    outcome_recorded += 1
+                log.info(f"[elite_scraper] AGI outcomes recorded: {outcome_recorded} niches")
+            except Exception as e:
+                log.warning(f"[elite_scraper] AGI outcome recording failed: {e}")
 
         # Meter usage
         if self.log_usage:
@@ -209,6 +271,8 @@ class EliteScraperProduct:
                                    "metros": metros,
                                    "max_leads": max_leads,
                                    "agent_reach_channels": tier_config.get("agent_reach_channels", []),
+                                   "agi_strategies": agi_strategies,
+                                   "agi_genomes": {n: g.get("strategy") for n, g in agi_genomes.items()},
                                })
             except Exception:
                 pass
@@ -226,6 +290,9 @@ class EliteScraperProduct:
             "delivery": config.get("delivery", "api"),
             "agent_reach_channels": tier_config.get("agent_reach_channels", []),
             "agent_reach_result": agent_reach_result,
+            "agi_strategies": agi_strategies,
+            "agi_genomes": agi_genomes,
+            "agi_outcomes_recorded": outcome_recorded,
             "deployment_guide": self._deployment_guide(tier, config),
             "timestamp": datetime.now(timezone.utc).isoformat(),
         }
