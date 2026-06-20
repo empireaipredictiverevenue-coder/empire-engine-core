@@ -69,3 +69,4 @@ solana-meme-sniper/target/
 
 # Third-party integrations (cloned repos — never commit)
 integrations/
+data/
