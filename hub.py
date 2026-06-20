@@ -43,6 +43,9 @@ from empire_demo import demo_page
 from empire_pricing import pricing_page, CPLPricingEngine, cpl_engine
 from empire_ppc import ppc_page
 from empire_ppl import ppl_page
+from empire_meetily_page import meetily_page
+from empire_scraper_page import scraper_page
+from empire_mrr_page import mrr_page
 from empire_live import LiveBroadcaster, register_live_routes
 from empire_command_deck import command_deck_page
 from empire_command_spa import command_spa_page
@@ -64,6 +67,7 @@ from empire_playbook import register_playbook_routes
 from empire_payouts import PayoutEngine, register_payout_routes, register_bounty_payout_routes
 from empire_solana_webhook import register_solana_webhook_routes
 from empire_crypto_payments import CryptoPaymentEngine, register_crypto_payment_routes
+from empire_moonpay_checkout import register_moonpay_checkout_routes
 from empire_fee import register_fee_routes
 from empire_fee_operator import register_operator_mark_settled
 from empire_claims import register_claims_routes
@@ -186,6 +190,9 @@ from products.analyzer import AnalyzerEngine, AnalyzerRoutes
 from products.sales_funnel import SalesFunnelEngine, SalesFunnelRoutes
 from products.product_email_dispatcher import ProductEmailDispatcher
 from products.trial_conversion import TrialConversionEngine
+from products.meetily import MeetilyProduct, MeetilyRoutes
+from products.elite_scraper import EliteScraperProduct, EliteScraperRoutes
+from products.agent_reach_enrichment import AgentReachEnricher, AgentReachRoutes
 from hook_analytics import HookRoutes
 
 # Strategist & Analytics Agents
@@ -1026,6 +1033,24 @@ async def ppl_page_route():
     return HTMLResponse(ppl_page())
 
 
+@app.get("/products/meetily", response_class=HTMLResponse)
+async def meetily_product_page():
+    """Meetily product landing page — privacy-first AI meeting assistant."""
+    return HTMLResponse(meetily_page())
+
+
+@app.get("/products/elite-scraper", response_class=HTMLResponse)
+async def elite_scraper_product_page():
+    """Elite Scraper v2 product landing page — AI-powered lead intelligence."""
+    return HTMLResponse(scraper_page())
+
+
+@app.get("/mrr", response_class=HTMLResponse)
+async def mrr_page_route():
+    """Unified MRR report page — all 16 Suite products with tiers, pricing, subscriber counts."""
+    return HTMLResponse(mrr_page())
+
+
 @app.get("/demo", response_class=HTMLResponse)
 async def demo():
     """Public walkthrough of the funnel (the link the /contractors
@@ -1785,16 +1810,61 @@ async def vonage_event_alias(request: Request):
 # with /api/v1/vonage/inbound and /api/v1/vonage/status (legacy paths).
 # These proxy to the real endpoints so existing Vonage app config doesn't
 # need to be updated in the dashboard UI.
+#
+# DUAL-PURPOSE: Vonage sends SMS inbound webhooks to the same URL that was
+# previously used for voice. The SMS payload includes 'msisdn' (sender phone)
+# and 'text' fields as form-encoded data. Voice payloads are JSON. We detect
+# the payload type and route accordingly.
 @app.post("/api/v1/vonage/inbound")
 @app.get("/api/v1/vonage/inbound")
 async def vonage_inbound_legacy(request: Request):
-    """Legacy alias for /api/v1/voice/answer — kept for Vonage dashboard config."""
-    body = await request.body()
+    """Dual-purpose Vonage webhook. Routes:
+      - SMS (form-encoded with msisdn) → /api/v1/sms/inbound
+      - Voice (JSON) → /api/v1/voice/answer
+    """
     params = dict(request.query_params)
+    content_type = (request.headers.get("content-type") or "").lower()
+
+    # ── SMS detection — Vonage sends SMS inbound as form-encoded with 'msisdn' ──
+    is_sms = False
+    form_body = None
+    if "application/x-www-form-urlencoded" in content_type:
+        # Definite SMS — parse as form data immediately, don't read raw body first
+        form_data = await request.form()
+        form_body = "&".join(f"{k}={v}" for k, v in form_data.multi_items())
+        is_sms = True
+    elif not content_type or "json" not in content_type:
+        # Content-type missing or ambiguous — try parsing as form data
+        # Vonage sometimes sends SMS without a proper content-type header.
+        # Parse form FIRST (before body(), which drains the stream).
+        try:
+            form_data = await request.form()
+            if "msisdn" in form_data:
+                is_sms = True
+                form_body = "&".join(f"{k}={v}" for k, v in form_data.multi_items())
+        except Exception:
+            pass
+
+    if is_sms and form_body:
+        async with _httpx.AsyncClient(base_url="http://localhost:8001", timeout=10.0) as client:
+            resp = await client.post(
+                "/api/v1/sms/inbound",
+                content=form_body,
+                params=params,
+                headers={"Content-Type": "application/x-www-form-urlencoded"},
+            )
+        return Response(
+            content=resp.content,
+            status_code=resp.status_code,
+            media_type=resp.headers.get("content-type", "application/json"),
+        )
+
+    # ── Voice — read raw body and forward to voice answer handler ──
+    body_bytes = await request.body()
     async with _httpx.AsyncClient(base_url="http://localhost:8001", timeout=10.0) as client:
         resp = await client.post(
             "/api/v1/voice/answer",
-            content=body,
+            content=body_bytes,
             params=params,
             headers={"Content-Type": "application/json"},
         )
@@ -1833,6 +1903,15 @@ register_crypto_payment_routes(
     engine=crypto_payment_engine,
     require_auth=require_auth,
     public_base_url=PUBLIC_BASE_URL,
+)
+
+# MoonPay card checkout — separate page with MoonPay widget + crypto fallback
+register_moonpay_checkout_routes(
+    app,
+    get_db=get_db,
+    vault_wallet=os.environ.get("EMPIRE_VAULT_WALLET", ""),
+    require_auth=require_auth,
+    crypto_payment_engine=crypto_payment_engine,
 )
 
 register_suite_routes(
@@ -1947,6 +2026,27 @@ suite_analyzer = AnalyzerEngine(
     log_usage=lambda a, p, e, q=1, u="count", m=None: suite_guard.log_usage(a, p, e, q, u, m),
 )
 AnalyzerRoutes(suite_analyzer, require_auth=require_auth).register(app)
+
+# Product 17: Meetily — privacy-first AI meeting assistant
+suite_meetily = MeetilyProduct(
+    guard=lambda a, f: suite_guard.check_access(a, f),
+    log_usage=lambda a, p, e, q=1, u="count", m=None: suite_guard.log_usage(a, p, e, q, u, m),
+)
+MeetilyRoutes(suite_meetily, require_auth=require_auth).register(app)
+
+# Product 18: Elite Scraper v2 — AI-powered multi-source lead intelligence
+suite_elite_scraper = EliteScraperProduct(
+    guard=lambda a, f: suite_guard.check_access(a, f),
+    log_usage=lambda a, p, e, q=1, u="count", m=None: suite_guard.log_usage(a, p, e, q, u, m),
+)
+EliteScraperRoutes(suite_elite_scraper, require_auth=require_auth).register(app)
+
+# Agent-Reach Enrichment Layer — 9-channel intelligence for Elite Scraper
+agent_reach_enricher = AgentReachEnricher(get_db=get_db)
+AgentReachRoutes(agent_reach_enricher, require_auth=require_auth).register(app)
+
+# Wire Agent-Reach enricher into Elite Scraper for tier-aware enrichment
+suite_elite_scraper.enricher = agent_reach_enricher
 
 # Product 16: Sales Funnel — one-time purchases, trials, upsells, renewals
 # Wire email dispatcher for automated product email sequences
