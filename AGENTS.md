@@ -141,6 +141,16 @@ has more entries than the AGENTS.md doc tracks (drift). Run
     Telegram alert to operator chat (808657420) on any status != 'verified'.
     Catches silent email failures (DKIM/SPF/Tracking CNAME drift).
     Added 2026-06-17 after resend upgrade revealed partially_failed domain.
+  - `scripts/dispatch_followup_agent.py` — every hour at :15,
+    → `logs/agent_dispatch_followup.log`. Queries dispatches with
+    status='sent' and meta->>'follow_up_due' in the past, sends SMS
+    reminder to contractors on 24h/72h/7d cadence. Tracks follow_up_history
+    in dispatches.meta. Auto-expires after 3 follow-ups or if unreachable.
+    Added 2026-06-20 as part of dispatch response-rate improvements.
+  - `scripts/fee_collection_agent.py --follow-up` — every 6h at :55,
+    → `logs/agent_fee_collection.log`. Re-sends SMS/email payment
+    requests to contractors with pending fee_events on 3d/7d/14d cadence.
+    Tracks collection_history in fee_events.meta. Added 2026-06-20.
 
 #### Pipeline-side (live in /opt/empire-pipeline/, not empire-v49 repo)
   - `storm_url_refresh_cron.sh` — every 6h on :15, → `logs/storm_url_refresh.log`.
