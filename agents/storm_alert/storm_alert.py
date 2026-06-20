@@ -48,6 +48,13 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(name)s] %(message
 
 AGENT_NAME = "storm_alert"
 
+def _normalize_severity(sev: str) -> str:
+    """Ensure severity value is title-cased (e.g. 'severe' → 'Severe')."""
+    s = sev.strip().lower()
+    REMAP = {"extreme": "Extreme"}
+    return REMAP.get(s, s.title()) if s else "Moderate"
+
+
 # ── Alert event → (damage_severity, urgency_score) mapping ───────────
 # urgency_score: 1-10, higher = more urgent
 SEVERITY_MAP: Dict[str, Tuple[str, int]] = {
@@ -282,7 +289,7 @@ def run_once(dry_run_override: Optional[bool] = None) -> dict:
         for target_id, (sev, urg) in updates.items():
             try:
                 sb.table("radar_targets").update({
-                    "damage_severity": sev,
+                    "damage_severity": _normalize_severity(sev),
                     "urgency_score": urg,
                     "updated_at": now_iso,
                 }).eq("id", target_id).execute()

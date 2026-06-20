@@ -591,6 +591,18 @@ _COUNTY_TO_METRO: Dict[str, str] = {
     "Jefferson, KY":   "Louisville",
 }
 
+def _normalize_severity(sev: str) -> str:
+    """Ensure severity value is title-cased (e.g. 'severe' → 'Severe')."""
+    s = sev.strip().lower()
+    # Known mappings for any edge-case values
+    REMAP = {
+        "extreme": "Extreme",
+    }
+    if s in REMAP:
+        return REMAP[s]
+    return s.title() if s else "Moderate"
+
+
 # ── Risk rank → damage_severity + urgency_score mapping ──────────────────
 # risk_rank from storm_predictor: 1=Thunderstorm, 2=Marginal, 3=Slight,
 # 4=Enhanced, 5=Moderate, 6=High
@@ -792,7 +804,7 @@ def run_once(dry_run_override: Optional[bool] = None) -> dict:
         for tid, (sev, urg) in updates_to_apply.items():
             try:
                 sb.table("radar_targets").update({
-                    "damage_severity": sev,
+                    "damage_severity": _normalize_severity(sev),
                     "urgency_score": urg,
                     "updated_at": now_iso,
                 }).eq("id", tid).execute()
@@ -809,7 +821,7 @@ def run_once(dry_run_override: Optional[bool] = None) -> dict:
                 continue
             try:
                 sb.table("radar_targets").update({
-                    "damage_severity": sev,
+                    "damage_severity": _normalize_severity(sev),
                     "updated_at": now_iso,
                 }).eq("id", tid).execute()
                 filled += 1
