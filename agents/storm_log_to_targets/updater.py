@@ -180,6 +180,73 @@ _COUNTY_TO_METRO: Dict[str, str] = {
     "Randall, TX":     "Amarillo",
     "El Paso, TX":     "El Paso",
     "Nueces, TX":      "Corpus Christi",
+    # ── I-35 Corridor (San Antonio ↔ Austin ↔ DFW) ──
+    # Southern I-35: Laredo → San Antonio
+    "Webb, TX":        "Webb, TX",          # Laredo — I-35 southern terminus
+    "Maverick, TX":    "Webb, TX",          # Eagle Pass
+    "Dimmit, TX":      "Webb, TX",          # Carrizo Springs
+    "Zavala, TX":      "Webb, TX",          # Crystal City
+    "La Salle, TX":    "San Antonio",       # Cotulla
+    "Frio, TX":        "San Antonio",       # Pearsall
+    "Medina, TX":      "San Antonio",       # Hondo
+    "Atascosa, TX":    "San Antonio",       # Jourdanton
+    "Wilson, TX":      "San Antonio",       # Floresville
+    "Karnes, TX":      "San Antonio",       # Karnes City
+    "Goliad, TX":      "San Antonio",       # Goliad
+    "Bee, TX":         "Corpus Christi",    # Beeville
+    "Live Oak, TX":    "Corpus Christi",    # George West
+    # San Antonio → Austin corridor
+    "Bandera, TX":     "San Antonio",       # Bandera
+    "Kendall, TX":     "San Antonio",       # Boerne
+    "Blanco, TX":      "Austin",            # Blanco
+    "Gillespie, TX":   "Austin",            # Fredericksburg
+    "Kerr, TX":        "San Antonio",       # Kerrville
+    "Real, TX":        "San Antonio",       # Leakey
+    "Uvalde, TX":      "San Antonio",       # Uvalde
+    # Austin metro fill-ins
+    "Burnet, TX":      "Austin",            # Burnet
+    "Llano, TX":       "Austin",            # Llano
+    "Gonzales, TX":    "Austin",            # Gonzales
+    "Fayette, TX":     "Austin",            # La Grange
+    "Lee, TX":         "Austin",            # Giddings
+    "Milam, TX":       "Temple",            # Cameron
+    "Burleson, TX":    "Temple",            # Caldwell
+    "Brazos, TX":      "Bryan/College Station", # Bryan-College Station
+    # I-35 North: Austin → Waco → DFW
+    "Falls, TX":       "Waco",              # Marlin
+    "Limestone, TX":   "Waco",              # Groesbeck
+    "Freestone, TX":   "Waco",              # Fairfield
+    "Robertson, TX":   "Temple",            # Hearne
+    "Leon, TX":        "Temple",            # Centerville
+    "Madison, TX":     "Temple",            # Madisonville
+    "Grimes, TX":      "Temple",            # Navasota
+    "Walker, TX":      "Temple",            # Huntsville
+    "Washington, TX":  "Temple",            # Brenham
+    "Austin, TX":      "Houston",           # Bellville — western Houston exurbs
+    "Waller, TX":      "Houston",           # Hempstead
+    "Hill, TX":        "Dallas-Fort Worth", # Hillsboro
+    "Navarro, TX":     "Dallas-Fort Worth", # Corsicana
+    "Henderson, TX":   "Dallas-Fort Worth", # Athens
+    "Anderson, TX":    "Dallas-Fort Worth", # Palestine
+    "Van Zandt, TX":   "Dallas-Fort Worth", # Canton
+    "Rains, TX":       "Dallas-Fort Worth", # Emory
+    "Wood, TX":        "Tyler",             # Quitman
+    "Hopkins, TX":     "Tyler",             # Sulphur Springs
+    "Delta, TX":       "Tyler",             # Cooper
+    "Franklin, TX":    "Tyler",             # Mount Vernon
+    "Titus, TX":       "Tyler",             # Mount Pleasant
+    "Morris, TX":      "Tyler",             # Daingerfield
+    # ── Rio Grande Valley ──
+    "Hidalgo, TX":     "Hidalgo, TX",        # McAllen/Edinburg/Pharr/Mission
+    "Cameron, TX":     "Cameron, TX",        # Brownsville/Harlingen
+    "Willacy, TX":     "Cameron, TX",        # Raymondville
+    "Starr, TX":       "Hidalgo, TX",        # Rio Grande City
+    "Zapata, TX":      "Webb, TX",           # Zapata — between Laredo and RGV
+    "Jim Hogg, TX":    "Webb, TX",           # Hebbronville
+    "Brooks, TX":      "Hidalgo, TX",        # Falfurrias
+    "Duval, TX":       "Corpus Christi",     # San Diego
+    "Jim Wells, TX":   "Corpus Christi",     # Alice
+    "San Patricio, TX":"Corpus Christi",     # Sinton
     # ── Oklahoma ──
     # OKC metro counties
     "Oklahoma, OK":    "Oklahoma City",

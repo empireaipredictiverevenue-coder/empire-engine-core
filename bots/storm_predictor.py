@@ -28,6 +28,18 @@ METROS = {
     "Memphis": (35.15, -90.05),
     "Atlanta": (33.75, -84.39),
     "Nashville": (36.16, -86.78),
+    # ── I-35 Corridor / Texas ──
+    "Waco": (31.55, -97.15),
+    "Temple": (31.10, -97.34),
+    "Bryan/College Station": (30.63, -96.33),
+    "Tyler": (32.35, -95.30),
+    "Lubbock": (33.58, -101.85),
+    "Amarillo": (35.20, -101.83),
+    "El Paso": (31.76, -106.49),
+    "Corpus Christi": (27.80, -97.40),
+    # ── Louisiana ──
+    "Shreveport": (32.52, -93.75),
+    "Lafayette LA": (30.22, -92.02),
 }
 
 import math
