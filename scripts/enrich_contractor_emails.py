@@ -21,9 +21,11 @@ import re
 import sys
 import json
 import time
+import subprocess
 import logging
 from datetime import datetime
 from collections import defaultdict
+from pathlib import Path
 
 try:
     from dotenv import load_dotenv
@@ -343,5 +345,18 @@ def enrich(dry_run: bool = True) -> dict:
 
 if __name__ == "__main__":
     dry_run = "--apply" not in sys.argv
+    run_agent_reach = "--agent-reach" in sys.argv
     result = enrich(dry_run=dry_run)
     print(f"\n{'DRY RUN' if result['dry_run'] else 'APPLIED'} — use {'--apply' if result['dry_run'] else '(already applied)'} to {'write' if result['dry_run'] else 're-run'}")
+
+    # ── Chain Agent-Reach intel enrichment ─────────────────────────
+    if run_agent_reach:
+        print("\n" + "=" * 60)
+        print("  CHAINING: Agent-Reach multi-source intel enrichment")
+        print("=" * 60)
+        script = str(Path(__file__).resolve().parent / "enrich_contractor_agent_reach.py")
+        cmd = [sys.executable, script]
+        if not dry_run:
+            cmd.append("--apply")
+        print(f"  Running: {' '.join(cmd)}")
+        subprocess.run(cmd)
