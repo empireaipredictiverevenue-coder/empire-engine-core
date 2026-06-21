@@ -25,6 +25,7 @@ Integration:
 import json
 import os
 import sys
+import shlex
 import subprocess
 import logging
 from pathlib import Path
@@ -119,8 +120,12 @@ def _notify_low_data(sent: int):
 
 def _git(command: str) -> bool:
     """Run a git command relative to the repo root. Returns True on success."""
-    full_cmd = f"cd {REPO} && {command}"
-    result = subprocess.run(full_cmd, shell=True, capture_output=True, text=True)
+    result = subprocess.run(
+        shlex.split(command),
+        cwd=str(REPO),
+        capture_output=True,
+        text=True,
+    )
     if result.returncode != 0:
         log.warning(f"[optimizer] git failed: {command[:60]} — {result.stderr[:200]}")
     return result.returncode == 0
