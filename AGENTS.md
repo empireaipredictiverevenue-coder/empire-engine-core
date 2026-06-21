@@ -303,6 +303,17 @@ durable, queryable, multi-agent queue.
   intel yet. Writes results to `contractors.meta.agent_reach_intel`.
   Idempotent — skips contractors already enriched. Rate-limited at 3.5s/
   contractor (~17/min). Added 2026-06-20.
+- `agents_marketing_health.py` — daily 05:00 UTC,
+  → `logs/agent_marketing_health.log`. Validates all 45 marketing skills:
+  SKILL.md exists on disk, registered in ImmutableSkillRegistry, `ask_llm`
+  wired, version and description set. Logs to `agent_activity` with
+  `meta` containing pass/fail counts. Sends Telegram alert on any failure.
+  Added 2026-06-20.
+- `scripts/generate_valuation_pdf.py` — weekly Sunday 09:00 UTC,
+  → `logs/valuation_pdf.log`. Regenerates `EMPIRE_VALUATION.pdf` from
+  `EMPIRE_VALUATION.md` with live Supabase data (fees, claims,
+  contractors, SMS stats). Uses WeasyPrint + markdown for A4 investor-grade
+  output. Added 2026-06-21.
 
 ## graphify
 

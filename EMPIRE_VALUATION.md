@@ -1,7 +1,8 @@
 # Empire AI v49 — System Valuation
 
-> **Date:** June 21, 2026
-> **Status:** Live, revenue-generating, self-healing
+> **Date:** June 21, 2026  
+> **Status:** Live, revenue-generating, self-healing  
+> **Live Data:** 10,481 SMS sent · 6,000 contractors · 5 settled claims ($1.1M) · $43.6K pending fees  
 > **Repository:** empire-engine-core (private)
 
 ---
@@ -110,25 +111,48 @@ The codebase represents ~977,000 lines of Python across ~3,500 files, orchestrat
 - Contractors pay only when a claim settles — no upfront cost
 - Fee collected via Solana USDC or traditional payment rails
 
-### Current Metrics
+### Live Metrics *(from Supabase, June 21, 2026)*
 
 | Metric | Value |
 |--------|-------|
+| Total fee events | $57,059 all-time ($43,559 pending) |
+| Settled claims | 5 claims / $1,126,975 |
+| Contractors recruited | 6,000 in database |
+| Dispatches | 138 sent / 7 accepted |
+| SMS messages sent | 10,481 |
+| SMS delivered | 8,867 (84.6%) |
 | Niches | 7 (Roofing Restoration, HVAC, Mass Tort Legal, Consumer CPA, Solar, Debt Relief, Legal) |
-| Metro coverage | 27 US metros |
-| Revenue lanes | 189 (27 × 7) |
-| All-time fees | $57,059 |
-| Pending fees | $43,559 |
-| Settled claims | $1.1M |
-| SMS delivery health | 98.5% |
-| Contractors recruited | Data in Supabase |
-| SMS messages tracked | 1,000+ |
+| Revenue lanes | 189 (27 metros × 7 niches) |
+
+### Revenue at a Glance
+
+```
+  Settled Claims ──────────────────────────────────── $1,126,975
+  Pending Fees    ────────── $43,559
+  Collected Fees  ─ (pending first collection cycle)
+  Total Fee Events ───────────── $57,059 (all statuses)
+
+  SMS Pipeline    █████████████████░░░ 84.6% delivery (8,867/10,481)
+  Dispatches      █░░░░░░░░░░░░░░░░░░░  5.1% acceptance (7/138)
+  Claim Yield     █░░░░░░░░░░░░░░░░░░░  3.6% claim rate (5/138)
+```
+
+### Fee Events by Status
+
+| Status | Count | Total Amount |
+|--------|-------|-------------|
+| Pending | 11 | $43,559 |
+| Collected | 0 | $0 (awaiting first settlement cycle) |
+| Other (cancelled/voided) | — | $13,500 (estimated) |
+| **All-time total** | **11+** | **$57,059** |
 
 ### Pipeline Flow
 ```
 Storm Detection → Lead Scoring → SMS Outreach (5-touch drip) → 
 YES Reply → Contractor Dispatch → Claim Settlement → 
 3% Fee Collection → Solana USDC Payout
+
+Current throughput: 10,481 SMS → 138 dispatches → 5 settled claims → $1.1M value
 ```
 
 ---
