@@ -292,6 +292,28 @@ Start with `docker compose up -d` from the product directory.
 Postgres 16 (not 18 — 18 has volume mount incompatibility).
 See `deploy/README.md` for full deployment details and known issues.
 
+## Scraper Pipeline (Updated 2026-06-21)
+The contractor prospecting pipeline was upgraded with a new repo:
+
+| Component | Repo | Role | API Key Required |
+|-----------|------|------|:---:|
+| **camofox-browser** | PM2 on :9377 | Stealth browser for Google-free web scraping | No |
+| **PhoneInfoga** | `/root/PhoneInfoga/` | Phone validation — carrier, line type, geolocation, OSINT | ⚠️ localscan=no, footprints=yes |
+| **Elite Scraper V2** | `products/elite_scraper.py` | Orchestrates camofox + PhoneInfoga for end-to-end prospecting | — |
+
+**PhoneInfoga scanners:** `localscan` (carrier/line type via `phonenumbers` lib — no API key),
+`numverify` (web scrape), `ovh` (telecom), `footprints` (social OSINT — needs `google_api_key`
++ `google_cx_id` in config.py). Replaces the Google Places API dependency for contractor
+phone validation.
+
+**⚠️ Wiring status:** `bots/predictive_prospector_agent.py` defines `CAMOFOX_URL` but its
+`scrape_niche()` returns placeholder data — HTTP calls to camofox-browser's API are not yet
+wired. Contractor discovery is functional via the old Google Places path (blocked by API key)
+but the camofox path needs wiring before prospecting is fully Google-free.
+
+**Install:** `pip3 install -r /root/PhoneInfoga/requirements.txt`
+**Run:** `python3 /root/PhoneInfoga/phoneinfoga.py -n <number> -s all`
+
 ## File Layout (so you don't grep the wrong place)
 
   - `/root/empire-v49/` — current codebase (this repo, master branch).
