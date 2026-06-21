@@ -267,16 +267,29 @@ def scan_agent_directory(
     file_pattern: str = "*.py",
     exclude_patterns: Optional[List[str]] = None,
     extra_globs: Optional[List[str]] = None,
+    path_exclude_patterns: Optional[List[str]] = None,
 ) -> Dict[str, List[Dict]]:
     """Scan all agent files in a directory.
 
     By default scans *.py files. Pass extra_globs=['*.md'] to also scan
     SkillSpector-compatible markdown files (e.g. SKILL.md prompt templates).
 
+    Args:
+        directory: Root directory to scan recursively.
+        file_pattern: Primary glob pattern for files.
+        exclude_patterns: Filename prefixes/patterns to skip (e.g. '__init__.py').
+        extra_globs: Additional glob patterns to include (e.g. ['*.md']).
+        path_exclude_patterns: Path segment patterns to exclude — any file whose
+            path contains one of these substrings is skipped.
+            Default: ['/references/', '/.docs/', '/.github/', '/node_modules/']
+            to suppress false positives from reference docs, config, and vendored code.
+
     Returns dict of {file_path: [findings]}.
     """
     if exclude_patterns is None:
         exclude_patterns = ["__init__.py", "test_", "_test.py", "setup.py"]
+    if path_exclude_patterns is None:
+        path_exclude_patterns = ["/references/", "/.docs/", "/.github/", "/node_modules/"]
 
     results = {}
     dir_path = Path(directory)
@@ -290,15 +303,18 @@ def scan_agent_directory(
         all_files.update(dir_path.rglob(extra_glob))
 
     for file_path in sorted(all_files):
-        # Skip excluded files
+        # Skip excluded files (filename-based)
         fname = file_path.name
         if any(fname.startswith(ex) or ex in fname for ex in exclude_patterns):
             continue
         # Skip symlinks, non-files
         if not file_path.is_file():
             continue
-
+        # Skip path-based exclusions (e.g. reference docs)
         file_path_str = str(file_path)
+        if any(pat in file_path_str for pat in path_exclude_patterns):
+            continue
+
         findings = scan_agent_file(file_path_str)
         if findings:
             results[file_path_str] = findings
