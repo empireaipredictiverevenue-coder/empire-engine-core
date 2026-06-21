@@ -8,9 +8,10 @@ to accept wins.
 
 Scoring model (weighted sum, all factors normalized 0-1):
 
-  metro_match      0.40   exact metro match → 1.0, adjacent metro → 0.5, else → 0
   specialty_match  0.25   jaccard overlap of required specialties vs theirs
-  trust_score      0.15   running 0-10 score updated from outcomes
+  trust_score      0.20   running 0-10 score updated from outcomes
+  metro_match      0.20   exact metro match → 1.0, adjacent metro → 0.5, else → 0
+  response_rate    0.15   accepted / total dispatches (0.5 for new contractors)
   freshness        0.10   inverse of days since last accepted dispatch
   capacity         0.10   1 - (active_dispatches / max_concurrent)
 
@@ -136,11 +137,14 @@ log = logging.getLogger("empire.matching")
 # ─────────────────────────────────────────────────────────────────────────────
 # CONFIG
 # ─────────────────────────────────────────────────────────────────────────────
-# Score weights — change these to re-balance the matching priorities
+# Score weights — rebalanced 2026-06-21 for storm-chaser model.
+# Contractors travel across state lines for hurricane/tornado work,
+# so metro_match is deprioritized in favor of trust + response_rate.
 SCORE_WEIGHTS = {
-    "metro_match":     0.40,
     "specialty_match": 0.25,
-    "trust_score":     0.15,
+    "trust_score":     0.20,
+    "metro_match":     0.20,
+    "response_rate":   0.15,
     "freshness":       0.10,
     "capacity":        0.10,
 }
@@ -159,7 +163,7 @@ TRUST_MIN = 0.0
 TRUST_MAX = 10.0
 TRUST_DEFAULT = 5.0
 
-DEFAULT_TOP_N        = 5
+DEFAULT_TOP_N        = 8  # was 5 — more matches = better acceptance odds
 DEFAULT_MAX_CONCUR   = 3
 DEFAULT_LINK_TTL     = 60 * 60 * 24  # 24h to accept
 
@@ -428,7 +432,7 @@ class ContractorMatcher:
         active_loads = await self._load_active_dispatch_counts([c["id"] for c in candidates])
 
         # Load total historical dispatch counts (batch — one query for all candidates)
-        total_sent_counts, has_accepts = await self._load_total_dispatch_counts(
+        total_sent_counts, accepted_counts = await self._load_total_dispatch_counts(
             [c["id"] for c in candidates]
         )
 
@@ -440,6 +444,8 @@ class ContractorMatcher:
                 required_specialties=required_specialties,
                 metro_adjacency=adjacency,
                 active_load=active_loads.get(contractor["id"], 0),
+                total_sent=total_sent_counts.get(contractor["id"], 0),
+                total_accepted=accepted_counts.get(contractor["id"], 0),
             )
 
             # ── QUALITY FILTERS (reduce noise, boost response rate) ──
@@ -455,7 +461,8 @@ class ContractorMatcher:
             # Soft filter: skip contractors dispatched 3+ times total with zero ever accepted
             # Uses batched data from _load_total_dispatch_counts — no per-contractor DB query
             total_sent = total_sent_counts.get(contractor["id"], 0)
-            if total_sent >= 3 and not has_accepts.get(contractor["id"], False):
+            total_accepted = accepted_counts.get(contractor["id"], 0)
+            if total_sent >= 3 and total_accepted == 0:
                 # 3+ total dispatches, 0 ever accepted — likely dead number / wrong contact
                 continue
 
@@ -576,6 +583,8 @@ class ContractorMatcher:
                     dispatch_meta["strategy"] = strategy
                 if niche:
                     dispatch_meta["niche"] = niche
+                # Stamp referral_code on dispatch if the contractor was referred
+                ctr_ref_code = contractor.get("referral_code", "")
                 ins = db.table("dispatches").insert({
                     "lead_id":         str(lead.get("id")) if lead.get("id") else None,
                     "contractor_id":   str(contractor["id"]),
@@ -583,6 +592,7 @@ class ContractorMatcher:
                     "match_components":components,
                     "token":           token,
                     "status":          "sent",
+                    "referral_code":   ctr_ref_code or None,
                     "meta":            dispatch_meta,
                 }).execute()
                 dispatch_ids.append(ins.data[0]["id"] if ins.data else None)
@@ -808,6 +818,8 @@ class ContractorMatcher:
         required_specialties: list[str],
         metro_adjacency: set,
         active_load: int,
+        total_sent: int = 0,
+        total_accepted: int = 0,
     ) -> tuple[float, dict]:
         """Return (total_score, components) for one contractor."""
         # 1. Metro match
@@ -856,12 +868,21 @@ class ContractorMatcher:
         max_concurrent = contractor.get("max_concurrent") or DEFAULT_MAX_CONCUR
         capacity = max(0.0, 1.0 - (active_load / max_concurrent)) if max_concurrent else 0.0
 
+        # 6. Response rate — how often this contractor accepts dispatches.
+        # New contractors (never dispatched) get 0.5 benefit of the doubt.
+        # Clamped to [0,1] to handle edge cases (e.g. data corruption).
+        if total_sent == 0:
+            response_rate = 0.5
+        else:
+            response_rate = max(0.0, min(1.0, total_accepted / total_sent))
+
         components = {
             "metro_match":     round(metro_score, 3),
             "specialty_match": round(specialty_score, 3),
             "trust_score":     round(trust_score_norm, 3),
             "freshness":       round(freshness, 3),
             "capacity":        round(capacity, 3),
+            "response_rate":   round(response_rate, 3),
         }
 
         total = sum(
@@ -903,12 +924,12 @@ class ContractorMatcher:
 
     async def _load_total_dispatch_counts(
         self, contractor_ids: list[str]
-    ) -> tuple[dict[str, int], dict[str, bool]]:
+    ) -> tuple[dict[str, int], dict[str, int]]:
         """Batch-query total historical dispatches per contractor.
 
-        Returns (total_sent: {cid: count}, has_accepted: {cid: bool}).
-        All statuses counted for total_sent; has_accepted is True if ANY
-        dispatch has status='accepted' (they converted at least once).
+        Returns (total_sent: {cid: count}, accepted: {cid: count}).
+        All statuses counted for total_sent; accepted counts only 'accepted' status.
+        Used for response_rate scoring and dead-number filtering.
         """
         if not contractor_ids:
             return {}, {}
@@ -917,13 +938,13 @@ class ContractorMatcher:
             res = db.table("dispatches").select("contractor_id, status") \
                 .in_("contractor_id", contractor_ids).limit(2000).execute()
             total_sent: dict[str, int] = {cid: 0 for cid in contractor_ids}
-            has_accepted: dict[str, bool] = {cid: False for cid in contractor_ids}
+            accepted: dict[str, int] = {cid: 0 for cid in contractor_ids}
             for row in (res.data or []):
                 cid = row["contractor_id"]
                 total_sent[cid] = total_sent.get(cid, 0) + 1
                 if row.get("status") == "accepted":
-                    has_accepted[cid] = True
-            return total_sent, has_accepted
+                    accepted[cid] = accepted.get(cid, 0) + 1
+            return total_sent, accepted
         except Exception as e:
             log.debug(f"[matching] load total counts failed: {e}")
             return {}, {}
