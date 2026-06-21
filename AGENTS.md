@@ -158,8 +158,17 @@ has more entries than the AGENTS.md doc tracks (drift). Run
     requests to contractors with pending fee_events on 3d/7d/14d cadence.
     Tracks collection_history in fee_events.meta. Added 2026-06-20.
   - `agents/prospector` — every 6h at :05. Contractor acquisition across
-    27 metros × 7 niches (expanded from 3 metros × 1 niche 2026-06-20).
-    Writes to prospects table; prospector_bridge moves to contractors.
+    54 metros × 35 niches (expanded from 27 metros × 7 niches 2026-06-20,
+    then 54 metros target 2026-06-21). Uses Google Places API
+    (bots/places_helper.py). Writes to prospects table; prospector_bridge
+    moves to contractors. **BLOCKED 2026-06-21:** GOOGLE_MAPS_API_KEY set
+    but not authorized for Places/Geocoding/Nearby APIs in GCP Console.
+    Prospector sweep returns 403 on all endpoints until key is fixed.
+  - `scripts/seed_new_metros.py` — manual run (Phase 1 metro expansion).
+    Seeds radar_targets with sample entries for new metros. Added
+    2026-06-21 for scaling from 11 radar-covered metros → target 35+.
+    Seeded Miami, Orlando, Jacksonville, New Orleans (20 entries).
+    Charlotte, Oklahoma City, St. Louis, Nashville already had coverage.
   - `python3 -m graphify update .` — daily 04:00 UTC,
     → `logs/graphify_update.log`. Updates the knowledge graph
     (graphify-out/graph.json) to keep codebase mapping in sync with code
