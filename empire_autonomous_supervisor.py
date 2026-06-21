@@ -282,8 +282,8 @@ async def _scan_agent_security() -> dict:
                 "run_id": str(uuid.uuid4()),
                 "started_at": datetime.now(timezone.utc).isoformat(),
                 "finished_at": datetime.now(timezone.utc).isoformat(),
-                "status": "CRITICAL" if summary["critical_findings"] else (
-                    "WARNING" if summary["total_findings"] > 0 else "ok"
+                "status": "error" if summary["critical_findings"] else (
+                    "error" if summary["total_findings"] > 0 else "ok"
                 ),
                 "rows_seen": summary["files_scanned"],
                 "rows_processed": summary["files_scanned"],
