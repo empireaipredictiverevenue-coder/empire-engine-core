@@ -118,16 +118,23 @@ def _notify_low_data(sent: int):
 
 # ── Git helpers ────────────────────────────────────────────────────────────
 
-def _git(command: str) -> bool:
-    """Run a git command relative to the repo root. Returns True on success."""
+def _git(command: str | list[str]) -> bool:
+    """Run a git command relative to the repo root. Returns True on success.
+
+    Accepts either a shell-style command string (parsed via shlex) or a
+    pre-split argument list. Use the list form when arguments may contain
+    special characters (quotes, spaces) to avoid shell parsing ambiguity.
+    """
+    args = shlex.split(command) if isinstance(command, str) else command
     result = subprocess.run(
-        shlex.split(command),
+        args,
         cwd=str(REPO),
         capture_output=True,
         text=True,
     )
+    cmd_repr = " ".join(args)[:80]
     if result.returncode != 0:
-        log.warning(f"[optimizer] git failed: {command[:60]} — {result.stderr[:200]}")
+        log.warning(f"[optimizer] git failed: {cmd_repr} — {result.stderr[:200]}")
     return result.returncode == 0
 
 
@@ -206,7 +213,7 @@ def run_optimization_loop(dry_run: bool = False, force: bool = False):
 
             # Git commit the win
             _git("git add agents/subject_optimizer/subjects.json")
-            _git(f"git commit -m 'opt(champion): {current_subject} at {current_rate:.1f}%'")
+            _git(["git", "commit", "-m", f"opt(champion): {current_subject} at {current_rate:.1f}%"])
 
             # Notify via Telegram
             _notify_champion(current_subject, current_rate, sent)
