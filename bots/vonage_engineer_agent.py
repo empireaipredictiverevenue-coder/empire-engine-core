@@ -282,5 +282,4 @@ def run_once():
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO,
                         format="%(asctime)s [%(name)s] %(message)s")
-    result = run_once()
-    print(json.dumps(result, indent=2, default=str))
+    asyncio.run(run_loop())
