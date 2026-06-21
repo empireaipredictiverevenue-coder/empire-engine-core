@@ -177,6 +177,51 @@ async def _send_sms_vonage(
         return {"ok": False, "error": str(e)}
 
 
+async def _check_vonage_status(message_uuid: str) -> dict:
+    """Poll the Vonage Messages API for delivery status.
+
+    Returns {"ok": True, "status": "delivered"|"undelivered"|..., "delivered": bool}
+    or {"ok": False, "error": ...} on failure.
+
+    Makes the system self-sufficient — no webhook dashboard config needed.
+    Vonage typically has status available within 1-3 seconds of send.
+    """
+    app_id = os.getenv("VONAGE_APPLICATION_ID", "")
+    key_path = os.getenv("VONAGE_PRIVATE_KEY_PATH", "/root/vonage_private.key")
+
+    if not app_id or not os.path.exists(key_path) or not message_uuid:
+        return {"ok": False, "error": "Missing credentials or message_uuid"}
+
+    try:
+        with open(key_path, "r") as f:
+            private_key = f.read()
+
+        import jwt as pyjwt
+        import time as _time
+
+        now = int(_time.time())
+        jti = str(uuid.uuid4())
+        token = pyjwt.encode({
+            "iat": now, "exp": now + 180, "jti": jti,
+            "application_id": app_id,
+        }, private_key, algorithm="RS256")
+
+        async with httpx.AsyncClient(timeout=8) as client:
+            r = await client.get(
+                f"https://api.nexmo.com/v1/messages/{message_uuid}",
+                headers={"Authorization": f"Bearer {token}"},
+            )
+            if r.status_code == 200:
+                data = r.json()
+                status = (data.get("status") or "").lower()
+                delivered = status == "delivered"
+                return {"ok": True, "status": status, "delivered": delivered}
+            else:
+                return {"ok": False, "error": f"HTTP {r.status_code}"}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+
 async def _send_email_resend(
     to: str,
     subject: str,
@@ -381,6 +426,9 @@ async def run_collection(
         last_attempt = collection_history[-1] if collection_history else None
         attempt_type = "initial"
 
+        # Track whether this attempt should use email instead of SMS
+        force_email = False
+
         if follow_up:
             if not last_attempt:
                 if not force_now:
@@ -399,11 +447,29 @@ async def run_collection(
 
                 days_since = (datetime.now(timezone.utc) - datetime.fromisoformat(last_ts)).days
                 attempt_num = len(collection_history)
+                force_email = False
 
                 if attempt_num > len(FOLLOW_UP_DAYS):
-                    log.info(f"  SKIP {fee_id[:12]}: {name[:20]} — max follow-ups reached ({attempt_num})")
-                    skipped_already_contacted += 1
-                    continue
+                    # SMS exhausted — auto-fallback to email with same 14d cadence
+                    expected_days = FOLLOW_UP_DAYS[-1]  # 14 days
+                    if not force_now and days_since < expected_days:
+                        log.info(
+                            f"  SKIP {fee_id[:12]}: {name[:20]} — "
+                            f"email cadence not met ({days_since}d < {expected_days}d)"
+                        )
+                        skipped_already_contacted += 1
+                        continue
+                    if email_enabled and email:
+                        attempt_type = f"follow_up_{attempt_num}"
+                        force_email = True
+                        log.info(
+                            f"  📧 EMAIL-FALLBACK {fee_id[:12]}: {name[:20]} — "
+                            f"SMS maxed ({attempt_num} attempts), switching to email"
+                        )
+                    else:
+                        log.info(f"  SKIP {fee_id[:12]}: {name[:20]} — max follow-ups reached ({attempt_num}), no email configured")
+                        skipped_already_contacted += 1
+                        continue
 
                 expected_days = FOLLOW_UP_DAYS[attempt_num - 1]
                 if not force_now and days_since < expected_days:
@@ -450,8 +516,8 @@ async def run_collection(
         message = ""
 
         if not dry_run:
-            # Try SMS first (faster attention)
-            if sms_enabled and phone:
+            # Try SMS first (faster attention) — skip if email fallback
+            if sms_enabled and phone and not force_email:
                 result = await _send_sms_vonage(
                     phone, body, vonage_number
                 )
@@ -459,6 +525,31 @@ async def run_collection(
                     success = True
                     channel_used = "sms"
                     message = result.get("message_id", "")
+                    # Write to sms_log for delivery tracking
+                    try:
+                        sb.table("sms_log").insert({
+                            "phone": phone,
+                            "direction": "outbound",
+                            "body": body,
+                            "step": None,
+                            "message_uuid": message,
+                            "delivered": None,
+                        }).execute()
+                        # Poll Vonage API for real delivery status (self-sufficient)
+                        await asyncio.sleep(1.5)
+                        status_result = await _check_vonage_status(message)
+                        if status_result.get("ok"):
+                            sb.table("sms_log").update({
+                                "delivered": status_result["delivered"],
+                            }).eq("message_uuid", message).execute()
+                            log.info(
+                                f"    Delivery: {status_result['status']} "
+                                f"(delivered={status_result['delivered']})"
+                            )
+                        else:
+                            log.debug(f"    Delivery check skipped: {status_result.get('error')}")
+                    except Exception as e:
+                        log.debug(f"    sms_log/delivery update failed: {e}")
                 else:
                     log.warning(f"    SMS failed ({result.get('error','?')}), falling back to email")
 

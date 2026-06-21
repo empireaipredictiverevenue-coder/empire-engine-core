@@ -46,6 +46,7 @@ from empire_ppl import ppl_page
 from empire_meetily_page import meetily_page
 from empire_scraper_page import scraper_page
 from empire_mrr_page import mrr_page
+from empire_cold_inbound_dashboard import cold_inbound_dashboard, cold_inbound_assessment_progress
 from empire_live import LiveBroadcaster, register_live_routes
 from empire_command_deck import command_deck_page
 from empire_command_spa import command_spa_page
@@ -704,12 +705,28 @@ brain_decider = BrainDecider(router=ai_router)
 brain_personality = BrainPersonality(get_db=get_db)
 brain_decider.personality = brain_personality
 
+# ── ask_llm adapter: AIRouter → (system, user) -> str for Skills Framework ──
+# Wires the production Ollama callable into marketing skills so they can
+# execute their SKILL.md prompt templates against a real LLM.
+# Uses low temperature (0.3) for deterministic framework execution and
+# high max_tokens (4096) for comprehensive multi-section outputs.
+# The task='skills.marketing' tag ensures proper observability routing.
+async def _ask_llm(system: str, user: str) -> str:
+    return await ai_router.generate(
+        prompt=user,
+        system=system,
+        task="skills.marketing",
+        temperature=0.3,
+        max_tokens=4096,
+    )
+
 # Skills Framework — brain vault + skill registry + harness manager
 skills_framework.init(
     brain_decider=brain_decider,
     brain_memory=brain_memory,
     brain_learning=brain_learning,
     brain_personality=brain_personality,
+    ask_llm=_ask_llm,
 )
 
 # Agentic features layer
@@ -1128,6 +1145,25 @@ register_fee_routes(app, require_auth=require_auth, get_db=get_db)
 register_operator_mark_settled(app, require_auth=require_auth, get_db=get_db)
 register_claims_routes(app, require_auth=require_auth, get_db=get_db)
 register_claim_webhook(app, get_db=get_db, broadcaster=live_broadcaster)
+
+
+# ── Cold Inbound Dashboard ──
+@app.get("/cold-inbound", response_class=HTMLResponse)
+async def cold_inbound_route():
+    """Operator dashboard for cold inbound dispatches with assessment progress."""
+    return HTMLResponse(await cold_inbound_dashboard(get_db))
+
+
+# ── Cold Inbound Assessment Progress API ──
+@app.get("/api/v1/cold-inbound/assessment-progress")
+async def cold_inbound_assessment_progress_route():
+    """Return structured JSON of assessment progress for all cold inbound leads.
+
+    Includes summary stats (total, pending, in_progress, completed, calls_made),
+    per-lead breakdown with call history and worksheet fields, and
+    metro-grouped aggregation.
+    """
+    return JSONResponse(await cold_inbound_assessment_progress(get_db))
 
 
 # ── SMS Reply Monitor — pipeline visibility into the reply→dispatch loop ──
@@ -1912,6 +1948,105 @@ async def vonage_status_legacy(request: Request):
         status_code=resp.status_code,
         media_type=resp.headers.get("content-type", "application/json"),
     )
+
+# Vonage SMS delivery receipt webhook — called by Vonage Messages API
+# when an outbound SMS delivery status changes. Updates sms_log.delivered
+# so the operator dashboard shows real delivery confirmation instead of
+# optimistic "sent" status.
+#
+# Vonage payload (JSON):
+#   { message_uuid, status, timestamp, to: {number}, from: {number}, error?: {code, reason} }
+#
+# Status values: delivered, undelivered, expired, rejected, unknown
+@app.post("/api/v1/vonage/sms-status")
+async def vonage_sms_status(request: Request):
+    """Vonage SMS delivery receipt webhook.
+
+    Updates sms_log.delivered based on the delivery status reported
+    by the Vonage Messages API. Matches on message_uuid.
+
+    Returns 200 OK to Vonage regardless of internal update success
+    (Vonage will retry on non-200, but we don't want them retrying
+    for missing sms_log rows — that's expected for SMS sent by the
+    lead dispatch engine which doesn't use message_uuid).
+    """
+    # Parse payload — Vonage can send JSON or form-encoded
+    payload: dict = {}
+    try:
+        content_type = (request.headers.get("content-type") or "").lower()
+        if "json" in content_type:
+            payload = await request.json()
+        else:
+            form = await request.form()
+            payload = dict(form)
+    except Exception:
+        # Best-effort: try raw body as JSON fallback
+        try:
+            body_bytes = await request.body()
+            payload = json.loads(body_bytes)
+        except Exception:
+            return Response(content='{"ok":true}', status_code=200, media_type="application/json")
+
+    message_uuid = (
+        payload.get("message_uuid") or payload.get("messageUuid") or ""
+    ).strip()
+    status = (payload.get("status") or "").strip().lower()
+
+    if not message_uuid:
+        return Response(content='{"ok":true}', status_code=200, media_type="application/json")
+
+    # Map Vonage status to delivered boolean
+    delivered = True if status == "delivered" else False
+
+    # Update sms_log
+    # Extract to/from phone from payload (Vonage provides it directly)
+    to_obj = payload.get("to", {}) or {}
+    phone = (to_obj.get("number") or "").strip()
+    try:
+        db = get_db()
+        db.table("sms_log").update({
+            "delivered": delivered,
+        }).eq("message_uuid", message_uuid).execute()
+        log.info(
+            f"[vonage-sms-status] message_uuid={message_uuid[:20]} "
+            f"status={status} delivered={delivered}"
+        )
+    except Exception as e:
+        log.warning(f"[vonage-sms-status] sms_log update failed: {e}")
+
+    # ── SI Strategy feed: record delivery outcome for strategy evolution ──
+    if phone:
+        try:
+            digits = "".join(c for c in phone if c.isdigit())
+            area = digits[:3] if len(digits) >= 3 else "unknown"
+            si_strategy.record_outcome(
+                strategy_name="SMS_DIRECT",
+                niche=f"sms_delivery_{area}",
+                success=delivered,
+                revenue=0.0,
+            )
+        except Exception:
+            pass
+
+    # ── AGI feed: emit event for revenue calibration ──
+    try:
+        await event_bus.emit(
+            "sms.delivery.status",
+            data={
+                "phone": phone,
+                "message_uuid": message_uuid,
+                "delivered": delivered,
+                "status": status,
+                "source": "vonage_webhook",
+            },
+            source="hub.vonage_sms_status",
+            severity="info" if delivered else "warn",
+        )
+    except Exception:
+        pass
+
+    # Always return 200 OK — Vonage retries non-200 responses
+    return Response(content='{"ok":true}', status_code=200, media_type="application/json")
 
 register_solana_webhook_routes(
     app,

@@ -93,6 +93,13 @@ AGENT_REGISTRY: List[Dict] = [
         "default_interval": 86400,     # 24 hours
         "description": "Daily billing digest → Telegram",
     },
+    {
+        "module": "agents_daily_revenue",
+        "function": "run_loop",
+        "agent_name": "revenue_daily_digest",
+        "default_interval": 86400,     # 24 hours
+        "description": "Daily revenue report (fees, claims, ledger) → Telegram",
+    },
     # ── Lead pipeline ──
     {
         "module": "agents.prospector",
@@ -223,6 +230,14 @@ AGENT_REGISTRY: List[Dict] = [
         "agent_name": "mass_tort_scout",
         "default_interval": 86400,     # 24 hours
         "description": "FDA recall monitoring for mass tort opportunities",
+    },
+    # ── Vonage Engineer — SMS delivery monitor + SI/AGI feed ──
+    {
+        "module": "bots.vonage_engineer_agent",
+        "function": "run_loop",
+        "agent_name": "vonage_engineer",
+        "default_interval": 300,       # 5 min
+        "description": "SMS delivery monitor: polls Vonage, updates sms_log, feeds SI + AGI",
     },
 ]
 
