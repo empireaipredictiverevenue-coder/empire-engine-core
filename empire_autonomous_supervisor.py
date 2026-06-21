@@ -78,17 +78,25 @@ async def _register_self():
         log.debug(f"[supervisor] registry heartbeat failed: {e}")
 
 
-# Services we expect to be running under PM2
+# Services we expect to be running under PM2 (synced to actual fleet 2026-06-21)
 _EXPECTED_SERVICES = [
     "empire-hub",
-    "empire-mesh",
-    "hermes-dashboard",
-    "synthetic-brain",
-    "agent-orchestrator",
+    "agent-runner",
+    "vonage-engineer",
+    "vault-monitor",
+    "daily-revenue",
+    "email-pulse-monitor",
+    "seo-agent",
+    "space-reasoner",
+    "stop-loss-bot",
+    "trading-bot",
+    "trading-stoploss",
+    "traffic-specialist",
+    "affiliate-recruiter",
 ]
 
-# Services that are allowed to be offline (non-critical)
-_OPTIONAL_SERVICES = {"hook-analytics", "autonomous-supervisor"}
+# Services that are allowed to be offline (non-critical — won't auto-restart)
+_OPTIONAL_SERVICES = {"autonomous-supervisor"}
 
 
 # ── PM2 Helpers ──────────────────────────────────────────────────────
