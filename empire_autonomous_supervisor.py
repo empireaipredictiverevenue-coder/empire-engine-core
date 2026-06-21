@@ -4,7 +4,8 @@ EMPIRE V49 · AUTONOMOUS SUPERVISOR
 ===================================
 The central self-healing loop that makes the entire agent fleet run
 autonomously. Monitors PM2 services, runs loop agent evolution cycles,
-restarts failed processes, and reports fleet health.
+restarts failed processes, scans agents for security vulnerabilities
+via SkillSpector, and reports fleet health.
 
 Runs under PM2 as 'autonomous-supervisor'.
 """
@@ -32,6 +33,7 @@ log = logging.getLogger("empire.supervisor")
 # ── Configuration ────────────────────────────────────────────────────
 _HEALTH_CHECK_INTERVAL = 60  # seconds between health checks
 _EVOLUTION_INTERVAL = 300     # seconds between loop agent evolution cycles
+_SKILLSPECTOR_INTERVAL = 21600  # seconds between agent security scans (6 hours)
 _HUB_URL = os.environ.get("HUB_URL", "http://127.0.0.1:8001")
 _PM2_BIN = "pm2"
 
@@ -63,10 +65,11 @@ async def _register_self():
             "capabilities": [
                 "monitor_fleet_health", "auto_restart_services",
                 "trigger_evolution", "orchestrate_agents",
+                "scan_agent_security",
             ],
             "task_types": [
                 "supervisor.health_check", "supervisor.evolution",
-                "supervisor.restart",
+                "supervisor.restart", "supervisor.skillspector_scan",
             ],
         }, on_conflict="agent_name").execute()
         log.debug("[supervisor] registered heartbeat in agent_registry")
@@ -220,6 +223,148 @@ async def run_learning_cycle() -> dict:
         return {"ok": False, "error": str(e)[:100]}
 
 
+# ── SkillSpector Security Scan Integration ────────────────────────────
+
+async def _scan_agent_security() -> dict:
+    """Run SkillSpector static analysis on all agent Python files.
+
+    Scans bots/ and agents/ directories for 347 vulnerability patterns
+    across 10 categories (prompt injection, data exfiltration,
+    privilege escalation, etc.).
+
+    Logs findings to agent_activity and fires Telegram alerts on
+    CRITICAL or HIGH severity findings.
+    """
+    from pathlib import Path
+
+    try:
+        from bots.skillspector_bridge import (
+            scan_all_agents, summarize_findings, _clear_pattern_cache,
+        )
+    except ImportError as e:
+        log.warning(f"[supervisor] skillspector_bridge import failed: {e}")
+        return {"ok": False, "error": f"import error: {e}"}
+
+    # Clear cache so pattern updates are picked up
+    _clear_pattern_cache()
+
+    repo = Path(__file__).resolve().parent
+    agent_dirs = [
+        str(repo / "bots"),
+        str(repo / "agents"),
+    ]
+
+    log.info("[supervisor] running SkillSpector agent security scan...")
+    try:
+        findings = scan_all_agents(agent_dirs)
+    except Exception as e:
+        log.error(f"[supervisor] SkillSpector scan_all_agents failed: {e}")
+        return {"ok": False, "error": f"scan failed: {e}"}
+    summary = summarize_findings(findings)
+
+    log.info(
+        f"[supervisor] SkillSpector scan complete: "
+        f"{summary['files_scanned']} files, "
+        f"{summary['total_findings']} findings "
+        f"(C:{summary['by_severity'].get('CRITICAL',0)} "
+        f"H:{summary['by_severity'].get('HIGH',0)} "
+        f"M:{summary['by_severity'].get('MEDIUM',0)} "
+        f"L:{summary['by_severity'].get('LOW',0)})"
+    )
+
+    # ── Log to agent_activity ───────────────────────────────────────
+    sb = _get_sb()
+    if sb:
+        try:
+            import uuid
+            sb.table("agent_activity").insert({
+                "agent_name": "skillspector_bridge",
+                "run_id": str(uuid.uuid4()),
+                "started_at": datetime.now(timezone.utc).isoformat(),
+                "finished_at": datetime.now(timezone.utc).isoformat(),
+                "status": "CRITICAL" if summary["critical_findings"] else (
+                    "WARNING" if summary["total_findings"] > 0 else "ok"
+                ),
+                "rows_seen": summary["files_scanned"],
+                "rows_processed": summary["files_scanned"],
+                "rows_errored": 0,
+                "summary": (
+                    f"SkillSpector scan: {summary['files_scanned']} files, "
+                    f"{summary['total_findings']} findings "
+                    f"(C:{summary['by_severity'].get('CRITICAL',0)} "
+                    f"H:{summary['by_severity'].get('HIGH',0)})"
+                ),
+                "meta": {
+                    "scan_type": "skillspector_static_analysis",
+                    "files_scanned": summary["files_scanned"],
+                    "total_findings": summary["total_findings"],
+                    "by_severity": summary["by_severity"],
+                    "by_category": summary["by_category"],
+                    "critical_findings": summary["critical_findings"][:20],
+                    "verdict": summary["verdict"],
+                },
+            }).execute()
+            log.debug("[supervisor] SkillSpector results logged to agent_activity")
+        except Exception as e:
+            log.warning(f"[supervisor] agent_activity log failed: {e}")
+
+    # ── Telegram alert on CRITICAL or HIGH findings ──────────────────
+    crit_count = len(summary["critical_findings"])
+    high_count = summary["by_severity"].get("HIGH", 0)
+    if crit_count > 0 or high_count > 0:
+        await _send_skillspector_alert(summary)
+
+    return {"ok": True, "summary": summary}
+
+
+async def _send_skillspector_alert(summary: dict) -> None:
+    """Send a Telegram alert about SkillSpector findings."""
+    try:
+        tg_token = os.environ.get("TELEGRAM_BOT_TOKEN", "")
+        tg_chat = os.environ.get("TELEGRAM_HOME_CHANNEL", "808657420")
+        if not tg_token:
+            return
+
+        critical = summary["critical_findings"]
+        high_count = summary["by_severity"].get("HIGH", 0)
+
+        lines = [
+            "\ud83d\udd10 *SkillSpector Security Scan*",
+            f"  Files scanned: {summary['files_scanned']}",
+            f"  Total findings: {summary['total_findings']}",
+            f"  Critical: {len(critical)}  High: {high_count}",
+            "",
+        ]
+
+        if critical:
+            lines.append("*Critical findings:*")
+            for cf in critical[:5]:
+                fname = cf["file"].rsplit("/", 1)[-1] if "/" in cf["file"] else cf["file"]
+                lines.append(f"  \u2022 {fname}:{cf['line']} \u2014 {cf['message'][:100]}")
+            if len(critical) > 5:
+                lines.append(f"  \u2026 and {len(critical) - 5} more")
+
+        alert = "\n".join(lines)
+
+        import urllib.request as _ur
+        payload_json = json.dumps({
+            "chat_id": tg_chat,
+            "text": alert,
+            "parse_mode": "Markdown",
+            "disable_web_page_preview": True,
+        }).encode()
+        req = _ur.Request(
+            f"https://api.telegram.org/bot{tg_token}/sendMessage",
+            data=payload_json,
+            method="POST",
+            headers={"Content-Type": "application/json"},
+        )
+        _ur.urlopen(req, timeout=10)
+        log.info("[supervisor] SkillSpector alert sent to Telegram")
+    except Exception as e:
+        log.warning(f"[supervisor] SkillSpector Telegram alert failed: {e}")
+
+
 # ── Main Autonomous Loop ────────────────────────────────────────────
 
 async def autonomous_loop():
@@ -231,8 +376,9 @@ async def autonomous_loop():
     # Register self in agent registry
     await _register_self()
 
-    # Track time since last evolution
+    # Track time since last evolution and last SkillSpector scan
     last_evolution = 0
+    last_skillspector = time.time()  # delay first scan (won't fire immediately)
     cycle_count = 0
     heartbeat_every = 5  # beats every 5 cycles (5 min)
 
@@ -253,6 +399,11 @@ async def autonomous_loop():
                 await run_evolution_cycle()
                 await run_learning_cycle()
                 last_evolution = now
+
+            # Run SkillSpector security scan periodically
+            if (now - last_skillspector) >= _SKILLSPECTOR_INTERVAL:
+                await _scan_agent_security()
+                last_skillspector = now
 
             # Log cycle summary
             if cycle_count % 10 == 0:
