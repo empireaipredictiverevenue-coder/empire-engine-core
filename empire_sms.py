@@ -617,7 +617,9 @@ class SMSSequenceEngine:
             # Send
             result = await self.voice_router.send_sms(phone, body)
 
-            # Log the attempt
+            # Log the attempt — delivery confirmation comes later via
+            # the Vonage webhook or the timeout-based vonage_engineer_agent.
+            # The Vonage API returns 202 "accepted" — not "delivered".
             try:
                 db = self.get_db()
                 db.table("sms_log").insert({
@@ -626,7 +628,7 @@ class SMSSequenceEngine:
                     "body":         body,
                     "step":         step,
                     "message_uuid": result.get("message_uuid"),
-                    "delivered":    result.get("ok", False),
+                    "delivered":    None,  # webhook or engineer agent confirms
                 }).execute()
             except Exception as e:
                 log.debug(f"[sms] log insert: {e}")

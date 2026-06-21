@@ -403,7 +403,9 @@ async def run_followups(
             if success:
                 sent_count += 1
 
-                # Record in sms_log
+                # Record in sms_log — delivery confirmation comes later via
+                # the Vonage webhook or the timeout-based vonage_engineer_agent.
+                # The Vonage API returns 202 "accepted" — not "delivered".
                 try:
                     sb.table("sms_log").insert({
                         "phone": phone,
@@ -411,7 +413,7 @@ async def run_followups(
                         "body": sms_body,
                         "step": follow_up_num,
                         "message_uuid": message_id,
-                        "delivered": True,
+                        "delivered": None,  # webhook or engineer agent confirms
                     }).execute()
                 except Exception as e:
                     log.debug(f"  sms_log insert failed: {e}")
