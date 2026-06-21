@@ -11,8 +11,9 @@ Higher tiers include more products, higher usage limits, priority support, and w
 **One-time Setup:** $4,997
 
 **Includes:**
-- Predictive Camofox Scraper
-- Predictive Prospector Agent
+- Predictive Camofox Scraper (stealth browser)
+- Predictive PhoneInfoga Scraper (phone OSINT)
+- Predictive Prospector Agent (multi-channel)
 - Basic Support
 
 ---
@@ -56,6 +57,7 @@ Higher tiers include more products, higher usage limits, priority support, and w
 - HyperFrames Video Engine
 - Voicebox Avatar Engine
 - **Empire Analytics** (BI dashboards)
+- **Elite Scraper V2** (multi-channel scraping)
 
 ---
 

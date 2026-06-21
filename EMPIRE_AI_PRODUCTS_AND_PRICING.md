@@ -7,9 +7,11 @@
 - **Predictive Revenue Engine** — Top-level coordinator of the entire fleet
 
 ### Scraping & Market Intelligence
-- **Predictive Camofox Scraper** — Main Google-free B2B scraper using camofox-browser
+- **Predictive Camofox Scraper** — Google-free B2B stealth browser scraper (camofox-browser on :9377)
+- **Predictive PhoneInfoga Scraper** — Phone validation & OSINT — carrier, line type, geolocation, social footprints
 - **Predictive YouTube Scraper** — YouTube transcript + strategy extraction
-- **Predictive Prospector Agent** — Local lead discovery and market prospecting
+- **Predictive Prospector Agent** — Local lead discovery and market prospecting across all channels
+- **Elite Scraper V2** — Multi-channel scraping orchestrator (camofox web + PhoneInfoga phone + YouTube video channels)
 
 ### Lead & Revenue Operations
 - **Predictive Lead Converter Agent** — Converts enriched leads into qualified opportunities
