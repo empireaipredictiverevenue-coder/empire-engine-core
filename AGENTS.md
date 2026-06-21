@@ -169,6 +169,10 @@ has more entries than the AGENTS.md doc tracks (drift). Run
     2026-06-21 for scaling from 11 radar-covered metros → target 35+.
     Seeded Miami, Orlando, Jacksonville, New Orleans (20 entries).
     Charlotte, Oklahoma City, St. Louis, Nashville already had coverage.
+  - `scripts/cross_metro_expand.py` — manual run (Phase 1 contractor expansion).
+    Seeds new metros with contractors cloned from nearby metros that have
+    real storm-chaser contractors. Currently covers 24 metro areas with
+    contractors (up from 13). Added 2026-06-21. Idempotent — safe to re-run.
   - `python3 -m graphify update .` — daily 04:00 UTC,
     → `logs/graphify_update.log`. Updates the knowledge graph
     (graphify-out/graph.json) to keep codebase mapping in sync with code
