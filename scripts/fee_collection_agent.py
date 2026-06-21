@@ -177,51 +177,6 @@ async def _send_sms_vonage(
         return {"ok": False, "error": str(e)}
 
 
-async def _check_vonage_status(message_uuid: str) -> dict:
-    """Poll the Vonage Messages API for delivery status.
-
-    Returns {"ok": True, "status": "delivered"|"undelivered"|..., "delivered": bool}
-    or {"ok": False, "error": ...} on failure.
-
-    Makes the system self-sufficient — no webhook dashboard config needed.
-    Vonage typically has status available within 1-3 seconds of send.
-    """
-    app_id = os.getenv("VONAGE_APPLICATION_ID", "")
-    key_path = os.getenv("VONAGE_PRIVATE_KEY_PATH", "/root/vonage_private.key")
-
-    if not app_id or not os.path.exists(key_path) or not message_uuid:
-        return {"ok": False, "error": "Missing credentials or message_uuid"}
-
-    try:
-        with open(key_path, "r") as f:
-            private_key = f.read()
-
-        import jwt as pyjwt
-        import time as _time
-
-        now = int(_time.time())
-        jti = str(uuid.uuid4())
-        token = pyjwt.encode({
-            "iat": now, "exp": now + 180, "jti": jti,
-            "application_id": app_id,
-        }, private_key, algorithm="RS256")
-
-        async with httpx.AsyncClient(timeout=8) as client:
-            r = await client.get(
-                f"https://api.nexmo.com/v1/messages/{message_uuid}",
-                headers={"Authorization": f"Bearer {token}"},
-            )
-            if r.status_code == 200:
-                data = r.json()
-                status = (data.get("status") or "").lower()
-                delivered = status == "delivered"
-                return {"ok": True, "status": status, "delivered": delivered}
-            else:
-                return {"ok": False, "error": f"HTTP {r.status_code}"}
-    except Exception as e:
-        return {"ok": False, "error": str(e)}
-
-
 async def _send_email_resend(
     to: str,
     subject: str,
@@ -470,8 +425,9 @@ async def run_collection(
                         log.info(f"  SKIP {fee_id[:12]}: {name[:20]} — max follow-ups reached ({attempt_num}), no email configured")
                         skipped_already_contacted += 1
                         continue
+                else:
+                    expected_days = FOLLOW_UP_DAYS[attempt_num - 1]
 
-                expected_days = FOLLOW_UP_DAYS[attempt_num - 1]
                 if not force_now and days_since < expected_days:
                     log.info(
                         f"  SKIP {fee_id[:12]}: {name[:20]} — follow-up {attempt_num} "
@@ -535,19 +491,7 @@ async def run_collection(
                             "message_uuid": message,
                             "delivered": None,
                         }).execute()
-                        # Poll Vonage API for real delivery status (self-sufficient)
-                        await asyncio.sleep(1.5)
-                        status_result = await _check_vonage_status(message)
-                        if status_result.get("ok"):
-                            sb.table("sms_log").update({
-                                "delivered": status_result["delivered"],
-                            }).eq("message_uuid", message).execute()
-                            log.info(
-                                f"    Delivery: {status_result['status']} "
-                                f"(delivered={status_result['delivered']})"
-                            )
-                        else:
-                            log.debug(f"    Delivery check skipped: {status_result.get('error')}")
+                        log.debug(f"    sms_log entry created — delivery confirmed via webhook")
                     except Exception as e:
                         log.debug(f"    sms_log/delivery update failed: {e}")
                 else:
