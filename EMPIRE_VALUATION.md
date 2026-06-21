@@ -121,7 +121,7 @@ The codebase represents ~977,000 lines of Python across ~3,500 files, orchestrat
 | Dispatches | 138 sent / 7 accepted |
 | SMS messages sent | 10,481 |
 | SMS delivered | 8,867 (84.6%) |
-| Niches | 7 (Roofing Restoration, HVAC, Mass Tort Legal, Consumer CPA, Solar, Debt Relief, Legal) |
+| Niches | 9 (Roofing Restoration, HVAC, Mass Tort Legal, Consumer CPA, Solar, Debt Relief, Legal, Auto Insurance, Medical Claims) |
 | Revenue lanes | 189 (27 metros × 7 niches) |
 
 ### Revenue at a Glance

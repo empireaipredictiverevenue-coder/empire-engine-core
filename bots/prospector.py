@@ -57,6 +57,9 @@ NICHE_QUERY_SUFFIX: Dict[str, str] = {
     "debt consolidation": "companies",
     "business loan broker": "brokers",
     "mortgage broker": "brokers",
+    # auto insurance + medical claims (Phase 1)
+    "auto_insurance": "agents",
+    "medical_claims": "providers",
     # senior care
     "assisted living": "facilities",
     "home health agency": "agencies",
@@ -124,6 +127,9 @@ NICHES: List[str] = [
     "nursing school",
     "managed it",
     "staffing",
+    # ── Phase 1 — new niches ──
+    "auto_insurance",
+    "medical_claims",
 ]
 
 
