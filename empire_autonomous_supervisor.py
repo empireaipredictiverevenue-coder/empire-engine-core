@@ -35,6 +35,7 @@ _HEALTH_CHECK_INTERVAL = 60  # seconds between health checks
 _EVOLUTION_INTERVAL = 300     # seconds between loop agent evolution cycles
 _SKILLSPECTOR_INTERVAL = 21600  # seconds between agent security scans (6 hours)
 _HUB_URL = os.environ.get("HUB_URL", "http://127.0.0.1:8001")
+_HUB_TOKEN = os.environ.get("HUB_TOKEN", "dev-token-insecure")
 _PM2_BIN = "pm2"
 
 # Supabase client (lazy-init)
@@ -196,7 +197,11 @@ async def run_evolution_cycle() -> dict:
     """Trigger the loop agent's self-evolution cycle via the hub API."""
     try:
         async with httpx.AsyncClient(timeout=30) as client:
-            r = await client.post(f"{_HUB_URL}/api/loop/evolve", json={"force": False})
+            r = await client.post(
+                f"{_HUB_URL}/api/loop/evolve",
+                json={"force": False},
+                headers={"Authorization": f"Bearer {_HUB_TOKEN}"},
+            )
             if r.status_code == 200:
                 data = r.json()
                 events = data.get("events", [])
@@ -212,7 +217,10 @@ async def run_learning_cycle() -> dict:
     """Check loop agent learning status."""
     try:
         async with httpx.AsyncClient(timeout=15) as client:
-            r = await client.get(f"{_HUB_URL}/api/loop/learning-status")
+            r = await client.get(
+                f"{_HUB_URL}/api/loop/learning-status",
+                headers={"Authorization": f"Bearer {_HUB_TOKEN}"},
+            )
             if r.status_code == 200:
                 data = r.json()
                 log.info(f"[supervisor] learning: {data.get('total_runs_tracked', 0)} runs tracked")
