@@ -277,14 +277,30 @@ durable, queryable, multi-agent queue.
   - Anything in `/root/_to_delete_20260525-0808/` — the previous Empire-AI
     stack, scheduled for deletion 2026-05-25. Read-only if at all.
 
+## Self-Hosted SaaS Products (White-Labeled Open Source)
+Deployed 2026-06-21. Each product has a docker-compose.yml in `deploy/<name>/`.
+Start with `docker compose up -d` from the product directory.
+
+| Product | Source | Port | Status | Revenue Impact |
+|---------|--------|------|--------|---------------|
+| **Empire Sign** | DocuSeal | 8090 | ✅ Live | Signed contracts → collectible fees ($43.6K pending) |
+| **Empire Workspace** | Affine | 8091 | ⚠️ DB migration needed | Kanban + wiki for internal/contractor use |
+| **Empire Analytics** | Superset | 8092 | ⚠️ Config needed | BI dashboards for contractor retention |
+| **Empire Studio** | Penpot | 8094 | ⚠️ Exporter crash | Landing pages + ad creatives |
+
+**Empire Sign quick start:** `cd deploy/empire-sign && docker compose up -d`
+Postgres 16 (not 18 — 18 has volume mount incompatibility).
+See `deploy/README.md` for full deployment details and known issues.
+
 ## File Layout (so you don't grep the wrong place)
 
   - `/root/empire-v49/` — current codebase (this repo, master branch).
   - `/root/.hermes/` — Hermes home. SOUL, config, state, kanban, logs.
   - `/root/empire-v49/migrations/` — SQL migrations, run via
     `/root/empire-v49/scripts/run_migrations.py`.
-  - `/root/empire-v49/deploy/` — SQL bundled with the deploy, NOT
-    run automatically.
+  - `/root/empire-v49/deploy/` — Docker Compose deployments for
+    self-hosted SaaS products (Empire Sign, Workspace, Analytics, Studio).
+    Also contains SQL deploy bundles (NOT run automatically).
   - `/root/empire-v49/.env` — does not exist. Env lives at `/root/.env`
     and is sourced by run_migrations.py and most scripts.
   - `/root/_to_delete_20260525-0808/` — dead previous stack, do not

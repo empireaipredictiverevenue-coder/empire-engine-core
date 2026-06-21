@@ -1,0 +1,84 @@
+# Empire Studio — White-labeled Penpot for design, landing pages & marketing assets
+# Deployed: 2026-06-21 | Ports: 8093 (backend), 8094 (frontend) | Stack: Clojure + React + PostgreSQL + Redis
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15
+    environment:
+      - POSTGRES_USER=penpot
+      - POSTGRES_PASSWORD=penpot
+      - POSTGRES_DB=penpot
+    volumes:
+      - ./pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U penpot"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - empire-studio
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    networks:
+      - empire-studio
+
+  penpot-backend:
+    image: penpotapp/backend:latest
+    environment:
+      - PENPOT_FLAGS=enable-registration enable-smtp disable-email-verification
+      - PENPOT_PUBLIC_URI=https://empire-ai.co.uk
+      - PENPOT_SECRET_KEY=${EMPIRE_STUDIO_SECRET:-empire-studio-secret-change-me}
+      - PENPOT_DATABASE_URI=postgresql://penpot:penpot@postgres:5432/penpot
+      - PENPOT_DATABASE_USERNAME=penpot
+      - PENPOT_DATABASE_PASSWORD=penpot
+      - PENPOT_REDIS_URI=redis://redis:6379/0
+      - PENPOT_ASSETS_STORAGE_BACKEND=assets-fs
+      - PENPOT_STORAGE_ASSETS_FS_DIRECTORY=/opt/data/assets
+      - PENPOT_TELEMETRY_ENABLED=false
+      - PENPOT_APP_NAME=Empire Studio
+    volumes:
+      - ./assets:/opt/data/assets
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    restart: unless-stopped
+    networks:
+      - empire-studio
+
+  penpot-exporter:
+    image: penpotapp/exporter:latest
+    environment:
+      - PENPOT_PUBLIC_URI=https://empire-ai.co.uk
+      - PENPOT_REDIS_URI=redis://redis:6379/0
+      - PENPOT_DATABASE_URI=postgresql://penpot:penpot@postgres:5432/penpot
+    depends_on:
+      - penpot-backend
+    restart: unless-stopped
+    networks:
+      - empire-studio
+
+  penpot-frontend:
+    image: penpotapp/frontend:latest
+    ports:
+      - "8094:80"
+    environment:
+      - PENPOT_BACKEND_URI=http://penpot-backend:6060
+      - PENPOT_EXPORTER_URI=http://penpot-exporter:6061
+      - PENPOT_FLAGS=enable-registration
+      - PENPOT_APP_NAME=Empire Studio
+    depends_on:
+      - penpot-backend
+      - penpot-exporter
+    restart: unless-stopped
+    networks:
+      - empire-studio
+
+networks:
+  empire-studio:
+    driver: bridge

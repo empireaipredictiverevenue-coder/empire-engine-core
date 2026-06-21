@@ -1,0 +1,60 @@
+# Empire Analytics — White-labeled Apache Superset for contractor dashboards & BI
+# Deployed: 2026-06-21 | Port: 8092 | Stack: Python/Flask + React + PostgreSQL + Redis
+version: '3.8'
+
+services:
+  superset:
+    image: apache/superset:latest
+    ports:
+      - "8092:8088"
+    environment:
+      - SUPERSET_SECRET_KEY=${EMPIRE_ANALYTICS_SECRET:-empire-analytics-secret-change-me}
+      - SUPERSET_APP_NAME=Empire Analytics
+      - SUPERSET_LOAD_EXAMPLES=no
+      - SUPERSET__SQLALCHEMY_DATABASE_URI=postgresql://superset:superset@postgres:5432/superset
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    volumes:
+      - ./superset_data:/app/superset_home
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    restart: unless-stopped
+    networks:
+      - empire-analytics
+    command: >
+      /bin/sh -c "
+      superset db upgrade &&
+      superset fab create-admin --username admin --password admin --firstname Empire --lastname Admin --email admin@empire-ai.co.uk 2>/dev/null || true &&
+      superset init &&
+      superset run -p 8088 --with-threads
+      "
+
+  postgres:
+    image: postgres:15
+    environment:
+      - POSTGRES_USER=superset
+      - POSTGRES_PASSWORD=superset
+      - POSTGRES_DB=superset
+    volumes:
+      - ./pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U superset"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - empire-analytics
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    networks:
+      - empire-analytics
+
+networks:
+  empire-analytics:
+    driver: bridge

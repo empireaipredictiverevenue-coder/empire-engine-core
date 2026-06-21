@@ -74,3 +74,7 @@ data/
 # Graphify knowledge graph — generated, 22MB, regenerated on extract
 # Do not commit — run `python3 -m graphify extract` to rebuild
 graphify-out/
+deploy/*/pg_data/
+deploy/*/data/
+deploy/*/superset_data/
+deploy/*/assets/
