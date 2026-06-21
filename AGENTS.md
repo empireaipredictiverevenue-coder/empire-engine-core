@@ -30,7 +30,7 @@ The fleet is bigger than the two agents. Last enumerated 2026-06-13
   - **hook_analytics** — `uvicorn hook_analytics:app :8046`
     (PID 3106758, 2 workers). Analytics event router.
 
-### PM2 services (10, all online; restart with `pm2 restart <name>`)
+### PM2 services (14, all online; restart with `pm2 restart <name>`)
   - **empire-mesh** (PID 3451686) — `main.py`. The fleet orchestrator script
     (signal handler, lib import, env bootstrap). Logs to `/var/log/empire.log`.
   - **empire-hub** (PID 3663717) — `hub.py` on `:8001` via uvicorn. The main
@@ -39,6 +39,10 @@ The fleet is bigger than the two agents. Last enumerated 2026-06-13
   - **empire-chrome** (PID 3451900) — `scripts/chrome_headless.sh` + xvfb.
     Headless Chrome on `:9222` for screenshots / scraping. See
     AGENTS.md / `scripts/screenshot_dashboards.py`.
+  - **camofox-scraper** — `camofox-browser server start --port 9377 --background`.
+    Camofox stealth browser for Elite Scraper V2 (Google-free prospecting).
+    Added 2026-06-21 as replacement for Google Places API. Health: `:9377/health`.
+    Used by `bots/predictive_prospector_agent.py` and `products/elite_scraper.py`.
   - **empire-pulse-cron** (PID 3451726) — `scripts/pulse_refresh_cron.py
     --interval 300`. Backup for the hub's pulse refresh loop. Keeps
     `pulse_rollup_hourly` materialised view fresh if the hub is down.

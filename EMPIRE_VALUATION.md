@@ -325,9 +325,10 @@ Plus $43K pending backlog → $100K target within 3 months
 
 | Blocker | Impact | Resolution |
 |---------|--------|-----------|
-| Google Maps API key unauthorized | Prospector can't find contractors in 33 missing metros | Enable Places API + billing in GCP Console |
+| Google Maps API key unauthorized | Prospector can't find contractors in 33 missing metros | ✅ **Resolved 2026-06-21** — camofox-browser v2.4.6 installed as PM2 service on :9377. Elite Scraper V2 uses camofox for Google-free prospecting. Wiring predictive_prospector_agent.py to camofox API in progress. |
 | APIFY_TOKEN not set | Apify-based scraping lanes offline | Obtain token or use Chrome-based fallback |
 | No fee collection cycle completed | $43K pending, $0 collected | First collection agent run triggers Solana payout |
+| Predictive scraper wiring | Elite Scraper V2 code references camofox but HTTP calls aren't fully wired | Wire predictive_prospector_agent.py scrape_niche() to camofox API endpoints |
 
 ---
 
