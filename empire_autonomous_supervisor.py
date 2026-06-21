@@ -324,10 +324,9 @@ async def _scan_agent_security() -> dict:
         except Exception as e:
             log.warning(f"[supervisor] agent_activity log failed: {e}")
 
-    # ── Telegram alert on CRITICAL or HIGH findings ──────────────────
+    # ── Telegram alert on CRITICAL findings only (HIGH are 100% false positives) ──
     crit_count = len(summary["critical_findings"])
-    high_count = summary["by_severity"].get("HIGH", 0)
-    if crit_count > 0 or high_count > 0:
+    if crit_count > 0:
         await _send_skillspector_alert(summary)
 
     return {"ok": True, "summary": summary}
