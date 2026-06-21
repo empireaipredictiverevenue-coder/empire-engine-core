@@ -30,7 +30,7 @@ The fleet is bigger than the two agents. Last enumerated 2026-06-13
   - **hook_analytics** — `uvicorn hook_analytics:app :8046`
     (PID 3106758, 2 workers). Analytics event router.
 
-### PM2 services (14, all online; restart with `pm2 restart <name>`)
+### PM2 services (11, all online; restart with `pm2 restart <name>`)
   - **empire-mesh** (PID 3451686) — `main.py`. The fleet orchestrator script
     (signal handler, lib import, env bootstrap). Logs to `/var/log/empire.log`.
   - **empire-hub** (PID 3663717) — `hub.py` on `:8001` via uvicorn. The main
