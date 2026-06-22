@@ -10,8 +10,11 @@ Receives Resend events for:
   - email.complained    → contractor_outreach.status = 'unsubscribed'
 
 Endpoint: POST /api/v1/resend/webhook
-Signed with HMAC-SHA256(secret, f"{timestamp}.{body}"). Resend header format:
-  Resend-Signature: t=1234567890,v1=abc123def456...
+Signed with Svix webhook format (HMAC-SHA256 + base64, whsec_ prefixed secret).
+Headers:
+  svix-id, svix-timestamp, svix-signature
+Signed payload: "{svix_id}.{svix_ts}.{raw_body}"
+Secret: base64-decoded whsec_ key → HMAC-SHA256 → base64-encoded digest
 
 Resend event payload shape:
   {
@@ -30,6 +33,7 @@ We tag every outbound email with the contractor_outreach row id so we can
 update state without a separate lookup table.
 """
 import os
+import base64
 import hmac
 import hashlib
 import json
@@ -49,7 +53,14 @@ from supabase import create_client
 
 log = logging.getLogger("resend_webhook")
 
-WEBHOOK_SECRET = os.environ.get("RESEND_WEBHOOK_SECRET", "")
+# Resend generates a unique signing secret per webhook. We store the primary
+# one from the env but also know the auto-generated secrets for webhooks 2 and 3.
+# The verifier tries all known secrets so events from any webhook are accepted.
+WEBHOOK_SECRETS = [
+    os.environ.get("RESEND_WEBHOOK_SECRET", ""),
+    "whsec_f7qMcUmCy46f0J279QO7qUUM0mTtDsta",  # webhook 2 (bounce/complaint)
+    "whsec_ciyjAkwNXqPCFPnEzYwTSFLpnIDAs2qF",  # webhook 3 (inbound email)
+]
 SIGNATURE_TOLERANCE_SEC = 300  # reject events older than 5 minutes
 
 
@@ -57,26 +68,52 @@ def _sb():
     return create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_SERVICE_KEY"])
 
 
-def _verify_signature(header_val: str, raw_body: bytes) -> bool:
-    """Verify Resend-Signature header against the request body + secret."""
-    if not header_val or not WEBHOOK_SECRET:
-        return False
-    parts = dict(p.split("=", 1) for p in header_val.split(",") if "=" in p)
-    ts = parts.get("t", "")
-    sig = parts.get("v1", "")
-    if not (ts and sig):
+def _decode_secret(secret: str) -> bytes:
+    """Base64-decode the webhook signing secret (strip whsec_ prefix)."""
+    raw = secret
+    if raw.startswith("whsec_"):
+        raw = raw[6:]
+    try:
+        return base64.b64decode(raw)
+    except Exception as exc:
+        log.warning(f"webhook: failed to base64-decode signing secret, using raw bytes: {exc}")
+        return raw.encode()
+
+
+def _verify_svix_signature(
+    svix_id: str, svix_ts: str, svix_sig: str, raw_body: bytes
+) -> bool:
+    """Verify Svix-format webhook signature (Resend uses Svix).
+
+    Tries all known WEBHOOK_SECRETS so events from any of the 3 Resend
+    webhooks (each with a unique auto-generated signing secret) are accepted.
+    """
+    if not (svix_id and svix_ts and svix_sig):
         return False
     # Reject old events (replay protection)
     try:
-        age = (datetime.now(timezone.utc).timestamp() - int(ts))
+        age = (datetime.now(timezone.utc).timestamp() - int(svix_ts))
         if abs(age) > SIGNATURE_TOLERANCE_SEC:
             log.warning(f"webhook: signature too old ({int(age)}s)")
             return False
     except ValueError:
         return False
-    signed_payload = f"{ts}.".encode() + raw_body
-    expected = hmac.new(WEBHOOK_SECRET.encode(), signed_payload, hashlib.sha256).hexdigest()
-    return hmac.compare_digest(sig, expected)
+    # Build signed content: {svix_id}.{svix_ts}.{raw_body}
+    signed_content = f"{svix_id}.{svix_ts}.".encode() + raw_body
+    # Try each known secret
+    for secret in WEBHOOK_SECRETS:
+        if not secret:
+            continue
+        key = _decode_secret(secret)
+        computed = hmac.new(key, signed_content, hashlib.sha256).digest()
+        expected = base64.b64encode(computed).decode()
+        # svix-signature format: "v1,sig1 v1,sig2..." — try each version
+        for part in svix_sig.split():
+            if part.startswith("v1,"):
+                candidate = part[3:]
+                if hmac.compare_digest(expected, candidate):
+                    return True
+    return False
 
 
 def _find_outreach_id_from_event(data: dict) -> Optional[str]:
@@ -90,8 +127,13 @@ def _find_outreach_id_from_event(data: dict) -> Optional[str]:
 
 async def handle_resend_webhook(request: Request) -> JSONResponse:
     raw_body = await request.body()
-    sig_header = request.headers.get("resend-signature", "") or request.headers.get("Resend-Signature", "")
-    if not _verify_signature(sig_header, raw_body):
+
+    # Svix webhook headers (Resend uses Svix)
+    svix_id = request.headers.get("svix-id") or request.headers.get("webhook-id", "")
+    svix_ts = request.headers.get("svix-timestamp") or request.headers.get("webhook-timestamp", "")
+    svix_sig = request.headers.get("svix-signature") or request.headers.get("webhook-signature", "")
+
+    if not _verify_svix_signature(svix_id, svix_ts, svix_sig, raw_body):
         log.warning("webhook: signature verification failed")
         return JSONResponse({"detail": "invalid signature"}, status_code=401)
 
@@ -129,9 +171,6 @@ async def handle_resend_webhook(request: Request) -> JSONResponse:
         sb.table("contractor_outreach").update(update).eq("id", outreach_id).execute()
         log.info(f"webhook: {event_type} → outreach_id={outreach_id[:8]}")
     elif recipient:
-        # Fallback: try to find by recipient (to[0])
-        # We don't store recipient on the outreach row, so use contractor email
-        # via a sub-query. Simpler: log the event so we can attribute later.
         log.info(f"webhook: {event_type} → recipient={recipient} (no outreach_id tag)")
 
     return JSONResponse({"ok": True, "event": event_type})

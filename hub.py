@@ -75,6 +75,9 @@ from empire_payment_page import register_payment_routes
 from empire_mrr import register_mrr_routes
 from empire_for_contractors import render_for_contractors_page
 from empire_resend_webhook import register_resend_webhook
+import agents.business_growth_agent as growth_agent
+from empire_funnel import register_funnel_route
+
 from empire_fee_operator import register_operator_mark_settled
 from empire_claims import register_claims_routes
 from empire_claim_webhook import register_claim_webhook
@@ -274,6 +277,67 @@ def get_db() -> Client:
 # FASTAPI APP
 # ─────────────────────────────────────────────────────────────────────
 app = FastAPI(title="Empire AI · V49", version="49.0.0")
+
+
+@app.get("/api/v1/bbb/recent")
+async def bbb_recent(limit: int = 50, metro: str = None, niche: str = None):
+    from fastapi.responses import JSONResponse
+    from supabase import create_client as _sb_create
+    sb = _sb_create(os.environ["SUPABASE_URL"], os.environ["SUPABASE_SERVICE_KEY"])
+    q = sb.table("prospects").select("id,business_name,phone,website,niche,metro,created_at,buy_signal_score").like("notes", "%bbb-search%").order("created_at", desc=True).limit(limit)
+    if metro:
+        q = q.eq("metro", metro)
+    if niche:
+        q = q.eq("niche", niche)
+    return JSONResponse({"prospects": [{"name": r.get("business_name"), **r} for r in (q.execute().data or [])]})
+
+
+@app.get("/api/v1/bbb/stats")
+async def bbb_stats():
+    from fastapi.responses import JSONResponse
+    from supabase import create_client as _sb_create
+    sb = _sb_create(os.environ["SUPABASE_URL"], os.environ["SUPABASE_SERVICE_KEY"])
+    r = sb.table("prospects").select("metro,niche").like("notes", "%bbb-search%").execute().data or []
+    by_metro = {}
+    by_niche = {}
+    for row in r:
+        m = row.get("metro") or "?"
+        n = row.get("niche") or "?"
+        by_metro[m] = by_metro.get(m, 0) + 1
+        by_niche[n] = by_niche.get(n, 0) + 1
+    return JSONResponse({"total": len(r), "by_metro": dict(sorted(by_metro.items(), key=lambda x: -x[1])[:20]), "by_niche": dict(sorted(by_niche.items(), key=lambda x: -x[1])[:20])})
+
+
+@app.get("/api/v1/bbb/recent")
+async def bbb_recent(limit: int = 50, metro: str = None, niche: str = None):
+    from fastapi.responses import JSONResponse
+    from supabase import create_client as _sb_create
+    sb = _sb_create(os.environ["SUPABASE_URL"], os.environ["SUPABASE_SERVICE_KEY"])
+    q = sb.table("prospects").select("id,business_name,phone,website,niche,metro,created_at,buy_signal_score").like("notes", "%bbb-search%").order("created_at", desc=True).limit(limit)
+    if metro: q = q.eq("metro", metro)
+    if niche: q = q.eq("niche", niche)
+    return JSONResponse({"prospects": [{"name": r.get("business_name"), **r} for r in (q.execute().data or [])]})
+
+@app.get("/api/v1/bbb/stats")
+async def bbb_stats():
+    from fastapi.responses import JSONResponse
+    from supabase import create_client as _sb_create
+    sb = _sb_create(os.environ["SUPABASE_URL"], os.environ["SUPABASE_SERVICE_KEY"])
+    r = sb.table("prospects").select("metro,niche").like("notes", "%bbb-search%").execute().data or []
+    by_metro = {}; by_niche = {}
+    for row in r:
+        m = row.get("metro") or "?"
+        n = row.get("niche") or "?"
+        by_metro[m] = by_metro.get(m, 0) + 1
+        by_niche[n] = by_niche.get(n, 0) + 1
+    return JSONResponse({"total": len(r), "by_metro": dict(sorted(by_metro.items(), key=lambda x: -x[1])[:20]), "by_niche": dict(sorted(by_niche.items(), key=lambda x: -x[1])[:20])})
+
+
+
+    return {"ok": True, "msg": "test2 endpoint"}
+    return {"ok": True, "msg": "test2 endpoint"}
+
+
 app.include_router(customer_router)
 
 app.add_middleware(
@@ -360,7 +424,7 @@ _quota_manager = ResendQuotaManager(
 # ─────────────────────────────────────────────────────────────────────
 # RESEND SEND HELPER
 # ─────────────────────────────────────────────────────────────────────
-async def _send_email(to, subject, html, priority: str = "marketing"):
+async def _send_email(to, subject, html, text: Optional[str] = None, priority: str = "marketing", tags: Optional[list] = None):
     if not RESEND_API_KEY:
         return {"ok": False, "error": "RESEND_API_KEY missing"}
 
@@ -377,11 +441,18 @@ async def _send_email(to, subject, html, priority: str = "marketing"):
     from_addr = os.environ.get("FROM_ADDRESS", "noreply@empire-ai.co.uk")
     from_name = os.environ.get("FROM_NAME", "Empire AI Operations")
     try:
+        payload: dict = {"from": f"{from_name} <{from_addr}>", "to": [to], "subject": subject}
+        if html:
+            payload["html"] = html
+        if text:
+            payload["text"] = text
+        if tags:
+            payload["tags"] = tags
         async with _httpx.AsyncClient(timeout=20.0) as client:
             r = await client.post(
                 "https://api.resend.com/emails",
                 headers={"Authorization": f"Bearer {RESEND_API_KEY}", "Content-Type": "application/json"},
-                json={"from": f"{from_name} <{from_addr}>", "to": [to], "subject": subject, "html": html},
+                json=payload,
             )
             data = r.json() if r.headers.get("content-type", "").startswith("application/json") else {}
             ok = r.status_code < 300
@@ -1198,6 +1269,10 @@ try:
     register_resend_webhook(app)
 except Exception as _e:
     log.warning(f"[hub] resend webhook register failed: {_e}")
+try:
+    register_funnel_route(app)
+except Exception as _e:
+    log.warning(f"[hub] funnel route register failed: {_e}")
 
 
 @app.get("/for-contractors", include_in_schema=False)
@@ -6791,3 +6866,12 @@ async def customer_event(request: Request):
     # TODO: Validate API key, store event, trigger AGI analysis
     print(f"[Hub] Received customer event: {data.get(event_type)}")
     return {"status": "received"}
+
+
+@app.post("/api/v1/growth/run")
+async def growth_run_cycle():
+    """Manually trigger a growth-agent cycle (also runs daily via cron)."""
+    import asyncio
+    loop = asyncio.get_event_loop()
+    await loop.run_in_executor(None, growth_agent.run)
+    return JSONResponse({"ok": True, "ran": "growth_agent"})

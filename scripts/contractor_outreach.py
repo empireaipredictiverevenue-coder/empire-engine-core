@@ -215,18 +215,40 @@ def _first_name(name: str) -> str:
 
 def _is_valid_email(email: str) -> bool:
     """Reject placeholder/invalid emails that have caused 422 errors from Resend."""
+    import re
     if not email:
         return False
-    if any(c in email for c in ["\x00", "\x01", "\x02", "\x03", "\x04", "\x05", "\x06", "\x07", "\x08"]):
+    # Control characters (cause 422 Unprocessable Entity)
+    for c in email:
+        if ord(c) < 32 or ord(c) == 127:
+            return False
+    # Whitespace anywhere
+    if any(c.isspace() for c in email):
         return False
-    if any(c in email for c in email[:1] + " \t\n"):
-        return False
-    if "@empire-ai" in email or "@placeholder" in email:
-        return False
+    # Common placeholder patterns
+    bad_patterns = [
+        "@empire-ai", "@placeholder", "@example.", "noreply@", "no-reply@",
+        "test@", "spam@", "your@", "youremail", "first.last@",
+        "@yoursite", "@domain.com", "@company.com", "@gmail.",  # too generic
+    ]
+    el = email.lower()
+    for p in bad_patterns:
+        if p in el:
+            return False
+    # RFC-ish: must have exactly one @, local + domain parts, TLD
     if email.count("@") != 1:
         return False
     local, _, domain = email.partition("@")
     if not local or not domain or "." not in domain:
+        return False
+    if len(local) > 64 or len(domain) > 255:
+        return False
+    # TLD must be 2+ letters
+    tld = domain.rsplit(".", 1)[-1]
+    if not (2 <= len(tld) <= 24 and tld.isalpha()):
+        return False
+    # Local part: no leading/trailing dots, no consecutive dots
+    if local.startswith(".") or local.endswith(".") or ".." in local:
         return False
     return True
 
