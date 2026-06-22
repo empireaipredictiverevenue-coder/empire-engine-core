@@ -485,6 +485,59 @@ def scraper_page() -> str:
       .sc-features, .sc-agents { grid-template-columns: 1fr; }
       .sc-steps { grid-template-columns: 1fr; }
     }
+      .sc-channels {
+        margin: 32px 0 40px;
+        padding: 20px 24px;
+        background: rgba(0, 200, 180, 0.04);
+        border: 1px solid rgba(0, 200, 180, 0.18);
+        border-radius: 8px;
+      }
+      .sc-channels-title {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+        color: var(--signal-teal);
+        margin-bottom: 16px;
+      }
+      .sc-channel {
+        display: flex;
+        gap: 14px;
+        padding: 12px 0;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+      }
+      .sc-channel:last-child { border-bottom: none; padding-bottom: 0; }
+      .sc-channel:first-of-type { padding-top: 0; }
+      .sc-channel-badge {
+        font-size: 18px;
+        line-height: 1.2;
+        flex-shrink: 0;
+        width: 24px;
+      }
+      .sc-channel-info { flex: 1; min-width: 0; }
+      .sc-channel-name {
+        font-family: var(--font-display);
+        font-size: 15px;
+        color: var(--empire-white);
+        margin-bottom: 2px;
+      }
+      .sc-channel-desc {
+        font-size: 12px;
+        color: var(--empire-fog, rgba(255,255,255,0.55));
+        margin-bottom: 4px;
+      }
+      .sc-channel-status {
+        font-family: var(--font-mono);
+        font-size: 10px;
+        color: rgba(0, 200, 180, 0.7);
+        letter-spacing: 0.05em;
+      }
+      .sc-channel-error {
+        color: rgba(255, 100, 100, 0.7);
+        font-size: 12px;
+        padding: 8px 0;
+      }
+    }
     """
 
     features_html = ""
@@ -496,12 +549,60 @@ def scraper_page() -> str:
       <div class="sc-feature-desc">{f['desc']}</div>
     </div>"""
 
+
+    # ── Live channel status (from agent_activity) ──
+    channels_html = ""
+    try:
+        from supabase import create_client as _cc
+        import os as _os
+        _sb2 = _cc(_os.environ.get("SUPABASE_URL"), _os.environ.get("SUPABASE_SERVICE_KEY"))
+        channel_agents = ["camofox_scraper", "youtube_scraper", "phoneinfoga"]
+        _ch_rows = _sb2.table("agent_activity").select("agent_name,started_at,status,rows_processed,summary").in_("agent_name", channel_agents).order("started_at", desc=True).limit(20).execute()
+        _ch_by_name = {}
+        for r in _ch_rows.data or []:
+            if r["agent_name"] not in _ch_by_name:
+                _ch_by_name[r["agent_name"]] = r
+        _ch_info = [
+            ("camofox_scraper", "🦊 Camofox Browser (BBB)", "Stealth scraper → contractor names"),
+            ("youtube_scraper", "🎬 YouTube Transcripts", "Search → watch?v= links"),
+            ("phoneinfoga",     "📞 PhoneInfoga Validation", "Phone OSINT → contractor records"),
+        ]
+        for _an, _label, _desc in _ch_info:
+            _row = _ch_by_name.get(_an)
+            if _row:
+                _ts = (_row.get("started_at") or "")[:19]
+                _st = _row.get("status") or "pending"
+                _rp = _row.get("rows_processed") or 0
+                _badge = "🟢" if _st == "ok" else "🟡" if _st == "skipped_disabled" else "🔴"
+                _status = f"last run {_ts} UTC · {_rp} rows"
+            else:
+                _badge = "⚪"
+                _status = "awaiting first cycle"
+            channels_html += f'''
+    <div class="sc-channel">
+      <div class="sc-channel-badge">{_badge}</div>
+      <div class="sc-channel-info">
+        <div class="sc-channel-name">{_label}</div>
+        <div class="sc-channel-desc">{_desc}</div>
+        <div class="sc-channel-status">{_status}</div>
+      </div>
+    </div>'''
+    except Exception as _e:
+        channels_html = f'<div class="sc-channel-error">Channel status unavailable: {str(_e)[:120]}</div>'
+
     agents_html = ""
     agents_data = [
         {"icon": "🦊", "name": "Camofox Scraper", "file": "bots/predictive_camofox_scraper.py", "desc": "Stealth B2B lead scraper using camofox-browser. 6 niches, 4 metros, search macros, proxy rotation."},
         {"icon": "🎬", "name": "YouTube Scraper", "file": "bots/predictive_youtube_scraper.py", "desc": "Video transcript scraper. Extracts content intelligence and feeds Synthetic Brain for niche analysis."},
         {"icon": "🔍", "name": "Prospector Agent", "file": "bots/predictive_prospector_agent.py", "desc": "Autonomous lead discovery across 36+ lanes. AGI self-improving scrape strategy."},
     ]
+    # Live channel status section (rendered above the agent cards)
+    channels_section = f"""
+    <div class="sc-channels">
+      <div class="sc-channels-title">Live Channel Status</div>
+      {channels_html}
+    </div>"""
+
     for a in agents_data:
         agents_html += f"""
     <div class="sc-agent">
@@ -510,6 +611,7 @@ def scraper_page() -> str:
       <div class="sc-agent-file">{a['file']}</div>
       <div class="sc-agent-desc">{a['desc']}</div>
     </div>"""
+    agents_html = channels_section + agents_html
 
     steps_html = ""
     for i, s in enumerate(SCRAPER_HOW_IT_WORKS):
