@@ -790,7 +790,7 @@ def mrr_page() -> str:
         slides_html += f"""
         <div class="mr-slide" data-slide="{si}"{active_cls}>
           <div class="mr-slide-eyebrow">Empire AI Suite</div>
-          <h1 class="mr-slide-title">{slide['title']}</h1>
+          <h2 class="mr-slide-title">{slide['title']}</h2>
           <p class="mr-slide-sub">{slide['sub']}</p>
         </div>"""
 
@@ -879,12 +879,13 @@ def mrr_page() -> str:
         for ti in range(len(testimonials))
     )
 
-    head = empire_head(title="Empire AI Suite · Products & Pricing · MRR", extra=extra_css)
+    head = empire_head(title="Empire AI Suite · Products & Pricing · MRR", extra=extra_css, page="mrr")
 
     return f"""<!DOCTYPE html>
 <html lang="en">
 {head}
 <body>
+<h1 class="sr-only">Empire AI Suite · Products &amp; Pricing</h1>
 
 <div class="mr-wrap">
 

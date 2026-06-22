@@ -11,6 +11,7 @@ import math
 from typing import Dict, List, Optional, Tuple
 
 from empire_tokens import empire_head
+from empire_structured_data import products_jsonld, faq_jsonld
 
 
 # ═════════════════════════════════════════════════════════════════════════
@@ -1476,11 +1477,6 @@ def pricing_page(products: list = None) -> str:
     }
     """
 
-    head = empire_head(
-        title="Empire AI · Pricing & Products",
-        extra=pricing_css,
-    )
-
     # ── HERO SLIDES DATA ────────────────────────────────────────────────
     hero_slides = [
         {
@@ -1560,6 +1556,8 @@ def pricing_page(products: list = None) -> str:
     head = empire_head(
         title="Empire AI · Pricing & Products",
         extra=pricing_css,
+        page="pricing",
+        meta_html=products_jsonld() + faq_jsonld(),
     )
 
     return f"""<!DOCTYPE html>

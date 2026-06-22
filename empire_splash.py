@@ -21,6 +21,7 @@ Wire-up in hub.py:
 """
 
 from empire_tokens import empire_head
+from empire_structured_data import organization_jsonld, webpage_jsonld
 
 
 def splash_page(redirect_to: str = "/command") -> str:
@@ -323,8 +324,17 @@ def splash_page(redirect_to: str = "/command") -> str:
     """
 
     head = empire_head(
-        title="Empire AI · Gateway",
+        title="Empire AI · Storm Revenue Engine",
         extra=splash_css,
+        page="splash",
+        meta_html=(
+            organization_jsonld()
+            + webpage_jsonld(
+                "Empire AI · Storm Revenue Engine",
+                "AI-powered lead generation and contractor dispatch. Storm damage detection, SMS outreach, lead qualification, and settlement tracking.",
+                "https://empire-ai.co.uk/",
+            )
+        ),
     )
 
     return f"""<!DOCTYPE html>
@@ -391,11 +401,11 @@ def splash_page(redirect_to: str = "/command") -> str:
     </svg>
   </div>
 
-  <div class="splash-wordmark">
+  <h1 class="splash-wordmark">
     <span class="splash-empire">EMPIRE</span>
     <span class="splash-ai">AI</span>
-  </div>
-  <div class="splash-tag">Predictive Revenue</div>
+  </h1>
+  <div class="splash-tag">Storm Damage Leads · 3% on Settled Claims Only</div>
 
 
   <button class="splash-prompt" type="button" id="splash-engage" aria-label="Enter the empire">
@@ -416,6 +426,8 @@ def splash_page(redirect_to: str = "/command") -> str:
   <a href="https://empire-ai.co.uk">Autonomous Engine</a>
   <span class="splash-foot-sep">·</span>
   <a href="/carrier/enroll">Carrier Webhook</a>
+  <span class="splash-foot-sep">·</span>
+  <a href="/contractor-signup">For Contractors</a>
 </div>
 
 <!-- Native Ad Container — loaded via /api/v1/ads/serve -->

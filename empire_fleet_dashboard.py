@@ -26,12 +26,25 @@ def fleet_dashboard_page() -> str:
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
 <title>Empire AI · Fleet Dashboard</title>
+<meta name="description" content="Empire AI autonomous agent fleet dashboard. Monitor 20+ AI agents running lead generation, contractor outreach, SMS dispatch, and revenue operations.">
+<meta name="keywords" content="AI agents, autonomous agents, agent fleet, AI dashboard, agent monitoring">
+<meta name="robots" content="index, follow">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Empire AI · Fleet Dashboard">
+<meta property="og:description" content="Empire AI autonomous agent fleet dashboard. Monitor 20+ AI agents running lead generation, contractor outreach, and revenue operations.">
+<meta property="og:url" content="https://empire-ai.co.uk/fleet">
+<meta property="og:site_name" content="Empire AI">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Empire AI · Fleet Dashboard">
+<meta name="twitter:description" content="Empire AI autonomous agent fleet — 20+ AI agents monitored in real-time.">
+<link rel="canonical" href="https://empire-ai.co.uk/fleet">
 {EMPIRE_FONTS}
 <style>{EMPIRE_TOKENS_CSS}</style>
 <style>{EMPIRE_BASE_CSS}</style>
 <style>{_FLEET_CSS}</style>
 </head>
 <body>
+<h1 class="sr-only">Empire AI · Agent Fleet Dashboard</h1>
 <div id="root"></div>
 <script type="importmap">
 {{

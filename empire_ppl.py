@@ -504,7 +504,7 @@ def ppl_page() -> str:
       <div class="ppl-step-desc">{s['desc']}</div>
     </div>"""
 
-    head = empire_head(title="Empire AI · Pay-Per-Lead Marketplace", extra=ppl_css)
+    head = empire_head(title="Empire AI · Pay-Per-Lead Marketplace", extra=ppl_css, page="ppl")
 
     return f"""<!DOCTYPE html>
 <html lang="en">

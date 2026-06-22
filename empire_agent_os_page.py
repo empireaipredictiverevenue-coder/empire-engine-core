@@ -15,6 +15,18 @@ _AGENT_OS_PAGE_HTML = '''<!DOCTYPE html>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Agent OS · Empire AI</title>
+<meta name="description" content="Empire AI Agent OS kernel. Real-time agent orchestration with inter-process communication, capability registry, and autonomous decision-making engine.">
+<meta name="keywords" content="agent OS, AI operating system, agent orchestration, autonomous AI, agent kernel">
+<meta name="robots" content="index, follow">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Agent OS · Empire AI">
+<meta property="og:description" content="Empire AI Agent OS kernel. Real-time agent orchestration with inter-process communication and autonomous decision-making.">
+<meta property="og:url" content="https://empire-ai.co.uk/agent-os">
+<meta property="og:site_name" content="Empire AI">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Agent OS · Empire AI">
+<meta name="twitter:description" content="Empire AI Agent OS — real-time autonomous agent orchestration and monitoring.">
+<link rel="canonical" href="https://empire-ai.co.uk/agent-os">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Geist:wght@200;400;500;600;700&family=Geist+Mono:wght@300;400;500;600;700&family=Inter:wght@200;400;500;600&display=swap" rel="stylesheet">
@@ -321,7 +333,7 @@ window.addEventListener('DOMContentLoaded',refresh);
 </head>
 <body>
 <div class="header">
-  <div class="header-title">Agent <em>OS</em></div>
+  <h1 class="header-title">Agent <em>OS</em></h1>
   <div class="header-sub">Unified Runtime · Real-Time Kernel Dashboard</div>
   <div class="header-bar"></div>
 </div>

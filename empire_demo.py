@@ -18,6 +18,18 @@ def demo_page() -> str:
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="theme-color" content="#0A1A2F">
 <title>Empire AI \u00b7 How the funnel works</title>
+<meta name="description" content="See how Empire AI's automated lead generation funnel works: storm detection, SMS outreach, YES reply qualification, and contractor dispatch — in 30 seconds.">
+<meta name="keywords" content="AI demo, lead generation demo, contractor dispatch demo, storm leads, funnel walkthrough">
+<meta name="robots" content="index, follow">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Empire AI · How the funnel works">
+<meta property="og:description" content="See how Empire AI's automated lead generation funnel works: storm detection, SMS outreach, YES reply qualification, and contractor dispatch.">
+<meta property="og:url" content="https://empire-ai.co.uk/demo">
+<meta property="og:site_name" content="Empire AI">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Empire AI · How the funnel works">
+<meta name="twitter:description" content="See how Empire AI's automated lead generation funnel works.">
+<link rel="canonical" href="https://empire-ai.co.uk/demo">
 <style>
   :root { --bg: #0A1A2F; --panel: #0F1E2F; --text: #E8EEF6;
           --muted: #94A3B8; --accent: #4FD1C5; --border: rgba(232,238,246,0.10); }

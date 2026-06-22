@@ -561,7 +561,7 @@ def meetily_page() -> str:
       </div>
     </div>"""
 
-    head = empire_head(title="Meetily · AI Meeting Assistant · Empire AI", extra=extra_css)
+    head = empire_head(title="Meetily · AI Meeting Assistant · Empire AI", extra=extra_css, page="meetily")
 
     return f"""<!DOCTYPE html>
 <html lang="en">

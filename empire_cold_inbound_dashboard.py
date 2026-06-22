@@ -950,6 +950,7 @@ async def cold_inbound_dashboard(get_db) -> str:
     head = empire_head(
         title="Cold Inbound Leads · Empire AI",
         extra=DASHBOARD_CSS,
+        page="cold_inbound",
     )
 
     return f"""<!DOCTYPE html>

@@ -213,9 +213,11 @@ class TokenProxy:
             result = await proxy.cached_call(
                 task=task,
                 key_data=key_data,
-                llm_call=lambda: original_generate._ollama_call(
-                    router, compressed, task, model, system,
-                    temperature, max_tokens, context,
+                # Use the full generate() so dispatch hits MiniMax / Z.ai / Anthropic.
+                # The legacy _ollama_call path bypasses cloud providers and 404s.
+                llm_call=lambda: original_generate(
+                    compressed, task=task, model=model, system=system,
+                    temperature=temperature, max_tokens=max_tokens, context=context,
                 ),
             )
             return result
@@ -238,9 +240,10 @@ class TokenProxy:
             result = await proxy.cached_call(
                 task=task,
                 key_data=key_data,
-                llm_call=lambda: original_generate_json._ollama_call(
-                    router, compressed, task, model, system,
-                    temperature, max_tokens, context, retries, json_mode=True,
+                llm_call=lambda: original_generate_json(
+                    compressed, task=task, model=model, system=system,
+                    temperature=temperature, max_tokens=max_tokens,
+                    context=context, retries=retries,
                 ),
             )
             return result

@@ -658,7 +658,7 @@ def scraper_page() -> str:
       </div>
     </div>"""
 
-    head = empire_head(title="Elite Scraper v2 · Predictive Revenue Fleet · Empire AI", extra=extra_css)
+    head = empire_head(title="Elite Scraper v2 · Predictive Revenue Fleet · Empire AI", extra=extra_css, page="elite_scraper")
 
     return f"""<!DOCTYPE html>
 <html lang="en">

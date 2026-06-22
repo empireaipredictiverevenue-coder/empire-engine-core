@@ -627,18 +627,90 @@ def empire_head(
     title: str = "Empire AI · Command Deck",
     extra: str = "",
     meta_html: str = "",
+    description: str = "",
+    keywords: str = "",
+    canonical: str = "",
+    page: str = "",
 ) -> str:
-    """Returns the complete <head> block (fonts + tokens + base + components)."""
+    """Returns the complete <head> block (fonts + tokens + base + components).
+
+    Args:
+        title: Page title (used for og:title, twitter:title).
+        extra: Additional CSS to inject into <style>.
+        meta_html: Raw HTML to inject before </head> (e.g. structured data).
+        description: Meta description (155 chars). Auto-generated from title if empty.
+        keywords: Comma-separated meta keywords.
+        canonical: Canonical URL.
+        page: One of the SEO_TAGS keys (e.g. 'splash', 'pricing'). Overrides
+               description/keywords/canonical with centralized SEO metadata.
+    """
+    import html as _html
+
+    # Resolve from SEO metadata module if page key provided
+    if page:
+        try:
+            from empire_seo_meta import SEO_TAGS as _seo
+            tags = _seo.get(page, {})
+            if tags:
+                if tags.get("description"):
+                    description = tags["description"]
+                if tags.get("keywords"):
+                    keywords = tags["keywords"]
+                if tags.get("canonical"):
+                    canonical = tags["canonical"]
+        except ImportError:
+            pass
+
+    # Fallback description from title if none provided
+    if not description:
+        base = "AI-powered lead generation, contractor dispatch, and revenue automation."
+        description = f"Empire AI — {base}"
+
+    # Build SEO meta tags
+    desc_esc = _html.escape(description[:300])
+    title_esc = _html.escape(title)
+    kw_esc = _html.escape(keywords[:500]) if keywords else ""
+    canonical_url = canonical or "https://empire-ai.co.uk/"
+
+    seo_meta = f"""
+<meta name="description" content="{desc_esc}">
+<meta property="og:type" content="website">
+<meta property="og:title" content="{title_esc}">
+<meta property="og:description" content="{desc_esc}">
+<meta property="og:url" content="{canonical_url}">
+<meta property="og:site_name" content="Empire AI">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="{title_esc}">
+<meta name="twitter:description" content="{desc_esc}">
+<link rel="canonical" href="{canonical_url}">"""
+
+    if kw_esc:
+        seo_meta += f'\n<meta name="keywords" content="{kw_esc}">'
+
+    seo_meta += '\n<meta name="robots" content="index, follow">'
+
+    # ── Headroom.js auto-hide header ─────────────────────────────────────
+    try:
+        from empire_headroom_js import EMPIRE_HEADROOM_CSS, EMPIRE_HEADROOM_JS
+        _headroom_css = EMPIRE_HEADROOM_CSS
+        _headroom_js = EMPIRE_HEADROOM_JS
+    except ImportError:
+        _headroom_css = ""
+        _headroom_js = ""
+
     return f"""<head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="theme-color" content="#0A1A2F">
-<title>{title}</title>
+<title>{title_esc}</title>
+{seo_meta}
 {EMPIRE_FONTS}
+{_headroom_js}
 <style>
 {EMPIRE_TOKENS_CSS}
 {EMPIRE_BASE_CSS}
 {EMPIRE_COMPONENTS_CSS}
+{_headroom_css}
 {extra}
 </style>
 {meta_html}

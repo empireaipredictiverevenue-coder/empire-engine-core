@@ -14,6 +14,18 @@ def outreach_view_page() -> str:
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>Empire AI · Outreach Performance</title>
+  <meta name="description" content="Empire AI outreach performance dashboard. Template A/B testing, reply rates, conversion rates, and per-variant breakdown across all pipelines.">
+  <meta name="keywords" content="outreach performance, A/B testing, reply rate, conversion rate, template analytics">
+  <meta name="robots" content="index, follow">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Empire AI · Outreach Performance">
+  <meta property="og:description" content="Empire AI outreach performance dashboard. Template A/B testing, reply rates, and conversion analytics.">
+  <meta property="og:url" content="https://empire-ai.co.uk/view/outreach">
+  <meta property="og:site_name" content="Empire AI">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Empire AI · Outreach Performance">
+  <meta name="twitter:description" content="Empire AI outreach A/B test analytics, reply rates, and conversion tracking.">
+  <link rel="canonical" href="https://empire-ai.co.uk/view/outreach">
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {

@@ -693,6 +693,7 @@ def ppc_page() -> str:
     head = empire_head(
         title="Empire AI · Pay-Per-Call Routing",
         extra=ppc_css,
+        page="ppc",
     )
 
     return f"""<!DOCTYPE html>

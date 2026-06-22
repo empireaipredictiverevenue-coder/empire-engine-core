@@ -205,7 +205,7 @@ def support_page() -> str:
 
     return f"""<!DOCTYPE html>
 <html lang="en">
-{empire_head(title="Empire AI · Support", extra=css)}
+{empire_head(title="Empire AI · Support", extra=css, page="support")}
 <body class="sp-body">
   <div class="sp-wrap">
     <header class="sp-header">

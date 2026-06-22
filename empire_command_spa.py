@@ -25,12 +25,25 @@ def command_spa_page() -> str:
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>Empire AI · Command</title>
+  <meta name="description" content="Empire AI command deck. Real-time operator console for lead pipeline monitoring, dispatch tracking, contractor management, and revenue analytics.">
+  <meta name="keywords" content="command deck, operator console, lead pipeline, dispatch tracking, contractor management">
+  <meta name="robots" content="index, follow">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Empire AI · Command">
+  <meta property="og:description" content="Empire AI command deck. Real-time operator console for lead pipeline monitoring, dispatch tracking, and contractor management.">
+  <meta property="og:url" content="https://empire-ai.co.uk/command">
+  <meta property="og:site_name" content="Empire AI">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Empire AI · Command">
+  <meta name="twitter:description" content="Empire AI command deck for lead pipeline and dispatch management.">
+  <link rel="canonical" href="https://empire-ai.co.uk/command">
   {EMPIRE_FONTS}
   <style>{EMPIRE_TOKENS_CSS}</style>
   <style>{EMPIRE_BASE_CSS}</style>
   <style>{_SPA_CSS}</style>
 </head>
 <body>
+  <h1 class="sr-only">Empire AI · Command Deck</h1>
   <div id="root"></div>
   <script>const EMPIRE_FEE_RATE = {COMMISSION_RATE};</script>
   <script type="importmap">
