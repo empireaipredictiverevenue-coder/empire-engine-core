@@ -51,6 +51,7 @@ from empire_live import LiveBroadcaster, register_live_routes
 from empire_command_deck import command_deck_page
 from empire_command_spa import command_spa_page
 from empire_fleet_dashboard import fleet_dashboard_page
+from empire_b2b_dashboard import b2b_dashboard_page
 from empire_voice import VoiceRouter, register_voice_routes
 from empire_sms import SMSEngine, register_sms_routes
 from empire_contractors import register_contractor_routes
@@ -95,6 +96,8 @@ from bots.affiliate_recruiter import run_loop as affiliate_recruiter_run_loop, r
 from bots.bounty_tracker import run_loop as bounty_tracker_run_loop, register_bounty_tracker_routes
 from bots.email_pulse_monitor import run_loop as email_pulse_run_loop
 from bots.stop_loss_routes import register_stop_loss_routes
+from bots.b2b_outreach import draft_for_lead
+from bots.b2b_qualifier import qualify_lead_by_id
 from empire_console import SovereignConsole, register_console_routes
 from empire_orchestrator import StormOrchestrator, register_storm_routes
 from empire_ai_router import AIRouter
@@ -1018,6 +1021,34 @@ register_hermes_routes(app)
 # Wiki viewer (the persistent project wiki)
 register_wiki_routes(app)
 
+@app.get("/sitemap.xml")
+async def sitemap_xml():
+    """XML Sitemap — 14 public pages for Google Search Console indexing."""
+    from fastapi.responses import Response
+    from empire_sitemap import generate_sitemap
+    return Response(generate_sitemap(), media_type="application/xml")
+
+
+@app.get("/robots.txt")
+async def robots_txt():
+    """robots.txt — allow all crawlers, point to sitemap."""
+    from fastapi.responses import Response
+    from empire_sitemap import generate_robots_txt
+    return Response(generate_robots_txt(), media_type="text/plain")
+
+
+@app.get("/google139bf877f7300092.html")
+async def google_site_verification():
+    """Google Search Console domain verification file."""
+    path = os.path.join(_STATIC_DIR, "google139bf877f7300092.html")
+    try:
+        with open(path, "r") as f:
+            content = f.read()
+        return Response(content, media_type="text/plain")
+    except FileNotFoundError:
+        raise HTTPException(404, "Verification file not found")
+
+
 @app.get("/", response_class=HTMLResponse)
 async def root():
     return HTMLResponse(splash_page())
@@ -1098,6 +1129,12 @@ async def command_deck():
     # Auth happens client-side: the SPA reads localStorage.hub_token,
     # calls /api/v1/auth/me, and redirects to /auth/login on 401.
     return HTMLResponse(command_spa_page())
+
+
+@app.get("/b2b", response_class=HTMLResponse)
+async def b2b_dashboard():
+    """B2B Lead Dashboard — filterable table of 775+ scraped leads with qualification tiers."""
+    return HTMLResponse(b2b_dashboard_page())
 
 
 # Legacy /command/<section> URLs (server-rendered HTML views, pre-SPA)
@@ -1506,6 +1543,141 @@ register_enrichment_routes(
     orchestrator=enrichment_orchestrator,
     require_auth=require_auth,
 )
+
+# ── B2B Lead API — dashboard data + drafting + qualification ──────────────
+
+@app.get("/api/b2b/leads")
+async def b2b_leads(
+    limit: int = Query(1000, ge=1, le=5000),
+    tier: str = Query(""),
+    niche: str = Query(""),
+    metro: str = Query(""),
+    search: str = Query(""),
+):
+    """Return B2B leads with filters for the dashboard.
+
+    Query params: limit, tier (hot|warm|cold), niche, metro, search (company name).
+    Returns: {ok, leads, total, hot, warm, cold, enriched, drafted, niches, metros}
+    """
+    import json as _b2b_json
+    db = get_db()
+    try:
+        query = db.table("b2b_leads").select("*").order("lead_score", desc=True).limit(limit)
+        if niche:
+            query = query.eq("niche", niche)
+        if metro:
+            query = query.eq("metro", metro)
+        if search:
+            query = query.ilike("company_name", f"%{search}%")
+
+        r = query.execute()
+        leads = r.data or []
+
+        # Enrichment lookup — check which leads have site_content
+        lead_ids = [l["id"] for l in leads]
+        enriched_ids = set()
+        drafted_ids = set()
+        if lead_ids:
+            try:
+                sc = db.table("site_content").select("b2b_lead_id").in_("b2b_lead_id", lead_ids).execute()
+                enriched_ids = {row["b2b_lead_id"] for row in (sc.data or [])}
+            except Exception:
+                pass
+            try:
+                ed = db.table("email_drafts").select("meta").not_.is_("meta", "null").execute()
+                for row in (ed.data or []):
+                    meta = row.get("meta") or {}
+                    if isinstance(meta, str):
+                        try:
+                            meta = _b2b_json.loads(meta)
+                        except Exception:
+                            meta = {}
+                    lid = meta.get("lead_id")
+                    if lid and lid in lead_ids:
+                        drafted_ids.add(lid)
+            except Exception:
+                pass
+
+        # Compute tier from lead_score
+        hot = 0
+        warm = 0
+        cold = 0
+        for lead in leads:
+            score = lead.get("lead_score", 0) or 0
+            try:
+                score = float(score)
+            except (TypeError, ValueError):
+                score = 0
+            if score >= 80:
+                lead["_tier"] = "hot"
+                hot += 1
+            elif score >= 50:
+                lead["_tier"] = "warm"
+                warm += 1
+            else:
+                lead["_tier"] = "cold"
+                cold += 1
+            lead["_enriched"] = lead["id"] in enriched_ids
+
+        # Apply tier filter in-memory (tier isn't a real column yet)
+        if tier:
+            leads = [l for l in leads if l.get("_tier") == tier]
+
+        # Distinct niches & metros for filter dropdowns
+        niches = sorted(set(l.get("niche", "") for l in leads if l.get("niche")))
+        metros = sorted(set(l.get("metro", "") for l in leads if l.get("metro")))
+
+        return JSONResponse({
+            "ok": True,
+            "leads": leads,
+            "total": (r.count if hasattr(r, "count") and r.count is not None else len(leads)),
+            "hot": hot,
+            "warm": warm,
+            "cold": cold,
+            "enriched": len(enriched_ids),
+            "drafted": len(drafted_ids),
+            "niches": niches[:50],
+            "metros": metros[:50],
+        })
+    except Exception as e:
+        log.warning(f"[b2b] leads query failed: {e}")
+        return JSONResponse({"ok": False, "error": str(e)[:200]}, status_code=500)
+
+
+@app.post("/api/b2b/draft")
+async def b2b_draft(request: Request, auth: bool = Depends(require_auth)):
+    """Draft outreach (email + SMS) for a single B2B lead.
+
+    Body: {lead_id: str, channels?: ["email", "sms"]}
+    """
+    try:
+        body = await request.json()
+        lead_id = (body.get("lead_id") or "").strip()
+        channels = body.get("channels", ["email", "sms"])
+        if not lead_id:
+            return JSONResponse({"ok": False, "error": "lead_id required"}, status_code=400)
+        result = await draft_for_lead(lead_id, channels)
+        return JSONResponse(result)
+    except Exception as e:
+        return JSONResponse({"ok": False, "error": str(e)[:200]}, status_code=500)
+
+
+@app.post("/api/b2b/qualify")
+async def b2b_qualify(request: Request, auth: bool = Depends(require_auth)):
+    """Score and classify a single B2B lead.
+
+    Body: {lead_id: str}
+    """
+    try:
+        body = await request.json()
+        lead_id = (body.get("lead_id") or "").strip()
+        if not lead_id:
+            return JSONResponse({"ok": False, "error": "lead_id required"}, status_code=400)
+        result = await qualify_lead_by_id(lead_id)
+        return JSONResponse(result)
+    except Exception as e:
+        return JSONResponse({"ok": False, "error": str(e)[:200]}, status_code=500)
+
 
 # ── Outreach Template Stats — A/B test analysis grouped by template_variant ──
 @app.get("/api/v1/outreach/template-stats")
@@ -2972,6 +3144,9 @@ async def brain_chat(request: Request, auth: bool = Depends(require_auth)):
     system = (body.get("system") or "").strip()
     prompt = (body.get("prompt") or "").strip()
     format_schema = body.get("format_schema")
+    # Optional model override: "glm-5.2", "claude-sonnet-4-5", etc.
+    # Provider auto-selected by empire_ai_router._provider_for_model.
+    model_override = (body.get("model") or "").strip() or None
 
     if not prompt:
         raise HTTPException(400, "prompt is required")
@@ -2979,21 +3154,26 @@ async def brain_chat(request: Request, auth: bool = Depends(require_auth)):
         raise HTTPException(400, "prompt too long (max 8000)")
 
     try:
+        kwargs = dict(
+            prompt=prompt,
+            system=system or "You are a helpful assistant.",
+            task="brain.proxy",
+        )
+        if model_override:
+            kwargs["model"] = model_override
         if format_schema:
-            result = await ai_router.generate_json(
-                prompt=prompt,
-                system=system or "You are a helpful assistant.",
-                task="brain.proxy",
-            )
-            return {"response": result}
+            result = await ai_router.generate_json(**kwargs)
+            return {"response": result, "model": model_override or ai_router._model_for_task("brain.proxy")}
         else:
-            result = await ai_router.generate(
-                prompt=prompt,
-                system=system or "You are a helpful assistant.",
-                task="brain.proxy",
-            )
+            result = await ai_router.generate(**kwargs)
             text = result.get("text", "") if isinstance(result, dict) else str(result)
-            return {"response": text}
+            return {
+                "response": text,
+                "model": model_override or ai_router._model_for_task("brain.proxy"),
+                "provider": result.get("provider") if isinstance(result, dict) else None,
+                "tokens_in": result.get("tokens_in", 0) if isinstance(result, dict) else 0,
+                "tokens_out": result.get("tokens_out", 0) if isinstance(result, dict) else 0,
+            }
     except Exception as e:
         log.warning(f"[brain/chat] LLM call failed: {e}")
         raise HTTPException(502, f"Brain call failed: {str(e)[:200]}")
