@@ -15,6 +15,18 @@ import httpx
 
 from observability.tracing import TraceContext
 
+# Local RAG: pull Obsidian vault context for every LLM call. Cheap (~1ms,
+# 8-note vault). Fails silent if vault missing.
+try:
+    from empire_obsidian_rag import build_context as _build_obsidian_context
+    _RAG_AVAILABLE = True
+except ImportError:
+    _RAG_AVAILABLE = False
+    _build_obsidian_context = None
+
+# Cap on how big the injected context block can get (chars)
+_RAG_CONTEXT_CAP = int(os.environ.get("RAG_MAX_CONTEXT_CHARS", "1500"))
+
 log = logging.getLogger("empire.ai.router")
 
 OLLAMA_URL = os.environ.get("OLLAMA_URL", "http://127.0.0.1:11434")
@@ -114,6 +126,15 @@ class AIRouter:
     ) -> str:
         chosen = self._model_for_task(task, model)
         provider = _provider_for_model(chosen)
+        # Pull Obsidian vault context relevant to this prompt. Cheap (~1ms),
+        # scoped to the top-K scoring notes. Appends to the system message.
+        if _RAG_AVAILABLE and prompt:
+            try:
+                rag_block = _build_obsidian_context(prompt)
+                if rag_block:
+                    system = (system or "") + "\n\n" + rag_block
+            except Exception as rag_err:
+                log.debug(f"[router] RAG failed: {rag_err}")
         # Re-read env per call so provider keys set after import still work.
         if provider == "minimax" and os.environ.get("MINIMAX_API_KEY"):
             result = await self._call_minimax(prompt=prompt, model=chosen, system=system,
@@ -142,6 +163,13 @@ class AIRouter:
     ) -> Dict[str, Any]:
         chosen = self._model_for_task(task, model)
         provider = _provider_for_model(chosen)
+        if _RAG_AVAILABLE and prompt:
+            try:
+                rag_block = _build_obsidian_context(prompt)
+                if rag_block:
+                    system = (system or "") + "\n\n" + rag_block
+            except Exception as rag_err:
+                log.debug(f"[router] RAG failed: {rag_err}")
         last_err = None
         raw = ""
         for attempt in range(retries + 1):
