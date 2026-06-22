@@ -265,7 +265,7 @@ async def find_prospects_camofox(
             "review_count": None,
             "buy_signal_score": score,
             "status": "new",
-            "source": opp.get("source", "camofox-browser"),
+            "notes": "source=" + opp.get("source", "camofox-browser"),
         })
 
     prospects.sort(key=lambda x: int(x["buy_signal_score"]), reverse=True)

@@ -484,6 +484,17 @@ class SelfAwarenessEngine:
             anomalies = [a for a in anomalies if a.get("severity") == severity]
         return anomalies
 
+    def detect_anomalies(self, model: Optional[dict] = None) -> list[dict]:
+        """Public wrapper around _detect_anomalies that accepts a pre-built model.
+
+        If a model is provided, anomalies are derived from it without rebuilding.
+        If no model is provided, builds system_model() internally.
+
+        This is the preferred public API for callers that already have a model
+        (e.g. AGI Governor consulting the SA engine).
+        """
+        return self._detect_anomalies(model)
+
     # ═══════════════════════════════════════════════════════════════
     # 4. ROOT CAUSE ANALYSIS
     # ═══════════════════════════════════════════════════════════════

@@ -723,6 +723,31 @@ module.exports = {
       log_date_format: 'YYYY-MM-DD HH:mm:ss Z',
     },
 
+    // ── Mesh Sovereign Worker (poll agent_task_queue for sovereign.* AGI tasks) ──
+    {
+      name: 'mesh-sovereign',
+      script: '/root/empire-v49/bots/mesh_sovereign_worker.py',
+      cwd: '/root/empire-v49',
+      interpreter: 'python3',
+      exec_mode: 'fork',
+      instances: 1,
+      env: {
+        PYTHONUNBUFFERED: '1',
+        MESH_SOVEREIGN_POLL_SEC: '120',
+      },
+      listen_timeout: 3000,
+      kill_timeout: 10000,
+      max_restarts: 10,
+      min_uptime: 15000,
+      restart_delay: 5000,
+      max_memory_restart: '500M',
+      error_file: '/root/.pm2/logs/mesh-sovereign-error.log',
+      out_file: '/root/.pm2/logs/mesh-sovereign-out.log',
+      pid_file: '/root/.pm2/pids/mesh-sovereign.pid',
+      merge_logs: true,
+      log_date_format: 'YYYY-MM-DD HH:mm:ss Z',
+    },
+
     // ── Empire Facebook Bot (Messenger lead gen, polling mode) ──
 
     // ── Empire Facebook Bot (Messenger lead gen, polling mode) ──

@@ -14,6 +14,7 @@ Agent teams:
   Revenue     → Dispatcher → Quality
   Browser     → Scraper
   Orchestrator → Autoresearch
+  Sovereign   → Strategy-Decide → Self-Aware → Niche-Analyze → Regime-Detect → AGI-Optimize
 
 Local sovereignty: All LLM calls go through AIRouter → local Ollama.
 """
@@ -48,6 +49,21 @@ TASK_AGENTIC_PLAN           = "agentic.plan"
 TASK_AGENTIC_REVIEW         = "agentic.review"
 TASK_AUTORESEARCH_RUN       = "autoresearch.run"
 TASK_AUTORESEARCH_ORCHESTRATE = "autoresearch.orchestrate"
+TASK_SOVEREIGN_STRATEGY_DECIDE = "sovereign.strategy_decide"
+TASK_SOVEREIGN_SELF_AWARE      = "sovereign.self_aware"
+TASK_SOVEREIGN_NICHE_ANALYZE   = "sovereign.niche_analyze"
+TASK_SOVEREIGN_REGIME_DETECT   = "sovereign.regime_detect"
+TASK_SOVEREIGN_AGI_OPTIMIZE    = "sovereign.agi_optimize"
+
+# ── Sovereign AGI Matrix route mapping ──────────────────────────────
+# Used by execute_sovereign_skill() and mesh_sovereign_worker.py
+SOVEREIGN_MATRIX_ROUTES = {
+    TASK_SOVEREIGN_STRATEGY_DECIDE: "/api/v6/matrix/strategy-decide",
+    TASK_SOVEREIGN_SELF_AWARE:      "/api/v6/matrix/self-aware",
+    TASK_SOVEREIGN_NICHE_ANALYZE:   "/api/v6/matrix/niche-analyze",
+    TASK_SOVEREIGN_REGIME_DETECT:   "/api/v6/matrix/regime-detect",
+    TASK_SOVEREIGN_AGI_OPTIMIZE:    "/api/v6/matrix/agi-optimize",
+}
 
 ALL_TASK_TYPES = [
     # Core fleet
@@ -70,6 +86,12 @@ ALL_TASK_TYPES = [
     TASK_AGENTIC_REVIEW,
     TASK_AUTORESEARCH_RUN,
     TASK_AUTORESEARCH_ORCHESTRATE,
+    # Sovereign AGI
+    TASK_SOVEREIGN_STRATEGY_DECIDE,
+    TASK_SOVEREIGN_SELF_AWARE,
+    TASK_SOVEREIGN_NICHE_ANALYZE,
+    TASK_SOVEREIGN_REGIME_DETECT,
+    TASK_SOVEREIGN_AGI_OPTIMIZE,
     # Memory
     "memory.store",
     "memory.retrieve",
@@ -213,6 +235,7 @@ AGENT_BROWSER        = "mesh.browser"
 AGENT_SCRAPER        = "mesh.scraper"
 AGENT_ORCHESTRATOR   = "mesh.orchestrator"
 AGENT_AUTORESEARCH   = "mesh.autoresearch"
+AGENT_SOVEREIGN      = "mesh.sovereign"
 
 # ── Agent → task types mapping ───────────────────────────────────────
 AGENT_TASK_MAP = {
@@ -230,6 +253,13 @@ AGENT_TASK_MAP = {
     AGENT_SCRAPER:       [TASK_SCRAPE_WEB, TASK_SCRAPE_CRAWL],
     AGENT_ORCHESTRATOR:  [TASK_AGENTIC_PLAN, TASK_AGENTIC_REVIEW, TASK_AUTORESEARCH_ORCHESTRATE],
     AGENT_AUTORESEARCH:  [TASK_AUTORESEARCH_RUN],
+    AGENT_SOVEREIGN:     [
+        TASK_SOVEREIGN_STRATEGY_DECIDE,
+        TASK_SOVEREIGN_SELF_AWARE,
+        TASK_SOVEREIGN_NICHE_ANALYZE,
+        TASK_SOVEREIGN_REGIME_DETECT,
+        TASK_SOVEREIGN_AGI_OPTIMIZE,
+    ],
 }
 
 AGENT_CAPABILITIES = {
@@ -247,6 +277,7 @@ AGENT_CAPABILITIES = {
     AGENT_SCRAPER:       ["scraper", "web", "extract", "crawl"],
     AGENT_ORCHESTRATOR:  ["orchestrator", "planning", "review", "meta"],
     AGENT_AUTORESEARCH:  ["autoresearch", "experiment", "self-healing"],
+    AGENT_SOVEREIGN:     ["sovereign", "agi", "strategy", "self-awareness", "bayesian", "optimization", "regime-detection"],
 }
 
 # ── Agent display names ──────────────────────────────────────────────
@@ -265,6 +296,7 @@ AGENT_DISPLAY = {
     AGENT_SCRAPER:       "Scraper Agent",
     AGENT_ORCHESTRATOR:  "Orchestrator",
     AGENT_AUTORESEARCH:  "Autoresearch Agent",
+    AGENT_SOVEREIGN:     "Sovereign AGI",
 }
 
 # ── Mesh agent → Fleet role mapping ─────────────────────────────────
@@ -283,6 +315,7 @@ MESH_AGENT_ROLES = {
     AGENT_SCRAPER:       "mesh_scraper",
     AGENT_ORCHESTRATOR:  "mesh_orchestrator",
     AGENT_AUTORESEARCH:  "mesh_autoresearch",
+    AGENT_SOVEREIGN:     "mesh_sovereign",
 }
 
 # ── Task type → registered skill name translation ──────────────────────
@@ -656,6 +689,47 @@ class AgentMesh:
             return {"ok": False, "skill": skill_name, "error": f"Not a social skill: {skill_name}"}
         return await self.execute_skill(skill_name, params)
 
+    async def execute_sovereign_skill(self, skill_name: str, params: dict = None) -> dict:
+        """Execute a sovereign AGI skill by proxying to the Sovereign AGI Matrix on port 8010.
+
+        Maps sovereign.* task types to matrix endpoints:
+          sovereign.strategy_decide → POST /api/v6/matrix/strategy-decide
+          sovereign.self_aware      → POST /api/v6/matrix/self-aware
+          sovereign.niche_analyze   → POST /api/v6/matrix/niche-analyze
+          sovereign.regime_detect   → POST /api/v6/matrix/regime-detect
+          sovereign.agi_optimize    → POST /api/v6/matrix/agi-optimize
+        """
+        if not skill_name.startswith("sovereign."):
+            return {"ok": False, "skill": skill_name, "error": f"Not a sovereign skill: {skill_name}"}
+
+        params = params or {}
+
+        # Map task type → matrix endpoint path (single source: SOVEREIGN_MATRIX_ROUTES)
+        endpoint = SOVEREIGN_MATRIX_ROUTES.get(skill_name)
+        if not endpoint:
+            return {"ok": False, "skill": skill_name, "error": f"No matrix route mapped for '{skill_name}'"}
+
+        try:
+            import httpx
+            SOVEREIGN_MATRIX_URL = os.environ.get("SOVEREIGN_MATRIX_URL", "http://localhost:8010")
+            async with httpx.AsyncClient(timeout=120.0) as client:
+                resp = await client.post(
+                    f"{SOVEREIGN_MATRIX_URL}{endpoint}",
+                    json=params,
+                    timeout=120.0,
+                )
+                if resp.status_code == 200:
+                    data = resp.json()
+                    return {"ok": True, "skill": skill_name, "result": data}
+                return {
+                    "ok": False,
+                    "skill": skill_name,
+                    "error": f"Matrix returned {resp.status_code}: {resp.text[:300]}",
+                }
+        except Exception as e:
+            log.error(f"[hermes] sovereign skill error ({skill_name}): {e}")
+            return {"ok": False, "skill": skill_name, "error": f"Matrix unreachable: {str(e)[:200]}"}
+
     def stop(self):
         """Stop the mesh loop."""
         self.running = False
@@ -705,6 +779,8 @@ def register_mesh_routes(app, mesh: AgentMesh, require_auth=None):
             result = await mesh.execute_design_skill(skill_name, params)
         elif skill_name.startswith("social."):
             result = await mesh.execute_social_skill(skill_name, params)
+        elif skill_name.startswith("sovereign."):
+            result = await mesh.execute_sovereign_skill(skill_name, params)
         else:
             result = await mesh.execute_skill(skill_name, params)
 

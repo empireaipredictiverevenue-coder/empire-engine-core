@@ -1,7 +1,7 @@
 import os
 import logging
 from datetime import datetime, timezone
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 from supabase import create_client
 
@@ -42,6 +42,11 @@ class AGIGovernor:
     # existing readers that do `AGIGovernor.si_strategy` directly.
     si_strategy = None
 
+    # Class-level slot for the shared SelfAwarenessEngine instance. hub.py
+    # assigns the live instance here at startup via set_self_awareness().
+    # If None, direct_strategy() falls back to the legacy staleness check.
+    self_awareness = None
+
     @classmethod
     def get_si_strategy(cls):
         """Return the hub's live StrategyEvolution instance, or None if not wired."""
@@ -59,12 +64,40 @@ class AGIGovernor:
         """
         cls.si_strategy = instance
 
+    # ── Self-Awareness Engine integration ────────────────────────────
+
+    @classmethod
+    def get_self_awareness(cls):
+        """Return the live SelfAwarenessEngine instance, or None if not wired."""
+        return cls.self_awareness
+
+    @classmethod
+    def set_self_awareness(cls, instance) -> None:
+        """
+        Register the hub's live SelfAwarenessEngine as the shared singleton.
+
+        Call this once at startup (e.g. `AGIGovernor.set_self_awareness(sa_engine)`)
+        so the governor can consult the self-awareness layer for anomaly-aware
+        strategy decisions. Passing `None` clears the registration (falls back
+        to legacy staleness check).
+        """
+        cls.self_awareness = instance
+
     def __init__(self):
         self.si = SyntheticIntelligence()
+        self._sa_cache_ts: Optional[float] = None
+        self._sa_cache_ctx: Optional[Dict] = None
+        self._sa_cache_ttl: float = float(os.environ.get("SA_CACHE_TTL_SEC", "60"))
 
     def check_agent_staleness(self) -> Dict:
-        """Query agent_registry. Flag any enabled agent whose last_ping is older
-        than 3× its expected interval. Returns {stale: [...], healthy: [...], checked_at}."""
+        """[LEGACY] Query agent_registry. Flag any enabled agent whose last_ping
+        is older than 3× its expected interval.
+
+        Prefer using the SelfAwarenessEngine.get_anomalies() for anomaly-aware
+        decision making when self_awareness is wired. This method remains for
+        backward compatibility when the SA engine is not available.
+
+        Returns {stale: [...], healthy: [...], checked_at}."""
         result: Dict = {"stale": [], "healthy": [], "checked_at": datetime.now(timezone.utc).isoformat()}
         if not SUPABASE_URL or not SUPABASE_KEY:
             log.warning("[agi.governor] supabase creds missing — skipping staleness check")
@@ -106,21 +139,157 @@ class AGIGovernor:
             log.warning(f"[agi.governor] staleness check failed: {e}")
         return result
 
+    # ── Self-Awareness consultation ─────────────────────────────────
+
+    def consult_self_awareness(self) -> Dict:
+        """Consult the Self-Awareness Engine for anomaly-informed strategy context.
+
+        Queries the SA engine for anomalies, system health, and lane performance.
+        Results are cached for _SA_CACHE_TTL_SEC seconds (default 60) to avoid
+        excessive Supabase queries on repeated calls within the same decision cycle.
+
+        Returns a dict with:
+          anomalies: list of all detected anomalies
+          critical_count: number of critical-severity anomalies
+          warning_count: number of warning-severity anomalies
+          health_overall: 'healthy' | 'degraded' | 'critical'
+          agent_health_pct: fraction of agents healthy
+          lane_win_rate: overall lane win rate (0.0-1.0)
+          wired: True if SA engine is available, False if fallback
+        """
+        sa = AGIGovernor.get_self_awareness()
+        if sa is None:
+            return {
+                "anomalies": [],
+                "critical_count": 0,
+                "warning_count": 0,
+                "health_overall": "unknown",
+                "agent_health_pct": 1.0,
+                "lane_win_rate": 1.0,
+                "wired": False,
+            }
+
+        # TTL cache — avoid rebuilding the full system model on every call
+        now_ts = datetime.now(timezone.utc).timestamp()
+        if (
+            self._sa_cache_ctx is not None
+            and self._sa_cache_ts is not None
+            and (now_ts - self._sa_cache_ts) < self._sa_cache_ttl
+        ):
+            return self._sa_cache_ctx
+
+        try:
+            # Use the SA engine's public detect_anomalies() with a pre-built model
+            # to avoid double-building system_model() inside get_anomalies().
+            model = sa.system_model()
+            anomalies = sa.detect_anomalies(model)
+            health = model.get("health", {})
+            lanes = model.get("lanes", {})
+
+            critical = [a for a in anomalies if a.get("severity") == "critical"]
+            warnings = [a for a in anomalies if a.get("severity") == "warning"]
+
+            ctx = {
+                "anomalies": anomalies,
+                "critical_count": len(critical),
+                "warning_count": len(warnings),
+                "health_overall": health.get("overall", "unknown"),
+                "agent_health_pct": health.get("health_pct", 1.0),
+                "lane_win_rate": lanes.get("overall_win_rate", 1.0),
+                "wired": True,
+            }
+
+            # Write-through cache
+            self._sa_cache_ctx = ctx
+            self._sa_cache_ts = now_ts
+
+            return ctx
+        except Exception as e:
+            log.warning(f"[agi.governor] self-awareness consultation failed: {e}")
+            return {
+                "anomalies": [],
+                "critical_count": 0,
+                "warning_count": 0,
+                "health_overall": "error",
+                "agent_health_pct": 1.0,
+                "lane_win_rate": 1.0,
+                "wired": True,
+                "error": str(e)[:200],
+            }
+
     def direct_strategy(self):
+        """Determine the current global strategy.
+
+        Decision pipeline:
+          1. Manual override — if operator has taken manual control, obey.
+          2. Self-awareness anomaly gate — if wired, consult the SA engine:
+             - Critical anomalies (agent_critical, lane_win_rate_critical) → HOLD
+             - Warning anomalies with degraded health → CAUTIOUS_PROCEED
+             - Warning anomalies only → AGGRESSIVE_STRIKE (logged)
+             - No anomalies → AGGRESSIVE_STRIKE
+          3. Legacy staleness fallback — if SA engine is not wired, use the
+             old agent_registry staleness check.
+          4. Default → AGGRESSIVE_STRIKE
+        """
         # 1. Check for human intervention
         status = get_manual_override()
         if status.get("mode") == "MANUAL":
             return status.get("strategy", "HOLD")
 
-        # 2. Refresh the cached health snapshot (auto-refresh on every decision)
-        #    so /api/governor/health and the SPA always see fresh data without re-querying Supabase.
+        # 2. Self-awareness anomaly gate (if wired)
+        sa_ctx = self.consult_self_awareness()
+        if sa_ctx.get("wired"):
+            critical_count = sa_ctx.get("critical_count", 0)
+            warning_count = sa_ctx.get("warning_count", 0)
+            health = sa_ctx.get("health_overall", "healthy")
+            win_rate = sa_ctx.get("lane_win_rate", 1.0)
+
+            # Critical anomalies → immediate HOLD
+            if critical_count > 0:
+                critical_types = [a.get("type") for a in sa_ctx.get("anomalies", [])
+                                  if a.get("severity") == "critical"]
+                log.warning(
+                    f"[agi.governor] HOLD — {critical_count} critical anomaly(s): "
+                    f"{critical_types}"
+                )
+                print(f"[AGI GOVERNOR] HOLD — {critical_count} critical anomaly(s) detected by self-awareness")
+                return "HOLD"
+
+            # Warning anomalies + degraded health → CAUTIOUS_PROCEED
+            if warning_count > 0 and health in ("degraded", "critical"):
+                log.warning(
+                    f"[agi.governor] CAUTIOUS_PROCEED — {warning_count} warning(s), "
+                    f"health={health}, agent_pct={sa_ctx.get('agent_health_pct', 0):.0%}"
+                )
+                print("[AGI GOVERNOR] CAUTIOUS_PROCEED — degraded health with warnings")
+                return "CAUTIOUS_PROCEED"
+
+            # Warning anomalies only with healthy system → AGGRESSIVE but logged
+            if warning_count > 0:
+                log.info(
+                    f"[agi.governor] AGGRESSIVE_STRIKE — {warning_count} warning(s) "
+                    f"present but system is {health}"
+                )
+
+            # Lane win rate below threshold → still aggressive but log
+            if win_rate < 0.15:
+                log.warning(
+                    f"[agi.governor] AGGRESSIVE_STRIKE — lane win rate "
+                    f"({win_rate:.1%}) below threshold but no critical anomalies"
+                )
+
+            print(f"[AGI GOVERNOR] AGGRESSIVE_STRIKE — self-aware (health={health}, "
+                  f"anomalies: {critical_count} critical, {warning_count} warning, "
+                  f"win_rate={win_rate:.0%})")
+            return "AGGRESSIVE_STRIKE"
+
+        # 3. Legacy staleness fallback (SA engine not wired)
         try:
             health = refresh_health_snapshot()
         except Exception as e:
             log.warning(f"[agi.governor] snapshot refresh failed: {e}")
             health = {}
 
-        # 3. Staleness gate — if any enabled agent hasn't pinged in 3× its interval, HOLD
         try:
             if health.get("stale"):
                 stale_names = [a["agent_name"] for a in health["stale"]]
@@ -130,7 +299,7 @@ class AGIGovernor:
             log.warning(f"[agi.governor] staleness gate error: {e}")
 
         # 4. Autonomous AGI Decisioning
-        print("[AGI GOVERNOR] Autonomous mode active.")
+        print("[AGI GOVERNOR] Autonomous mode active (legacy staleness check).")
         return "AGGRESSIVE_STRIKE"
 
     def strategy_for_niche(self, niche: str) -> str:
