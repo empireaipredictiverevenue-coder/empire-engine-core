@@ -97,19 +97,52 @@ def _build_payment_body(
     claim_amount: float,
     dispatch_id: str,
     is_follow_up: bool = False,
+    discount_percent: float = 0.0,
+    discount_amount: float = 0.0,
+    discount_expires_at: str = "",
 ) -> str:
-    """Build the payment request body. ~300 chars, fits in 2 SMS segments."""
+    """Build the payment request body. ~300 chars, fits in 2 SMS segments.
+
+    If a discount has been offered, the SMS leads with the savings so
+    the contractor feels the urgency ("20% off if you pay this week").
+    Copy stays short, human, direct — no AI-polished phrasing.
+    """
     prefix = "Empire AI:"
     header = "Payment reminder" if is_follow_up else "Settlement notice"
 
-    return (
-        f"{prefix} {header} — "
-        f"${fee_amount:,.0f} fee on ${claim_amount:,.0f} claim ({dispatch_id[:8]}...). "
-        f"Send 3% USDC to: {VAULT_WALLET}. "
-        f"Then POST settlement to: empire-ai.co.uk/api/v1/claim-settled "
-        f"(dispatch={dispatch_id}). "
-        f"Reply HELP for help. STOP to opt out."
-    )
+    pay_url = f"empire-ai.co.uk/pay/{dispatch_id}"
+
+    # Discount lead — only if discount is offered and not expired
+    discount_lead = ""
+    if discount_percent and discount_amount and discount_expires_at:
+        try:
+            from datetime import datetime, timezone
+            exp = datetime.fromisoformat(discount_expires_at.replace("Z", "+00:00"))
+            if exp > datetime.now(timezone.utc):
+                pct_int = int(round(float(discount_percent) * 100))
+                new_total = max(0.0, float(fee_amount) - float(discount_amount))
+                discount_lead = (
+                    f"{pct_int}% OFF — pay ${new_total:,.0f} (save ${discount_amount:,.0f}) by {exp.strftime('%b %d')}. "
+                )
+        except Exception:
+            pass
+
+    # SMS copy. Lead with savings if discount is live, otherwise lead with the claim.
+    if discount_lead:
+        return (
+            f"{prefix} {header} — "
+            f"{discount_lead}"
+            f"${fee_amount:,.0f} fee on ${claim_amount:,.0f} claim ({dispatch_id[:8]}...). "
+            f"Pay: {pay_url} STOP to opt out."
+        )
+    else:
+        return (
+            f"{prefix} {header} — "
+            f"${fee_amount:,.0f} fee on ${claim_amount:,.0f} claim ({dispatch_id[:8]}...). "
+            f"Pay here: {pay_url} "
+            f"(QR + wallet, takes 60s). "
+            f"Reply HELP for help. STOP to opt out."
+        )
 
 
 async def _send_sms_vonage(
@@ -452,12 +485,20 @@ async def run_collection(
         dispatch_id = (fe_meta or {}).get("dispatch_id", "")
         is_follow = attempt_type != "initial"
 
+        # Discount lives on the fee row directly (not in meta)
+        disc_pct = fe.get("discount_percent")
+        disc_amt = fe.get("discount_amount")
+        disc_exp = fe.get("discount_expires_at")
+
         body = _build_payment_body(
             contractor_name=name.split()[0] if name else "Contractor",
             fee_amount=fee_amount,
             claim_amount=claim_amount,
             dispatch_id=dispatch_id or fee_id,
             is_follow_up=is_follow,
+            discount_percent=float(disc_pct or 0),
+            discount_amount=float(disc_amt or 0),
+            discount_expires_at=disc_exp or "",
         )
 
         log.info(
