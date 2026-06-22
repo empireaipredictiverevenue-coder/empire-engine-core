@@ -77,7 +77,6 @@ class MeshSovereignWorker:
                     "bayesian", "optimization", "regime-detection",
                 ],
                 "task_types": TASK_TYPES,
-                "role_name": "mesh_sovereign",
             }, on_conflict="agent_name").execute()
             return True
         except Exception as e:
@@ -176,13 +175,17 @@ class MeshSovereignWorker:
         """Call the Sovereign AGI Matrix directly on port 8010.
 
         Used as fallback if the hub is unavailable.
-        Uses SOVEREIGN_MATRIX_ROUTES from agent_mesh (single source of truth).
+        Uses inline route mapping to avoid import dependencies on agent_mesh.
         """
-        try:
-            from agent_mesh import SOVEREIGN_MATRIX_ROUTES
-        except ImportError:
-            return {"ok": False, "error": "Cannot import SOVEREIGN_MATRIX_ROUTES from agent_mesh"}
-        endpoint = SOVEREIGN_MATRIX_ROUTES.get(skill_name)
+        # Inline mapping — avoids circular/standalone import issues with agent_mesh
+        _ROUTES = {
+            "sovereign.strategy_decide": "/api/v6/matrix/strategy-decide",
+            "sovereign.self_aware":      "/api/v6/matrix/self-aware",
+            "sovereign.niche_analyze":   "/api/v6/matrix/niche-analyze",
+            "sovereign.regime_detect":   "/api/v6/matrix/regime-detect",
+            "sovereign.agi_optimize":    "/api/v6/matrix/agi-optimize",
+        }
+        endpoint = _ROUTES.get(skill_name)
         if not endpoint:
             return {"ok": False, "error": f"No matrix route for {skill_name}"}
 

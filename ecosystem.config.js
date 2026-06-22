@@ -748,6 +748,31 @@ module.exports = {
       log_date_format: 'YYYY-MM-DD HH:mm:ss Z',
     },
 
+    // ── Sovereign AGI Matrix (sovereign intelligence layer, port 8010) ──
+    {
+      name: 'sovereign-matrix',
+      script: '/root/empire-v49/matrix/sovereign_agi_matrix.py',
+      cwd: '/root/empire-v49',
+      interpreter: 'python3',
+      exec_mode: 'fork',
+      instances: 1,
+      env: {
+        PYTHONUNBUFFERED: '1',
+        PYTHONPATH: '/root/empire-v49',
+      },
+      listen_timeout: 3000,
+      kill_timeout: 10000,
+      max_restarts: 10,
+      min_uptime: 15000,
+      restart_delay: 5000,
+      max_memory_restart: '500M',
+      error_file: '/root/.pm2/logs/sovereign-matrix-error.log',
+      out_file: '/root/.pm2/logs/sovereign-matrix-out.log',
+      pid_file: '/root/.pm2/pids/sovereign-matrix.pid',
+      merge_logs: true,
+      log_date_format: 'YYYY-MM-DD HH:mm:ss Z',
+    },
+
     // ── Empire Facebook Bot (Messenger lead gen, polling mode) ──
 
     // ── Empire Facebook Bot (Messenger lead gen, polling mode) ──

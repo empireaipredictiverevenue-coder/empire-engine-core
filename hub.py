@@ -70,6 +70,7 @@ from empire_solana_webhook import register_solana_webhook_routes
 from empire_crypto_payments import CryptoPaymentEngine, register_crypto_payment_routes
 from empire_moonpay_checkout import register_moonpay_checkout_routes
 from empire_fee import register_fee_routes
+from empire_payment_page import register_payment_routes
 from empire_fee_operator import register_operator_mark_settled
 from empire_claims import register_claims_routes
 from empire_claim_webhook import register_claim_webhook
@@ -212,7 +213,7 @@ from empire_network_agent import register_network_routes
 from empire_loop_agent import register_loop_routes
 from empire_analytics_agent import AnalyticsAgent
 from empire_psychology_mind_map import register_psychology_routes
-from empire_self_awareness import register_self_awareness_routes
+from empire_self_awareness import register_self_awareness_routes, SelfAwarenessEngine
 from empire_business_planner import register_business_planner_routes
 from empire_agent_os import AgentKernel, register_agent_os_routes
 from empire_agent_os_page import agent_os_dashboard_page
@@ -1148,6 +1149,7 @@ register_playbook_routes(app, require_auth=require_auth, get_db=get_db)
 register_payout_routes(app, engine=payout_engine, require_auth=require_auth, require_owner=require_owner)
 register_bounty_payout_routes(app, require_auth=require_auth, payout_engine=payout_engine)
 register_fee_routes(app, require_auth=require_auth, get_db=get_db)
+register_payment_routes(app, get_db=get_db)
 register_operator_mark_settled(app, require_auth=require_auth, get_db=get_db)
 register_claims_routes(app, require_auth=require_auth, get_db=get_db)
 register_claim_webhook(app, get_db=get_db, broadcaster=live_broadcaster)
@@ -3399,6 +3401,10 @@ async def pain_points_export_report(auth: bool = Depends(require_auth)):
 si_strategy = StrategyEvolution(get_db=get_db)
 si_strategy.set_pain_points(pain_points)
 
+# Self-Awareness Engine — anomaly detection, root cause analysis, self-improvement
+# Wired into the AGI Governor for anomaly-aware strategy decisions (critical → HOLD, etc.)
+self_awareness_engine = SelfAwarenessEngine(get_db=get_db)
+
 # ── Satellite Strike Core + God Mode Swarm Gate ──────────────────
 # Scans storm forecasts → filters warehouse targets → parallel video ads.
 # Each lane runs Script Engine → FFmpeg 1080x1920 Render (Kokoro TTS included).
@@ -3661,6 +3667,7 @@ _pred_rev.set_si_instance(si_strategy)
 try:
     from empire_agi_governor import AGIGovernor
     AGIGovernor.set_si_strategy(si_strategy)
+    AGIGovernor.set_self_awareness(self_awareness_engine)
 except Exception:
     pass
 
