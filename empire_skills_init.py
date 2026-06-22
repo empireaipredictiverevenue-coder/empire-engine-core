@@ -18,6 +18,7 @@ from skills.trading_skills import register_trading_skills
 from skills.marketing_skills import register_marketing_skills
 from skills.email_skills import register_email_skills
 from skills.design_skills import register_design_skills
+from skills.hermes_skills import register_hermes_skills
 from skills.dynamic import VaultSkillDiscoverer
 
 
@@ -111,6 +112,10 @@ class SkillsFramework:
         # 5b. Register design skills (UI, UX, visual, motion, accessibility, design ops)
         #     Wires ask_llm so skills can execute design guidance via LLM
         register_design_skills(registry=self.registry, ask_llm=ask_llm)
+
+        # 5c. Register hermes mesh skills (task queue ops, fleet agents, autoresearch, external tools)
+        #     29 skills that make the mesh dispatch layer invocable via HarnessManager.run()
+        register_hermes_skills(registry=self.registry)
 
         # 6. Auto-discover vault-defined skills
         if auto_discover_skills:

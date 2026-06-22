@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Empire AI · Referral Leaderboard Preview</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@200;300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg: #0a1a2f; --bg2: #15263f; --bg3: #1a2f4a;
+  --fg: #f8fafd; --fg2: #c8d0dc; --fg3: #7a8ca3;
+  --teal: #44e5b8; --cyan: #5ac8fa; --amber: #ffb800; --red: #f43f5e;
+  --divider: rgba(122,140,163,0.18); --radius: 8px;
+  --font: 'Inter', -apple-system, sans-serif;
+  --mono: 'JetBrains Mono', monospace;
+}
+body {
+  background: var(--bg); color: var(--fg);
+  font-family: var(--font); letter-spacing: -0.02em;
+  min-height: 100vh;
+}
+.header {
+  background: var(--bg2); border-bottom: 1px solid var(--divider);
+  padding: 20px 32px; display: flex; align-items: center; justify-content: space-between;
+}
+.header-brand { display: flex; align-items: baseline; gap: 8px; }
+.header-brand .e { font-weight: 700; font-size: 18px; letter-spacing: 0.22em; }
+.header-brand .ai { font-weight: 700; font-size: 18px; letter-spacing: 0.22em; color: var(--cyan); }
+.header h1 { font-weight: 200; font-size: 20px; letter-spacing: -0.04em; }
+.header h1 em { color: var(--teal); font-style: italic; font-weight: 500; }
+.container { max-width: 1200px; margin: 0 auto; padding: 28px 24px; }
+.stats-row {
+  display: flex; gap: 12px; margin-bottom: 20px; flex-wrap: wrap;
+}
+.stat-card {
+  background: var(--bg2); border: 1px solid var(--divider);
+  padding: 14px 18px; flex: 1; min-width: 140px;
+}
+.stat-card .label {
+  font-family: var(--mono); font-size: 8px; color: var(--fg3);
+  letter-spacing: 0.14em; text-transform: uppercase; margin-bottom: 4px;
+}
+.stat-card .value {
+  font-weight: 200; font-size: 22px; line-height: 1;
+}
+.stat-card .value.teal { color: var(--teal); }
+.stat-card .value.amber { color: var(--amber); }
+.stat-card .value.cyan { color: var(--cyan); }
+.section-title {
+  font-family: var(--mono); font-size: 10px; color: var(--fg3);
+  letter-spacing: 0.14em; text-transform: uppercase; margin-bottom: 10px;
+  display: flex; align-items: center; gap: 8px;
+}
+.section-title strong { color: var(--fg2); font-weight: 500; }
+.section-title .count {
+  color: var(--teal); font-size: 9px;
+  background: rgba(68,229,184,0.1); padding: 2px 8px;
+}
+.table-wrap {
+  background: var(--bg2); border: 1px solid var(--divider);
+  max-height: calc(100vh - 300px); overflow-y: auto;
+}
+table { width: 100%; border-collapse: collapse; }
+thead th {
+  font-family: var(--mono); font-size: 8px; color: var(--fg3);
+  letter-spacing: 0.14em; text-transform: uppercase; text-align: left;
+  padding: 10px 14px; border-bottom: 1px solid var(--divider);
+  background: rgba(0,0,0,0.25); position: sticky; top: 0; z-index: 2;
+}
+tbody td {
+  padding: 7px 14px; border-bottom: 1px solid rgba(122,140,163,0.06);
+  font-family: var(--mono); font-size: 9px; color: var(--fg2);
+}
+tbody tr:hover { background: rgba(68,229,184,0.03); }
+tbody tr:last-child td { border-bottom: none; }
+.num { text-align: right; font-variant-numeric: tabular-nums; }
+.empty-state {
+  text-align: center; padding: 48px 24px; color: var(--fg3);
+  font-family: var(--mono); font-size: 10px; line-height: 1.6;
+}
+.empty-state .big { font-size: 32px; margin-bottom: 12px; }
+.footer {
+  text-align: right; padding: 12px 0 40px;
+  font-family: var(--mono); font-size: 8px; color: var(--fg3);
+  letter-spacing: 0.04em;
+}
+.search-bar {
+  margin-bottom: 12px; display: flex; gap: 8px; align-items: center;
+}
+.search-bar input {
+  flex: 1; background: rgba(0,0,0,0.4); color: var(--fg);
+  border: 1px solid var(--divider); font-family: var(--mono);
+  font-size: 11px; padding: 8px 12px; outline: none;
+  transition: border-color 0.2s;
+}
+.search-bar input:focus { border-color: var(--teal); }
+.search-bar .hint {
+  font-family: var(--mono); font-size: 8px; color: var(--fg3);
+  letter-spacing: 0.08em; white-space: nowrap;
+}
+.pagination {
+  display: flex; align-items: center; justify-content: center;
+  gap: 8px; margin-top: 14px; font-family: var(--mono); font-size: 9px;
+}
+.pagination button {
+  background: var(--bg2); color: var(--fg2); border: 1px solid var(--divider);
+  padding: 6px 12px; cursor: pointer; font-family: var(--mono); font-size: 9px;
+  transition: all 0.15s;
+}
+.pagination button:hover { border-color: var(--teal); color: var(--teal); }
+.pagination button:disabled { opacity: 0.3; cursor: default; }
+.pagination .info { color: var(--fg3); }
+.zero { color: var(--fg3); opacity: 0.55; }
+.medal-1 { color: var(--amber); font-weight: 700; }
+.medal-2 { color: var(--teal); font-weight: 600; }
+.medal-3 { color: var(--teal); font-weight: 600; }
+</style>
+</head><body>
+<div class="header">
+  <div class="header-brand"><span class="e">EMPIRE</span><span class="ai">AI</span></div>
+  <h1>Referral <em>Leaderboard</em></h1>
+  <div style="font-family:var(--mono);font-size:9px;color:var(--fg3);">Preview · 500 referrers · all $0</div>
+</div>
+<div class="container">
+  <div class="stats-row">
+    <div class="stat-card">
+      <div class="label">Total Referrers</div>
+      <div class="value amber" id="totalRefs">—</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">Total Referrals</div>
+      <div class="value" id="totalRefsCount">0</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">Total Earned</div>
+      <div class="value teal" id="totalEarned">$0.00</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">Total Paid</div>
+      <div class="value cyan" id="totalPaid">$0.00</div>
+    </div>
+  </div>
+
+  <div class="section-title">
+    <strong>Referral Leaderboard</strong>
+    <span class="count" id="lbCount">—</span>
+  </div>
+
+  <div class="search-bar">
+    <input type="text" id="searchInput" placeholder="Search by contractor name or metro..." oninput="filterAndRender()" />
+    <span class="hint" id="resultHint">Showing 1–50 of 500</span>
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th class="num" style="width:50px;">#</th>
+          <th>Referrer</th>
+          <th style="width:140px;">Metro</th>
+          <th class="num" style="width:90px;">Referred</th>
+          <th class="num" style="width:110px;">Total Earned</th>
+          <th class="num" style="width:90px;">Paid</th>
+        </tr>
+      </thead>
+      <tbody id="leaderboardBody">
+        <tr><td class="empty-state" colspan="6">Loading...</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="pagination">
+    <button id="prevBtn" onclick="prevPage()" disabled>← Prev</button>
+    <span class="info" id="pageInfo">Page 1 of 10</span>
+    <button id="nextBtn" onclick="nextPage()">Next →</button>
+  </div>
+
+  <div class="footer">
+    All 500 referrers at $0.00 · $500 bounty per contractor referral · First referral to earn takes #1
+  </div>
+</div>
+
+<script src="leaderboard_data.js"></script>
+<script>
+const PER_PAGE = 50;
+let currentPage = 1;
+let filteredData = [];
+
+function init() {
+  const all = (window.LEADERBOARD_DATA || []).slice();
+  // Sort alphabetically for the zero-state preview
+  all.sort(function(a, b) {
+    var an = a.name.toLowerCase(), bn = b.name.toLowerCase();
+    return an < bn ? -1 : an > bn ? 1 : 0;
+  });
+  filteredData = all;
+  document.getElementById('totalRefs').textContent = all.length.toLocaleString();
+  renderPage();
+}
+
+function filterAndRender() {
+  var q = document.getElementById('searchInput').value.toLowerCase().trim();
+  var all = (window.LEADERBOARD_DATA || []).slice();
+  all.sort(function(a, b) {
+    var an = a.name.toLowerCase(), bn = b.name.toLowerCase();
+    return an < bn ? -1 : an > bn ? 1 : 0;
+  });
+  if (!q) {
+    filteredData = all;
+  } else {
+    filteredData = all.filter(function(e) {
+      return e.name.toLowerCase().indexOf(q) !== -1 || e.metro.toLowerCase().indexOf(q) !== -1;
+    });
+  }
+  currentPage = 1;
+  renderPage();
+}
+
+function renderPage() {
+  var total = filteredData.length;
+  var totalPages = Math.max(1, Math.ceil(total / PER_PAGE));
+  if (currentPage > totalPages) currentPage = totalPages;
+
+  var start = (currentPage - 1) * PER_PAGE;
+  var end = Math.min(start + PER_PAGE, total);
+  var page = filteredData.slice(start, end);
+
+  var tbody = document.getElementById('leaderboardBody');
+  if (total === 0) {
+    tbody.innerHTML = '<tr><td class="empty-state" colspan="6"><div class="big">🔍</div>No matching referrers found</td></tr>';
+  } else {
+    tbody.innerHTML = page.map(function(e, i) {
+      var globalIdx = start + i;
+      var rank = globalIdx + 1;
+      var medal = rank <= 3 ? (rank === 1 ? '🥇 ' : (rank === 2 ? '🥈 ' : '🥉 ')) : '';
+      var rankCls = rank === 1 ? 'medal-1' : (rank <= 3 ? 'medal-2' : '');
+      return '<tr>' +
+        '<td class="num ' + rankCls + '">' + medal + rank + '</td>' +
+        '<td style="font-weight:500;">' + esc(e.name) + '</td>' +
+        '<td style="color:var(--fg3);">' + esc(e.metro) + '</td>' +
+        '<td class="num zero">0</td>' +
+        '<td class="num zero">$0.00</td>' +
+        '<td class="num zero">$0.00</td>' +
+      '</tr>';
+    }).join('');
+  }
+
+  document.getElementById('lbCount').textContent = total + ' referrer' + (total === 1 ? '' : 's');
+  document.getElementById('resultHint').textContent = 'Showing ' + (start + 1) + '–' + end + ' of ' + total;
+  document.getElementById('pageInfo').textContent = 'Page ' + currentPage + ' of ' + totalPages;
+  document.getElementById('prevBtn').disabled = currentPage <= 1;
+  document.getElementById('nextBtn').disabled = currentPage >= totalPages;
+}
+
+function prevPage() { if (currentPage > 1) { currentPage--; renderPage(); } }
+function nextPage() { var tp = Math.max(1, Math.ceil(filteredData.length / PER_PAGE)); if (currentPage < tp) { currentPage++; renderPage(); } }
+
+function esc(s) {
+  if (!s) return '';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+init();
+</script>
+</body></html>

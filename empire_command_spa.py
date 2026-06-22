@@ -1827,6 +1827,7 @@ const NAV_GROUPS = [
       { id: 'support',       label: 'Support',        sub: 'FAQ · contact · live chat' },
       { id: 'stack', label: 'Stack', sub: 'Infra · services · incidents' },
       { id: 'agent-os',   label: 'Agent OS',     sub: 'Kernel · agents · IPC · boot' },
+      { id: "mc-os", label: "Mission Control OS", sub: "System metrics · skills · anomalies" },
     ]
   },
 ];
@@ -10845,6 +10846,7 @@ function App() {
             active.id === 'analytics'     ? html`<${Analytics} />` :
             active.id === 'psychology'    ? html`<${PsychologyDashboard} />` :
             active.id === 'self-awareness' ? html`<${SelfAwarenessDashboard} />` :
+            active.id === "mc-os"          ? html`u003c${McOsRedirect} />` :
             active.id === 'agent-os'       ? html`<${AgentOSDashboard} />` :
             active.id === 'bridge'        ? html`<${Bridge} />` :
             active.id === 'affiliates'    ? html`<${Affiliates} />` :
@@ -11675,6 +11677,13 @@ function QC() {
     </div>
   `;
 }
+
+// ── Mission Control OS redirect ──────────────────────────────────
+const McOsRedirect = () => {
+  useEffect(() => { window.location.href = "http://localhost:8060"; }, []);
+  return html`u003cdiv class="stub"u003eu003cdiv class="stub-body"u003eRedirecting to Mission Control OS dashboardu2026u003c/divu003eu003c/divu003e`;
+};
+
 
 createRoot(document.getElementById('root')).render(html`<${App} />`);
 """

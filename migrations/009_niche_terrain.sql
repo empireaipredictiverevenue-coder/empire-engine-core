@@ -10,7 +10,7 @@
 -- Records from monitoring social communities: what people are saying,
 -- engagement levels, sentiment. Feeds the habit learning engine.
 CREATE TABLE IF NOT EXISTS social_observations (
-    id                INTEGER PRIMARY KEY AUTOINCREMENT,
+    id                BIGSERIAL PRIMARY KEY,
     niche             TEXT NOT NULL,
     platform          TEXT NOT NULL,
     community_name    TEXT NOT NULL DEFAULT '',
@@ -32,7 +32,7 @@ CREATE INDEX IF NOT EXISTS idx_social_obs_sentiment
 -- Learned behavioral patterns per niche: peak hours, content preferences,
 -- sentiment baselines, decision cycles. Updated by the habit learning engine.
 CREATE TABLE IF NOT EXISTS niche_habit_traits (
-    id                INTEGER PRIMARY KEY AUTOINCREMENT,
+    id                BIGSERIAL PRIMARY KEY,
     niche             TEXT NOT NULL,
     trait_key         TEXT NOT NULL,
     trait_value       TEXT NOT NULL,   -- JSON string for complex values

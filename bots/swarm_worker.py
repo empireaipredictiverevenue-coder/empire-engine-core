@@ -156,8 +156,8 @@ class SwarmOrchestrationNode:
             return
         try:
             sb.table("agent_registry").upsert({
-                "agent_name": "swarm_worker",
-                "role_name": "mesh_studio_render",
+                "agent_name": "mesh.swarm_worker",
+                "role_name": "swarm_worker",
                 "status": "ACTIVE",
                 "last_ping": datetime.now(timezone.utc).isoformat(),
                 "enabled": True,
@@ -346,7 +346,7 @@ class SwarmOrchestrationNode:
             return None
         try:
             r = sb.rpc("claim_next_task", {
-                "p_agent_name": "swarm_worker",
+                "p_agent_name": "mesh.swarm_worker",
                 "p_task_types": ["swarm.fire", "swarm.strike_video"],
             }).execute()
             if r.data:

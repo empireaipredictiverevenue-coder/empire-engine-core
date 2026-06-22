@@ -108,6 +108,31 @@ PRODUCT_CATALOG = {
             "ANALYZER_ENTERPRISE": {"price": 399,  "checks": 0,   "features": ["unlimited operations", "all tools", "Shodan device scanning", "deep OSINT", "priority support"]},
         },
     },
+    "meetily": {
+        "name": "Meetily AI",
+        "tiers": {
+            "MEETILY_STARTER":    {"price": 99,   "checks": 0,   "features": ["Local transcription (Whisper)", "AI summaries", "Single user license", "Ollama support", "Basic meeting search", "Email support"]},
+            "MEETILY_PRO":        {"price": 299,  "checks": 0,   "features": ["Everything in Starter", "Up to 5 users", "Speaker diarization", "Custom summary workflows", "Advanced export (PDF/DOCX/SRT)", "Claude/Groq/OpenRouter support", "Priority email support"]},
+            "MEETILY_ENTERPRISE": {"price": 999,  "checks": 0,   "features": ["Everything in Pro", "Unlimited users", "Dedicated server deployment", "White-label branding", "Custom integrations", "On-premise/VPC hosting", "99.9% SLA", "Dedicated support engineer"]},
+        },
+    },
+    "elite_scraper": {
+        "name": "Elite Scraper v2",
+        "tiers": {
+            "SCRAPER_STARTER":    {"price": 149,  "checks": 100, "features": ["Camofox-browser stealth scraping", "1 niche", "100 leads/month", "Basic enrichment (name/phone/address)", "Weekly delivery via CSV or API", "Email support"]},
+            "SCRAPER_PRO":        {"price": 499,  "checks": 500, "features": ["Camofox-browser + search macros", "YouTube transcript intelligence", "Up to 3 niches across 4 metros", "500 leads/month", "Predictive scoring (LLM + rules)", "Real-time delivery via API/webhook", "Priority email support"]},
+            "SCRAPER_ENTERPRISE": {"price": 1999, "checks": 0,   "features": ["Camofox + Prospector + YouTube fleet", "36+ lanes (all niches x all metros)", "5,000+ leads/month", "Synthetic Brain deep reasoning", "AGI self-improvement", "99.9% SLA", "Dedicated support engineer"]},
+        },
+    },
+    "ai_closer": {
+        "name": "AI Closer",
+        "tiers": {
+            "CLOSER_STARTER":    {"price": 299,  "checks": 50,  "features": ["Template-based static NCCO calls", "Basic email nurture", "BrainDecider GO/NO-GO scoring", "Monthly decision log"]},
+            "CLOSER_PRO":        {"price": 999,  "checks": 200, "features": ["AGI-generated scripts", "Static NCCO + SMS + email", "2 closer personas", "ClosingExpert objection handling", "Lead persona detection"]},
+            "CLOSER_ENTERPRISE": {"price": 2499, "checks": 0,   "features": ["Live Kokoro TTS streaming calls", "All 5 closer personas", "Multi-turn objection loop", "AGI premium scripts", "Real-time outcome feedback", "Operator notify on connects"]},
+            "EXECUTIVE_WHALE":   {"price": 9997, "checks": 0,   "features": ["Priority dispatch — skip queue", "Dedicated operator warm-forward", "Priority Synthetic Brain inference", "24/7 SLA <5min response", "Custom script fine-tuning", "Weekly strategy calibration", "Dedicated account manager"]},
+        },
+    },
 }
 
 # ── Upsell paths — tier → recommended_next_tier ──────────────────────────────
@@ -129,6 +154,9 @@ UPSELL_PATHS = {
     "HEXSTRIKE_GROWTH":                      "HEXSTRIKE_ENTERPRISE",
     "ANALYZER_LITE":                         "ANALYZER_GROWTH",
     "ANALYZER_GROWTH":                       "ANALYZER_ENTERPRISE",
+    "CLOSER_STARTER":                         "CLOSER_PRO",
+    "CLOSER_PRO":                             "CLOSER_ENTERPRISE",
+    "CLOSER_ENTERPRISE":                      "EXECUTIVE_WHALE",
 }
 
 UPGRADE_MONTHLY_SAVINGS = {
@@ -138,6 +166,11 @@ UPGRADE_MONTHLY_SAVINGS = {
     "FORECAST_LITE→PRO":          300,
     "CONTENT_PULSE_STARTER→GROWTH": 150,    "CONTRACTOR_EXCHANGE_STARTER→GROWTH":   300,
     "ANALYZER_LITE→GROWTH":                 100,
+    "MEETILY_STARTER→PRO":                    200,
+    "MEETILY_PRO→ENTERPRISE":                  700,
+    "CLOSER_STARTER→PRO":                      700,
+    "CLOSER_PRO→ENTERPRISE":                   1500,
+    "CLOSER_ENTERPRISE→EXECUTIVE_WHALE":       7498,
 }
 
 # ── Trial config per product ─────────────────────────────────────────────────
@@ -152,6 +185,8 @@ TRIAL_CONFIG = {
     "contractor_exchange":  {"days": 14, "checks": 50, "trial_tier": "CONTRACTOR_EXCHANGE_STARTER"},
     "hexstrike":            {"days": 7,  "checks": 5,  "trial_tier": "HEXSTRIKE_STARTER"},
     "analyzer":             {"days": 7,  "checks": 10, "trial_tier": "ANALYZER_LITE"},
+    "meetily":              {"days": 14, "checks": 0,  "trial_tier": "MEETILY_STARTER"},
+    "ai_closer":            {"days": 7,  "checks": 5,  "trial_tier": "CLOSER_STARTER"},
 }
 
 # ── Pydantic models ─────────────────────────────────────────────────────────

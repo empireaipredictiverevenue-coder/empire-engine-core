@@ -167,7 +167,15 @@ class SkillHarness:
         return error_out
 
     async def _build_context(self, input: SkillInput) -> SkillContext:
-        """Build the injection context for this execution."""
+        """Build the injection context for this execution.
+
+        Injects:
+          - Skill dependencies (from registry)
+          - AGI Governor: current strategy and staleness snapshot
+          - SI Strategy: best genome for niche, win rates
+          - Predictive Revenue: per-lane forecast, close rate, health
+        All three are lazy-imported and fail gracefully (None if unavailable).
+        """
         context = SkillContext()
 
         if self._config.inject_skills and self._registry:
@@ -179,6 +187,44 @@ class SkillHarness:
         if self._config.mock_deps:
             for name, mock in self._config.mock_deps.items():
                 context.inject_skill(name, mock)
+
+        # ── Inject AGI Governor context ────────────────────────────────
+        agi_context = {}
+        try:
+            from empire_agi_governor import governor as _gov
+            agi_context["strategy"] = _gov.direct_strategy()
+            agi_context["health"] = _gov.check_agent_staleness()
+        except Exception as e:
+            log.debug(f"[harness] AGI governor unavailable: {e}")
+            agi_context["error"] = str(e)[:100]
+        context.inject("agi_governor", agi_context)
+
+        # ── Inject SI Strategy context ─────────────────────────────────
+        si_context = {}
+        try:
+            from empire_si_strategy import StrategyEvolution
+            si_instance = StrategyEvolution.get_shared_instance()
+            if si_instance is not None:
+                si_context["snapshot"] = si_instance.snapshot()
+                si_context["best_per_niche"] = si_instance.snapshot().get("best_per_niche", {})
+            else:
+                si_context["wired"] = False
+        except Exception as e:
+            log.debug(f"[harness] SI strategy unavailable: {e}")
+            si_context["error"] = str(e)[:100]
+        context.inject("si_strategy", si_context)
+
+        # ── Inject Predictive Revenue context ──────────────────────────
+        pr_context = {}
+        try:
+            from bots import predictive_revenue
+            pr_context["forecast"] = predictive_revenue.per_lane_forecast()
+            pr_context["close_rate"] = predictive_revenue.get_close_rate()
+            pr_context["health"] = predictive_revenue.revenue_health_check()
+        except Exception as e:
+            log.debug(f"[harness] predictive revenue unavailable: {e}")
+            pr_context["error"] = str(e)[:100]
+        context.inject("predictive_revenue", pr_context)
 
         return context
 

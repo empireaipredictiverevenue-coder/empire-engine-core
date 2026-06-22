@@ -10,13 +10,14 @@ Run modes:
     python3 scripts/vault_monitor.py              # full check + alert
     python3 scripts/vault_monitor.py --quiet       # silent check (log only)
     python3 scripts/vault_monitor.py --force       # re-alert even if balance unchanged
-
-Cron: */30 * * * *  (every 30 minutes)
+    python3 scripts/vault_monitor.py --loop        # continuous PM2 mode (checks every 60s)
+    python3 scripts/vault_monitor.py --loop --interval 30  # custom interval (seconds)
 """
 
 import os
 import sys
 import json
+import time
 import logging
 import argparse
 from datetime import datetime, timezone
@@ -224,13 +225,24 @@ def main():
     p = argparse.ArgumentParser(description="Solana vault wallet monitor")
     p.add_argument("--quiet", action="store_true", help="No Telegram alert")
     p.add_argument("--force", action="store_true", help="Force re-alert")
+    p.add_argument("--loop", action="store_true", help="Run continuously (PM2 mode)")
+    p.add_argument("--interval", type=int, default=60, help="Check interval in seconds (default: 60)")
     args = p.parse_args()
 
     import asyncio
-    result = asyncio.run(check_vault(quiet=args.quiet, force=args.force))
 
-    # Print summary as JSON for log parsing
-    print(json.dumps(result, indent=2, default=str))
+    if args.loop:
+        log.info(f"Vault monitor starting in loop mode (interval={args.interval}s)")
+        while True:
+            try:
+                result = asyncio.run(check_vault(quiet=args.quiet, force=args.force))
+                print(json.dumps(result, indent=2, default=str))
+            except Exception as e:
+                log.error(f"Loop iteration failed: {e}")
+            time.sleep(args.interval)
+    else:
+        result = asyncio.run(check_vault(quiet=args.quiet, force=args.force))
+        print(json.dumps(result, indent=2, default=str))
 
 
 if __name__ == "__main__":

@@ -55,8 +55,11 @@ VALID_TIERS = {"ROUTER_SaaS", "DATA_ENTERPRISE", "SPY_DATA", "ALL_ACCESS",
                 "CONTENT_PULSE_STARTER", "CONTENT_PULSE_GROWTH", "CONTENT_PULSE_ENTERPRISE",
                 "CONTRACTOR_EXCHANGE_STARTER", "CONTRACTOR_EXCHANGE_GROWTH", "CONTRACTOR_EXCHANGE_ENTERPRISE",
                 "HEXSTRIKE_STARTER", "HEXSTRIKE_GROWTH", "HEXSTRIKE_ENTERPRISE",
-                "ANALYZER_LITE", "ANALYZER_GROWTH", "ANALYZER_ENTERPRISE"}
-VALID_PRODUCTS = {"inbound_router", "data_vault", "buyer_spy", "seo_optimizer", "lead_score", "compliant", "strike_campaigns", "forecast", "market_eye", "content_pulse", "contractor_exchange", "hexstrike", "analyzer"}
+                "ANALYZER_LITE", "ANALYZER_GROWTH", "ANALYZER_ENTERPRISE",
+                "MEETILY_STARTER", "MEETILY_PRO", "MEETILY_ENTERPRISE",
+                "SCRAPER_STARTER", "SCRAPER_PRO", "SCRAPER_ENTERPRISE",
+                "CLOSER_STARTER", "CLOSER_PRO", "CLOSER_ENTERPRISE", "EXECUTIVE_WHALE"}
+VALID_PRODUCTS = {"inbound_router", "data_vault", "buyer_spy", "seo_optimizer", "lead_score", "compliant", "strike_campaigns", "forecast", "market_eye", "content_pulse", "contractor_exchange", "hexstrike", "analyzer", "meetily", "elite_scraper", "ai_closer"}
 VALID_STATUSES = {"ACTIVE", "PAST_DUE", "CANCELED", "TRIALING"}
 
 # ── Feature flag column mapping ──────────────────────────────────
@@ -274,6 +277,8 @@ class SuiteSubscriptionEngine:
             flags["seo_audits_per_month"] = 0
             flags["seo_keywords_per_month"] = 0
             flags["seo_content_pieces_per_month"] = 0
+            flags["meetily_enabled"] = 1
+            flags["elite_scraper_enabled"] = 1
         elif tier == "SEO_STARTER":
             flags["seo_audits_enabled"] = 1
             flags["seo_keyword_tracking_enabled"] = 1
@@ -299,6 +304,12 @@ class SuiteSubscriptionEngine:
             flags["seo_audits_per_month"] = 0
             flags["seo_keywords_per_month"] = 0
             flags["seo_content_pieces_per_month"] = 0
+        elif "MEETILY" in tier:
+            flags["meetily_enabled"] = 1
+        elif "SCRAPER" in tier:
+            flags["elite_scraper_enabled"] = 1
+        elif "CLOSER" in tier or tier == "EXECUTIVE_WHALE":
+            flags["closer_enabled"] = 1
         return flags
 
     def _upsert_flags(self, account_id: str, flags: dict):
@@ -431,6 +442,9 @@ class SuiteGuard:
         "contractor_exchange":     "contractor_exchange_enabled",
         "hexstrike":               "hexstrike_enabled",
         "analyzer":                "analyzer_enabled",
+        "meetily":                 "meetily_enabled",
+        "elite_scraper":           "elite_scraper_enabled",
+        "ai_closer":               "closer_enabled",
     }
 
     def __init__(

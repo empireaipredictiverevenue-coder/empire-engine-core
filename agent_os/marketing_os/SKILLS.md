@@ -1,266 +1,124 @@
-# MARKETING · Skills Registry
+# MARKETING OS · Skills Registry
 
-## Registered Skills
+## Overview
+45 registered marketing skills sourced from the [marketingskills](https://github.com/coreyhaines31/marketingskills) repository. Each skill wraps a `SKILL.md` prompt template and is executable via the Skills Framework's `HarnessManager.run()`.
+
+All skills are registered in `skills/marketing_skills.py` and wired into the hub's `empire_skills_init.py`. They are callable directly via `HarnessManager.run("marketing.<skill>", params)` or indirectly through the mesh task queue via `mesh.marketing.execute`.
+
+### Execution modes
+- **LLM mode** — If `ask_llm` is wired, the skill executes its SKILL.md prompt template against the LLM.
+- **Analysis-only mode** — Without LLM, the skill returns the parsed instructions for manual execution.
+
+---
+
+### Product & Strategy
+
+| Skill | Directory | Description |
+|-------|-----------|-------------|
+| `marketing.product` | `product-marketing` | Product marketing strategy — positioning, messaging, pricing, GTM, competitive differentiation |
+| `marketing.marketing-plan` | `marketing-plan` | Marketing plan creation — channel mix, budget allocation, quarterly roadmaps |
+| `marketing.pricing` | `pricing` | Pricing strategy — value-based pricing, tiering, packaging, discount psychology |
+| `marketing.launch` | `launch` | Product launch strategy — pre-launch, launch day, post-launch campaigns and timing |
+| `marketing.marketing-psychology` | `marketing-psychology` | Marketing psychology — persuasion triggers, cognitive biases, behavioral economics |
+
+### Email & Outreach
+
+| Skill | Directory | Description |
+|-------|-----------|-------------|
+| `marketing.emails` | `emails` | Email sequence design — drip campaigns, welcome series, lifecycle emails, behavior-triggered flows |
+| `marketing.cold-email` | `cold-email` | Cold email outreach — copy templates, sequencing, deliverability, personalization |
+| `marketing.sms` | `sms` | SMS marketing — campaign strategy, compliance (TCPA), automation, segmentation |
+| `marketing.prospecting` | `prospecting` | B2B prospecting — ICP definition, lead sourcing, enrichment, sequencing |
+
+### Paid Advertising
+
+| Skill | Directory | Description |
+|-------|-----------|-------------|
+| `marketing.ads` | `ads` | Paid advertising campaigns — strategy, bidding, platform selection, optimization |
+| `marketing.ad-creative` | `ad-creative` | Ad creative strategy — visual concepts, copy angles, creative testing frameworks |
+| `marketing.offers` | `offers` | Offer strategy — discount design, bundling, pricing promotions, urgency tactics |
 
 ### Copy & Content
 
-#### 1. `marketing.copywriting`
-Write persuasive copy for landing pages, emails, ads, social, and web.
-- Input: product/service, audience, tone, medium, key message
-- Output: finished copy with headlines, body, CTAs
-- Source: skills/marketingskills/skills/copywriting/SKILL.md
+| Skill | Directory | Description |
+|-------|-----------|-------------|
+| `marketing.copywriting` | `copywriting` | Copywriting for landing pages, emails, ads, social, and web copy |
+| `marketing.copy-editing` | `copy-editing` | Copy editing — clarity, concision, tone, grammar, brand voice consistency |
+| `marketing.content-strategy` | `content-strategy` | Content strategy — editorial planning, topic clusters, content lifecycle |
+| `marketing.video` | `video` | Video marketing strategy — content types, distribution, optimization, platforms |
+| `marketing.image` | `image` | Visual content strategy — infographics, data visualization, branded imagery |
+| `marketing.ideas` | `marketing-ideas` | Marketing idea generation — channel brainstorming, creative concepts, growth experiments |
 
-#### 2. `marketing.copy-editing`
-Edit copy for clarity, concision, tone, grammar, and brand voice consistency.
-- Input: draft copy, brand guidelines, editorial notes
-- Output: edited copy with change annotations
+### SEO & Search
 
-#### 3. `marketing.content-strategy`
-Develop editorial plans, topic clusters, and content lifecycles.
-- Input: niche, buyer persona, content audit, goals
-- Output: 90-day content calendar with pillar/cluster topics
+| Skill | Directory | Description |
+|-------|-----------|-------------|
+| `marketing.programmatic-seo` | `programmatic-seo` | Programmatic SEO — template-based landing pages, structured data, scalable content |
+| `marketing.schema` | `schema` | Schema markup strategy — structured data, rich snippets, knowledge graph |
+| `marketing.ai-seo` | `ai-seo` | AI-powered SEO — LLM content optimization, AI search readiness, generative engine optimization |
+| `marketing.seo-audit` | `seo-audit` | SEO audit — technical SEO review, content gap analysis, competitor benchmarking |
+| `marketing.site-architecture` | `site-architecture` | Site architecture for SEO — information architecture, internal linking, URL structure |
+| `marketing.aso` | `aso` | App Store Optimization — keyword strategy, conversion rate, creative optimization |
+| `marketing.directory-submissions` | `directory-submissions` | Directory submission strategy — citation building, local SEO, niche directories |
 
-#### 4. `marketing.video`
-Video marketing strategy — content types, distribution, optimization.
-- Input: campaign goals, audience, budget, platform (YouTube, TikTok, etc.)
-- Output: video content plan with formats, thumbnails, CTAs
+### Conversion Rate Optimization (CRO)
 
-#### 5. `marketing.image`
-Visual content strategy — infographics, data viz, branded imagery.
-- Input: brand assets, data points, content themes
-- Output: visual content brief with style references
+| Skill | Directory | Description |
+|-------|-----------|-------------|
+| `marketing.cro` | `cro` | Conversion rate optimization — funnel analysis, UX testing, landing page optimization |
+| `marketing.ab-testing` | `ab-testing` | A/B testing design — hypothesis formulation, test design, statistical significance, analysis |
+| `marketing.signup` | `signup` | Signup flow optimization — form design, friction reduction, conversion rate |
+| `marketing.onboarding` | `onboarding` | User onboarding design — activation flows, time-to-value, retention mechanics |
+| `marketing.popups` | `popups` | Popup and overlay strategy — timing, targeting, design, conversion optimization |
+| `marketing.paywalls` | `paywalls` | Paywall strategy — metering, hard walls, dynamic paywalls, subscriber conversion |
 
-#### 6. `marketing.social`
-Social media marketing — platform strategy, content calendar, community management.
-- Input: platforms (LinkedIn, X, Instagram), audience, cadence
-- Output: monthly content calendar with post templates
+### Social & Community
 
-### Email & Messaging
+| Skill | Directory | Description |
+|-------|-----------|-------------|
+| `marketing.social` | `social` | Social media marketing — platform strategy, content calendar, community management |
+| `marketing.community` | `community-marketing` | Community marketing — building, engaging, and monetizing online communities |
+| `marketing.co-marketing` | `co-marketing` | Co-marketing partnerships — partner selection, joint campaigns, co-branded content |
 
-#### 7. `marketing.emails`
-Email sequence design — drip campaigns, welcome series, lifecycle emails, behavior-triggered flows.
-- Input: audience segment, goal (activation/retention/winback), cadence
-- Output: full email sequence with subject lines, body, CTAs
+### Analytics & Operations
 
-#### 8. `marketing.cold-email`
-Cold email outreach — copy templates, sequencing, deliverability, personalization.
-- Input: prospect list, ICP, value proposition
-- Output: multi-step cold email sequence with personalization variables
+| Skill | Directory | Description |
+|-------|-----------|-------------|
+| `marketing.analytics` | `analytics` | Marketing analytics — metrics frameworks, dashboard design, attribution, KPI tracking |
+| `marketing.revops` | `revops` | Revenue operations — funnel metrics, attribution, pipeline management, tooling stack |
+| `marketing.sales-enablement` | `sales-enablement` | Sales enablement — battle cards, collateral, objection handling, playbooks |
+| `marketing.churn-prevention` | `churn-prevention` | Churn prevention — retention strategies, win-back campaigns, at-risk detection |
 
-#### 9. `marketing.sms`
-SMS marketing — campaign strategy, compliance (TCPA), automation, segmentation.
-- Input: audience, offer, compliance rules, opt-in status
-- Output: SMS campaign flow with triggers, messages, opt-out handling
+### Growth & Lead Gen
 
-### SEO
+| Skill | Directory | Description |
+|-------|-----------|-------------|
+| `marketing.referrals` | `referrals` | Referral program design — customer referrals, affiliate schemes, ambassador programs, viral loops |
+| `marketing.lead-magnets` | `lead-magnets` | Lead magnet design — content upgrades, gated assets, value exchange optimization |
+| `marketing.free-tools` | `free-tools` | Free tools as marketing — interactive tools, calculators, generators for lead gen |
 
-#### 10. `marketing.programmatic-seo`
-Programmatic SEO — template-based landing pages, structured data, scalable content.
-- Input: target keywords, location data, content templates
-- Output: page template schemas with meta, H1, body structures
+### Research & Intelligence
 
-#### 11. `marketing.schema`
-Schema markup strategy — structured data, rich snippets, knowledge graph.
-- Input: page types (local, product, article, FAQ), content
-- Output: JSON-LD schema snippets per page type
+| Skill | Directory | Description |
+|-------|-----------|-------------|
+| `marketing.customer-research` | `customer-research` | Customer research — surveys, interviews, persona development, jobs-to-be-done |
+| `marketing.competitor-profiling` | `competitor-profiling` | Competitor profiling — intelligence gathering, positioning analysis, SWOT |
+| `marketing.competitors` | `competitors` | Competitive analysis — feature comparison, pricing parity, differentiation |
+| `marketing.pr` | `public-relations` | Public relations — press outreach, media kits, announcement strategy, crisis comms |
 
-#### 12. `marketing.ai-seo`
-AI-powered SEO — LLM content optimization, AI search readiness, generative engine optimization.
-- Input: target queries, existing content, competitor SERPs
-- Output: content optimization brief for AI search visibility
+---
 
-#### 13. `marketing.seo-audit`
-SEO audit — technical SEO review, content gap analysis, competitor benchmarking.
-- Input: website URL, target keywords, competitor URLs
-- Output: prioritized audit with technical, content, and off-page findings
+## Total: 45 registered skills
 
-#### 14. `marketing.site-architecture`
-Site architecture for SEO — information architecture, internal linking, URL structure.
-- Input: sitemap, content inventory, user flows
-- Output: site architecture blueprint with URL hierarchy
+### Skills on disk without registration (4)
+These `skills/marketingskills/skills/` directories have SKILL.md files but no corresponding `BaseSkill` class:
+- `keyword-research` — keyword research & discovery
+- `link-building` — backlink acquisition strategy
+- `local-seo` — local business SEO optimization
+- `technical-seo` — technical SEO audit & implementation
 
-#### 15. `marketing.directory-submissions`
-Directory submission strategy — citation building, local SEO, niche directories.
-- Input: business info, niches, target metros
-- Output: prioritized directory list with submission templates
+### Registration
+All 45 skills are registered in `skills/marketing_skills.py` via `register_marketing_skills(registry, ask_llm=None)`. When `ask_llm` is wired, skills execute their SKILL.md prompt template against the LLM. AGI/SI/PR context is injected automatically by the HarnessManager's `SkillHarness._build_context()`.
 
-### Ads & Creative
-
-#### 16. `marketing.ads`
-Paid advertising campaigns — strategy, bidding, platform selection, optimization.
-- Input: budget, audience, goal (leads/sales/brand), platforms
-- Output: full ad campaign plan with creative brief, budget allocation, KPIs
-
-#### 17. `marketing.ad-creative`
-Ad creative strategy — visual concepts, copy angles, creative testing frameworks.
-- Input: product, audience, platform, value proposition
-- Output: creative concepts with headlines, visuals, testing matrix
-
-### Growth & Conversion
-
-#### 18. `marketing.referrals`
-Referral program design — customer referrals, affiliate schemes, ambassador programs, viral loops.
-- Input: customer base, incentive budget, program goals
-- Output: referral program structure with rewards, mechanics, tracking
-
-#### 19. `marketing.lead-magnets`
-Lead magnet design — content upgrades, gated assets, value exchange optimization.
-- Input: audience pain points, content library, conversion goals
-- Output: lead magnet concepts with delivery mechanics
-
-#### 20. `marketing.free-tools`
-Free tools as marketing — interactive tools, calculators, generators for lead gen.
-- Input: audience needs, technical feasibility, SEO opportunity
-- Output: tool concept with spec, UX flow, lead capture design
-
-#### 21. `marketing.offers`
-Offer strategy — discount design, bundling, pricing promotions, urgency tactics.
-- Input: product, price point, customer segment, seasonality
-- Output: offer structure with terms, messaging, timing
-
-#### 22. `marketing.popups`
-Popup and overlay strategy — timing, targeting, design, conversion optimization.
-- Input: page type, audience behavior, conversion goal
-- Output: popup variants with triggers, design, copy
-
-#### 23. `marketing.paywalls`
-Paywall strategy — metering, hard walls, dynamic paywalls, subscriber conversion.
-- Input: content value, audience segment, business model
-- Output: paywall configuration with pricing, limits, upgrade paths
-
-### Strategy & Planning
-
-#### 24. `marketing.product`
-Product marketing strategy — positioning, messaging, pricing, GTM, competitive differentiation.
-- Input: product specs, market landscape, buyer personas
-- Output: positioning doc, messaging hierarchy, GTM plan
-
-#### 25. `marketing.marketing-plan`
-Marketing plan creation — channel mix, budget allocation, quarterly roadmaps.
-- Input: revenue targets, growth goals, current performance
-- Output: quarterly marketing plan with channel allocation, budget, milestones
-
-#### 26. `marketing.marketing-psychology`
-Marketing psychology — persuasion triggers, cognitive biases, behavioral economics.
-- Input: campaign goal, audience profile, medium
-- Output: psychology-based message framework with bias applications
-
-#### 27. `marketing.marketing-ideas`
-Marketing idea generation — channel brainstorming, creative concepts, growth experiments.
-- Input: constraints (budget, time, audience), goals
-- Output: ranked ideas with impact estimate, effort, risk
-
-### Research & Analytics
-
-#### 28. `marketing.customer-research`
-Customer research — surveys, interviews, persona development, jobs-to-be-done.
-- Input: market, existing customers, research questions
-- Output: personas, JTBD maps, insight themes
-
-#### 29. `marketing.competitor-profiling`
-Competitor profiling — intelligence gathering, positioning analysis, SWOT.
-- Input: competitor list, market landscape
-- Output: competitor profiles with SWOT, positioning maps
-
-#### 30. `marketing.competitors`
-Competitive analysis — feature comparison, pricing parity, differentiation.
-- Input: product, competitor products, market category
-- Output: comparison matrix with differentiation opportunities
-
-#### 31. `marketing.analytics`
-Marketing analytics — metrics frameworks, dashboard design, attribution, KPI tracking.
-- Input: business goals, data sources, reporting needs
-- Output: analytics framework with KPIs, dashboard spec, attribution model
-
-### Sales & Retention
-
-#### 32. `marketing.prospecting`
-B2B prospecting — ICP definition, lead sourcing, enrichment, sequencing.
-- Input: target market, deal size, sales motion
-- Output: prospecting playbook with sources, enrichment, sequence templates
-
-#### 33. `marketing.sales-enablement`
-Sales enablement — battle cards, collateral, objection handling, playbooks.
-- Input: product, competitor landscape, sales process
-- Output: enablement kit with battle cards, scripts, objection responses
-
-#### 34. `marketing.onboarding`
-User onboarding design — activation flows, time-to-value, retention mechanics.
-- Input: product, user persona, activation criteria
-- Output: onboarding flow with milestones, touchpoints, success metrics
-
-#### 35. `marketing.signup`
-Signup flow optimization — form design, friction reduction, conversion rate.
-- Input: current signup flow, drop-off data, user research
-- Output: optimized signup flow with A/B test plan
-
-#### 36. `marketing.churn-prevention`
-Churn prevention — retention strategies, win-back campaigns, at-risk detection.
-- Input: churn data, customer segments, product usage
-- Output: retention playbook with triggers, campaigns, success metrics
-
-### Optimization
-
-#### 37. `marketing.ab-testing`
-A/B testing design — hypothesis formulation, test design, statistical significance, analysis.
-- Input: current performance, improvement hypothesis, traffic volume
-- Output: test plan with variants, sample size, duration, analysis framework
-
-#### 38. `marketing.cro`
-Conversion rate optimization — funnel analysis, UX testing, landing page optimization.
-- Input: funnel data, user behavior, business goals
-- Output: optimization roadmap with test prioritization
-
-#### 39. `marketing.pricing`
-Pricing strategy — value-based pricing, tiering, packaging, discount psychology.
-- Input: product value, market rates, cost structure, customer segments
-- Output: pricing framework with tiers, packaging, discount rules
-
-#### 40. `marketing.revops`
-Revenue operations — funnel metrics, attribution, pipeline management, tooling stack.
-- Input: current stack, revenue data, team structure
-- Output: RevOps blueprint with tool recommendations, process maps
-
-#### 41. `marketing.launch`
-Product launch strategy — pre-launch, launch day, post-launch campaigns and timing.
-- Input: product, audience, launch goals, competitive timing
-- Output: phased launch plan with milestones, campaigns, risk mitigation
-
-### Partnerships & Community
-
-#### 42. `marketing.co-marketing`
-Co-marketing partnerships — partner selection, joint campaigns, co-branded content.
-- Input: strategic goals, audience overlap, partner criteria
-- Output: partner list with outreach templates, campaign playbook
-
-#### 43. `marketing.community`
-Community marketing — building, engaging, and monetizing online communities.
-- Input: audience, platform, engagement goals
-- Output: community strategy with growth, engagement, monetization plans
-
-#### 44. `marketing.pr`
-Public relations — press outreach, media kits, announcement strategy, crisis comms.
-- Input: company narrative, target publications, announcement calendar
-- Output: PR kit with press release template, media list, pitch templates
-
-### Mobile
-
-#### 45. `marketing.aso`
-App Store Optimization — keyword strategy, conversion rate, creative optimization.
-- Input: app, target keywords, competitive landscape
-- Output: ASO strategy with keywords, creatives, conversion tactics
-
-## Skill Categories
-| Category | Skills | Count |
-|---|---|---|
-| Copy & Content | copywriting, copy-editing, content-strategy, video, image, social | 6 |
-| Email & Messaging | emails, cold-email, sms | 3 |
-| SEO | programmatic-seo, schema, ai-seo, seo-audit, site-architecture, directory-submissions | 6 |
-| Ads & Creative | ads, ad-creative | 2 |
-| Growth & Conversion | referrals, lead-magnets, free-tools, offers, popups, paywalls | 6 |
-| Strategy & Planning | product, marketing-plan, marketing-psychology, marketing-ideas | 4 |
-| Research & Analytics | customer-research, competitor-profiling, competitors, analytics | 4 |
-| Sales & Retention | prospecting, sales-enablement, onboarding, signup, churn-prevention | 5 |
-| Optimization | ab-testing, cro, pricing, revops, launch | 5 |
-| Partnerships & Community | co-marketing, community, pr | 3 |
-| Mobile | aso | 1 |
+### Mesh routing
+Marketing skills are dispatched through the `agent_task_queue` via `marketing.*` task types. The `mesh.marketing` worker polls for these tasks and calls `/api/hermes/execute-skill` on the hub, which routes through `AgentMesh.execute_marketing_skill()` → `HarnessManager.run()`.

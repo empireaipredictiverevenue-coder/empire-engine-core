@@ -19,8 +19,9 @@ Scraper agents in the fleet:
     Supports 36+ niches with AGI self-improvement.
 
   - products/agent_reach_enrichment.py — Agent-Reach multi-channel intelligence.
-    9 channels: GitHub search, semantic search, Jina Reader, RSS feeds,
-    YouTube transcripts, V2EX, Bilibili, Twitter, Reddit.
+    19 channels: GitHub, semantic search, Jina Reader, RSS, YouTube,
+    V2EX, Bilibili, Twitter, Reddit, HN, arXiv, Wayback, Wikipedia,
+    Cloudscraper, Crawl4AI, Apify, Google, Claude, DNS/Geo.
 
   - empire_agi_governor.py — AGI Governor: per-niche strategy selection
     via SI StrategyEvolution, win-rate tracking, outcome recording.
@@ -30,9 +31,10 @@ Scraper agents in the fleet:
 
 Empire AI provides:
   - Hosted camofox-browser infrastructure
-  - Agent-Reach multi-channel intelligence layer (9 channels)
+  - Agent-Reach multi-channel intelligence layer (11 Pro / 19 Enterprise channels)
   - AGI Governor strategy routing per niche
   - SI Strategy genome enrichment + outcome feedback loop
+  - SI-genome-driven channel selection: channel mix adapts per niche/contractor
   - Managed data pipelines into Supabase
   - Centralized user management + billing
   - Custom niche/metro configuration per client
@@ -67,7 +69,7 @@ ELITE_SCRAPER_TIERS = {
     },
     "SCRAPER_PRO": {
         "price": 599,
-        "description": "Multi-niche scraping with Agent-Reach intelligence (GitHub, semantic search, RSS, Jina), predictive scoring, and real-time delivery",
+        "description": "Multi-niche scraping with Agent-Reach intelligence (11 channels), predictive scoring, and real-time delivery",
         "features": [
             "Up to 3 niches across 4 metros",
             "500 leads/month",
@@ -76,23 +78,35 @@ ELITE_SCRAPER_TIERS = {
             "Agent-Reach: Semantic search — free Google alternative",
             "Agent-Reach: RSS monitoring — passive lead generation",
             "Agent-Reach: Jina Reader — intelligent web browsing",
+            "Agent-Reach: HN Search — tech/startup industry signals",
+            "Agent-Reach: Wikipedia — entity research & background",
+            "Agent-Reach: Wayback Machine — historical web content",
+            "Agent-Reach: YouTube transcripts — competitive video intel",
+            "Agent-Reach: Twitter/X + Reddit — social & community signals",
+            "Agent-Reach: arXiv — academic & research paper discovery",
+            "SI-genome-driven channel selection: channel mix adapts per niche",
             "YouTube transcript scraping + Synthetic Brain analysis",
             "Predictive lead scoring (LLM + rules hybrid)",
             "Smart deduplication across sources",
             "Real-time delivery via API/webhook",
             "Priority email support",
         ],
-        "agent_reach_channels": ["jina_read", "semantic_search", "rss_fetch", "github_search"],
+        "agent_reach_channels": [
+            "jina_read", "semantic_search", "rss_fetch", "github_search",
+            "hn_search", "wikipedia_search", "wayback_fetch",
+            "youtube_transcript", "twitter_search", "reddit_search",
+            "arxiv_search",
+        ],
     },
     "SCRAPER_ENTERPRISE": {
         "price": 2499,
-        "description": "Full-scale predictive scraper fleet with all 36+ niches, all 7 Agent-Reach channels, Prospector agent, proxy rotation, and managed deployment",
+        "description": "Full-scale predictive scraper fleet with all 36+ niches, all 19 Agent-Reach channels, Prospector agent, proxy rotation, and managed deployment",
         "features": [
             "All 6+ niches across all 4+ metros (36+ lanes)",
             "5,000+ leads/month",
             "Camofox-browser with full proxy rotation + session persistence",
-            "Agent-Reach: ALL 7 channels — GitHub, semantic search, RSS, Jina, YouTube, V2EX, Bilibili",
-            "Agent-Reach: V2EX + Bilibili — Chinese market intelligence",
+            "Agent-Reach: ALL 19 channels — SI-genome-driven channel selection per niche",
+            "SI Strategy genome wiring: channel mix adapts to niche performance data",
             "Predictive Prospector Agent for lead discovery",
             "YouTube scraper for competitive content intel",
             "Synthetic Brain integration for deep reasoning",
@@ -101,8 +115,14 @@ ELITE_SCRAPER_TIERS = {
             "99.9% SLA",
             "Dedicated support engineer",
         ],
-        "agent_reach_channels": ["jina_read", "semantic_search", "rss_fetch", "github_search",
-                                  "youtube_transcript", "v2ex_browse", "bilibili_search"],
+        "agent_reach_channels": [
+            "jina_read", "semantic_search", "rss_fetch", "github_search",
+            "youtube_transcript", "v2ex_browse", "bilibili_search",
+            "twitter_search", "reddit_search", "hn_search", "arxiv_search",
+            "wayback_fetch", "wikipedia_search", "cloudscraper_fetch",
+            "crawl4ai", "apify_scrape", "google_web_search", "claude_analyze",
+            "dns_geo_lookup",
+        ],
     },
 }
 
@@ -114,13 +134,15 @@ class EliteScraperProduct:
       - Camofox Scraper: B2B lead scraping via stealth browser
       - YouTube Scraper: Transcripts + content intelligence
       - Prospector Agent: Lead discovery across 36+ lanes
-      - Agent-Reach: 7-channel multi-source intelligence (GitHub, semantic
-        search, RSS, Jina Reader, YouTube, V2EX, Bilibili)
+      - Agent-Reach: 19-channel multi-source intelligence (GitHub, semantic
+        search, RSS, Jina Reader, YouTube, V2EX, Bilibili, Twitter, Reddit,
+        HN, arXiv, Wayback, Wikipedia, Cloudscraper, Crawl4AI, Apify,
+        Google, Claude, DNS/Geo)
 
     Resold through the Empire AI Suite with three tiers:
       - Starter ($149/mo): Single-niche, weekly delivery, Jina Reader
-      - Pro ($599/mo): Multi-niche, Agent-Reach intel, real-time
-      - Enterprise ($2,499/mo): Full fleet, all 7 channels, managed
+      - Pro ($599/mo): Multi-niche, 11 Agent-Reach channels, real-time
+      - Enterprise ($2,499/mo): Full fleet, all 19 channels, managed SI
     """
 
     def __init__(
@@ -208,39 +230,59 @@ class EliteScraperProduct:
             except Exception as e:
                 log.warning(f"[elite_scraper] AGI strategy lookup failed: {e}")
 
-        # ── Agent-Reach Enrichment (if enricher is wired) ──
+        # ── Agent-Reach Enrichment (SI-driven channel selection — genome passed to enrich()) ──
         agent_reach_result = None
         if use_agent_reach and self.enricher:
             try:
+                tier_channels = tier_config.get("agent_reach_channels", ["jina_read"])
+
+                # Determine SI genome from the first niche (all niches share one enrich call)
+                first_genome = next(iter(agi_genomes.values()), {}).get("genome", {})
+
+                # Build per-niche channel plan for metadata (informational only)
+                niche_channels = {}
+                for niche in (niches or ["roofing"]):
+                    genome = agi_genomes.get(niche, {}).get("genome", {})
+                    # _si_select_channels is a @staticmethod, call on instance is fine
+                    si_channels = self.enricher._si_select_channels(genome, tier_channels)
+                    niche_channels[niche] = si_channels
+
                 query = config.get("agent_reach_query") or (
-                    f"{', '.join(niches or ['roofing'])} contractors {', '.join(metros or ['Texas'])}"
+                    f"{'. '.join(niches or ['roofing'])} contractors {', '.join(metros or ['Texas'])}"
                 )
-                channels = tier_config.get("agent_reach_channels", ["jina_read"])
+
+                # Pass the SI genome directly to enrich() — it handles channel selection
+                # and max_results scaling internally via _si_select_channels + _si_volume_multiplier
                 agent_reach_result = await self.enricher.enrich(
                     query=query,
-                    channels=channels,
+                    channels=tier_channels,
                     max_results=min(max_leads, 25),
                     tier=tier,
                     save_to_db=True,
+                    genome=first_genome,
                     metadata={
                         "job_id": job_id,
                         "account_id": account_id,
                         "niches": niches,
                         "metros": metros,
                         "agi_strategies": agi_strategies,
+                        "agi_genomes": agi_genomes,
+                        "niche_channels": niche_channels,
+                        "si_selected": bool(first_genome),
                     },
                 )
                 if agent_reach_result.get("ok"):
                     ar_hits = agent_reach_result.get("total_hits", 0)
+                    ar_channels = agent_reach_result.get("channels_used", [])
                     self.stats["leads_collected"] += ar_hits
                     log.info(f"[elite_scraper] Agent-Reach: {ar_hits} hits across "
-                             f"{len(agent_reach_result.get('channels_used',[]))} channels")
+                             f"{len(ar_channels)} channels (SI genome-driven)")
             except Exception as e:
                 log.warning(f"[elite_scraper] Agent-Reach enrichment failed: {e}")
                 agent_reach_result = {"ok": False, "error": str(e)[:200]}
 
         # ── AGI + SI Outcome Recording (close the feedback loop) ──
-        # Only record outcomes when Agent-Reach actually executed
+        # Record per-niche outcomes so SI can evolve channel selection over time
         outcome_recorded = 0
         if use_agi_si and agi_strategies and agent_reach_result is not None:
             try:
@@ -256,7 +298,8 @@ class EliteScraperProduct:
                         revenue=revenue,
                     )
                     outcome_recorded += 1
-                log.info(f"[elite_scraper] AGI outcomes recorded: {outcome_recorded} niches")
+                log.info(f"[elite_scraper] AGI outcomes recorded: {outcome_recorded} niches"
+                         f" — SI will evolve channel selection on next cycle")
             except Exception as e:
                 log.warning(f"[elite_scraper] AGI outcome recording failed: {e}")
 
@@ -309,20 +352,28 @@ class EliteScraperProduct:
             "SCRAPER_PRO": (
                 "1. Empire AI configures up to 3 niches across 4 metros\\n"
                 "2. Camofox-browser runs with search macros (@yelp_search, @google_search)\\n"
-                "3. Agent-Reach multi-channel intel: GitHub, semantic search, RSS, Jina\\n"
-                "4. YouTube scraper monitors relevant channels for competitive intel\\n"
-                "5. Predictive brain scores and ranks every lead\\n"
-                "6. Real-time delivery via API or webhook"
+                "3. Agent-Reach multi-channel intel (11 channels):"
+                " Jina Reader, semantic search, GitHub, RSS,\\n"
+                "   HN Search, Wikipedia, Wayback Machine, YouTube transcripts,"
+                " Twitter/X, Reddit, arXiv\\n"
+                "4. SI-genome-driven channel selection: channel mix adapts per niche/contractor\\n"
+                "5. YouTube scraper monitors relevant channels for competitive intel\\n"
+                "6. Predictive brain scores and ranks every lead\\n"
+                "7. Real-time delivery via API or webhook"
             ),
             "SCRAPER_ENTERPRISE": (
                 "1. Empire AI provisions dedicated camofox-browser infrastructure\\n"
                 "2. All 6+ niches and 4+ metros active (36+ lanes)\\n"
-                "3. Agent-Reach ALL 7 channels: GitHub, semantic, RSS, Jina, YouTube, V2EX, Bilibili\\n"
-                "4. Prospector Agent discovers new leads autonomously\\n"
-                "5. YouTube scraper feeds competitive intel to Synthetic Brain\\n"
-                "6. Proxy rotation + session persistence active\\n"
-                "7. AGI self-improvement adapts scraping strategy\\n"
-                "8. API/webhook integration with full fleet pipeline"
+                "3. Agent-Reach ALL 19 channels: Jina Reader, semantic search, GitHub, RSS,\\n"
+                "   HN Search, Wikipedia, Wayback Machine, YouTube transcripts, Twitter/X,\\n"
+                "   Reddit, arXiv, V2EX, Bilibili, Cloudscraper, Crawl4AI, Apify,\\n"
+                "   Google Search, Claude AI, DNS/Geo intelligence\\n"
+                "4. SI-genome-driven channel selection + per-niche strategy routing\\n"
+                "5. Prospector Agent discovers new leads autonomously\\n"
+                "6. YouTube scraper feeds competitive intel to Synthetic Brain\\n"
+                "7. Proxy rotation + session persistence active\\n"
+                "8. AGI self-improvement adapts scraping strategy\\n"
+                "9. API/webhook integration with full fleet pipeline"
             ),
         }
         return guides.get(tier, "Contact Empire AI ops for deployment instructions.")
@@ -385,25 +436,42 @@ class EliteScraperRoutes:
             return JSONResponse(self.scraper.snapshot())
 
         # ── Agent-Reach powered enrichment endpoint ──
-        if self.enricher:
-            @app.post("/api/v6/suite/scraper/enrich")
-            async def scraper_enrich(request: Request, auth: bool = Depends(self.require_auth) if self.require_auth else None):
-                """Run Agent-Reach enrichment via Elite Scraper.
-                Body: {query, channels?, tier?, max_results?}
-                """
-                try:
-                    body = await request.json()
-                except Exception:
-                    raise HTTPException(400, "Invalid JSON")
-                query = (body.get("query") or "").strip()
-                if not query:
-                    raise HTTPException(400, "query required")
-                result = await self.enricher.enrich(
-                    query=query,
-                    channels=body.get("channels"),
-                    max_results=int(body.get("max_results", 10)),
-                    tier=body.get("tier", "SCRAPER_PRO"),
-                )
-                return JSONResponse(result)
+        @app.post("/api/v6/suite/scraper/enrich")
+        async def scraper_enrich(request: Request, auth: bool = Depends(self.require_auth) if self.require_auth else None):
+            """Run Agent-Reach enrichment via Elite Scraper.
+
+            Supports SI-genome-driven channel selection when `genome` is provided.
+
+            Body:
+                query (str): Search query (required)
+                channels (list[str], optional): Channel names to use
+                max_results (int, optional): Max results per channel (default: 10)
+                tier (str, optional): SCRAPER_STARTER | SCRAPER_PRO | SCRAPER_ENTERPRISE
+                genome (dict, optional): SI genome traits {aggressiveness, narrow_focus,
+                    outreach_intensity, risk_tolerance, price_premium} — each 0.0-1.0
+                metadata (dict, optional): Extra metadata for result storage
+                save_to_db (bool, optional): Whether to cache results (default: true)
+            """
+            # Resolve enricher at call time — it may be set after registration
+            enricher = self.enricher or self.scraper.enricher
+            if not enricher:
+                return JSONResponse({"ok": False, "error": "Agent-Reach enricher not configured"}, status_code=503)
+            try:
+                body = await request.json()
+            except Exception:
+                raise HTTPException(400, "Invalid JSON")
+            query = (body.get("query") or "").strip()
+            if not query:
+                raise HTTPException(400, "query required")
+            result = await enricher.enrich(
+                query=query,
+                channels=body.get("channels"),
+                max_results=int(body.get("max_results", 10)),
+                tier=body.get("tier", "SCRAPER_PRO"),
+                genome=body.get("genome"),
+                metadata=body.get("metadata"),
+                save_to_db=body.get("save_to_db", True),
+            )
+            return JSONResponse(result)
 
         log.info("[elite_scraper] Routes registered · /api/v6/suite/scraper/*")

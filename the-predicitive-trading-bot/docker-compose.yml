@@ -1,0 +1,85 @@
+# ═══════════════════════════════════════════════════════════════════════════
+# PREDICITIVE TRADING BOT · DOCKER COMPOSE
+# ═══════════════════════════════════════════════════════════════════════════
+# Two services:
+#   trading-bot        — Full stack (FastAPI on :8050 + stop loss monitor)
+#   trading-stoploss   — Stop loss monitor only (no API)
+#
+# Quick start:
+#   docker compose up -d                     # start both services
+#   docker compose up -d trading-bot         # start only the full stack
+#   docker compose logs -f trading-bot       # follow logs
+#   docker compose down                      # stop everything
+#
+# Environment:
+#   Copy .env.example to .env and fill in your keys, or pass inline:
+#     SOLANA_RPC_URL=... docker compose up -d
+# ═══════════════════════════════════════════════════════════════════════════
+
+services:
+  # ── Trading Bot (full stack: API :8050 + stop loss monitor) ──────────
+  trading-bot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: predicitive-trading-bot:latest
+    container_name: trading-bot
+    ports:
+      - "8050:8050"
+    environment:
+      # Solana connection
+      - SOLANA_RPC_URL=${SOLANA_RPC_URL:-https://api.mainnet-beta.solana.com}
+      - STOPLOSS_WALLET_PRIVATE_KEY=${STOPLOSS_WALLET_PRIVATE_KEY:-}
+      # Stop loss config
+      - STOPLOSS_INTERVAL_SEC=${STOPLOSS_INTERVAL_SEC:-15}
+      - STOPLOSS_SOLANA_TIMEOUT=${STOPLOSS_SOLANA_TIMEOUT:-30}
+      # API config
+      - HOST=0.0.0.0
+      - PORT=8050
+      # Trading skills API keys (optional)
+      - HELIUS_API_KEY=${HELIUS_API_KEY:-}
+      - BIRDEYE_API_KEY=${BIRDEYE_API_KEY:-}
+      - JUPITER_API_KEY=${JUPITER_API_KEY:-}
+      # AI analysis (optional)
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - AI_MODEL=${AI_MODEL:-gpt-4o-mini}
+    volumes:
+      # Persist SQLite database (positions, users, config)
+      - trading-bot-data:/app/data
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:8050/api/v1/health"]
+      interval: 30s
+      timeout: 10s
+      start_period: 15s
+      retries: 3
+    restart: unless-stopped
+    networks:
+      - trading-bot-net
+
+  # ── Stop Loss Monitor (no API) ────────────────────────────────────────
+  trading-stoploss:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: predicitive-trading-bot:latest
+    container_name: trading-stoploss
+    command: python3 stoploss_bot.py --loop
+    profiles:
+      - standalone
+    environment:
+      - SOLANA_RPC_URL=${SOLANA_RPC_URL:-https://api.mainnet-beta.solana.com}
+      - STOPLOSS_WALLET_PRIVATE_KEY=${STOPLOSS_WALLET_PRIVATE_KEY:-}
+      - STOPLOSS_INTERVAL_SEC=${STOPLOSS_INTERVAL_SEC:-15}
+      - STOPLOSS_SOLANA_TIMEOUT=${STOPLOSS_SOLANA_TIMEOUT:-30}
+    volumes:
+      - trading-bot-data:/app/data
+    restart: unless-stopped
+    networks:
+      - trading-bot-net
+
+networks:
+  trading-bot-net:
+    driver: bridge
+
+volumes:
+  trading-bot-data:

@@ -52,6 +52,14 @@ logging.basicConfig(
     format="%(asctime)s [%(name)s] %(message)s",
 )
 
+# ── Dev Browser Integration (JS-rendered website scraping fallback) ─────
+_DEV_BROWSER_AVAILABLE = False
+try:
+    from skills.browser_harness import scrape_page as _dev_scrape
+    _DEV_BROWSER_AVAILABLE = True
+except ImportError:
+    pass
+
 # ── CONFIG ─────────────────────────────────────────────────────────────
 
 _DEFAULT_CONFIG = {
@@ -444,6 +452,33 @@ async def _scrape_website(url: str) -> Dict[str, str]:
                     break
             except Exception:
                 continue
+
+    # If static HTTP scrape didn't find anything, try dev-browser for JS-rendered pages
+    if not found["phone"] and not found["email"] and _DEV_BROWSER_AVAILABLE:
+        try:
+            loop = asyncio.get_event_loop()
+            dev_result = await loop.run_in_executor(None, _dev_scrape, url)
+            if dev_result and dev_result.get("text_content"):
+                text = dev_result["text_content"]
+                # Phone extraction from dev-browser output
+                if not found["phone"]:
+                    m = _PHONE_RE.search(text)
+                    if m:
+                        cleaned = _clean_phone(m.group(1))
+                        if cleaned:
+                            found["phone"] = cleaned
+                # Email extraction
+                if not found["email"]:
+                    emails = _EMAIL_RE.findall(text)
+                    non_generic = [e for e in emails
+                                   if e.split("@")[0] not in
+                                   {"info", "hello", "support", "noreply", "admin", "webmaster"}]
+                    if non_generic:
+                        found["email"] = non_generic[0].lower()
+                    elif emails:
+                        found["email"] = emails[0].lower()
+        except Exception:
+            pass
 
     return found
 

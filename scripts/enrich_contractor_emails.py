@@ -12,8 +12,13 @@ Strategies (in priority order):
   3. REPORT — List what couldn't be enriched for manual followup
 
 Usage:
-    python3 scripts/enrich_contractor_emails.py          # dry-run
-    python3 scripts/enrich_contractor_emails.py --apply  # write to DB
+    python3 scripts/enrich_contractor_emails.py                                    # dry-run
+    python3 scripts/enrich_contractor_emails.py --apply                            # write to DB
+    python3 scripts/enrich_contractor_emails.py --agent-reach                      # + SI-driven intel enrichment
+    python3 scripts/enrich_contractor_emails.py --agent-reach --genome-archetype RECALL_SNIPER   # global genome
+    python3 scripts/enrich_contractor_emails.py --agent-reach --genome '{"aggressiveness":0.7}'  # custom genome
+    python3 scripts/enrich_contractor_emails.py --agent-reach --genome-tier SCRAPER_ENTERPRISE   # Enterprise pool
+    python3 scripts/enrich_contractor_emails.py --agent-reach --legacy             # old 1-2 channel mode
 """
 
 import os
@@ -346,11 +351,39 @@ def enrich(dry_run: bool = True) -> dict:
 if __name__ == "__main__":
     dry_run = "--apply" not in sys.argv
     run_agent_reach = "--agent-reach" in sys.argv
+    legacy = "--legacy" in sys.argv
     limit = 0
+    genome_raw = None
+    genome_archetype = ""
+    genome_tier = ""
+
     if "--limit" in sys.argv:
         idx = sys.argv.index("--limit")
         if idx + 1 < len(sys.argv):
             limit = int(sys.argv[idx + 1])
+
+    if "--genome" in sys.argv:
+        idx = sys.argv.index("--genome")
+        if idx + 1 < len(sys.argv):
+            genome_raw = sys.argv[idx + 1]
+
+    if "--genome-archetype" in sys.argv:
+        idx = sys.argv.index("--genome-archetype")
+        if idx + 1 < len(sys.argv):
+            genome_archetype = sys.argv[idx + 1].upper()
+
+    if "--genome-tier" in sys.argv:
+        idx = sys.argv.index("--genome-tier")
+        if idx + 1 < len(sys.argv):
+            raw_tier = sys.argv[idx + 1].strip().upper()
+            valid_tiers = {"SCRAPER_PRO", "SCRAPER_ENTERPRISE"}
+            if raw_tier in valid_tiers:
+                genome_tier = raw_tier
+            else:
+                available = ", ".join(sorted(valid_tiers))
+                print(f"Error: Unknown tier '{raw_tier}'. Available: {available}")
+                sys.exit(1)
+
     result = enrich(dry_run=dry_run)
     print(f"\n{'DRY RUN' if result['dry_run'] else 'APPLIED'} — use {'--apply' if result['dry_run'] else '(already applied)'} to {'write' if result['dry_run'] else 're-run'}")
 
@@ -359,11 +392,27 @@ if __name__ == "__main__":
         print("\n" + "=" * 60)
         print("  CHAINING: Agent-Reach multi-source intel enrichment")
         print("=" * 60)
+        if genome_archetype:
+            print(f"  SI genome archetype: {genome_archetype}")
+        elif genome_raw:
+            print(f"  SI genome: {genome_raw}")
+        if genome_tier:
+            print(f"  Channel pool tier: {genome_tier}")
+        if legacy:
+            print(f"  Mode: legacy (1-2 channels, no SI)")
         script = str(Path(__file__).resolve().parent / "enrich_contractor_agent_reach.py")
         cmd = [sys.executable, script]
         if not dry_run:
             cmd.append("--apply")
         if limit > 0:
             cmd.extend(["--limit", str(limit)])
+        if genome_archetype:
+            cmd.extend(["--genome-archetype", genome_archetype])
+        elif genome_raw:
+            cmd.extend(["--genome", genome_raw])
+        if genome_tier:
+            cmd.extend(["--genome-tier", genome_tier])
+        if legacy:
+            cmd.append("--legacy")
         print(f"  Running: {' '.join(cmd)}")
         subprocess.run(cmd)

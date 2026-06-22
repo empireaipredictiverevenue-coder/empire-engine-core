@@ -46,6 +46,7 @@ EXCLUDE_DIRS = {
     "env",
     "tests",          # test files are fixtures, allowed to mock I/O freely
     "scripts",        # one-off ops scripts
+    "scripts_archive",  # archived fix/repair scripts (have pre-existing syntax errors)
     "migrations",     # SQL files only
     ".github",        # YAML workflows
     "outreach_drafts",  # text drafts

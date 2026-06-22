@@ -2,7 +2,10 @@
 EMPIRE V49 - PROSPECTOR (UPGRADED)
 ==================================
 Finds contractors (lead BUYERS, not homeowners) in storm-active metros.
-Uses Google Places text search (via places_helper) and ranks by buy-signal.
+Primary: camofox-browser stealth scraping (Google-free).
+Fallback: Google Places text search (via places_helper) — requires API key.
+Ranks by buy-signal and writes to the 'prospects' table.
+
 Supports multiple niches, uses shared METROS config from config/metros.py.
 
 This finds businesses TO SELL TO (contractors who buy leads), distinct from
@@ -24,6 +27,9 @@ load_dotenv("/root/.env")
 sys.path.insert(0, "/root/empire-v49")
 from config.metros import METROS, metro_coords
 from bots.places_helper import places_search as _places_search
+from bots.predictive_camofox_scraper import PredictiveCamofoxScraper
+import httpx
+import re
 # Map niche -> search query suffix. Storm-response niches use
 # "contractors" (the original behavior). B2B niches use
 # "companies" or "services" to broaden the search.
@@ -179,6 +185,115 @@ def buy_signal(place: Dict[str, Any]) -> int:
     return min(score, 100)
 
 
+async def find_prospects_camofox(
+    metro: str = "Wichita",
+    niche: str = "roofing",
+    max_results: int = 30,
+) -> List[Dict[str, Any]]:
+    """Find contractor prospects using camofox-browser stealth scraping.
+
+    Google-free alternative to find_prospects(). Uses the PredictiveCamofoxScraper
+    to scrape BBB listings and other sources. Returns the same normalized format
+    as find_prospects() so the rest of the pipeline (scoring, saving) works identically.
+
+    Note: camofox returns business names and URLs but typically no phone/website/rating
+    data, so buy_signal scores will be lower. Run enrichment pass to fill in gaps.
+    """
+    query_niche: str = niche.replace("_", " ")
+    print(f"[PROSPECT] Camofox: scraping {query_niche} in {metro}...")
+
+    scraper = PredictiveCamofoxScraper()
+    opportunities = await scraper.scrape_niche(niche, metro, max_results=max_results)
+    print(f"[PROSPECT] Camofox returned {len(opportunities)} opportunities")
+
+    prospects: List[Dict[str, Any]] = []
+    for opp in opportunities:
+        name: Optional[str] = opp.get("name") or opp.get("business_name")
+        if not name:
+            continue
+
+        # Build a place-like dict so buy_signal scoring works
+        place = {
+            "name": name,
+            "website": opp.get("url") or opp.get("domain"),
+            "niche": niche,
+            "metro": metro,
+            "phone": None,
+            "rating": None,
+            "review_count": None,
+            "business_status": None,
+        }
+        score: int = buy_signal(place)
+
+        # Attempt to extract phone/address from BBB profile URL
+        bbb_url = opp.get("url", "")
+        extracted_phone = None
+        extracted_address = None
+        if bbb_url and "bbb.org" in bbb_url.lower():
+            try:
+                async with httpx.AsyncClient(timeout=15) as client:
+                    r = await client.get(bbb_url, follow_redirects=True)
+                    if r.status_code == 200:
+                        text = r.text[:30000]
+                        # Phone: look for common patterns in first 5000 chars
+                        phone_match = re.search(
+                            r'(?:phone|tel|call)[\s:=]+[\+\d][\d\s\.\(\)\-]{7,}',
+                            text[:5000], re.IGNORECASE
+                        )
+                        if phone_match:
+                            raw = phone_match.group(0)
+                            raw = re.sub(r'[^\d+]', '', raw)
+                            if len(raw) >= 10:
+                                extracted_phone = raw
+                        # Address: look for BBB profile address
+                        addr_match = re.search(
+                            r'"address"\s*[:=]\s*"([^"]+)"', text[:10000], re.IGNORECASE
+                        )
+                        if addr_match:
+                            extracted_address = addr_match.group(1)
+            except Exception:
+                pass
+
+        prospects.append({
+            "business_name": name,
+            "niche": niche,
+            "metro": metro,
+            "phone": extracted_phone or opp.get("phone"),
+            "website": opp.get("url") or opp.get("domain"),
+            "address": extracted_address,
+            "rating": None,
+            "review_count": None,
+            "buy_signal_score": score,
+            "status": "new",
+            "source": opp.get("source", "camofox-browser"),
+        })
+
+    prospects.sort(key=lambda x: int(x["buy_signal_score"]), reverse=True)
+    return prospects
+
+
+async def run_camofox(
+    metro: str = "Wichita",
+    niche: str = "roofing",
+) -> List[Dict[str, Any]]:
+    """Run the full prospector pipeline using camofox-browser: find + save + print top 10.
+
+    Similar to run() but forces the camofox path for Google-free discovery.
+
+    Returns the full list of prospects (found, not just saved).
+    """
+    prospects: List[Dict[str, Any]] = await find_prospects_camofox(metro, niche)
+    saved: int = await save_prospects(prospects)
+    print(f"[PROSPECT] Camofox: {len(prospects)} found, {saved} new saved")
+    print(f"\n=== TOP 10 PROSPECTS ({metro} {niche}) [CAMOFOX] ===")
+    for i, p in enumerate(prospects[:10], 1):
+        src = p.get('source', 'camofox')
+        print(f"{i}. {p['business_name']} | score {p['buy_signal_score']} | "
+              f"{'web' if p['website'] else 'no-web'} | "
+              f"{p['phone'] or 'no-phone'} | src={src}")
+    return prospects
+
+
 async def find_prospects(
     metro: str = "Wichita",
     niche: str = "roofing",
@@ -203,6 +318,11 @@ async def find_prospects(
     print(f"[PROSPECT] Searching {query}...")
     leads: List[Dict[str, Any]] = await _places_search(query, lat, lon)
     print(f"[PROSPECT] Places returned {len(leads)} businesses")
+
+    # If Google Places returned nothing (no key, 403, or empty), fall back to camofox
+    if not leads:
+        print(f"[PROSPECT] Google Places returned empty — falling back to camofox-browser...")
+        return await find_prospects_camofox(metro=metro, niche=niche, max_results=30)
 
     prospects: List[Dict[str, Any]] = []
     for p in leads:
@@ -316,9 +436,16 @@ if __name__ == "__main__":
     metro: str = sys.argv[1] if len(sys.argv) > 1 else "Wichita"
     niche: str = sys.argv[2] if len(sys.argv) > 2 else "roofing"
     multi: bool = "--multi" in sys.argv
+    use_camofox: bool = "--camofox" in sys.argv or "--cf" in sys.argv
     if multi:
+        if use_camofox:
+            print("[PROSPECT] Camofox multi-scan: running all metros x niches via camofox-browser...")
         results = asyncio.run(run_multi())
         print(f"\n=== MULTI SCAN COMPLETE ===")
         print(f"Total found: {results['total_found']}, saved: {results['total_saved']}")
     else:
-        asyncio.run(run(metro, niche))
+        if use_camofox:
+            print(f"[PROSPECT] Camofox mode: scraping {niche} in {metro}...")
+            asyncio.run(run_camofox(metro, niche))
+        else:
+            asyncio.run(run(metro, niche))

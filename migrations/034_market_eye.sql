@@ -9,9 +9,9 @@
 
 -- ── 1. competitor_tracking — registered competitors per account ──────────────
 CREATE TABLE IF NOT EXISTS competitor_tracking (
-    id                  INTEGER PRIMARY KEY AUTOINCREMENT,
-    created_at          TEXT NOT NULL DEFAULT (datetime('now')),
-    updated_at          TEXT NOT NULL DEFAULT (datetime('now')),
+    id                  BIGSERIAL PRIMARY KEY,
+    created_at          TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at          TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     account_id          TEXT NOT NULL DEFAULT 'demo',
     name                TEXT NOT NULL,
     website             TEXT NOT NULL,
@@ -33,8 +33,8 @@ CREATE INDEX IF NOT EXISTS idx_competitor_active
 
 -- ── 2. competitor_snapshots — periodic scrape results ────────────────────────
 CREATE TABLE IF NOT EXISTS competitor_snapshots (
-    id              INTEGER PRIMARY KEY AUTOINCREMENT,
-    created_at      TEXT NOT NULL DEFAULT (datetime('now')),
+    id              BIGSERIAL PRIMARY KEY,
+    created_at      TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     competitor_id   INTEGER NOT NULL,
     account_id      TEXT NOT NULL DEFAULT 'demo',
     status_code     INTEGER,
@@ -55,8 +55,8 @@ CREATE INDEX IF NOT EXISTS idx_snapshots_competitor
 
 -- ── 3. competitor_alerts — generated alerts when significant changes ─────────
 CREATE TABLE IF NOT EXISTS competitor_alerts (
-    id              INTEGER PRIMARY KEY AUTOINCREMENT,
-    created_at      TEXT NOT NULL DEFAULT (datetime('now')),
+    id              BIGSERIAL PRIMARY KEY,
+    created_at      TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     account_id      TEXT NOT NULL DEFAULT 'demo',
     competitor_id   INTEGER,
     alert_type      TEXT NOT NULL CHECK (alert_type IN (
@@ -82,8 +82,8 @@ CREATE INDEX IF NOT EXISTS idx_alerts_unread
 
 -- ── 4. market_briefs — generated weekly competitive intelligence briefs ──────
 CREATE TABLE IF NOT EXISTS market_briefs (
-    id              INTEGER PRIMARY KEY AUTOINCREMENT,
-    created_at      TEXT NOT NULL DEFAULT (datetime('now')),
+    id              BIGSERIAL PRIMARY KEY,
+    created_at      TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     account_id      TEXT NOT NULL DEFAULT 'demo',
     brief_period    TEXT NOT NULL,             -- '2026-W25' ISO week format
     competitor_count INTEGER DEFAULT 0,
@@ -99,7 +99,7 @@ CREATE INDEX IF NOT EXISTS idx_briefs_account
 
 -- ── 5. Update product_usage_log CHECK constraint ─────────────────────────────
 -- Already handled in previous migration — just seed a usage entry if table exists
-INSERT OR IGNORE INTO product_usage_log
+INSERT INTO product_usage_log
     (customer_account_id, product_name, usage_event, quantity, unit, metadata)
 SELECT 'demo_market_eye_starter', 'market_eye', 'competitor_added', 1, 'count',
        '{"note": "seed_demo", "competitor": "Angi"}'

@@ -23,6 +23,9 @@ redis>=5.0
 # so pytest is the only test dep we need.
 pytest>=8.0
 
+# ── Vector Search (Qdrant) ──
+qdrant-client>=1.17.0
+
 # ── Observability ──
 # Langfuse — LLM observability, tracing, cost tracking
 langfuse>=4.0

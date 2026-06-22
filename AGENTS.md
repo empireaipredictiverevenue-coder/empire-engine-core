@@ -30,7 +30,17 @@ The fleet is bigger than the two agents. Last enumerated 2026-06-13
   - **hook_analytics** — `uvicorn hook_analytics:app :8046`
     (PID 3106758, 2 workers). Analytics event router.
 
-### PM2 services (11, all online; restart with `pm2 restart <name>`)
+### PM2 services (13, all online; restart with `pm2 restart <name>`)
+  - **mesh-marketing** — `bots/mesh_marketing_worker.py`. Polls
+    `agent_task_queue` for `marketing.*` tasks assigned to `mesh.marketing`,
+    claims them atomically, executes via the hub's skill execution API, and
+    updates task status to Done or Failed. Poll interval: 30s.
+    Added 2026-06-22.
+  - **mesh-dispatcher** — `bots/mesh_dispatcher.py --loop`. Polls
+    `agent_task_queue` for `revenue.connect_buyer` tasks assigned to
+    `mesh.dispatcher`, queries `radar_targets` for qualified leads, matches
+    with available buyers, and creates dispatch records. Poll interval: 120s.
+    Added 2026-06-22.
   - **empire-mesh** (PID 3451686) — `main.py`. The fleet orchestrator script
     (signal handler, lib import, env bootstrap). Logs to `/var/log/empire.log`.
   - **empire-hub** (PID 3663717) — `hub.py` on `:8001` via uvicorn. The main
@@ -181,6 +191,12 @@ has more entries than the AGENTS.md doc tracks (drift). Run
     → `logs/graphify_update.log`. Updates the knowledge graph
     (graphify-out/graph.json) to keep codebase mapping in sync with code
     changes. AST-only extraction, no API cost. Added 2026-06-20.
+  - `integrations/recursive_loop_orchestrator.py` — daily 00:00 UTC,
+    → `logs/recursive_loop.log`. Recursive self-healing meta-loop. Runs all
+    7 autoresearch targets (weather, contractor SMS, storm SMS, email subjects,
+    buyer emails, trading bot params, sniper bot config) in dependency order,
+    aggregates results, and updates `integrations/autoresearch/scratchpad.md`.
+    Added 2026-06-21.
 
 #### Pipeline-side (live in /opt/empire-pipeline/, not empire-v49 repo)
   - `storm_url_refresh_cron.sh` — every 6h on :15, → `logs/storm_url_refresh.log`.

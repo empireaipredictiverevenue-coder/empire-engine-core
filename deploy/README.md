@@ -11,6 +11,7 @@ Created 2026-06-21.
 | **Empire Workspace** | [Affine](https://github.com/toeverything/affine) | 8091 | ⚠️ Init needed | Team docs + kanban + whiteboards |
 | **Empire Analytics** | [Apache Superset](https://github.com/apache/superset) | 8092 | ⚠️ Config needed | BI dashboards for contractors |
 | **Empire Studio** | [Penpot](https://github.com/penpot/penpot) | 8094 | ⚠️ Exporter fix | Design tool for marketing assets |
+| **Empire Chatwoot** | [Chatwoot](https://github.com/chatwoot/chatwoot) | 8093 | ⚠️ Setup guide below | Facebook Messenger chatbot + omnichannel inbox |
 
 ## Quick Start
 
@@ -50,6 +51,29 @@ docker compose up -d
 
 **Known issue:** `penpot-exporter` container restarting (exit 255). Frontend nginx references exporter upstream — if exporter is down, frontend won't serve. Backend runs fine on its own.
 
+### Empire Chatwoot (Customer Engagement Platform)
+```bash
+cd deploy/chatwoot
+cp .env.chatwoot .env
+# Edit .env with your Facebook App credentials (see setup steps below)
+nano .env
+docker compose up -d
+# Initialize database
+ docker compose run --rm rails bundle exec rails db:chatwoot_prepare
+ docker compose restart rails
+# Access: http://localhost:8093
+```
+
+**⚠️ Prerequisite:** You must create a Facebook App in the Meta Developer Portal
+before the Facebook Messenger channel will work. See the setup guide below.
+
+**⚠️ Known issue:** Facebook Messenger channel requires `FB_APP_ID`, `FB_APP_SECRET`,
+and `FB_VERIFY_TOKEN` env vars to be set BEFORE starting the containers.
+
+**Next:** Register an API access token in Chatwoot:
+1. Open http://localhost:8093 → Create account → **Settings** → **Profile** → **Access Tokens**
+2. Generate a token → set as `CHATWOOT_API_ACCESS_TOKEN` in `/root/.env`
+
 ## Architecture
 
 Each product runs in its own Docker network with isolated PostgreSQL and Redis:
@@ -57,6 +81,7 @@ Each product runs in its own Docker network with isolated PostgreSQL and Redis:
 - `empire-workspace` network (affine + pgvector + redis)
 - `empire-analytics` network (superset + postgres:15 + redis)
 - `empire-studio` network (backend + frontend + exporter + postgres:15 + redis)
+- `empire-chatwoot` network (rails + sidekiq + postgres:16 + redis:7)
 
 ## Nginx Routing (Planned)
 

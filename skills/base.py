@@ -8,7 +8,7 @@ import abc
 import time
 import asyncio
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any, Optional
 
 
@@ -103,8 +103,8 @@ class BaseSkill(abc.ABC):
     name: str = ""
     version: str = "1.0.0"
     description: str = ""
-    tags: list[str] = field(default_factory=list)
-    dependencies: list[str] = field(default_factory=list)
+    tags: list[str] = []
+    dependencies: list[str] = []
     timeout_seconds: float = 30.0
     max_retries: int = 3
     retry_delay: float = 1.0

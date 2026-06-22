@@ -98,14 +98,14 @@ async def find_available_buyers(metro: Optional[str] = None) -> List[Dict]:
     """Find buyers that can accept leads."""
     buyers = []
     try:
-        q = _sb.table("buyers").select("id,name,metro,niche,max_leads_per_day,leads_accepted_today")
+        q = _sb.table("buyers").select("id,buyer_name,metro,niche,daily_cap,calls_today")
         if metro:
             q = q.eq("metro", metro)
         r = q.execute()
 
         for buyer in (r.data or []):
-            max_leads = buyer.get("max_leads_per_day", 10) or 10
-            accepted = buyer.get("leads_accepted_today", 0) or 0
+            max_leads = buyer.get("daily_cap", 10) or 10
+            accepted = buyer.get("calls_today", 0) or 0
             if accepted < max_leads:
                 buyers.append(buyer)
 
@@ -175,8 +175,7 @@ async def create_dispatch(lead: Dict, buyer: Dict, quality: Dict) -> Optional[st
             "status": "sent",
             "meta": json.dumps({
                 "source": "mesh.dispatcher",
-                "buyer_id": buyer.get("id"),
-                "buyer_name": buyer.get("name"),
+                "buyer_id": buyer.get("id"),                        "buyer_name": buyer.get("buyer_name"),
                 "lead_phone": lead.get("phone"),
                 "lead_address": lead.get("address"),
                 "lead_city": lead.get("city"),
@@ -188,7 +187,7 @@ async def create_dispatch(lead: Dict, buyer: Dict, quality: Dict) -> Optional[st
 
         if r.data:
             dispatch_id = r.data[0].get("id")
-            log.info(f"[dispatcher] dispatch created: {dispatch_id[:8]} → {buyer.get('name')}")
+            log.info(f"[dispatcher] dispatch created: {dispatch_id[:8]} → {buyer.get('buyer_name')}")
 
             # Update the lead status
             _sb.table("radar_targets").update({
@@ -280,7 +279,7 @@ async def process_task(task: Dict, dry_run: bool = False) -> Dict:
         buyer = buyers.pop(0)
 
         if dry_run:
-            log.info(f"[dispatcher] DRY RUN: would dispatch lead {lead['id'][:8]} to {buyer.get('name')}")
+            log.info(f"[dispatcher] DRY RUN: would dispatch lead {lead['id'][:8]} to {buyer.get('buyer_name')}")
             dispatched += 1
             continue
 
@@ -288,7 +287,7 @@ async def process_task(task: Dict, dry_run: bool = False) -> Dict:
         dispatch_id = await create_dispatch(lead, buyer, quality)
         if dispatch_id:
             dispatched += 1
-            log.info(f"[dispatcher] dispatched lead {lead['id'][:8]} → {buyer.get('name')}")
+            log.info(f"[dispatcher] dispatched lead {lead['id'][:8]} → {buyer.get('buyer_name')}")
 
     # Mark the task
     if not dry_run:
@@ -335,6 +334,19 @@ async def run_once(dry_run: bool = False) -> Dict:
                 log.info(f"[dispatcher] auto-created dispatch task")
     except Exception as e:
         log.error(f"[dispatcher] task creation error: {e}")
+
+    # Heartbeat in agent_registry
+    try:
+        _sb.table("agent_registry").upsert({
+            "agent_name": "mesh.dispatcher",
+            "status": "ACTIVE",
+            "last_ping": datetime.now(timezone.utc).isoformat(),
+            "enabled": True,
+            "capabilities": ["dispatcher", "buyer", "revenue"],
+            "task_types": ["revenue.connect_buyer"],
+        }, on_conflict="agent_name").execute()
+    except Exception as e:
+        log.error(f"[dispatcher] heartbeat error: {e}")
 
     # Claim and process tasks
     try:

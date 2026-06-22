@@ -39,6 +39,24 @@ except ImportError:
 
 from supabase import create_client
 
+# Lazy import for bounty tracking — fee_watcher creates fee_events that
+# may trigger referral bounties on the referred contractor's first claim.
+_BOUNTY_IMPORTED = False
+
+def _check_bounty(fee_event: dict):
+    """Call check_bounty_eligible_sync on a newly created fee_event.
+    Silent if bounty_tracker module can't be imported."""
+    global _BOUNTY_IMPORTED
+    try:
+        if not _BOUNTY_IMPORTED:
+            from bots.bounty_tracker import check_bounty_eligible_sync
+            _BOUNTY_IMPORTED = True
+        check_bounty_eligible_sync(fee_event)
+    except ImportError:
+        _BOUNTY_IMPORTED = True  # don't retry
+    except Exception as e:
+        log.debug(f"[fee_watcher] bounty check skipped: {e}")
+
 log = logging.getLogger("empire.fee_watcher")
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(name)s] %(message)s")
 
@@ -177,7 +195,12 @@ def _create_fee_event(sb, claim: dict, dry_run: bool, fee_percent: float) -> dic
     try:
         r = sb.table("fee_events").insert(fee_event).execute()
         inserted_id = r.data[0]["id"] if r.data else None
-        return {"action": "created", "fee_event": {"id": inserted_id, **fee_event}, "fee": fee}
+        created_event = {"id": inserted_id, **fee_event}
+        # Fire bounty check — the referred contractor's first fee_event
+        # triggers a $500 bounty for the referrer
+        if inserted_id:
+            _check_bounty(created_event)
+        return {"action": "created", "fee_event": created_event, "fee": fee}
     except Exception as e:
         return {"action": "error", "error": str(e)[:200]}
 

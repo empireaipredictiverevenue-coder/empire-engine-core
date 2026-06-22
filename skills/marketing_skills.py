@@ -532,6 +532,38 @@ class SocialSkill(MarketingSkill):
     tags = ["domain:marketing", "social", "content"]
     skill_name = "social"
 
+# 46. SEO — Keyword Research
+class KeywordResearchSkill(MarketingSkill):
+    name = "marketing.keyword-research"
+    version = "1.0.0"
+    description = "Keyword research — search demand analysis, keyword clustering, topic modeling, opportunity identification"
+    tags = ["domain:marketing", "seo", "keyword-research"]
+    skill_name = "keyword-research"
+
+# 47. SEO — Link Building
+class LinkBuildingSkill(MarketingSkill):
+    name = "marketing.link-building"
+    version = "1.0.0"
+    description = "Link building — outreach, guest posting, broken link building, digital PR, link reclamation for domain authority and rankings"
+    tags = ["domain:marketing", "seo", "link-building"]
+    skill_name = "link-building"
+
+# 48. SEO — Local SEO
+class LocalSEOSkill(MarketingSkill):
+    name = "marketing.local-seo"
+    version = "1.0.0"
+    description = "Local SEO — Google Business Profile optimization, map pack rankings, NAP consistency, local citation management"
+    tags = ["domain:marketing", "seo", "local"]
+    skill_name = "local-seo"
+
+# 49. SEO — Technical SEO
+class TechnicalSEOSkill(MarketingSkill):
+    name = "marketing.technical-seo"
+    version = "1.0.0"
+    description = "Technical SEO — JavaScript SEO, Core Web Vitals, crawl budget optimization, site architecture, migrations"
+    tags = ["domain:marketing", "seo", "technical"]
+    skill_name = "technical-seo"
+
 
 # ═════════════════════════════════════════════════════════════════════
 # REGISTRATION
@@ -583,6 +615,10 @@ MARKETING_SKILL_CLASSES = [
     SiteArchitectureSkill,
     SMSSkill,
     SocialSkill,
+    KeywordResearchSkill,
+    LinkBuildingSkill,
+    LocalSEOSkill,
+    TechnicalSEOSkill,
 ]
 
 

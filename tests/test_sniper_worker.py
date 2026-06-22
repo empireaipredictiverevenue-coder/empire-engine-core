@@ -23,6 +23,15 @@ if _PROJECT_ROOT not in sys.path:
 # (the-predicitive-trading-bot/), so we can't import it as a dotted
 # module path. Instead, we add its path to sys.path and import from
 # the `skills` subpackage directly.
+#
+# IMPORTANT: The project root also has a `skills/` package that can
+# shadow the trading-bot's during full-suite collection. We clear any
+# cached `skills` entries from sys.modules so the import finds the
+# trading-bot's version first (its path is inserted at position 0).
+for _key in list(sys.modules.keys()):
+    if _key.startswith("skills"):
+        del sys.modules[_key]
+
 _PRED_BOT_DIR = os.path.join(_PROJECT_ROOT, "the-predicitive-trading-bot")
 if _PRED_BOT_DIR not in sys.path:
     sys.path.insert(0, _PRED_BOT_DIR)

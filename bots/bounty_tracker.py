@@ -244,6 +244,19 @@ async def check_bounty_eligible(
                 "fee_event_id": fee_event_id,
             })
 
+            # Log bounty earned in referral_log for audit trail
+            try:
+                db.table("referral_log").insert({
+                    "event_type": "bounty_earned",
+                    "referral_code": ref_code,
+                    "referrer_contractor_id": referrer_id,
+                    "referred_contractor_id": contractor_id,
+                    "contractor_referral_id": ref_id,
+                    "meta": {"bounty_amount": bounty_amount, "fee_event_id": fee_event_id, "payout_id": payout_id},
+                }).execute()
+            except Exception:
+                pass
+
             log.info(
                 f"[bounty_tracker] Bounty earned! referral={ref_id} "
                 f"contractor={contractor_id} referrer={referrer_phone} "

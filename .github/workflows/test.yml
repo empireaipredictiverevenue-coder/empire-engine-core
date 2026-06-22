@@ -129,3 +129,81 @@ jobs:
             **/__pycache__/
           retention-days: 3
           if-no-files-found: ignore
+
+  smoke-test:
+    name: Smoke Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq \
+            libxkbcommon0 \
+            libxdamage1 \
+            libxcomposite1 \
+            libxrandr2 \
+            libgbm1 \
+            libpango-1.0-0 \
+            libcairo2
+          echo "✅ System deps installed"
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          echo "✅ Python deps installed"
+
+      - name: Run Python syntax check (all .py files)
+        run: |
+          ERROR_COUNT=0
+          FILE_COUNT=0
+          while IFS= read -r -d '' f; do
+            FILE_COUNT=$((FILE_COUNT + 1))
+            if ! python3 -m py_compile "$f" 2>/dev/null; then
+              echo "❌ Syntax error: $f"
+              ERROR_COUNT=$((ERROR_COUNT + 1))
+            fi
+          done < <(find . -name '*.py' -not -path './.git/*' -not -path './node_modules/*' -not -path './scripts_archive/*' -not -path './_to_delete_*' -print0)
+          echo "Checked $FILE_COUNT Python files, $ERROR_COUNT errors"
+          if [ "$ERROR_COUNT" -gt 0 ]; then
+            exit 1
+          fi
+
+      - name: Run import-safety test
+        env:
+          EMPIRE_TESTING: "1"
+          SUPABASE_URL: "https://test.placeholder.supabase.co"
+          SUPABASE_ANON_KEY: "test-anon-key-placeholder"
+          SUPABASE_SERVICE_KEY: "test-service-key-placeholder"
+        run: |
+          python3 -m pytest tests/test_imports.py -v --tb=short
+
+      - name: Run fee copy guard
+        run: |
+          python3 scripts/check_fee_copy.py
+
+      - name: Run pipeline smoke test (requires network)
+        continue-on-error: true
+        run: |
+          python3 smoke_test.py 2>&1 || echo "⚠ Pipeline smoke test skipped (network may be unavailable)"
+
+      - name: Upload smoke-test logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-test-logs
+          path: |
+            logs/
+          retention-days: 3
+          if-no-files-found: ignore

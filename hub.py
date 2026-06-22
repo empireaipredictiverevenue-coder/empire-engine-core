@@ -123,6 +123,12 @@ from empire_mission_control import (
     mission_control_broadcast_loop,
     register_mission_control_routes,
 )
+from integrations.qdrant import register_qdrant_routes, ensure_collections
+from empire_mission_control_os import (
+    agent_os_mission_snapshot,
+    mission_control_os_broadcast_loop,
+    register_mission_control_os_routes,
+)
 from empire_pulse import PulseEngine, pulse_view_page
 from empire_outreach_view import outreach_view_page
 from empire_data_bridge import register_bridge_routes as register_data_bridge_routes, start_bridge_processor, init_bridge_db
@@ -1424,7 +1430,9 @@ fleet = AgentFleet(get_db=get_db)
 register_fleet_routes(app, fleet=fleet, require_auth=require_auth)
 
 # ── Agent Mesh — Hermes Protocol task queue + agent orchestration ──
-mesh = AgentMesh(get_db=get_db)
+# Wire the Skills Framework HarnessManager so mesh.email.execute,
+# mesh.design.execute, and mesh.marketing.execute can dispatch directly
+mesh = AgentMesh(get_db=get_db, harness_mgr=skills_framework.harness_mgr)
 register_mesh_routes(app, mesh=mesh, require_auth=require_auth)
 
 # ── Task Audit Reporter — agent task completion reports ─────────────
@@ -2509,6 +2517,21 @@ register_sniper_brain_routes(app, require_auth=require_auth)
 
 # Mission Control — always-visible top status bar (AGI/SI/Brain/Revenue/Lanes/Compliance/Network)
 register_mission_control_routes(app, get_db=get_db)
+# Agent OS Mission Control — unified bridge: system metrics + agent kernel + skills + autoresearch
+register_mission_control_os_routes(app, get_db=get_db, kernel=agent_os_kernel)
+# ── Qdrant Vector Search Routes ────────────────────────────────────
+# GET    /api/v1/qdrant/health        — Qdrant connectivity health
+# GET    /api/v1/qdrant/stats          — Collection stats
+# POST   /api/v1/qdrant/ensure         — Create collections if missing
+# POST   /api/v1/qdrant/skills/search  — Semantic skill search
+# POST   /api/v1/qdrant/leads/search   — Semantic lead search
+# POST   /api/v1/qdrant/documents/search — Semantic document search
+register_qdrant_routes(app, prefix="/api/v1/qdrant")
+# ── Ensure Qdrant collections exist on startup (best-effort) ──
+@app.on_event("startup")
+async def _qdrant_startup():
+    await ensure_collections()
+
 
 # ── Brain Personality Routes ──────────────────────────────────
 # GET  /api/brain/personality/snapshot       — full personality config + available profiles
@@ -3732,6 +3755,17 @@ async def _deferred_background_tasks():
     asyncio.create_task(
         mission_control_broadcast_loop(get_db, live_broadcaster),
         name="mission-control-broadcast",
+    )
+
+    # Agent OS Mission Control broadcast loop
+    asyncio.create_task(
+        mission_control_os_broadcast_loop(
+            broadcaster=live_broadcaster,
+            get_db=get_db,
+            kernel=agent_os_kernel,
+            interval=5.0,
+        ),
+        name="mission-control-os-broadcast",
     )
 
     # Storm Orchestrator — live NWS alert poll loop (every 300s)
@@ -5854,6 +5888,66 @@ async def webhook_lead(request: fastapi.Request, x_empire_secret: str = fastapi.
         })
     except Exception as e:
         return JSONResponse({"error": f'Database write error: {str(e)}'}, status_code=500)
+
+
+
+# ── Facebook Messenger Bot — Chatwoot webhook ──────────────────────────
+# Receives Chatwoot webhook events (message_created from Facebook channel)
+# and processes them through the Empire Facebook bot.
+#
+# Configuration:
+#   - Chatwoot must have a Facebook Messenger inbox configured
+#   - Chatwoot webhook URL: https://empire-ai.co.uk/webhook/facebook-bot
+#   - CHATWOOT_URL, CHATWOOT_ACCESS_TOKEN, CHATWOOT_ACCOUNT_ID env vars
+
+_facebook_bot: Optional["EmpireFacebookBot"] = None
+_facebook_bot_lock = asyncio.Lock()
+
+
+async def _get_facebook_bot():
+    """Lazy-init the Facebook bot singleton."""
+    global _facebook_bot
+    if _facebook_bot is None:
+        async with _facebook_bot_lock:
+            if _facebook_bot is None:
+                from parking_lot.bots.empire_facebook_bot import EmpireFacebookBot
+                _facebook_bot = EmpireFacebookBot()
+                log.info("[facebook-bot] singleton initialized")
+    return _facebook_bot
+
+
+@app.post("/webhook/facebook-bot")
+async def facebook_bot_webhook(request: Request):
+    """Chatwoot webhook endpoint for Facebook Messenger messages.
+
+    Receives webhook events from Chatwoot when a Facebook Page visitor
+    sends a message. Processes through EmpireFacebookBot and replies
+    via Chatwoot API.
+
+    Chatwoot webhook payload format:
+      {
+        "event": "message_created",
+        "conversation": { "id": 1, ... },
+        "message": { "content": "...", "message_type": "incoming", ... },
+        "sender": { "id": 1, "name": "...", ... }
+      }
+
+    Returns 200 OK quickly — processing is async (fire-and-forget via
+    create_task) to avoid Chatwoot webhook timeout (default 5s).
+    """
+    try:
+        payload = await request.json()
+    except Exception:
+        return JSONResponse({"ok": False, "error": "invalid_json"}, status_code=400)
+
+    event_type = payload.get("event", "")
+    if event_type != "message_created":
+        return JSONResponse({"ok": True, "event": event_type, "skipped": True})
+
+    bot = await _get_facebook_bot()
+    asyncio.create_task(bot.handle_webhook_event(payload))
+
+    return JSONResponse({"ok": True, "event": "message_created", "processing": True})
 
 # ─────────────────────────────────────────────────────────────────────
 # LEAD INGESTION API — lightweight POST endpoint for radar_targets

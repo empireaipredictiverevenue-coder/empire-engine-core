@@ -1,0 +1,137 @@
+# Empire Chatwoot — Self-Hosted Customer Engagement Platform
+# Facebook Messenger channel support via FB_APP_ID / FB_APP_SECRET / FB_VERIFY_TOKEN
+# Port: 8093 | Stack: Rails + PostgreSQL 16 + Redis 7
+#
+# Quick start:
+#   cp .env.chatwoot .env
+#   # Edit .env with your credentials
+#   docker compose up -d
+#   docker compose run --rm rails bundle exec rails db:chatwoot_prepare
+#   docker compose restart rails
+#   # Access: http://localhost:8093
+
+volumes:
+  chatwoot_pg_data:
+  chatwoot_redis_data:
+
+services:
+  # ── PostgreSQL 16 ──────────────────────────────────────────────────
+  postgres:
+    image: postgres:16
+    environment:
+      - POSTGRES_USER=chatwoot
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-chatwoot_secret}
+      - POSTGRES_DB=chatwoot
+    volumes:
+      - chatwoot_pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U chatwoot"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - empire-chatwoot
+
+  # ── Redis 7 ────────────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    command: redis-server --requirepass ${REDIS_PASSWORD:-chatwoot_redis_secret}
+    volumes:
+      - chatwoot_redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - empire-chatwoot
+
+  # ── Chatwoot Rails App ────────────────────────────────────────────
+  rails:
+    image: chatwoot/chatwoot:latest
+    ports:
+      - "8093:3000"
+    environment:
+      - RAILS_ENV=production
+      - NODE_ENV=production
+      - INSTALLATION_ENV=docker
+
+      # URL
+      - FRONTEND_URL=${FRONTEND_URL:-http://localhost:8093}
+
+      # Database
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_DATABASE=chatwoot
+      - POSTGRES_USERNAME=chatwoot
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-chatwoot_secret}
+
+      # Redis
+      - REDIS_URL=redis://:${REDIS_PASSWORD:-chatwoot_redis_secret}@redis:6379
+
+      # Security
+      - SECRET_KEY_BASE=${CHATWOOT_SECRET_KEY_BASE:-change-me-to-a-random-string}
+
+      # Facebook Messenger integration
+      - FB_APP_ID=${FB_APP_ID:-}
+      - FB_APP_SECRET=${FB_APP_SECRET:-}
+      - FB_VERIFY_TOKEN=${FB_VERIFY_TOKEN:-}
+
+      # Active Storage (local files)
+      - ACTIVE_STORAGE_SERVICE=${ACTIVE_STORAGE_SERVICE:-local}
+
+      # SMTP (optional — for email notifications)
+      - SMTP_ADDRESS=${SMTP_ADDRESS:-}
+      - SMTP_PORT=${SMTP_PORT:-587}
+      - SMTP_USERNAME=${SMTP_USERNAME:-}
+      - SMTP_PASSWORD=${SMTP_PASSWORD:-}
+      - SMTP_DOMAIN=${SMTP_DOMAIN:-empire-ai.co.uk}
+      - MAILER_SENDER_EMAIL=${MAILER_SENDER_EMAIL:-notifications@empire-ai.co.uk}
+
+      # Logging
+      - RAILS_LOG_TO_STDOUT=true
+    volumes:
+      - ./storage:/app/storage
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - empire-chatwoot
+
+  # ── Sidekiq Background Worker ──────────────────────────────────────
+  sidekiq:
+    image: chatwoot/chatwoot:latest
+    command: bundle exec sidekiq -q default -q mailers -q low
+    environment:
+      - RAILS_ENV=production
+      - NODE_ENV=production
+      - INSTALLATION_ENV=docker
+      - FRONTEND_URL=${FRONTEND_URL:-http://localhost:8093}
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_DATABASE=chatwoot
+      - POSTGRES_USERNAME=chatwoot
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-chatwoot_secret}
+      - REDIS_URL=redis://:${REDIS_PASSWORD:-chatwoot_redis_secret}@redis:6379
+      - SECRET_KEY_BASE=${CHATWOOT_SECRET_KEY_BASE:-change-me-to-a-random-string}
+      - FB_APP_ID=${FB_APP_ID:-}
+      - FB_APP_SECRET=${FB_APP_SECRET:-}
+      - FB_VERIFY_TOKEN=${FB_VERIFY_TOKEN:-}
+      - RAILS_LOG_TO_STDOUT=true
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - empire-chatwoot
+
+networks:
+  empire-chatwoot:
+    driver: bridge
