@@ -71,13 +71,13 @@ def _fetch_contractors_without_phone_validation(limit: int = 50) -> List[Dict]:
     if not sb:
         return []
     try:
-        r = sb.table("contractors").select("id,business_name,phone").not_.is_("phone", "null").is_("phone_validation_json", "null").limit(limit).execute()
+        r = sb.table("contractors").select("id,name,phone").not_.is_("phone", "null").is_("phone_validation_json", "null").limit(limit).execute()
         return r.data or []
     except Exception as e:
         log.warning(f"fetch contractors failed: {e}")
         # try alternate: just any contractor with a phone
         try:
-            r = sb.table("contractors").select("id,business_name,phone").not_.is_("phone", "null").limit(limit).execute()
+            r = sb.table("contractors").select("id,name,phone").not_.is_("phone", "null").limit(limit).execute()
             return r.data or []
         except Exception:
             return []
