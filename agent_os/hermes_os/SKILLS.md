@@ -172,6 +172,20 @@ Agentic skills framework — Socratic brainstorming, TDD, planning, subagent dev
 - Input: capability (brainstorm, tdd, plan, delegate, review, design-skill), task, context
 - Output: structured workflow result
 
+### 30. `consulting.strategy`
+Strategic business consulting — market analysis, growth strategy, pricing optimization, competitive positioning.
+- Input: goal, business_context, constraints (optional), audience (optional), depth (optional: strategic/tactical/operational)
+- Output: strategic analysis with domain coverage, structured input for LLM, recommendations pending flag
+- **Task routing:** `consulting.strategy` → `mesh.orchestrator` (SLA: 30 min, Priority: High)
+- **AGI/SI/PR aware:** Injects full AGI Governor strategy, SI genome traits for context-aware business recommendations
+
+### 31. `mesh.delegate`
+Task delegation engine — breaks down complex objectives into subtasks, maps to most capable agents via keyword matching, creates task tickets in agent_task_queue.
+- Input: objective, context (optional), deadline (optional), auto_create_tasks (optional boolean)
+- Output: execution plan with subtask breakdown, agent assignments, priorities, ticket IDs (if auto_create_tasks=true)
+- **Task routing:** `mesh.delegate` → `mesh.orchestrator` (SLA: 5 min, Priority: High)
+- **AGI/SI/PR aware:** Maps to 14 available agents via keyword matching. Agent capability registry includes scout, outreach, dispatcher, studio, quality, swarm, marketing, design, email, scraper, orchestrator, autoresearch, browser
+
 ## Mesh Agents Managed
 - mesh.scout — Finds targets in storm zones
 - mesh.outreach — Sends messages

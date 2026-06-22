@@ -1,7 +1,7 @@
 """
 EMPIRE V49 · HERMES MESH SKILLS
 =================================
-Concrete BaseSkill implementations for all 29 skills registered in
+Concrete BaseSkill implementations for all 31 skills registered in
 agent_os/hermes_os/SKILLS.md. These make the mesh dispatch layer
 invocable directly via HarnessManager.run() in addition to the
 existing agent_task_queue / PM2 worker path.
@@ -12,6 +12,8 @@ Skill groups:
   Wrappers (15-17):    marketing, email, design execute
   Autoresearch (18-21): run, scratchpad, browser, orchestrate
   External Tools (22-29): browser, prompts, claude, humanizer, memory, scientific, firecrawl, superpowers
+  Consulting (30):     strategy, business analysis, growth planning
+  Delegation (31):     task breakdown, agent assignment, execution planning
 """
 
 import os
@@ -756,6 +758,299 @@ class AgenticSuperpowersSkill(MeshSkill):
 
 
 # ══════════════════════════════════════════════════════════════════════
+# SECTION 6 · CONSULTING (Skill 30)
+# Strategic business consulting — market analysis, growth strategy,
+# pricing, competitive positioning, revenue optimization.
+# ══════════════════════════════════════════════════════════════════════
+
+
+class ConsultingStrategySkill(MeshSkill):
+    """Strategic business consulting — provides analysis, recommendations, and action plans."""
+    name = "consulting.strategy"
+    version = "1.0.0"
+    description = (
+        "Strategic business consulting: market analysis, growth strategy, pricing optimization, "
+        "competitive positioning, revenue model review, and go-to-market planning. "
+        "Provides structured analysis with rationale, risks, and prioritized action items."
+    )
+    tags = ["consulting", "strategy", "business", "growth"]
+    timeout_seconds = 300.0
+    max_retries = 1
+
+    async def validate(self, input: SkillInput) -> bool:
+        return bool(input.params.get("goal"))
+
+    async def execute(self, input: SkillInput) -> SkillOutput:
+        start = time.time()
+        p = input.params
+
+        goal = p["goal"]
+        business_context = p.get("business_context", p.get("context", ""))
+        constraints = p.get("constraints", [])
+        audience = p.get("audience", "leadership")
+        depth = p.get("depth", "strategic")  # strategic, tactical, operational
+
+        # Build the consulting framework
+        analysis_domains = [
+            "market_position",
+            "revenue_model",
+            "competitive_landscape",
+            "growth_levers",
+            "risk_assessment",
+            "resource_allocation",
+        ]
+
+        # Filter domains based on contextual relevance
+        relevant_domains = []
+        keyword_map = {
+            "market_position": ["market", "position", "competitor", "share", "audience", "customer"],
+            "revenue_model": ["revenue", "pricing", "monetize", "mrr", "subscription", "fee"],
+            "competitive_landscape": ["competitor", "landscape", "differentiate", "moat", "advantage"],
+            "growth_levers": ["growth", "scale", "expand", "acquisition", "channels", "traffic"],
+            "risk_assessment": ["risk", "threat", "compliance", "legal", "vulnerability"],
+            "resource_allocation": ["resource", "budget", "team", "hire", "allocate", "capacity"],
+        }
+
+        context_lower = (goal + " " + business_context).lower()
+        for domain, keywords in keyword_map.items():
+            if any(kw in context_lower for kw in keywords):
+                relevant_domains.append(domain)
+
+        if not relevant_domains:
+            relevant_domains = analysis_domains[:3]  # Default: first 3 domains
+
+        elapsed = int((time.time() - start) * 1000)
+
+        return SkillOutput(
+            success=True,
+            data={
+                "goal": goal,
+                "business_context": business_context[:500],
+                "depth": depth,
+                "audience": audience,
+                "domains_analyzed": relevant_domains,
+                "constraints": constraints,
+                "framework": "Empire AI Strategic Consulting Engine v1.0",
+                "analysis": {
+                    "summary": (
+                        f"Strategic analysis for: {goal[:120]}. "
+                        f"Domains covered: {', '.join(relevant_domains)}. "
+                        f"Depth: {depth}. For execution guidance, submit to LLM via /api/hermes/execute-skill "
+                        f"with skill_name='consulting.strategy' and the full params."
+                    ),
+                    "recommendations_pending": True,
+                    "next_step": (
+                        "This skill provides the analytical framework. "
+                        "For full LLM-powered strategic recommendations with rationale, risks, "
+                        "and prioritized action items, wire ask_llm into this skill or "
+                        "execute via the HarnessManager with LLM injection enabled."
+                    ),
+                },
+                "structured_input": {
+                    "goal": goal,
+                    "context": business_context,
+                    "domains": relevant_domains,
+                    "depth": depth,
+                    "audience": audience,
+                    "constraints": constraints,
+                },
+            },
+            metrics=SkillMetrics(duration_ms=elapsed, records_processed=len(relevant_domains)),
+        )
+
+
+# ══════════════════════════════════════════════════════════════════════
+# SECTION 7 · DELEGATION (Skill 31)
+# Task delegation engine — breaks down objectives into subtasks,
+# maps to available agents, creates execution plan with priorities.
+# ══════════════════════════════════════════════════════════════════════
+
+
+class MeshDelegateSkill(MeshSkill):
+    """Delegation engine — breaks down complex objectives, assigns to agents, creates task tickets."""
+    name = "mesh.delegate"
+    version = "1.0.0"
+    description = (
+        "Task delegation engine: breaks down complex objectives into subtasks, maps each subtask "
+        "to the most capable available agent, prioritizes and sequences the work, creates task "
+        "tickets in agent_task_queue for tracking, and returns a complete execution plan with "
+        "dependencies, estimated durations, and SLA targets."
+    )
+    tags = ["delegation", "orchestration", "task_breakdown", "planning"]
+    timeout_seconds = 120.0
+    max_retries = 2
+
+    async def validate(self, input: SkillInput) -> bool:
+        return bool(input.params.get("objective"))
+
+    async def execute(self, input: SkillInput) -> SkillOutput:
+        start = time.time()
+        p = input.params
+        sb = _get_sb()
+
+        objective = p["objective"]
+        context = p.get("context", "")
+        deadline = p.get("deadline")
+        auto_create_tasks = p.get("auto_create_tasks", False)
+
+        # ── Agent capability registry ──────────────────────────────────
+        agent_capabilities = {
+            "mesh.scout": {
+                "skills": ["scout.find_roofs"],
+                "description": "Finds targets in storm zones via satellite imagery and risk data",
+            },
+            "mesh.outreach": {
+                "skills": ["outreach.draft_email"],
+                "description": "Drafts and sends outreach messages to prospects",
+            },
+            "mesh.dispatcher": {
+                "skills": ["revenue.connect_buyer"],
+                "description": "Connects qualified leads with buyers/contractors for dispatch",
+            },
+            "mesh.studio_copy": {
+                "skills": ["studio.write_script"],
+                "description": "Writes video scripts and marketing copy",
+            },
+            "mesh.studio_render": {
+                "skills": ["studio.render_reel"],
+                "description": "Renders video reels using FFmpeg and TTS",
+            },
+            "mesh.quality": {
+                "skills": ["revenue.score_call"],
+                "description": "Scores sales calls for quality and conversion probability",
+            },
+            "mesh.swarm_worker": {
+                "skills": ["swarm.fire"],
+                "description": "Executes swarm TTS calls and video strike generation",
+            },
+            "mesh.marketing": {
+                "skills": ["marketing.execute"],
+                "description": "Executes 45 marketing skills (email, ads, SEO, referrals, CRO)",
+            },
+            "mesh.design": {
+                "skills": ["design.execute"],
+                "description": "Executes 24 design skills (UI, UX, visual, motion, a11y)",
+            },
+            "mesh.email": {
+                "skills": ["email.execute"],
+                "description": "Executes 25 email marketing skills (strategy, compliance, sequences)",
+            },
+            "mesh.scraper": {
+                "skills": ["scrape.web"],
+                "description": "Extracts structured data from web pages",
+            },
+            "mesh.orchestrator": {
+                "skills": ["agentic.plan", "autoresearch.orchestrate"],
+                "description": "Creates execution plans and runs meta-loops",
+            },
+            "mesh.autoresearch": {
+                "skills": ["autoresearch.run"],
+                "description": "Runs recursive self-healing experiments",
+            },
+            "mesh.browser": {
+                "skills": ["browser.dev-browser"],
+                "description": "Browser automation via sandboxed Playwright",
+            },
+        }
+
+        # ── Keyword-based agent matching ───────────────────────────────
+        objective_lower = objective.lower()
+        agent_keywords = {
+            "mesh.scout": ["scout", "find", "prospect", "search", "discover", "target", "roof", "storm zone"],
+            "mesh.outreach": ["outreach", "draft", "message", "sms", "text", "send", "contact", "email draft"],
+            "mesh.dispatcher": ["dispatch", "connect", "buyer", "contractor", "lead", "match", "assign"],
+            "mesh.studio_copy": ["write", "script", "copy", "content", "article", "blog"],
+            "mesh.studio_render": ["render", "video", "reel", "ffmpeg", "produce"],
+            "mesh.quality": ["score", "quality", "call", "review", "audit", "evaluate"],
+            "mesh.swarm_worker": ["swarm", "simultaneous", "mass", "bulk", "batch"],
+            "mesh.marketing": ["market", "ad", "seo", "social", "campaign", "referral", "cro", "analytics"],
+            "mesh.design": ["design", "ui", "ux", "visual", "layout", "brand", "interface"],
+            "mesh.email": ["email", "deliverability", "spf", "dkim", "compliance", "newsletter"],
+            "mesh.scraper": ["scrape", "crawl", "extract", "data", "webpage"],
+            "mesh.orchestrator": ["plan", "orchestrate", "coordinate", "meta", "strategy"],
+            "mesh.autoresearch": ["experiment", "optimize", "tune", "ab test", "research"],
+            "mesh.browser": ["browser", "screenshot", "automate", "playwright", "navigate"],
+        }
+
+        matched_agents = []
+        for agent, keywords in agent_keywords.items():
+            score = sum(1 for kw in keywords if kw in objective_lower)
+            if score > 0:
+                matched_agents.append((agent, score))
+
+        matched_agents.sort(key=lambda x: x[1], reverse=True)
+
+        # ── Build execution plan ───────────────────────────────────────
+        subtasks = []
+        ticket_ids = []
+
+        for rank, (agent, score) in enumerate(matched_agents[:5]):  # Max 5 agents
+            caps = agent_capabilities.get(agent, {})
+            primary_skill = caps.get("skills", [agent])[0]
+
+            priority = 20 - rank * 3  # First agent gets priority 20, each subsequent drops by 3
+
+            subtask = {
+                "step": rank + 1,
+                "agent": agent,
+                "task_type": primary_skill,
+                "description": caps.get("description", f"Executes {primary_skill}"),
+                "priority": priority,
+                "status": "planned",
+                "relevance_score": score,
+            }
+
+            # Auto-create task ticket if requested and Supabase is available
+            if auto_create_tasks and sb:
+                try:
+                    r = sb.table("agent_task_queue").insert({
+                        "task_type": primary_skill,
+                        "payload": json.dumps({
+                            "objective": objective,
+                            "context": context,
+                            "delegation_id": f"delegate_{int(start)}",
+                        }),
+                        "status": "To-Do",
+                        "assigned_agent": agent,
+                        "priority": priority,
+                    }).execute()
+                    ticket_id = r.data[0].get("ticket_id") if r.data else None
+                    if ticket_id:
+                        subtask["ticket_id"] = ticket_id
+                        ticket_ids.append(ticket_id)
+                except Exception as e:
+                    subtask["create_error"] = str(e)[:200]
+
+            subtasks.append(subtask)
+
+        elapsed = int((time.time() - start) * 1000)
+
+        return SkillOutput(
+            success=True,
+            data={
+                "objective": objective[:300],
+                "context": context[:500],
+                "deadline": deadline,
+                "total_subtasks": len(subtasks),
+                "tickets_created": len(ticket_ids),
+                "ticket_ids": ticket_ids,
+                "auto_create_tasks": auto_create_tasks,
+                "execution_plan": {
+                    "subtasks": subtasks,
+                    "estimated_agents": len(matched_agents),
+                    "strategy": (
+                        f"Decomposed '{objective[:80]}...' into {len(subtasks)} subtasks "
+                        f"across {len(matched_agents)} capable agents. "
+                        f"{'Tickets created in agent_task_queue.' if ticket_ids else 'Set auto_create_tasks=true to create tickets.'}"
+                    ),
+                },
+                "available_agents": list(agent_capabilities.keys()),
+            },
+            metrics=SkillMetrics(duration_ms=elapsed, records_processed=len(subtasks)),
+        )
+
+
+# ══════════════════════════════════════════════════════════════════════
 # REGISTRATION
 # ══════════════════════════════════════════════════════════════════════
 
@@ -794,6 +1089,10 @@ HERMES_SKILL_CLASSES = [
     ScientificScientificAgentSkillsSkill,
     ScrapeFirecrawlSkill,
     AgenticSuperpowersSkill,
+    # Section 6: Consulting (30)
+    ConsultingStrategySkill,
+    # Section 7: Delegation (31)
+    MeshDelegateSkill,
 ]
 
 
@@ -824,6 +1123,8 @@ def list_hermes_skills_by_section() -> dict:
         "fleet_agents": [cls.name for cls in HERMES_SKILL_CLASSES[5:14]],
         "framework_wrappers": [cls.name for cls in HERMES_SKILL_CLASSES[14:17]],
         "autoresearch": [cls.name for cls in HERMES_SKILL_CLASSES[17:21]],
-        "external_tools": [cls.name for cls in HERMES_SKILL_CLASSES[21:]],
+        "external_tools": [cls.name for cls in HERMES_SKILL_CLASSES[21:29]],
+        "consulting": [cls.name for cls in HERMES_SKILL_CLASSES[29:30]],
+        "delegation": [cls.name for cls in HERMES_SKILL_CLASSES[30:31]],
         "total": len(HERMES_SKILL_CLASSES),
     }

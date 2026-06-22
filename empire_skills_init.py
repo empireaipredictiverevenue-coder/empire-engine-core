@@ -19,6 +19,7 @@ from skills.marketing_skills import register_marketing_skills
 from skills.email_skills import register_email_skills
 from skills.design_skills import register_design_skills
 from skills.hermes_skills import register_hermes_skills
+from skills.query_skills import register_query_skills
 from skills.dynamic import VaultSkillDiscoverer
 
 
@@ -116,6 +117,14 @@ class SkillsFramework:
         # 5c. Register hermes mesh skills (task queue ops, fleet agents, autoresearch, external tools)
         #     29 skills that make the mesh dispatch layer invocable via HarnessManager.run()
         register_hermes_skills(registry=self.registry)
+
+        # 5d. Register query & knowledge skills (DB query, RAG vector search, knowledge base)
+        #     3 skills: query.db.sql, query.rag.search, query.kb.search
+        register_query_skills(
+            registry=self.registry,
+            ask_llm=ask_llm,
+            supabase_client=None,  # wired later if exec_sql RPC is available
+        )
 
         # 6. Auto-discover vault-defined skills
         if auto_discover_skills:
