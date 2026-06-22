@@ -57,6 +57,11 @@ builds/**/*.jpg
 # Keep the directory structure (target_<name> folders) in git, just not the assets
 !builds/**/
 !builds/**/.gitkeep
+
+# Scratch/debug/fix scripts (temporary — never commit)
+_*.py
+bbb_probe2.py
+_*.sh
 test-ledger/
 
 # Obsidian vault per-user app config (theme, spellcheck, font prefs — not portable)
