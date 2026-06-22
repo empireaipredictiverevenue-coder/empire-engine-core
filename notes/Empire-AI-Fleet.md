@@ -79,6 +79,7 @@ the old map was written. Cron fleet was silently truncated at one point; restore
 
 ## Related
 
+- [[Obsidian_RAG_2026-06-22]] — vault-aware brain (active 2026-06-22)
 - [[Empire_AI_Brain]] — predictive cloud (voice + video)
 - [[Sessions/2026-06-22_payment_and_recovery]] — today's work
 - [[Parking_Lot]] — deferred ideas
