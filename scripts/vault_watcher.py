@@ -203,25 +203,33 @@ def _is_already_paid_tx(sb, tx_sig: str) -> bool:
 
 def run_poll(sb, since_hours: int = 168) -> dict:
     """One poll cycle. Returns counts."""
+    run_id = str(uuid.uuid4())
+    started_at = datetime.now(timezone.utc).isoformat()
     since_unix = int(time.time()) - since_hours * 3600
 
     pending = sb.table("fee_events").select(
         "id,claim_id,contractor_id,fee_amount,discount_amount,status,meta"
     ).eq("status", "pending").execute().data or []
 
+    pending_count = len(pending)
     if not pending:
         log.info("[watcher] no pending fees — nothing to match against")
-        return {"pending": 0, "transfers": 0, "matched": 0, "marked": 0}
+        result = {"pending": 0, "transfers": 0, "matched": 0, "marked": 0}
+        _log_activity(sb, run_id, started_at, result, pending_count)
+        return result
 
-    log.info(f"[watcher] {len(pending)} pending fees, fetching transfers since {since_hours}h ago")
+    log.info(f"[watcher] {pending_count} pending fees, fetching transfers since {since_hours}h ago")
     transfers = _fetch_recent_usdc_transfers(VAULT_WALLET, since_unix)
     log.info(f"[watcher] fetched {len(transfers)} transfers")
 
     if not transfers:
-        return {"pending": len(pending), "transfers": 0, "matched": 0, "marked": 0}
+        result = {"pending": pending_count, "transfers": 0, "matched": 0, "marked": 0}
+        _log_activity(sb, run_id, started_at, result, pending_count)
+        return result
 
     matched = 0
     marked = 0
+    errors = 0
     for fee in pending:
         # Effective amount = original - discount
         original = float(fee["fee_amount"])
@@ -243,17 +251,24 @@ def run_poll(sb, since_hours: int = 168) -> dict:
                 f"[watcher] MATCH: fee={fee['claim_id'][:24]} ${expected:,.2f} "
                 f"<= tx {tx['sig'][:12]} ${tx['amount']:,.2f}"
             )
-            _mark_paid(sb, fee, tx["sig"], tx["kind"], tx["amount"])
-            matched += 1
-            marked += 1
+            try:
+                _mark_paid(sb, fee, tx["sig"], tx["kind"], tx["amount"])
+                matched += 1
+                marked += 1
+            except Exception as e:
+                log.warning(f"[watcher] mark_paid failed for {fee['claim_id'][:24]}: {e}")
+                errors += 1
 
             # Thank-you SMS + Telegram ping
             cid = fee.get("contractor_id")
             if cid:
                 c = sb.table("contractors").select("name,phone").eq("id", cid).limit(1).execute().data
                 if c and c[0].get("phone"):
-                    r = _send_thank_you_sms(c[0]["phone"], c[0].get("name", "Contractor"), expected, fee["claim_id"])
-                    log.info(f"[watcher] thank-you SMS: {r}")
+                    try:
+                        r = _send_thank_you_sms(c[0]["phone"], c[0].get("name", "Contractor"), expected, fee["claim_id"])
+                        log.info(f"[watcher] thank-you SMS: {r}")
+                    except Exception as e:
+                        log.warning(f"[watcher] thank-you SMS failed: {e}")
 
             _ping_telegram(
                 f"\U0001F4B0 Payment received!\n"
@@ -263,12 +278,43 @@ def run_poll(sb, since_hours: int = 168) -> dict:
             )
             break  # one tx per fee
 
-    return {
-        "pending": len(pending),
+    result = {
+        "pending": pending_count,
         "transfers": len(transfers),
         "matched": matched,
         "marked": marked,
     }
+    _log_activity(sb, run_id, started_at, result, pending_count, errors)
+    return result
+
+
+def _log_activity(sb, run_id: str, started_at: str, result: dict, pending_count: int, errors: int = 0):
+    """Log a vault watcher poll cycle to the agent_activity table for audit trail."""
+    status = "ok" if errors == 0 else "error"
+    summary_parts = [
+        f"pending_fees={result['pending']}",
+        f"transfers_fetched={result['transfers']}",
+        f"matched={result['matched']}",
+        f"marked_paid={result['marked']}",
+    ]
+    if errors:
+        summary_parts.append(f"errors={errors}")
+    try:
+        sb.table("agent_activity").insert({
+            "agent_name": "vault_watcher",
+            "run_id": run_id,
+            "started_at": started_at,
+            "finished_at": datetime.now(timezone.utc).isoformat(),
+            "status": status,
+            "rows_seen": pending_count,
+            "rows_processed": result["transfers"],
+            "rows_errored": errors,
+            "summary": " ".join(summary_parts),
+            "meta": result,
+        }).execute()
+        log.info(f"[watcher] agent_activity logged: {' '.join(summary_parts)}")
+    except Exception as e:
+        log.debug(f"[watcher] agent_activity insert failed: {e}")
 
 
 def main():

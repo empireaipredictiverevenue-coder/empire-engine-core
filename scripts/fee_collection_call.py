@@ -3,17 +3,8 @@ Empire AI · Fee Collection AI Call
 ==================================
 
 Places an AI-voice outbound call to a contractor who has an unpaid
-fee_event. Uses the Vonage Voice API with a talk NCCO that:
-
-  - States who we are (one breath)
-  - Names the claim + the original fee
-  - Leads with the discount (urgency)
-  - Directs to the payment page
-  - Asks them to press 1 to repeat the page, or just hang up to opt out
-
-Bypasses empire_voice.VonageAdapter (which requires legacy VONAGE_API_KEY/SECRET
-env vars we don't have) and signs the JWT directly with VONAGE_APPLICATION_ID +
-the private key.
+fee_event. Uses empire_voice.VonageAdapter for consistent JWT auth,
+caching, connection pooling, and event URL routing.
 
 Voice: Amy (en-US) — clear, professional, slightly warm. We deliberately avoid
 the over-enthusiastic "Congratulations!" tone the AI-closer templates tend to
@@ -46,59 +37,22 @@ import httpx
 import jwt as pyjwt
 from supabase import create_client
 
+# Use the shared VonageAdapter for consistent JWT auth + event routing
+from empire_voice import VonageAdapter
+
 log = logging.getLogger("fee_collection_call")
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(name)s] %(message)s")
 
 VAULT_WALLET = "egJ1t9NZkDs8FvMbfnQTqXzC4KNuhAc9XSfpG9y9AZM"
 
 
-def _generate_jwt(app_id: str, private_key_path: str) -> str:
-    with open(private_key_path) as f:
-        private_key = f.read()
-    now = int(time.time())
-    payload = {
-        "iat": now,
-        "exp": now + 180,
-        "jti": str(uuid.uuid4()),
-        "application_id": app_id,
-    }
-    return pyjwt.encode(payload, private_key, algorithm="RS256")
-
-
-def _place_call(to_number: str, ncco: list, from_number: str, event_url: str = "") -> dict:
-    """Place an outbound voice call via Vonage Voice API."""
-    app_id = os.environ["VONAGE_APPLICATION_ID"]
-    key_path = os.environ.get("VONAGE_PRIVATE_KEY_PATH", "/root/vonage_private.key")
-    token = _generate_jwt(app_id, key_path)
-
-    payload = {
-        "to": [{"type": "phone", "number": to_number.lstrip("+")}],
-        "from": {"type": "phone", "number": from_number.lstrip("+")},
-        "ncco": ncco,
-        # Async answering machine detection so the call connects without
-        # an awkward silence at the start.
-        "advanced_machine_detection": {
-            "behavior": "continue",
-            "mode": "default",
-            "beep_timeout": 45,
-        },
-    }
-    if event_url:
-        payload["event_url"] = [event_url]
-
-    r = httpx.post(
-        "https://api.nexmo.com/v1/calls",
-        json=payload,
-        headers={
-            "Authorization": f"Bearer {token}",
-            "Content-Type": "application/json",
-        },
-        timeout=15,
+def _get_adapter() -> VonageAdapter:
+    """Return a shared VonageAdapter instance (reuses JWT cache + connection pool)."""
+    return VonageAdapter(
+        app_id=os.environ.get("VONAGE_APPLICATION_ID", ""),
+        private_key_path=os.environ.get("VONAGE_PRIVATE_KEY_PATH", "/root/vonage_private.key"),
+        from_number=os.environ.get("VONAGE_NUMBER", "12142277528"),
     )
-    if r.status_code in (200, 201):
-        data = r.json()
-        return {"ok": True, "uuid": data.get("uuid"), "status": data.get("status", "queued")}
-    return {"ok": False, "error": f"HTTP {r.status_code}: {r.text[:300]}"}
 
 
 def _build_ncco(fee: dict, contractor_name: str, claim_id: str) -> list:
@@ -216,8 +170,8 @@ def _pick_one_fee_per_contractor(sb) -> dict:
     return seen
 
 
-def call_one(sb, fee: dict, dry_run: bool, from_number: str, event_url: str) -> dict:
-    """Place a call for one fee."""
+def call_one(sb, fee: dict, dry_run: bool, from_number: str, event_url: str, adapter: VonageAdapter = None) -> dict:
+    """Place a call for one fee using the shared VonageAdapter."""
     cid = fee["contractor_id"]
     c = sb.table("contractors").select("name,phone,email").eq("id", cid).limit(1).execute().data
     if not c or not c[0].get("phone"):
@@ -234,7 +188,15 @@ def call_one(sb, fee: dict, dry_run: bool, from_number: str, event_url: str) -> 
         return {"ok": True, "fee_id": fee["id"], "dry_run": True}
 
     print(f"  calling {name} {phone} (${fee['fee_amount']:,.0f}, discount ${fee.get('discount_amount') or 0:,.0f})")
-    r = _place_call(phone, ncco, from_number, event_url)
+    
+    # Use VonageAdapter instead of raw httpx — gets JWT caching,
+    # connection pooling, and proper event URL routing
+    if adapter and adapter.enabled:
+        r = adapter.place_call_sync(to_number=phone, ncco=ncco, event_webhook=event_url)
+    else:
+        # Fallback to direct call if no adapter
+        r = _place_call(phone, ncco, from_number, event_url)
+    
     print(f"    -> {r}")
     _log_call(sb, fee["id"], cid, phone, r.get("uuid") or "", r.get("ok", False), ncco)
     return {"ok": r.get("ok"), "fee_id": fee["id"], **r}
@@ -251,9 +213,14 @@ def main():
     if not any([args.all, args.fee_id, args.contractor_id]):
         p.error("need --all or --fee-id or --contractor-id")
 
-    from_number = os.environ.get("VONAGE_NUMBER", "12142277528").lstrip("+")
+    adapter = _get_adapter()
+    if not adapter.enabled:
+        log.error("VonageAdapter not enabled — check VONAGE_APPLICATION_ID and VONAGE_PRIVATE_KEY_PATH")
+        sys.exit(1)
+
     public_base = os.environ.get("PUBLIC_BASE_URL", "https://empire-ai.co.uk")
     event_url = f"{public_base}/api/v1/voice/events"
+    from_number = os.environ.get("VONAGE_NUMBER", "12142277528").lstrip("+")
 
     sb = create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_SERVICE_KEY"])
 
@@ -275,7 +242,7 @@ def main():
 
     results = []
     for f in fees_to_call:
-        r = call_one(sb, f, args.dry_run, from_number, event_url)
+        r = call_one(sb, f, args.dry_run, from_number, event_url, adapter)
         results.append(r)
         # small delay so Vonage doesn't rate-limit
         time.sleep(1.5)

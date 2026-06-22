@@ -105,7 +105,10 @@ class VonageAdapter:
         self.app_id       = app_id
         self.private_key  = self._load_private_key(private_key_path)
         self.from_number  = from_number
-        self.enabled      = bool(api_key and api_secret and app_id and self.private_key)
+        # Voice calls use JWT auth (app_id + private_key) — no api_key/secret needed.
+        # api_key/secret are only required for the legacy Vonage SMS API, not voice.
+        self.enabled      = bool(app_id and self.private_key)
+        self._has_legacy_creds = bool(api_key and api_secret)  # for send_sms fallback
         # Cached JWT — reused across calls to avoid RSA signing on every request
         self._cached_token: Optional[str] = None
         self._cached_token_expiry: float = 0.0
@@ -114,9 +117,9 @@ class VonageAdapter:
         self._sync_client: Optional[httpx.Client] = None
 
         if self.enabled:
-            log.info(f"[vonage] Adapter ONLINE · DID {from_number}")
+            log.info(f"[vonage] Adapter ONLINE · JWT voice ready · DID {from_number}")
         else:
-            log.warning("[vonage] Adapter DISABLED · missing credentials (will log-only)")
+            log.warning("[vonage] Adapter DISABLED · missing VONAGE_APPLICATION_ID or VONAGE_PRIVATE_KEY_PATH (will log-only)")
 
     def _load_private_key(self, path: str) -> Optional[str]:
         if not path or not os.path.exists(path):
@@ -177,7 +180,7 @@ class VonageAdapter:
             event_webhook: URL Vonage POSTs status updates to
         """
         if not self.enabled:
-            log.error(f"[vonage] place_call blocked: adapter not enabled (missing creds: VONAGE_API_KEY/SECRET/APPLICATION_ID/PRIVATE_KEY_PATH in /root/.env). to_number={to_number}")
+            log.error(f"[vonage] place_call blocked: adapter not enabled (missing VONAGE_APPLICATION_ID or VONAGE_PRIVATE_KEY_PATH in /root/.env). to_number={to_number}")
             return {"ok": False, "error": "vonage_adapter_disabled_check_env"}
 
         token = self._generate_jwt()
@@ -241,7 +244,7 @@ class VonageAdapter:
         Returns: {ok, uuid, status, error?}
         """
         if not self.enabled:
-            log.error(f"[vonage] place_call_sync blocked: adapter not enabled. to_number={to_number}")
+            log.error(f"[vonage] place_call_sync blocked: adapter not enabled (missing VONAGE_APPLICATION_ID or VONAGE_PRIVATE_KEY_PATH). to_number={to_number}")
             return {"ok": False, "error": "vonage_adapter_disabled_check_env"}
 
         token = self._generate_jwt()
@@ -292,8 +295,8 @@ class VonageAdapter:
         """
         Send an SMS via Vonage Messages API. Returns: {ok, message_uuid, error?}
         """
-        if not self.enabled:
-            log.error(f"[vonage] send_sms blocked: adapter not enabled. to_number={to_number} body[:60]={message[:60]}")
+        if not self.enabled and not self._has_legacy_creds:
+            log.error(f"[vonage] send_sms blocked: no JWT (VONAGE_APPLICATION_ID) or legacy API key. to_number={to_number}")
             return {"ok": False, "error": "vonage_adapter_disabled_check_env"}
 
         token = self._generate_jwt()
@@ -1231,16 +1234,41 @@ def register_voice_routes(
         """
         Vonage posts call lifecycle events here: ringing, answered,
         completed, etc. Also receives advanced_machine_detection results
-        (status = "human" | "machine"). We log AMD results to track
-        detection rates and push to the live dashboard.
+        (status = "human" | "machine").
+
+        NOTE: The Vonage application Event URL is shared between Voice and
+        Messages (SMS) APIs. SMS delivery receipts also arrive here but
+        lack a `uuid` field — they are logged separately and skipped.
         """
         try:
             event = await request.json()
         except Exception:
             event = {}
 
-        status     = event.get("status", "unknown")
+        # ── Detect non-voice events ──────────────────────────────────
+        # SMS delivery receipts / error events lack both 'uuid' and
+        # 'direction' fields that voice events always carry. They also
+        # often have an 'error' or 'sms' key. Skip them gracefully.
         call_uuid  = event.get("uuid", "")
+        status     = event.get("status", "unknown")
+
+        is_voice_event = bool(call_uuid) and status not in ("unknown", "delivered", "undelivered")
+        is_sms_event = not call_uuid and ("sms" in event or "error" in event or "usage" in event)
+
+        if is_sms_event:
+            # Log SMS delivery noise at debug level so we can track
+            # volume but don't pollute call_events
+            log.debug(
+                f"[voice] sms event skipped (voice webhook): "
+                f"status={status} to={event.get('to','?')} "
+                f"error={event.get('error',{}).get('detail','none')[:60]}"
+            )
+            return PlainTextResponse("ok", status_code=200)
+
+        if not is_voice_event:
+            log.debug(f"[voice] unknown event format skipped: {str(event)[:200]}")
+            return PlainTextResponse("ok", status_code=200)
+
         direction  = event.get("direction", "")
         duration   = int(event.get("duration", 0) or 0)
 
@@ -1271,8 +1299,6 @@ def register_voice_routes(
             try:
                 db = get_db()
                 meta = dict(event)
-                # Normalize call identifiers so human/machine events
-                # can be joined with their parent call record
                 db.table("call_events").insert({
                     "call_uuid":  call_uuid,
                     "status":     status,
@@ -1281,8 +1307,14 @@ def register_voice_routes(
                     "sub_state":  event.get("sub_state", None),
                     "meta":       meta,
                 }).execute()
+
+                # Log important lifecycle transitions
+                if status in ("answered", "completed", "human", "machine"):
+                    log.info(
+                        f"[voice] event: {status} · {call_uuid[:12]}... · "
+                        f"dur={duration}s · dir={direction}"
+                    )
             except Exception as e:
-                # call_events table optional; warn but don't fail
                 log.debug(f"[voice] call_events insert: {e}")
 
         # ── Push to live dashboards ──────────────────────────────────
@@ -1295,8 +1327,6 @@ def register_voice_routes(
                     "direction": direction,
                     "duration":  duration,
                 }
-                # Include AMD detail when present so the dashboard
-                # can surface machine/human detection in real-time
                 if status in ("human", "machine"):
                     payload["amd"] = {
                         "result":    status,
@@ -1527,9 +1557,113 @@ def register_voice_routes(
                 "vonage_enabled": router.vonage.enabled,
             }
 
+    # ── VONAGE API CALL SCRAPER (backfill for event webhook gaps) ──
+    if require_auth:
+        @app.post("/api/v1/voice/backfill")
+        async def voice_backfill(auth: bool = Depends(require_auth)):
+            """
+            Query the Vonage API directly for today's completed calls and
+            backfill any missing call_events records.
+
+            This exists because the Vonage event webhook doesn't reliably
+            deliver voice call events (events URL is shared with Messages API
+            which sends SMS delivery receipts instead).
+
+            Body (optional):
+              { date_start: "2026-06-22", page_size: 50 }
+            """
+            if not router.vonage.enabled:
+                return JSONResponse({"ok": False, "error": "vonage_adapter_disabled"}, status_code=400)
+
+            token = router.vonage._generate_jwt()
+            if not token:
+                return JSONResponse({"ok": False, "error": "JWT generation failed"}, status_code=500)
+
+            now = datetime.now(timezone.utc)
+            date_start = now.strftime("%Y-%m-%dT%H:%M:%SZ")
+            date_start = date_start[:10] + "T00:00:00Z"  # start of today
+
+            async with httpx.AsyncClient(timeout=15) as client:
+                r = await client.get(
+                    f"https://api.nexmo.com/v1/calls?date_start={date_start}&page_size=50",
+                    headers={"Authorization": f"Bearer {token}"},
+                )
+                if r.status_code != 200:
+                    return JSONResponse({"ok": False, "error": f"Vonage API: HTTP {r.status_code}"}, status_code=502)
+
+                data = r.json()
+                calls = data.get("_embedded", {}).get("calls", []) if "_embedded" in data else []
+                if not calls:
+                    return JSONResponse({"ok": False, "error": "no calls found", "calls": []})
+
+                if not get_db:
+                    return JSONResponse({"ok": False, "error": "no database"}, status_code=500)
+
+                db = get_db()
+                backfilled = 0
+                skipped = 0
+                for c in calls:
+                    cuuid = c.get("uuid", "")
+                    if not cuuid:
+                        skipped += 1
+                        continue
+
+                    # Check if already logged
+                    existing = db.table("call_events").select("id").eq("call_uuid", cuuid).limit(1).execute()
+                    if existing.data:
+                        skipped += 1
+                        continue
+
+                    # Determine status from call record
+                    call_status = c.get("status", "completed")
+                    duration = int(c.get("duration", 0) or 0)
+                    direction = c.get("direction", "outbound")
+                    price = c.get("price")
+                    rate = c.get("rate")
+                    start_time = c.get("start_time", "")
+                    end_time = c.get("end_time", "")
+                    to_num = c.get("to", {}).get("number", "")
+                    from_num = c.get("from", {}).get("number", "")
+                    conversation_uuid = c.get("conversation_uuid", "")
+
+                    meta = {
+                        "price": price,
+                        "rate": rate,
+                        "start_time": start_time,
+                        "end_time": end_time,
+                        "to": to_num,
+                        "from": from_num,
+                        "conversation_uuid": conversation_uuid,
+                        "source": "vonage_api_backfill",
+                    }
+
+                    try:
+                        db.table("call_events").insert({
+                            "call_uuid": cuuid,
+                            "status": call_status,
+                            "direction": direction,
+                            "duration": duration,
+                            "sub_state": None,
+                            "meta": meta,
+                        }).execute()
+                        backfilled += 1
+
+                        # Also log to router stats
+                        router.stats["calls_completed"] += 1
+                    except Exception as e:
+                        log.warning(f"[voice] backfill insert failed for {cuuid[:12]}: {e}")
+
+                return JSONResponse({
+                    "ok": True,
+                    "backfilled": backfilled,
+                    "skipped": skipped,
+                    "total_found": len(calls),
+                    "date_start": date_start,
+                })
+
     # Import render_few_shot here (module-level import unsafe due to potential
     # circular deps at import time — brain_memory doesn't import voice, but
     # we keep it local to the registration function for clarity).
     from empire_brain_memory import render_few_shot as _render_few_shot
 
-    log.info("[voice] Routes registered · /api/v1/voice/{answer,events,strike,stats}")
+    log.info("[voice] Routes registered · /api/v1/voice/{answer,events,strike,stats,backfill}")
