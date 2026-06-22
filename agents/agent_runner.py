@@ -239,6 +239,28 @@ AGENT_REGISTRY: List[Dict] = [
         "default_interval": 300,       # 5 min
         "description": "SMS delivery monitor: polls Vonage, updates sms_log, feeds SI + AGI",
     },
+    # ── Elite Scraper V2 channels (BBB + camofox-browser + YouTube + PhoneInfoga) ──
+    {
+        "module": "bots.predictive_camofox_scraper",
+        "function": "run_loop",
+        "agent_name": "camofox_scraper",
+        "default_interval": 7200,      # 2 hours
+        "description": "Elite Scraper V2 channel 1: camofox-browser + BBB category scrapes (6 niches × 4 metros)",
+    },
+    {
+        "module": "bots.youtube_scraper",
+        "function": "run_loop",
+        "agent_name": "youtube_scraper",
+        "default_interval": 86400,     # 24 hours
+        "description": "Elite Scraper V2 channel 2: YouTube transcript scraper for niche strategy content",
+    },
+    {
+        "module": "scripts.run_phoneinfoga",
+        "function": "run_loop",
+        "agent_name": "phoneinfoga",
+        "default_interval": 86400,     # 24 hours
+        "description": "Elite Scraper V2 channel 3: PhoneInfoga phone validation for contractor enrichment",
+    },
 ]
 
 # ── Dynamic import helper ─────────────────────────────────────────────

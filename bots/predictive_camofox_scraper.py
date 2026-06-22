@@ -33,37 +33,89 @@ class PredictiveCamofoxScraper:
         })
         return r.json()
 
-    async def get_snapshot(self, tab_id: str):
-        r = await self.client.get(f"{CAMOFOX_URL}/tabs/{tab_id}/snapshot")
+    async def get_snapshot(self, tab_id: str, user_id: str = "empire"):
+        # camofox server reads userId from query string on GET endpoints
+        r = await self.client.get(f"{CAMOFOX_URL}/tabs/{tab_id}/snapshot", params={"userId": user_id})
         return r.json()
 
     async def scrape_niche(self, niche: str, metro: str, max_results: int = 30) -> List[Dict]:
         """Scrape a niche using camofox-browser + search macros"""
         log.info(f"[Camofox] Scraping {niche} in {metro}")
         
-        # Use search macro
-        macro_map = {
-            "roofing": "@yelp_search",
-            "hvac": "@yelp_search",
-            "solar": "@google_search",
-            "restoration": "@yelp_search",
-            "public_adjuster": "@google_search",
-            "commercial": "@google_search"
+        # Source mix: prefer static-render sites (BBB) over JS-heavy (Yelp/Google)
+        # because camofox a11y snapshot only captures rendered HTML, not post-JS DOM.
+        query = f"{niche} contractors {metro}"
+        source_map = {
+            "roofing":         ("url", "https://www.bbb.org/us/tx/dallas/category/roofing-contractors"),
+            "hvac":            ("url", "https://www.bbb.org/us/tx/dallas/category/air-conditioning-contractors"),
+            "solar":           ("url", "https://www.bbb.org/us/tx/dallas/category/solar-energy-contractors"),
+            "restoration":     ("url", "https://www.bbb.org/us/tx/dallas/category/fire-and-water-damage-restoration"),
+            "public_adjuster": ("url", "https://www.bbb.org/us/tx/dallas/category/public-adjusters"),
+            "commercial":      ("url", "https://www.bbb.org/us/tx/dallas/category/general-contractors"),
         }
-        macro = macro_map.get(niche, "@google_search")
+        kind, payload = source_map.get(niche, ("macro", "@yelp_search"))
+        user_id = "empire"
         
         try:
-            tab = await self.create_tab("about:blank")
-            tab_id = tab.get("id")
+            # camofox blocks about: URLs, must use http(s). Start with a real
+            # blank-ish target then navigate via macro.
+            start_url = "https://www.google.com"
+            tab = await self.create_tab(start_url, user_id=user_id, session_key=f"scrape-{niche}-{metro}")
+            tab_id = tab.get("id") or tab.get("tabId")
+            if not tab_id:
+                log.warning(f"[Camofox] create_tab returned no id: {tab}")
+                return []
             
-            # Navigate with search macro
-            await self.client.post(f"{CAMOFOX_URL}/tabs/{tab_id}/navigate", json={
-                "macro": macro,
-                "query": f"{niche} contractors in {metro}"
-            })
+            # Navigate using the chosen source
+            if kind == "url":
+                # simple metro substitution: tx/dallas → tx/{metro}
+                nav_url = payload.replace("/tx/dallas", f"/tx/{metro.replace(chr(32), chr(45))}")
+                nav_resp = await self.client.post(
+                    f"{CAMOFOX_URL}/tabs/{tab_id}/navigate",
+                    json={"userId": user_id, "url": nav_url},
+                )
+            else:
+                nav_resp = await self.client.post(
+                    f"{CAMOFOX_URL}/tabs/{tab_id}/navigate",
+                    json={"userId": user_id, "macro": payload, "query": query},
+                )
+            if nav_resp.status_code >= 400:
+                log.warning(f"[Camofox] navigate failed {nav_resp.status_code}: {nav_resp.text[:200]}")
             
-            snapshot = await self.get_snapshot(tab_id)
-            await self.client.delete(f"{CAMOFOX_URL}/tabs/{tab_id}")
+            # Give JS-rendered pages a moment to render before snapshot
+            try:
+                await self.client.post(
+                    f"{CAMOFOX_URL}/tabs/{tab_id}/wait",
+                    json={"userId": user_id, "condition": "networkidle", "timeoutMs": 8000},
+                )
+            except Exception as wait_err:
+                log.debug(f"[Camofox] wait skipped: {wait_err}")
+
+            # Give JS-rendered pages a moment to render before snapshot
+            try:
+                await self.client.post(
+                    f"{CAMOFOX_URL}/tabs/{tab_id}/wait",
+                    json={"userId": user_id, "condition": "networkidle", "timeoutMs": 8000},
+                )
+            except Exception as wait_err:
+                log.debug(f"[Camofox] wait skipped: {wait_err}")
+
+            snapshot = await self.get_snapshot(tab_id, user_id=user_id)
+
+            # Extract outbound links as a second-opinion opportunity list
+            try:
+                links_resp = await self.client.get(
+                    f"{CAMOFOX_URL}/tabs/{tab_id}/links",
+                    params={"userId": user_id},
+                )
+                if links_resp.status_code == 200:
+                    snap = snapshot if isinstance(snapshot, dict) else {}
+                    snap["_links"] = links_resp.json()
+                    snapshot = snap
+            except Exception as links_err:
+                log.debug(f"[Camofox] links extract skipped: {links_err}")
+
+            await self.client.request("DELETE", f"{CAMOFOX_URL}/tabs/{tab_id}", json={"userId": user_id})
             
             # Parse snapshot into structured opportunities
             opportunities = self._parse_snapshot(snapshot, niche, metro)
@@ -95,20 +147,70 @@ class PredictiveCamofoxScraper:
             return []
 
     def _parse_snapshot(self, snapshot: Dict, niche: str, metro: str) -> List[Dict]:
-        """Parse accessibility snapshot into structured opportunities"""
-        text = snapshot.get("snapshot", "")
-        opportunities = []
-        
-        # Simple parsing (improve with better NLP later)
-        lines = text.split("\n")
-        for line in lines:
-            if any(word in line.lower() for word in ["roof", "hvac", "solar", "restoration", "adjuster"]):
+        """Parse camofox a11y snapshot + links into structured business leads.
+
+        Strategy:
+          1. From `_links` (if extracted) take any bbb.org URLs that look like
+             individual business pages (path /biz/... or /business/...) — these
+             are real contractor listings.
+          2. From the snapshot text, take any "link 'Business Name' [eN]" lines
+             that look like proper nouns (Title Case, not nav/footer text).
+        Returns up to max_results opportunities.
+        """
+        opportunities: List[Dict] = []
+        seen: set = set()
+
+        # 1) Links-based extraction (most reliable)
+        links_payload = snapshot.get("_links", {}) if isinstance(snapshot, dict) else {}
+        for link in links_payload.get("links", []) or []:
+            url = (link.get("url") or "").lower()
+            text_label = (link.get("text") or "").strip()
+            if not url or not text_label:
+                continue
+            if "bbb.org" in url and ("/biz/" in url or "/business/" in url or "/profile/" in url):
+                key = url.split("?")[0]
+                if key in seen:
+                    continue
+                seen.add(key)
                 opportunities.append({
-                    "domain": line.strip()[:100],
+                    "name": text_label[:120],
+                    "url": link["url"],
                     "niche": niche,
                     "metro": metro,
-                    "source": "camofox"
+                    "source": "camofox-bbb",
+                    "domain": url.split("/")[2] if "://" in url else "",
                 })
+
+        # 2) Snapshot-text-based extraction (fallback)
+        if len(opportunities) < 5:
+            text = snapshot.get("snapshot", "") or snapshot.get("text", "") or ""
+            for line in text.split("\n"):
+                l = line.strip()
+                if not l.startswith("- link "):
+                    continue
+                if "[e" not in l:
+                    continue
+                try:
+                    name = l.split('"')[1].strip()
+                except IndexError:
+                    continue
+                if len(name) < 4 or len(name) > 80:
+                    continue
+                low = name.lower()
+                if any(skip in low for skip in ["cookie", "privacy", "homepage", "login", "sign in", "sign up", "search", "filter", "sort by", "see more", "read more", "get a quote", "leave a review", "file a complaint"]):
+                    continue
+                if any(k in low for k in [niche[:4], "roof", "hvac", "solar", "restoration", "adjuster", "construction", "builders", "contractor", "company", "services"]):
+                    if name not in seen:
+                        seen.add(name)
+                        opportunities.append({
+                            "name": name,
+                            "url": "",
+                            "niche": niche,
+                            "metro": metro,
+                            "source": "camofox-snapshot",
+                            "domain": "",
+                        })
+
         return opportunities
 
     async def _agi_self_improvement(self):
