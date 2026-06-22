@@ -95,7 +95,7 @@ def _build_payment_body(
     contractor_name: str,
     fee_amount: float,
     claim_amount: float,
-    dispatch_id: str,
+    pay_url: str,
     is_follow_up: bool = False,
     discount_percent: float = 0.0,
     discount_amount: float = 0.0,
@@ -106,11 +106,11 @@ def _build_payment_body(
     If a discount has been offered, the SMS leads with the savings so
     the contractor feels the urgency ("20% off if you pay this week").
     Copy stays short, human, direct — no AI-polished phrasing.
+
+    pay_url: full HTTPS payment URL (e.g. https://empire-ai.co.uk/pay/<claim_id>)
     """
     prefix = "Empire AI:"
     header = "Payment reminder" if is_follow_up else "Settlement notice"
-
-    pay_url = f"empire-ai.co.uk/pay/{dispatch_id}"
 
     # Discount lead — only if discount is offered and not expired
     discount_lead = ""
@@ -132,13 +132,13 @@ def _build_payment_body(
         return (
             f"{prefix} {header} — "
             f"{discount_lead}"
-            f"${fee_amount:,.0f} fee on ${claim_amount:,.0f} claim ({dispatch_id[:8]}...). "
+            f"${fee_amount:,.0f} fee on ${claim_amount:,.0f} claim. "
             f"Pay: {pay_url} STOP to opt out."
         )
     else:
         return (
             f"{prefix} {header} — "
-            f"${fee_amount:,.0f} fee on ${claim_amount:,.0f} claim ({dispatch_id[:8]}...). "
+            f"${fee_amount:,.0f} fee on ${claim_amount:,.0f} claim. "
             f"Pay here: {pay_url} "
             f"(QR + wallet, takes 60s). "
             f"Reply HELP for help. STOP to opt out."
@@ -482,8 +482,11 @@ async def run_collection(
                 continue
 
         # ── Build payment request body ──────────────────────────────────
-        dispatch_id = (fe_meta or {}).get("dispatch_id", "")
         is_follow = attempt_type != "initial"
+
+        # The payment URL uses claim_id so /pay/{claim_id} resolves correctly
+        claim_id_pay = fe.get("claim_id") or fee_id
+        pay_url = f"https://empire-ai.co.uk/pay/{claim_id_pay}"
 
         # Discount lives on the fee row directly (not in meta)
         disc_pct = fe.get("discount_percent")
@@ -494,7 +497,7 @@ async def run_collection(
             contractor_name=name.split()[0] if name else "Contractor",
             fee_amount=fee_amount,
             claim_amount=claim_amount,
-            dispatch_id=dispatch_id or fee_id,
+            pay_url=pay_url,
             is_follow_up=is_follow,
             discount_percent=float(disc_pct or 0),
             discount_amount=float(disc_amt or 0),
@@ -584,6 +587,7 @@ async def run_collection(
                     "email": email or None,
                     "status": "sent",
                     "body_preview": body[:100],
+                    "payment_url": pay_url,
                 })
                 try:
                     sb.table("fee_events").update({

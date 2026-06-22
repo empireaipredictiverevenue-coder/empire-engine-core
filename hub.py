@@ -72,6 +72,9 @@ from empire_crypto_payments import CryptoPaymentEngine, register_crypto_payment_
 from empire_moonpay_checkout import register_moonpay_checkout_routes
 from empire_fee import register_fee_routes
 from empire_payment_page import register_payment_routes
+from empire_mrr import register_mrr_routes
+from empire_for_contractors import render_for_contractors_page
+from empire_resend_webhook import register_resend_webhook
 from empire_fee_operator import register_operator_mark_settled
 from empire_claims import register_claims_routes
 from empire_claim_webhook import register_claim_webhook
@@ -1187,6 +1190,21 @@ register_payout_routes(app, engine=payout_engine, require_auth=require_auth, req
 register_bounty_payout_routes(app, require_auth=require_auth, payout_engine=payout_engine)
 register_fee_routes(app, require_auth=require_auth, get_db=get_db)
 register_payment_routes(app, get_db=get_db)
+try:
+    register_mrr_routes(app, require_auth=None, get_db=get_db)
+except Exception as _e:
+    log.warning(f"[hub] mrr routes register failed: {_e}")
+try:
+    register_resend_webhook(app)
+except Exception as _e:
+    log.warning(f"[hub] resend webhook register failed: {_e}")
+
+
+@app.get("/for-contractors", include_in_schema=False)
+async def for_contractors_page():
+    """Public pricing/onboarding page. USDC subscription."""
+    from fastapi.responses import HTMLResponse
+    return HTMLResponse(render_for_contractors_page())
 register_operator_mark_settled(app, require_auth=require_auth, get_db=get_db)
 register_claims_routes(app, require_auth=require_auth, get_db=get_db)
 register_claim_webhook(app, get_db=get_db, broadcaster=live_broadcaster)
