@@ -30,7 +30,7 @@ class BuyerSpy:
         log_usage: Optional[Callable] = None,   # SuiteGuard.log_usage
         ollama_host: str = "localhost",
         ollama_port: int = 11434,
-        ollama_model: str = "llama3:8b",
+        ollama_model: str = "llama3.2:3b",
     ):
         self.guard = guard
         self.log_usage = log_usage

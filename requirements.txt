@@ -29,3 +29,6 @@ qdrant-client>=1.17.0
 # ── Observability ──
 # Langfuse — LLM observability, tracing, cost tracking
 langfuse>=4.0
+crawl4ai>=0.8.0
+scrapy>=2.16.0
+crawlee>=1.7.0

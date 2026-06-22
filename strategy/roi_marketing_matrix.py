@@ -46,7 +46,7 @@ class StrategyRequest(BaseModel):
 # ── Ollama Helper ─────────────────────────────────────────────────────
 _OLLAMA_HOST = os.environ.get("OLLAMA_HOST", "localhost")
 _OLLAMA_PORT = int(os.environ.get("OLLAMA_PORT", "11434"))
-_OLLAMA_MODEL = os.environ.get("OLLAMA_STRATEGY_MODEL", "llama3:8b")
+_OLLAMA_MODEL = os.environ.get("OLLAMA_STRATEGY_MODEL", "llama3.2:3b")
 
 
 def _consult_synthetic_brain(system_rules: str, current_stats: str) -> dict:

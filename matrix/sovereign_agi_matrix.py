@@ -10,6 +10,7 @@ AGI Optimizer, Skills Framework, Hermes Protocol mesh.
 ENDPOINTS
 ─────────
   GET  /api/v6/matrix/health           → Health check
+  GET  /api/v6/matrix/fleet-status     → Fleet-wide status (PM2 + matrix + governor)
   POST /api/v6/matrix/affiliate-hunter  → AI-drafted outreach to publishers
   POST /api/v6/matrix/buyer-locksmith   → Provision buyer + trigger media engine
   POST /api/v6/matrix/strategy-decide   → AGI Governor strategy decision
@@ -22,6 +23,7 @@ ENDPOINTS
 import os
 import sys
 import json
+import subprocess
 import http.client
 import logging
 import asyncio
@@ -85,7 +87,7 @@ class AGIOptimizeRequest(BaseModel):
 # ── Ollama Helper ─────────────────────────────────────────────────────
 _OLLAMA_HOST = os.environ.get("OLLAMA_HOST", "localhost")
 _OLLAMA_PORT = int(os.environ.get("OLLAMA_PORT", "11434"))
-_OLLAMA_MODEL = os.environ.get("OLLAMA_MATRIX_MODEL", "llama3:8b")
+_OLLAMA_MODEL = os.environ.get("OLLAMA_MATRIX_MODEL", "llama3.2:3b")
 
 
 def _call_local_brain(system_rules: str, user_context: str) -> dict:
@@ -162,6 +164,7 @@ async def matrix_health():
         "capabilities": [
             "affiliate-hunter",
             "buyer-locksmith",
+            "fleet-status",
             "strategy-decide",
             "self-aware",
             "niche-analyze",
@@ -169,6 +172,151 @@ async def matrix_health():
             "agi-optimize",
         ],
     }
+
+
+@app.get("/api/v6/matrix/fleet-status")
+async def fleet_status():
+    """Aggregate fleet-wide status: all PM2 services, matrix health, governor strategy.
+
+    Returns a single operator dashboard snapshot with:
+      - pm2_services: [{name, status, pid, uptime, memory, cpu}]
+      - matrix_health: self-check (version, status)
+      - governor: current strategy decision + staleness check
+      - summary: totals (online/offline/errored)
+    """
+    ts = datetime.now(timezone.utc).isoformat()
+    result = {
+        "ts": ts,
+        "pm2_services": [],
+        "matrix_health": {},
+        "governor": {},
+        "summary": {},
+    }
+
+    # ── 1. PM2 Services ──────────────────────────────────────────
+    try:
+        proc = await asyncio.to_thread(
+            subprocess.run,
+            ["pm2", "jlist"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        if proc.returncode == 0:
+            pm2_data = json.loads(proc.stdout)
+            for s in pm2_data:
+                env = s.get("pm2_env", {})
+                monit = s.get("monit", {})
+                result["pm2_services"].append({
+                    "name": s.get("name", "?"),
+                    "status": env.get("status", "?"),
+                    "pid": env.get("pid"),
+                    "uptime_seconds": int(env.get("pm_uptime", 0) / 1000) if env.get("pm_uptime") else 0,
+                    "restarts": env.get("restart_time", 0),
+                    "memory_mb": round(monit.get("memory", 0) / 1048576, 1) if monit.get("memory") else 0,
+                    "cpu_pct": monit.get("cpu", 0),
+                })
+        else:
+            result["pm2_services"] = {"error": f"pm2 jlist failed: {proc.stderr[:200]}"}
+    except FileNotFoundError:
+        result["pm2_services"] = {"error": "pm2 not found in PATH"}
+    except subprocess.TimeoutExpired:
+        result["pm2_services"] = {"error": "pm2 jlist timed out"}
+    except json.JSONDecodeError:
+        result["pm2_services"] = {"error": "pm2 jlist returned invalid JSON"}
+    except Exception as e:
+        result["pm2_services"] = {"error": str(e)[:200]}
+
+    # ── 2. Matrix Health Self-Check ──────────────────────────────
+    result["matrix_health"] = {
+        "service": "sovereign-synthetic-matrix",
+        "version": "7.0.0",
+        "port": 8010,
+        "status": "OPERATIONAL",
+    }
+
+    # ── 3. Governor Strategy ─────────────────────────────────────
+    try:
+        from empire_agi_governor import governor
+
+        strategy = await asyncio.to_thread(governor.direct_strategy)
+        sa_wired = governor.get_self_awareness() is not None
+
+        # Auto-wire SelfAwarenessEngine in the matrix process if Supabase is available.
+        # The hub wires it at startup, but the matrix is a separate Python process.
+        if not sa_wired:
+            db = _get_supabase()
+            if db:
+                try:
+                    from empire_self_awareness import SelfAwarenessEngine as SAE
+                    governor.set_self_awareness(SAE(get_db=lambda: db))
+                    sa_wired = True
+                except Exception:
+                    pass
+
+        # Use self-awareness anomaly detection if wired, legacy staleness as fallback
+        if sa_wired:
+            sa_ctx = governor.consult_self_awareness()
+            anomaly_count = len(sa_ctx.get("anomalies", []))
+            critical_count = sum(1 for a in sa_ctx.get("anomalies", []) if a.get("severity") == "critical")
+            degraded = sa_ctx.get("degraded", False)
+            result["governor"] = {
+                "strategy": strategy,
+                "sa_wired": True,
+                "anomaly_count": anomaly_count,
+                "critical_anomalies": critical_count,
+                "health_degraded": degraded,
+                "anomaly_details": [
+                    {"type": a.get("type", "?"), "severity": a.get("severity", "?"), "detail": str(a.get("detail", ""))[:120]}
+                    for a in sa_ctx.get("anomalies", [])[:10]
+                ],
+            }
+        else:
+            health = await asyncio.to_thread(governor.check_agent_staleness)
+            stale_names = [a["agent_name"] for a in health.get("stale", [])]
+            result["governor"] = {
+                "strategy": strategy,
+                "sa_wired": False,
+                "stale_count": len(stale_names),
+                "stale_agents": stale_names[:10],
+            }
+    except ImportError:
+        result["governor"] = {"error": "AGI Governor unavailable"}
+    except Exception as e:
+        result["governor"] = {"error": str(e)[:200]}
+
+    # ── 4. Summary ───────────────────────────────────────────────
+    if isinstance(result["pm2_services"], list):
+        services = result["pm2_services"]
+        result["summary"] = {
+            "total_services": len(services),
+            "online": sum(1 for s in services if s["status"] == "online"),
+            "stopped": sum(1 for s in services if s["status"] == "stopped"),
+            "errored": sum(1 for s in services if s["status"] == "errored"),
+            "other": sum(1 for s in services if s["status"] not in ("online", "stopped", "errored")),
+            "total_memory_mb": round(sum(s.get("memory_mb", 0) for s in services), 1),
+            "max_uptime_seconds": max((s.get("uptime_seconds", 0) for s in services), default=0),
+            "hub_uptime_seconds": next((s.get("uptime_seconds", 0) for s in services if s["name"] == "empire-hub"), 0),
+        }
+    else:
+        result["summary"] = {"error": "PM2 data unavailable"}
+
+    # ── 5. Overall health signal ─────────────────────────────────
+    online = result["summary"].get("online", 0)
+    total = result["summary"].get("total_services", 1)
+    strategy = result["governor"].get("strategy", "HOLD")
+    errors = result["summary"].get("errored", 0)
+
+    if errors > 0:
+        result["overall"] = "DEGRADED"
+    elif online / max(total, 1) < 0.8:
+        result["overall"] = "WARNING"
+    elif strategy == "HOLD":
+        result["overall"] = "CAUTIOUS"
+    else:
+        result["overall"] = "HEALTHY"
+
+    return result
 
 
 @app.post("/api/v6/matrix/affiliate-hunter", status_code=status.HTTP_201_CREATED)

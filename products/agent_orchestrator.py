@@ -71,7 +71,7 @@ class AgentOrchestrator:
                     "http://localhost:11434/api/chat",
                     headers={"Content-Type": "application/json"},
                     json={
-                        "model": "llama3:8b",
+                        "model": "llama3.2:3b",
                         "messages": [
                             {
                                 "role": "system",
