@@ -213,12 +213,47 @@ def _first_name(name: str) -> str:
     return name.split()[0]
 
 
+def _is_valid_email(email: str) -> bool:
+    """Reject placeholder/invalid emails that have caused 422 errors from Resend."""
+    if not email:
+        return False
+    if any(c in email for c in ["\x00", "\x01", "\x02", "\x03", "\x04", "\x05", "\x06", "\x07", "\x08"]):
+        return False
+    if any(c in email for c in email[:1] + " \t\n"):
+        return False
+    if "@empire-ai" in email or "@placeholder" in email:
+        return False
+    if email.count("@") != 1:
+        return False
+    local, _, domain = email.partition("@")
+    if not local or not domain or "." not in domain:
+        return False
+    return True
+
+
 def enroll_universe():
-    """One-time: enroll every valid contractor in tier_intro sequence step 1."""
+    """One-time: enroll every valid contractor in tier_intro sequence step 1.
+    Bad emails are flagged in contractor_outreach with status='bounced' so we
+    never try to send to them again."""
     sb = create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_SERVICE_KEY"])
     # Find valid contractors
     r = sb.table("contractors").select("id,email,name").eq("active", True).not_.is_("phone", "null").not_.is_("email", "null").execute()
-    candidates = [c for c in (r.data or []) if c.get("email") and "@empire-ai" not in c["email"] and "@placeholder" not in c["email"]]
+    raw_candidates = r.data or []
+    candidates = []
+    bad_email_ids = []
+    for c in raw_candidates:
+        if _is_valid_email(c.get("email", "")):
+            candidates.append(c)
+        else:
+            bad_email_ids.append(c["id"])
+    # Mark bad emails as bounced in contractor_outreach (in case any rows exist)
+    if bad_email_ids:
+        existing = sb.table("contractor_outreach").select("id,contractor_id").in_("contractor_id", bad_email_ids).eq("status", "pending").execute().data or []
+        for row in existing:
+            sb.table("contractor_outreach").update({
+                "status": "bounced",
+                "notes": "invalid/placeholder email detected at enrollment",
+            }).eq("id", row["id"]).execute()
     # Skip those already enrolled in tier_intro
     existing = sb.table("contractor_outreach").select("contractor_id,sequence").eq("sequence", "tier_intro").execute()
     already = {e["contractor_id"] for e in (existing.data or [])}
