@@ -1,0 +1,32 @@
+"""EMPIRE FEE BILLING — Professional payment requests with card options"""
+
+import os
+import logging
+from supabase import create_client
+from dotenv import load_dotenv
+
+load_dotenv("/root/.env")
+sb = create_client(os.getenv("SUPABASE_URL"), os.getenv("SUPABASE_SERVICE_KEY"))
+
+log = logging.getLogger("empire.fee_billing")
+
+VAULT_WALLET = "egJ1t9NZkDs8FvMbfnQTqXzC4KNuhAc9XSfpG9y9AZM"
+
+SEEDED_CONTRACTORS = [
+    "marcus@lonestarroofing.com",
+    "david@texaselitehvac.com",
+    "sarah@gulfcoastrestoration.com"
+]
+
+def get_pending_fees():
+    res = sb.table("fee_events").select("*").eq("status", "pending").execute()
+    return res.data or []
+
+def get_seeded_contractors():
+    res = sb.table("contractors").select("*").in_("email", SEEDED_CONTRACTORS).execute()
+    return res.data or []
+
+def create_payment_message(contractor_name, amount):
+    msg = """Hi {name},
+
+Hope youre doing well.
