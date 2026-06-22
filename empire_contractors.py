@@ -575,6 +575,17 @@ async def contractors_onboard(request: Request) -> JSONResponse:
                 }
                 db.table("contractor_referrals").insert(cr_payload).execute()
                 log.info(f"[contractors_onboard] referral tracked: {referrer_id} via code {ref_cookie}")
+                # Log signup in referral_log for audit trail
+                try:
+                    db.table("referral_log").insert({
+                        "event_type": "signup",
+                        "referral_code": ref_cookie,
+                        "referrer_contractor_id": referrer_id,
+                        "referred_contractor_id": contractor_id,
+                        "meta": {"source": "self_onboard", "referred_name": name, "referred_company": company},
+                    }).execute()
+                except Exception:
+                    pass
                 # Fire-and-forget: ntfy + SMS to referrer
                 import asyncio as _ref_asyncio
                 _ref_asyncio.ensure_future(_notify_referral_signup(

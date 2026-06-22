@@ -4,6 +4,14 @@ EMPIRE V49 · UNIFIED MRR PRICING PAGE
 Comprehensive landing page at /mrr showing all 16 Empire AI Suite products
 with pricing tiers, features, and links to individual product pages.
 
+Features:
+  - Hero product slider cycling through featured products
+  - Animated stat counters that count up on scroll
+  - Monthly/annual pricing toggle with smooth transition
+  - Scroll-triggered entrance animations for product cards
+  - Testimonial slider section
+  - Expanding tier cards with Best Value highlights
+
 Wire-up in hub.py:
     from empire_mrr_page import mrr_page
 
@@ -161,7 +169,6 @@ MRR_PRODUCTS = [
     },
 ]
 
-# Sort: products with active subs first, then alphabetically
 SORT_ORDER = {
     "All Access": 0, "LeadScore AI": 1, "Compliant": 2, "Strike Campaigns": 3,
     "HexStrike AI": 4, "SEO Optimizer": 5, "Analyzer Agent": 6, "Inbound Router": 7,
@@ -170,9 +177,6 @@ SORT_ORDER = {
 }
 MRR_PRODUCTS.sort(key=lambda p: SORT_ORDER.get(p["name"], 99))
 
-# ── Tier → Crypto Checkout Key Mapping ──────────────────────────
-# Maps (product_name, tier_name) to the tier key used in
-# /crypto/checkout/{tier} and TIER_PRICES_USDC.
 _TIER_KEY_MAP = {
     ("Inbound Router", "SaaS"): "ROUTER_SaaS",
     ("Data Vault", "Enterprise"): "DATA_ENTERPRISE",
@@ -218,7 +222,6 @@ _TIER_KEY_MAP = {
 
 
 def _tier_checkout_url(prod_name: str, tier_name: str) -> str:
-    """Return the /crypto/checkout/{tier} URL for a product+tier, or mailto fallback."""
     key = _TIER_KEY_MAP.get((prod_name, tier_name))
     if key:
         return f"/crypto/checkout/{key}"
@@ -226,11 +229,6 @@ def _tier_checkout_url(prod_name: str, tier_name: str) -> str:
 
 
 def _tier_cta(prod_name: str, tier_name: str, original_cta: str) -> str:
-    """Return the appropriate CTA text for a tier button.
-    
-    Products wired to crypto checkout get "Pay with USDC";
-    unmatched products keep their original CTA (mailto fallback).
-    """
     key = _TIER_KEY_MAP.get((prod_name, tier_name))
     if key:
         return "Pay with USDC"
@@ -238,7 +236,7 @@ def _tier_cta(prod_name: str, tier_name: str, original_cta: str) -> str:
 
 
 def mrr_page() -> str:
-    """Return the full /mrr landing page HTML."""
+    """Return the full /mrr landing page HTML with animations, slider, and pricing toggle."""
 
     extra_css = """
     .mr-wrap {
@@ -246,19 +244,32 @@ def mrr_page() -> str:
       margin: 0 auto;
       padding: 48px 32px 80px;
     }
-    .mr-hero {
-      text-align: center;
+
+    /* ── HERO SLIDER ────────────────────────────────────────────── */
+    .mr-hero-slider {
+      position: relative;
       margin-bottom: 56px;
+      overflow: hidden;
     }
-    .mr-eyebrow {
+    .mr-slide-track {
+      display: flex;
+      transition: transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .mr-slide {
+      min-width: 100%;
+      text-align: center;
+      padding: 0 20px;
+    }
+    .mr-slide-eyebrow {
       font-family: var(--font-mono);
       font-size: 10px;
       color: var(--signal-teal);
       letter-spacing: 0.32em;
       text-transform: uppercase;
       margin-bottom: 14px;
+      animation: empire-fade-up 0.5s 0.1s both;
     }
-    .mr-title {
+    .mr-slide-title {
       font-family: var(--font-display);
       font-weight: 200;
       font-size: 48px;
@@ -266,13 +277,14 @@ def mrr_page() -> str:
       color: var(--empire-white);
       line-height: 1.08;
       margin-bottom: 18px;
+      animation: empire-fade-up 0.5s 0.15s both;
     }
-    .mr-title em {
+    .mr-slide-title em {
       font-style: italic;
       font-weight: 700;
       color: var(--signal-teal);
     }
-    .mr-sub {
+    .mr-slide-sub {
       font-family: var(--font-mono);
       font-size: 12px;
       color: var(--empire-mist);
@@ -280,7 +292,65 @@ def mrr_page() -> str:
       max-width: 640px;
       margin: 0 auto;
       line-height: 1.8;
+      animation: empire-fade-up 0.5s 0.2s both;
     }
+    .mr-slide-dots {
+      display: flex;
+      justify-content: center;
+      gap: 10px;
+      margin-top: 24px;
+    }
+    .mr-slide-dot {
+      width: 10px; height: 10px;
+      border-radius: 50%;
+      background: var(--empire-shadow);
+      border: 0;
+      cursor: pointer;
+      transition: all 0.3s var(--ease-snap);
+      padding: 0;
+    }
+    .mr-slide-dot.active {
+      background: var(--signal-teal);
+      box-shadow: 0 0 8px var(--signal-teal);
+      width: 28px;
+      border-radius: 5px;
+    }
+    .mr-slide-dot:hover {
+      background: var(--empire-mist);
+    }
+    .mr-slide-arrows {
+      position: absolute;
+      top: 50%;
+      left: 0;
+      right: 0;
+      transform: translateY(-50%);
+      display: flex;
+      justify-content: space-between;
+      pointer-events: none;
+      padding: 0 16px;
+    }
+    .mr-slide-arrow {
+      pointer-events: auto;
+      width: 40px; height: 40px;
+      border-radius: 50%;
+      background: var(--empire-overlay);
+      border: 1px solid var(--empire-divider);
+      color: var(--empire-mist);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: all 0.2s var(--ease-snap);
+      font-size: 18px;
+      backdrop-filter: blur(8px);
+    }
+    .mr-slide-arrow:hover {
+      color: var(--signal-teal);
+      border-color: var(--signal-teal-soft);
+      background: var(--signal-teal-soft);
+    }
+
+    /* ── STATS WITH COUNTER ─────────────────────────────────────── */
     .mr-stats {
       display: flex;
       justify-content: center;
@@ -288,7 +358,16 @@ def mrr_page() -> str:
       margin-top: 36px;
       flex-wrap: wrap;
     }
-    .mr-stat { text-align: center; }
+    .mr-stat {
+      text-align: center;
+      opacity: 0;
+      transform: translateY(20px);
+      transition: all 0.6s var(--ease-out-empire);
+    }
+    .mr-stat.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
     .mr-stat-num {
       font-family: var(--font-display);
       font-weight: 200;
@@ -312,16 +391,94 @@ def mrr_page() -> str:
       flex-wrap: wrap;
     }
 
-    /* Product cards */
+    /* ── PRICING TOGGLE ─────────────────────────────────────────── */
+    .mr-toggle-wrap {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 14px;
+      margin-bottom: 24px;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--empire-mist);
+      letter-spacing: 0.1em;
+    }
+    .mr-toggle-wrap .active-label {
+      color: var(--empire-white);
+      font-weight: 600;
+    }
+    .mr-toggle {
+      position: relative;
+      width: 52px; height: 28px;
+      background: var(--empire-divider);
+      border-radius: 14px;
+      cursor: pointer;
+      transition: background 0.3s;
+      border: 0;
+      padding: 0;
+    }
+    .mr-toggle.active {
+      background: var(--signal-teal-soft);
+    }
+    .mr-toggle::after {
+      content: '';
+      position: absolute;
+      top: 3px; left: 3px;
+      width: 22px; height: 22px;
+      border-radius: 50%;
+      background: var(--empire-mist);
+      transition: all 0.3s var(--ease-snap);
+    }
+    .mr-toggle.active::after {
+      left: 27px;
+      background: var(--signal-teal);
+    }
+    .mr-toggle-save {
+      font-size: 9px;
+      color: var(--status-green);
+      background: rgba(16,185,129,0.1);
+      padding: 2px 8px;
+      border-radius: 4px;
+      margin-left: 4px;
+    }
+
+    /* ── SCROLL ANIMATIONS ──────────────────────────────────────── */
+    .mr-reveal {
+      opacity: 0;
+      transform: translateY(30px);
+      transition: all 0.6s var(--ease-out-empire);
+    }
+    .mr-reveal.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+    .mr-reveal-delay-1 { transition-delay: 0.1s; }
+    .mr-reveal-delay-2 { transition-delay: 0.2s; }
+    .mr-reveal-delay-3 { transition-delay: 0.3s; }
+    .mr-reveal-delay-4 { transition-delay: 0.4s; }
+
+    /* ── PRODUCT CARDS ──────────────────────────────────────────── */
     .mr-product {
       background: var(--empire-surface);
       border: 1px solid var(--empire-divider);
       margin-bottom: 16px;
       overflow: hidden;
       transition: all 0.25s var(--ease-snap);
+      position: relative;
     }
+    .mr-product::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, var(--signal-teal), transparent);
+      opacity: 0;
+      transition: opacity 0.3s;
+    }
+    .mr-product:hover::before { opacity: 1; }
     .mr-product:hover {
       border-color: var(--signal-teal-soft);
+      transform: translateX(4px);
     }
     .mr-product-header {
       display: flex;
@@ -363,28 +520,27 @@ def mrr_page() -> str:
       font-weight: 600;
       flex-shrink: 0;
       margin-right: 12px;
+      transition: opacity 0.3s;
     }
     .mr-product-chevron {
       flex-shrink: 0;
       width: 18px;
       height: 18px;
       color: var(--empire-fog);
-      transition: transform 0.25s ease;
+      transition: transform 0.25s ease, color 0.25s;
     }
     .mr-product.expanded .mr-product-chevron {
       transform: rotate(180deg);
       color: var(--signal-teal);
     }
 
-    /* Tier cards inside the expandable section */
+    /* ── TIER CARDS ─────────────────────────────────────────────── */
     .mr-tiers {
       max-height: 0;
       overflow: hidden;
-      transition: max-height 0.35s ease;
+      transition: max-height 0.4s cubic-bezier(0.16, 1, 0.3, 1);
     }
-    .mr-tiers.open {
-      max-height: 600px;
-    }
+    .mr-tiers.open { max-height: 600px; }
     .mr-tiers-inner {
       display: grid;
       grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
@@ -398,13 +554,14 @@ def mrr_page() -> str:
       display: flex;
       flex-direction: column;
       transition: all 0.2s var(--ease-snap);
+      position: relative;
     }
     .mr-tier:hover {
       border-color: var(--empire-border);
+      transform: translateY(-2px);
     }
     .mr-tier.highlight {
       border-color: var(--signal-teal);
-      position: relative;
     }
     .mr-tier.highlight::before {
       content: "Best Value";
@@ -435,11 +592,18 @@ def mrr_page() -> str:
       color: var(--empire-white);
       line-height: 1;
       margin-bottom: 4px;
+      transition: opacity 0.3s;
     }
     .mr-tier-price span {
       font-size: 13px;
       color: var(--empire-fog);
       font-weight: 400;
+    }
+    .mr-tier-price.annual {
+      font-size: 28px;
+    }
+    .mr-tier-price.annual span {
+      font-size: 12px;
     }
     .mr-tier-features {
       list-style: none;
@@ -475,9 +639,9 @@ def mrr_page() -> str:
       cursor: pointer;
       text-decoration: none;
       text-align: center;
-      transition: opacity 0.2s;
+      transition: opacity 0.2s, transform 0.2s;
     }
-    .mr-tier-btn:hover { opacity: 0.85; }
+    .mr-tier-btn:hover { opacity: 0.85; transform: scale(1.02); }
     .mr-tier-btn.outline {
       background: transparent;
       color: var(--signal-teal);
@@ -488,7 +652,7 @@ def mrr_page() -> str:
       color: #0A1A2F;
     }
 
-    /* Section label */
+    /* ── SECTION LABEL ──────────────────────────────────────────── */
     .mr-section-label {
       font-family: var(--font-mono);
       font-size: 10px;
@@ -501,7 +665,87 @@ def mrr_page() -> str:
       border-bottom: 1px solid var(--empire-divider);
     }
 
-    /* Footer */
+    /* ── TESTIMONIAL SLIDER ─────────────────────────────────────── */
+    .mr-testimonials {
+      margin-top: 80px;
+      padding: 48px 0;
+      border-top: 1px solid var(--empire-divider);
+      border-bottom: 1px solid var(--empire-divider);
+    }
+    .mr-test-header {
+      text-align: center;
+      margin-bottom: 36px;
+    }
+    .mr-test-eyebrow {
+      font-family: var(--font-mono);
+      font-size: 9px;
+      color: var(--signal-teal);
+      letter-spacing: 0.28em;
+      text-transform: uppercase;
+    }
+    .mr-test-title {
+      font-family: var(--font-display);
+      font-weight: 200;
+      font-size: 28px;
+      color: var(--empire-white);
+      margin-top: 8px;
+    }
+    .mr-test-track {
+      position: relative;
+      overflow: hidden;
+    }
+    .mr-test-inner {
+      display: flex;
+      transition: transform 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .mr-test-card {
+      min-width: 100%;
+      padding: 0 60px;
+      text-align: center;
+      box-sizing: border-box;
+    }
+    .mr-test-quote {
+      font-size: 18px;
+      color: var(--empire-silver);
+      line-height: 1.7;
+      max-width: 640px;
+      margin: 0 auto 20px;
+      font-style: italic;
+      letter-spacing: -0.01em;
+    }
+    .mr-test-quote::before { content: "\\201C"; color: var(--signal-teal); font-size: 32px; }
+    .mr-test-quote::after { content: "\\201D"; color: var(--signal-teal); font-size: 32px; }
+    .mr-test-author {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--empire-mist);
+    }
+    .mr-test-author strong {
+      color: var(--empire-white);
+      font-weight: 600;
+    }
+    .mr-test-dots {
+      display: flex;
+      justify-content: center;
+      gap: 8px;
+      margin-top: 24px;
+    }
+    .mr-test-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: var(--empire-shadow);
+      border: 0;
+      cursor: pointer;
+      transition: all 0.3s var(--ease-snap);
+      padding: 0;
+    }
+    .mr-test-dot.active {
+      background: var(--signal-teal);
+      box-shadow: 0 0 6px var(--signal-teal);
+    }
+    .mr-test-dot:hover { background: var(--empire-mist); }
+
+    /* ── FOOTER ─────────────────────────────────────────────────── */
     .mr-foot {
       margin-top: 64px;
       padding-top: 24px;
@@ -517,12 +761,61 @@ def mrr_page() -> str:
     .mr-foot a:hover { color: var(--signal-teal); }
 
     @media (max-width: 900px) {
-      .mr-title { font-size: 32px; }
+      .mr-slide-title { font-size: 32px; }
       .mr-tiers-inner { grid-template-columns: 1fr; }
+      .mr-test-card { padding: 0 24px; }
+      .mr-test-quote { font-size: 15px; }
     }
     """
 
-    # Build product cards
+    # ── HERO SLIDES DATA ────────────────────────────────────────────────
+    hero_slides = [
+        {
+            "title": '<em>16 Products</em> · One Platform<br>Unified MRR Pricing',
+            "sub": "From lead generation to revenue intelligence — every product in the Empire AI Suite, with transparent pricing and no hidden fees.",
+        },
+        {
+            "title": '<em>AI-Powered</em> Lead Scoring<br>Start at <em>$49/mo</em>',
+            "sub": "Bayesian models, batch processing, and CSV export. The most advanced lead intelligence platform on the market.",
+        },
+        {
+            "title": '<em>Full Suite</em> Access<br><em>$2,499/mo</em> — Everything Included',
+            "sub": "All 16 products. Unlimited usage. Priority support. The complete predictive revenue engine in one subscription.",
+        },
+    ]
+
+    slides_html = ""
+    for si, slide in enumerate(hero_slides):
+        active_cls = ' style="display:block"' if si == 0 else ' style="display:none"'
+        slides_html += f"""
+        <div class="mr-slide" data-slide="{si}"{active_cls}>
+          <div class="mr-slide-eyebrow">Empire AI Suite</div>
+          <h1 class="mr-slide-title">{slide['title']}</h1>
+          <p class="mr-slide-sub">{slide['sub']}</p>
+        </div>"""
+
+    dots_html = "".join(
+        f'<button class="mr-slide-dot{" active" if si == 0 else ""}" onclick="goToSlide({si})" aria-label="Slide {si+1}"></button>'
+        for si in range(len(hero_slides))
+    )
+
+    stats_data = [
+        ("16", "Products"),
+        ("42", "Tiers / SKUs"),
+        ("$49", "Starting Price"),
+        ("$2,499", "All Access"),
+    ]
+
+    stats_html = "".join(
+        f"""
+        <div class="mr-stat" data-count="{s[0]}">
+          <div class="mr-stat-num">{s[0]}</div>
+          <div class="mr-stat-label">{s[1]}</div>
+        </div>"""
+        for si, s in enumerate(stats_data)
+    )
+
+    # ── PRODUCT CARDS ──────────────────────────────────────────────────
     products_html = ""
     for pi, prod in enumerate(MRR_PRODUCTS):
         min_price = min(t["price"] for t in prod["tiers"])
@@ -537,16 +830,20 @@ def mrr_page() -> str:
             hl = " highlight" if tier.get("highlight") else ""
             features_list = "".join(f"<li>{f}</li>" for f in tier["features"])
             btn_class = "" if tier.get("highlight") else " outline"
+            annual_price = round(tier["price"] * 10)  # ~2 months free
             tiers_html += f"""
             <div class="mr-tier{hl}">
               <div class="mr-tier-name">{tier['name']}</div>
-              <div class="mr-tier-price">${tier['price']}<span>/mo</span></div>
+              <div class="mr-tier-price" data-monthly="${tier['price']}" data-annual="${annual_price}">
+                ${tier['price']}<span>/mo</span>
+              </div>
               <ul class="mr-tier-features">{features_list}</ul>
               <a class="mr-tier-btn{btn_class}" href="{_tier_checkout_url(prod['name'], tier['name'])}">{_tier_cta(prod['name'], tier['name'], prod['cta'])}</a>
             </div>"""
 
+        delay = pi % 4
         products_html += f"""
-    <div class="mr-product" id="mr-prod-{pi}">
+    <div class="mr-product mr-reveal mr-reveal-delay-{delay}" id="mr-prod-{pi}">
       <div class="mr-product-header" onclick="toggleMrTiers({pi})" role="button" tabindex="0" aria-expanded="false" aria-controls="mr-tiers-{pi}">
         <div class="mr-product-icon">{prod['icon']}</div>
         <div class="mr-product-info">
@@ -561,6 +858,27 @@ def mrr_page() -> str:
       </div>
     </div>"""
 
+    # ── TESTIMONIALS ──────────────────────────────────────────────────
+    testimonials = [
+        {"quote": "Empire AI's lead scoring cut our prospecting time by 60%. We now focus only on high-intent leads and close 3x more deals.", "author": "Operations Director", "company": "National Roofing Corp"},
+        {"quote": "The Strike Campaigns platform automated our entire outreach pipeline. From lead discovery to SMS follow-up — it runs itself.", "author": "VP of Sales", "company": "Premier Home Services"},
+        {"quote": "We evaluated 12 lead gen platforms. Empire AI's predictive engine was the only one that consistently delivered qualified, verified leads.", "author": "CEO", "company": "Summit Restoration"},
+        {"quote": "The compliance layer alone saves us thousands in legal fees. TCPA, DNC, quiet hours — all automated and audited.", "author": "General Counsel", "company": "Liberty Contractors"},
+    ]
+
+    test_cards_html = ""
+    for ti, t in enumerate(testimonials):
+        test_cards_html += f"""
+        <div class="mr-test-card" data-test="{ti}">
+          <div class="mr-test-quote">{t['quote']}</div>
+          <div class="mr-test-author"><strong>{t['author']}</strong> · {t['company']}</div>
+        </div>"""
+
+    test_dots_html = "".join(
+        f'<button class="mr-test-dot{" active" if ti == 0 else ""}" onclick="goToTestimonial({ti})" aria-label="Testimonial {ti+1}"></button>'
+        for ti in range(len(testimonials))
+    )
+
     head = empire_head(title="Empire AI Suite · Products & Pricing · MRR", extra=extra_css)
 
     return f"""<!DOCTYPE html>
@@ -570,42 +888,63 @@ def mrr_page() -> str:
 
 <div class="mr-wrap">
 
-  <div class="mr-hero">
-    <div class="mr-eyebrow">Empire AI Suite</div>
-    <h1 class="mr-title"><em>16 Products</em> · One Platform<br>Unified MRR Pricing</h1>
-    <p class="mr-sub">
-      From lead generation to revenue intelligence — every product in the Empire AI Suite,
-      with transparent pricing and no hidden fees.
-    </p>
-    <div class="mr-stats">
-      <div class="mr-stat">
-        <div class="mr-stat-num">16</div>
-        <div class="mr-stat-label">Products</div>
-      </div>
-      <div class="mr-stat">
-        <div class="mr-stat-num">42</div>
-        <div class="mr-stat-label">Tiers / SKUs</div>
-      </div>
-      <div class="mr-stat">
-        <div class="mr-stat-num">$49</div>
-        <div class="mr-stat-label">Starting Price</div>
-      </div>
-      <div class="mr-stat">
-        <div class="mr-stat-num">$2,499</div>
-        <div class="mr-stat-label">All Access</div>
-      </div>
+  <!-- ── HERO SLIDER ──────────────────────────────────────────────── -->
+  <div class="mr-hero-slider">
+    <div class="mr-slide-track" id="mr-slide-track">
+      {slides_html}
     </div>
-    <div class="mr-cta-row">
-      <a class="e-btn" href="mailto:ops@empire-ai.co.uk?subject=Empire%20AI%20Suite%20Inquiry">Contact Sales</a>
-      <a class="e-btn" href="/products/meetily" style="background:transparent;color:var(--signal-teal);border:1px solid var(--signal-teal);">View Meetily</a>
-      <a class="e-btn" href="/products/elite-scraper" style="background:transparent;color:var(--signal-teal);border:1px solid var(--signal-teal);">View Scraper</a>
+    <div class="mr-slide-arrows">
+      <button class="mr-slide-arrow" onclick="prevSlide()" aria-label="Previous slide">\\u2039</button>
+      <button class="mr-slide-arrow" onclick="nextSlide()" aria-label="Next slide">\\u203a</button>
+    </div>
+    <div class="mr-slide-dots" id="mr-slide-dots">
+      {dots_html}
     </div>
   </div>
 
-  <div class="mr-section-label">All Products · Click to expand tiers and pricing</div>
+  <!-- ── STATS ────────────────────────────────────────────────────── -->
+  <div class="mr-stats" id="mr-stats">
+    {stats_html}
+  </div>
 
-  {products_html}
+  <div class="mr-cta-row">
+    <a class="e-btn" href="mailto:ops@empire-ai.co.uk?subject=Empire%20AI%20Suite%20Inquiry">Contact Sales</a>
+    <a class="e-btn" href="/products/meetily" style="background:transparent;color:var(--signal-teal);border:1px solid var(--signal-teal);">View Meetily</a>
+    <a class="e-btn" href="/products/elite-scraper" style="background:transparent;color:var(--signal-teal);border:1px solid var(--signal-teal);">View Scraper</a>
+  </div>
 
+  <!-- ── PRICING TOGGLE ───────────────────────────────────────────── -->
+  <div class="mr-section-label" style="margin-top:64px;">All Products · Click to expand tiers</div>
+
+  <div class="mr-toggle-wrap">
+    <span class="active-label" id="toggle-label-monthly">Monthly</span>
+    <button class="mr-toggle" id="pricing-toggle" onclick="togglePricing()" role="switch" aria-checked="false" aria-label="Toggle annual pricing">
+    </button>
+    <span id="toggle-label-annual">Annual <span class="mr-toggle-save">Save ~17%</span></span>
+  </div>
+
+  <!-- ── PRODUCTS LIST ────────────────────────────────────────────── -->
+  <div id="mr-products-list">
+    {products_html}
+  </div>
+
+  <!-- ── TESTIMONIAL SLIDER ───────────────────────────────────────── -->
+  <div class="mr-testimonials mr-reveal" id="mr-testimonials">
+    <div class="mr-test-header">
+      <div class="mr-test-eyebrow">What Our Customers Say</div>
+      <div class="mr-test-title">Trusted by leading contractors nationwide</div>
+    </div>
+    <div class="mr-test-track">
+      <div class="mr-test-inner" id="mr-test-inner">
+        {test_cards_html}
+      </div>
+    </div>
+    <div class="mr-test-dots" id="mr-test-dots">
+      {test_dots_html}
+    </div>
+  </div>
+
+  <!-- ── FOOTER ───────────────────────────────────────────────────── -->
   <div class="mr-foot">
     <a href="/">Empire AI</a>
     <span style="padding:0 8px;color:var(--empire-shadow)">·</span>
@@ -626,6 +965,7 @@ def mrr_page() -> str:
 
 <script>
 (function() {{
+  // ── PRODUCT EXPAND/COLLAPSE ────────────────────────────────────────
   window.toggleMrTiers = function(idx) {{
     var prod = document.getElementById('mr-prod-' + idx);
     var tiers = document.getElementById('mr-tiers-' + idx);
@@ -635,6 +975,139 @@ def mrr_page() -> str:
     tiers.classList.toggle('open');
     header.setAttribute('aria-expanded', expanded);
   }};
+
+  // ── HERO SLIDER ──────────────────────────────────────────────────
+  var currentSlide = 0;
+  var totalSlides = {len(hero_slides)};
+
+  function updateSlide() {{
+    var track = document.getElementById('mr-slide-track');
+    var slides = track.querySelectorAll('.mr-slide');
+    var dots = document.querySelectorAll('.mr-slide-dot');
+    slides.forEach(function(s, i) {{
+      s.style.display = i === currentSlide ? 'block' : 'none';
+    }});
+    dots.forEach(function(d, i) {{
+      d.classList.toggle('active', i === currentSlide);
+    }});
+  }}
+
+  window.goToSlide = function(idx) {{
+    currentSlide = idx;
+    updateSlide();
+  }};
+
+  window.nextSlide = function() {{
+    currentSlide = (currentSlide + 1) % totalSlides;
+    updateSlide();
+  }};
+
+  window.prevSlide = function() {{
+    currentSlide = (currentSlide - 1 + totalSlides) % totalSlides;
+    updateSlide();
+  }};
+
+  // Auto-rotate hero slider every 5s
+  setInterval(window.nextSlide, 5000);
+
+  // ── TESTIMONIAL SLIDER ──────────────────────────────────────────
+  var currentTest = 0;
+  var totalTests = {len(testimonials)};
+
+  window.goToTestimonial = function(idx) {{
+    currentTest = idx;
+    var inner = document.getElementById('mr-test-inner');
+    var dots = document.querySelectorAll('.mr-test-dot');
+    inner.style.transform = 'translateX(-' + (idx * 100) + '%)';
+    dots.forEach(function(d, i) {{
+      d.classList.toggle('active', i === idx);
+    }});
+  }};
+
+  // Auto-rotate testimonials every 6s
+  setInterval(function() {{
+    window.goToTestimonial((currentTest + 1) % totalTests);
+  }}, 6000);
+
+  // ── PRICING TOGGLE (Monthly / Annual) ───────────────────────────
+  var isAnnual = false;
+
+  window.togglePricing = function() {{
+    isAnnual = !isAnnual;
+    var toggle = document.getElementById('pricing-toggle');
+    var monthlyLabel = document.getElementById('toggle-label-monthly');
+    var annualLabel = document.getElementById('toggle-label-annual');
+    toggle.classList.toggle('active', isAnnual);
+    monthlyLabel.classList.toggle('active-label', !isAnnual);
+    annualLabel.classList.toggle('active-label', isAnnual);
+
+    // Update all tier prices
+    document.querySelectorAll('.mr-tier').forEach(function(tier) {{
+      var priceEl = tier.querySelector('.mr-tier-price');
+      if (!priceEl) return;
+      if (isAnnual) {{
+        var annualPrice = priceEl.getAttribute('data-annual');
+        if (annualPrice) {{
+          priceEl.innerHTML = '$' + annualPrice + '<span>/mo billed annually</span>';
+        }}
+      }} else {{
+        var monthlyPrice = priceEl.getAttribute('data-monthly');
+        if (monthlyPrice) {{
+          priceEl.innerHTML = '$' + monthlyPrice + '<span>/mo</span>';
+        }}
+      }}
+    }});
+
+    // Update price ranges in product headers
+    document.querySelectorAll('.mr-product-price-range').forEach(function(el) {{
+      var monthly = el.getAttribute('data-monthly-range');
+      var annual = el.getAttribute('data-annual-range');
+      if (isAnnual && annual) {{
+        el.textContent = annual;
+      }} else if (monthly) {{
+        el.textContent = monthly;
+      }}
+    }});
+  }};
+
+  // Store both monthly and annual price ranges on product headers
+  document.querySelectorAll('.mr-product').forEach(function(prod) {{
+    var priceEl = prod.querySelector('.mr-product-price-range');
+    if (!priceEl) return;
+    var monthlyText = priceEl.textContent;
+    priceEl.setAttribute('data-monthly-range', monthlyText);
+    // Calculate annual: take the numbers and multiply by 10 (~2 months free)
+    var annualText = monthlyText.replace(/\\$[\\d,]+/g, function(m) {{
+      var num = parseInt(m.replace(/[$,]/g, ''));
+      return '$' + (num * 10);
+    }});
+    priceEl.setAttribute('data-annual-range', annualText + ' billed annually');
+  }});
+
+  // ── SCROLL REVEAL ANIMATIONS ────────────────────────────────────
+  function checkReveals() {{
+    var reveals = document.querySelectorAll('.mr-reveal');
+    var stats = document.querySelectorAll('.mr-stat');
+    var winH = window.innerHeight;
+
+    reveals.forEach(function(el) {{
+      var rect = el.getBoundingClientRect();
+      if (rect.top < winH - 60) {{
+        el.classList.add('visible');
+      }}
+    }});
+
+    stats.forEach(function(el) {{
+      var rect = el.getBoundingClientRect();
+      if (rect.top < winH - 40) {{
+        el.classList.add('visible');
+      }}
+    }});
+  }}
+
+  window.addEventListener('scroll', checkReveals);
+  checkReveals();  // initial check
+
 }})();
 </script>
 

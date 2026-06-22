@@ -26,7 +26,7 @@ signal.signal(signal.SIGINT, _handle_signal)
 
 sb = create_client(os.getenv("SUPABASE_URL"), os.getenv("SUPABASE_SERVICE_KEY"))
 
-AGENTS = ["storm_predictor", "corridor_agent", "overseer", "contractor_sniper", "hermes_controller", "agi_lane_engine", "agi_revenue", "revenue_brain", "voice_streaming_agent", "synthetic_brain", "error_watcher", "space_reasoner"]  # reddit_pulse parked (needs dev account); b2b_lead_scraper parked (cost £154 on Places API, no revenue)
+AGENTS = ["storm_predictor", "corridor_agent", "overseer", "contractor_sniper", "hermes_controller", "agi_lane_engine", "agi_revenue", "revenue_brain", "voice_streaming_agent", "synthetic_brain", "error_watcher", "space_reasoner", "empire_social_agent", "empire_facebook_chatbot"]  # reddit_pulse parked (needs dev account); b2b_lead_scraper parked (cost £154 on Places API, no revenue)
 
 # Agent → role mapping for fleet registration
 AGENT_ROLES = {
@@ -42,6 +42,8 @@ AGENT_ROLES = {
     "synthetic_brain": "lead_gen_director",
     "error_watcher": "error_watcher",
     "space_reasoner": "space_reasoner",
+    "empire_social_agent": "social_media_manager",
+    "empire_facebook_chatbot": "facebook_chatbot",
 }
 
 def log_registry(agent, status, error=None):

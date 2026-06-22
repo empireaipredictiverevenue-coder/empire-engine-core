@@ -666,7 +666,7 @@ def _suite_product_cards(products: list) -> str:
         {chr(10).join(f'        <li>{f}</li>' for f in features[:6])}
       </div>
       <div class="pr-card-price">${price:,.0f}<span class="pr-card-price-sub">/mo</span></div>
-      <a href="/crypto/checkout/{tier}" class="pr-card-cta">Subscribe with USDC</a>
+      <a href="/checkout-card/{tier}" class="pr-card-cta">Subscribe with USDC</a>
     </div>''')
     return '<div class="pr-prods">\n' + "\n".join(cards) + '\n    </div>'
 
@@ -706,7 +706,7 @@ FALLBACK_SUITE_HTML = '''<!-- SECTION 1: SUITE PRODUCTS                         
         </ul>
         <div class="pr-card-price">$499 <small>/mo</small></div>
         <div class="pr-card-price-sub">+ $0.25 per routed call</div>
-        <a href="/crypto/checkout/ROUTER_SaaS" class="pr-card-cta">Subscribe with USDC</a>
+        <a href="/checkout-card/ROUTER_SaaS" class="pr-card-cta">Subscribe with USDC</a>
       </div>
 
       <!-- Product 2: Data Vault -->
@@ -729,7 +729,7 @@ FALLBACK_SUITE_HTML = '''<!-- SECTION 1: SUITE PRODUCTS                         
         </ul>
         <div class="pr-card-price">$799 <small>/mo</small></div>
         <div class="pr-card-price-sub">+ $0.02 per stored record/mo</div>
-        <a href="/crypto/checkout/DATA_ENTERPRISE" class="pr-card-cta">Subscribe with USDC</a>
+        <a href="/checkout-card/DATA_ENTERPRISE" class="pr-card-cta">Subscribe with USDC</a>
       </div>
 
       <!-- Product 3: Buyer Spy AI -->
@@ -752,7 +752,7 @@ FALLBACK_SUITE_HTML = '''<!-- SECTION 1: SUITE PRODUCTS                         
         </ul>
         <div class="pr-card-price">$1,499 <small>/mo</small></div>
         <div class="pr-card-price-sub">+ $5 per analysis</div>
-        <a href="/crypto/checkout/SPY_DATA" class="pr-card-cta">Subscribe with USDC</a>
+        <a href="/checkout-card/SPY_DATA" class="pr-card-cta">Subscribe with USDC</a>
       </div>
 
     </div>
@@ -763,7 +763,260 @@ FALLBACK_SUITE_HTML = '''<!-- SECTION 1: SUITE PRODUCTS                         
 
 def pricing_page(products: list = None) -> str:
     pricing_css = """
-    /* ── PAGE SPECIFIC ──────────────────────────────────────────────── */
+    /* ── HERO SLIDER ────────────────────────────────────────────── */
+    .pr-hero-slider {
+      position: relative;
+      margin-bottom: 48px;
+      overflow: hidden;
+    }
+    .pr-slide-track {
+      display: flex;
+      transition: transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .pr-slide {
+      min-width: 100%;
+      text-align: center;
+      padding: 40px 20px;
+    }
+    .pr-slide-eyebrow {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      color: var(--signal-teal);
+      letter-spacing: 0.32em;
+      text-transform: uppercase;
+      margin-bottom: 14px;
+      animation: empire-fade-up 0.5s 0.1s both;
+    }
+    .pr-slide-title {
+      font-family: var(--font-display);
+      font-weight: 200;
+      font-size: 44px;
+      letter-spacing: -0.04em;
+      color: var(--empire-white);
+      line-height: 1.08;
+      margin-bottom: 18px;
+      animation: empire-fade-up 0.5s 0.15s both;
+    }
+    .pr-slide-title em {
+      font-style: italic;
+      font-weight: 700;
+      color: var(--signal-teal);
+    }
+    .pr-slide-sub {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      color: var(--empire-mist);
+      letter-spacing: 0.14em;
+      max-width: 640px;
+      margin: 0 auto 20px;
+      line-height: 1.8;
+      animation: empire-fade-up 0.5s 0.2s both;
+    }
+    .pr-slide-cta {
+      display: inline-block;
+      padding: 12px 28px;
+      background: var(--signal-teal);
+      color: #0A1A2F;
+      font-family: var(--font-mono);
+      font-size: 10px;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      font-weight: 600;
+      text-decoration: none;
+      border-radius: var(--radius-sm);
+      transition: all 0.2s var(--ease-snap);
+      animation: empire-fade-up 0.5s 0.25s both;
+    }
+    .pr-slide-cta:hover {
+      opacity: 0.85;
+      transform: scale(1.03);
+    }
+    .pr-slide-dots {
+      display: flex;
+      justify-content: center;
+      gap: 10px;
+      margin-top: 20px;
+    }
+    .pr-slide-dot {
+      width: 10px; height: 10px;
+      border-radius: 50%;
+      background: var(--empire-shadow);
+      border: 0;
+      cursor: pointer;
+      transition: all 0.3s var(--ease-snap);
+      padding: 0;
+    }
+    .pr-slide-dot.active {
+      background: var(--signal-teal);
+      box-shadow: 0 0 8px var(--signal-teal);
+      width: 28px;
+      border-radius: 5px;
+    }
+    .pr-slide-dot:hover {
+      background: var(--empire-mist);
+    }
+    .pr-slide-arrows {
+      position: absolute;
+      top: 50%;
+      left: 0;
+      right: 0;
+      transform: translateY(-50%);
+      display: flex;
+      justify-content: space-between;
+      pointer-events: none;
+      padding: 0 16px;
+    }
+    .pr-slide-arrow {
+      pointer-events: auto;
+      width: 40px; height: 40px;
+      border-radius: 50%;
+      background: var(--empire-overlay);
+      border: 1px solid var(--empire-divider);
+      color: var(--empire-mist);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: all 0.2s var(--ease-snap);
+      font-size: 18px;
+      backdrop-filter: blur(8px);
+    }
+    .pr-slide-arrow:hover {
+      color: var(--signal-teal);
+      border-color: var(--signal-teal-soft);
+      background: var(--signal-teal-soft);
+    }
+
+    /* ── STATS WITH COUNTER ─────────────────────────────────────── */
+    .pr-stats {
+      display: flex;
+      justify-content: center;
+      gap: 32px;
+      margin: 36px 0 48px;
+      flex-wrap: wrap;
+    }
+    .pr-stat {
+      text-align: center;
+      opacity: 0;
+      transform: translateY(20px);
+      transition: all 0.6s var(--ease-out-empire);
+    }
+    .pr-stat.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+    .pr-stat-num {
+      font-family: var(--font-display);
+      font-weight: 200;
+      font-size: 36px;
+      color: var(--signal-teal);
+      line-height: 1;
+    }
+    .pr-stat-label {
+      font-family: var(--font-mono);
+      font-size: 9px;
+      color: var(--empire-fog);
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      margin-top: 6px;
+    }
+
+    /* ── SCROLL ANIMATIONS ──────────────────────────────────────── */
+    .pr-reveal {
+      opacity: 0;
+      transform: translateY(30px);
+      transition: all 0.6s var(--ease-out-empire);
+    }
+    .pr-reveal.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+    .pr-reveal-delay-1 { transition-delay: 0.1s; }
+    .pr-reveal-delay-2 { transition-delay: 0.2s; }
+    .pr-reveal-delay-3 { transition-delay: 0.3s; }
+    .pr-reveal-delay-4 { transition-delay: 0.4s; }
+
+    /* ── TESTIMONIAL SLIDER ─────────────────────────────────────── */
+    .pr-testimonials {
+      margin-top: 80px;
+      padding: 48px 0;
+      border-top: 1px solid var(--empire-divider);
+      border-bottom: 1px solid var(--empire-divider);
+    }
+    .pr-test-header {
+      text-align: center;
+      margin-bottom: 36px;
+    }
+    .pr-test-eyebrow {
+      font-family: var(--font-mono);
+      font-size: 9px;
+      color: var(--signal-teal);
+      letter-spacing: 0.28em;
+      text-transform: uppercase;
+    }
+    .pr-test-title {
+      font-family: var(--font-display);
+      font-weight: 200;
+      font-size: 28px;
+      color: var(--empire-white);
+      margin-top: 8px;
+    }
+    .pr-test-track {
+      position: relative;
+      overflow: hidden;
+    }
+    .pr-test-inner {
+      display: flex;
+      transition: transform 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .pr-test-card {
+      min-width: 100%;
+      padding: 0 60px;
+      text-align: center;
+      box-sizing: border-box;
+    }
+    .pr-test-quote {
+      font-size: 18px;
+      color: var(--empire-silver);
+      line-height: 1.7;
+      max-width: 640px;
+      margin: 0 auto 20px;
+      font-style: italic;
+      letter-spacing: -0.01em;
+    }
+    .pr-test-quote::before { content: "\\201C"; color: var(--signal-teal); font-size: 32px; }
+    .pr-test-quote::after { content: "\\201D"; color: var(--signal-teal); font-size: 32px; }
+    .pr-test-author {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--empire-mist);
+    }
+    .pr-test-author strong {
+      color: var(--empire-white);
+      font-weight: 600;
+    }
+    .pr-test-dots {
+      display: flex;
+      justify-content: center;
+      gap: 8px;
+      margin-top: 24px;
+    }
+    .pr-test-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: var(--empire-shadow);
+      border: 0;
+      cursor: pointer;
+      transition: all 0.3s var(--ease-snap);
+      padding: 0;
+    }
+    .pr-test-dot.active {
+      background: var(--signal-teal);
+      box-shadow: 0 0 6px var(--signal-teal);
+    }
+    .pr-test-dot:hover { background: var(--empire-mist); }
+
+    /* ── EXISTING STYLES ────────────────────────────────────────── */
     .pr-wrap {
       max-width: 1200px;
       margin: 0 auto;
@@ -1228,6 +1481,87 @@ def pricing_page(products: list = None) -> str:
         extra=pricing_css,
     )
 
+    # ── HERO SLIDES DATA ────────────────────────────────────────────────
+    hero_slides = [
+        {
+            "title": 'Autonomous <em>Revenue</em> Engine',
+            "sub": "Six integrated products powering a closed-loop revenue machine — from lead generation and AI-powered outreach to settlement tracking and predictive analytics.",
+            "cta": "Contact Sales",
+            "cta_url": "mailto:ops@empire-ai.co.uk?subject=Empire%20AI%20Suite%20Inquiry",
+        },
+        {
+            "title": '<em>Productized</em> Lead Lanes<br>Start at <em>$99/mo</em>',
+            "sub": "32 vertical-specific lanes across roofing, legal, insurance, financial services, healthcare, and more — with transparent per-lead pricing.",
+            "cta": "Explore Strike Packs",
+            "cta_url": "#strike-packs",
+        },
+        {
+            "title": '<em>Enterprise-Grade</em> AI Suite<br>From <em>$499/mo</em>',
+            "sub": "Inbound routing, data vault, buyer intelligence, agent orchestration, and B2B prospecting — all in one platform with no hidden fees.",
+            "cta": "View All Products",
+            "cta_url": "#suite-products",
+        },
+    ]
+
+    slides_html = ""
+    for si, slide in enumerate(hero_slides):
+        active_cls = ' style="display:block"' if si == 0 else ' style="display:none"'
+        slides_html += f"""
+        <div class="pr-slide" data-slide="{si}"{active_cls}>
+          <div class="pr-slide-eyebrow">Products &amp; Pricing</div>
+          <h1 class="pr-slide-title">{slide['title']}</h1>
+          <p class="pr-slide-sub">{slide['sub']}</p>
+          <a class="pr-slide-cta" href="{slide['cta_url']}">{slide['cta']}</a>
+        </div>"""
+
+    dots_html = "".join(
+        f'<button class="pr-slide-dot{" active" if si == 0 else ""}" onclick="prGoToSlide({si})" aria-label="Slide {si+1}"></button>'
+        for si in range(len(hero_slides))
+    )
+
+    # ── STATS ──────────────────────────────────────────────────────────
+    stats_data = [
+        ("41", "Active Lanes"),
+        ("16", "Categories"),
+        ("130+", "Sub-Niches"),
+        ("$49", "Starting Price"),
+    ]
+
+    stats_html = "".join(
+        f"""
+        <div class="pr-stat">
+          <div class="pr-stat-num">{s[0]}</div>
+          <div class="pr-stat-label">{s[1]}</div>
+        </div>"""
+        for si, s in enumerate(stats_data)
+    )
+
+    # ── BUILD TESTIMONIAL SLIDER ──────────────────────────────────────
+    testimonials = [
+        {"quote": "Empire AI's lead scoring cut our prospecting time by 60%. We now focus only on high-intent leads and close 3x more deals.", "author": "Operations Director", "company": "National Roofing Corp"},
+        {"quote": "The Strike Campaigns platform automated our entire outreach pipeline. From lead discovery to SMS follow-up — it runs itself.", "author": "VP of Sales", "company": "Premier Home Services"},
+        {"quote": "We evaluated 12 lead gen platforms. Empire AI's predictive engine was the only one that consistently delivered qualified, verified leads.", "author": "CEO", "company": "Summit Restoration"},
+    ]
+
+    test_cards_html = "".join(
+        f"""
+        <div class="pr-test-card" data-test="{ti}">
+          <div class="pr-test-quote">{t['quote']}</div>
+          <div class="pr-test-author"><strong>{t['author']}</strong> · {t['company']}</div>
+        </div>"""
+        for ti, t in enumerate(testimonials)
+    )
+
+    test_dots_html = "".join(
+        f'<button class="pr-test-dot{" active" if ti == 0 else ""}" onclick="prGoToTestimonial({ti})" aria-label="Testimonial {ti+1}"></button>'
+        for ti in range(len(testimonials))
+    )
+
+    head = empire_head(
+        title="Empire AI · Pricing & Products",
+        extra=pricing_css,
+    )
+
     return f"""<!DOCTYPE html>
 <html lang="en">
 {head}
@@ -1235,20 +1569,32 @@ def pricing_page(products: list = None) -> str:
 
 <div class="pr-wrap">
 
-  <!-- HERO -->
-  <div class="pr-header">
-    <div class="pr-eyebrow">Products & Pricing</div>
-    <h1 class="pr-title">Autonomous <em>Revenue</em> Engine</h1>
-    <p class="pr-sub">
-      Six integrated products powering a closed-loop revenue machine —
-      from lead generation and AI-powered outreach to settlement tracking and predictive analytics.
-    </p>
+  <!-- ── HERO SLIDER ──────────────────────────────────────────────── -->
+  <div class="pr-hero-slider">
+    <div class="pr-slide-track" id="pr-slide-track">
+      {slides_html}
+    </div>
+    <div class="pr-slide-arrows">
+      <button class="pr-slide-arrow" onclick="prPrevSlide()" aria-label="Previous slide">\\u2039</button>
+      <button class="pr-slide-arrow" onclick="prNextSlide()" aria-label="Next slide">\\u203a</button>
+    </div>
+    <div class="pr-slide-dots" id="pr-slide-dots">
+      {dots_html}
+    </div>
   </div>
 
-  <!-- ──────────────────────────────────────────────────────────────────── -->
-  {_suite_product_cards(products) if products else FALLBACK_SUITE_HTML}<!-- SECTION 2: SUITE TIERS                                              -->
-  <!-- ──────────────────────────────────────────────────────────────────── -->
-  <div class="pr-section">
+  <!-- ── STATS ────────────────────────────────────────────────────── -->
+  <div class="pr-stats" id="pr-stats">
+    {stats_html}
+  </div>
+
+  <!-- ── SUITE PRODUCTS ───────────────────────────────────────────── -->
+  <div id="suite-products">
+    {_suite_product_cards(products) if products else FALLBACK_SUITE_HTML}
+  </div>
+
+  <!-- ── SUITE TIERS ──────────────────────────────────────────────── -->
+  <div class="pr-section pr-reveal">
     <div class="pr-section-h">
       <span class="pr-section-num">02</span>
       <span class="pr-section-title">Suite Tiers</span>
@@ -1293,10 +1639,8 @@ def pricing_page(products: list = None) -> str:
     </table>
   </div>
 
-  <!-- ──────────────────────────────────────────────────────────────────── -->
-  <!-- SECTION 3: ADVANCED PRODUCTS                                       -->
-  <!-- ──────────────────────────────────────────────────────────────────── -->
-  <div class="pr-section">
+  <!-- ── ADVANCED PRODUCTS ─────────────────────────────────────────── -->
+  <div class="pr-section pr-reveal pr-reveal-delay-1">
     <div class="pr-section-h">
       <span class="pr-section-num">03</span>
       <span class="pr-section-title">Advanced Products</span>
@@ -1304,19 +1648,11 @@ def pricing_page(products: list = None) -> str:
     </div>
 
     <div class="pr-prods">
-
-      <!-- Product 4: Omni Bridge -->
       <div class="pr-card" style="animation-delay: 0.05s">
         <div class="pr-card-icon"><i class="ti ti-bridge"></i></div>
         <div class="pr-card-name">Omni Bridge</div>
-        <div class="pr-card-desc">
-          End-to-end voice-to-social pipeline. Deepgram STT → AI analysis →
-          Zernio social distribution. Close the loop from call to content.
-        </div>
-        <div class="pr-card-badges">
-          <span class="pr-bdg cyan">Premium</span>
-          <span class="pr-bdg amber">Add-on</span>
-        </div>
+        <div class="pr-card-desc">End-to-end voice-to-social pipeline. Deepgram STT → AI analysis → Zernio social distribution.</div>
+        <div class="pr-card-badges"><span class="pr-bdg cyan">Premium</span><span class="pr-bdg amber">Add-on</span></div>
         <ul class="pr-card-features">
           <li>Real-time Deepgram speech-to-text</li>
           <li>AI-powered content extraction &amp; summarization</li>
@@ -1325,44 +1661,30 @@ def pricing_page(products: list = None) -> str:
         </ul>
         <div class="pr-card-price">$999 <small>/mo</small></div>
         <div class="pr-card-price-sub">+ $0.10 per audio minute processed</div>
-        <a href="/crypto/checkout/OMNI_BRIDGE" class="pr-card-cta">Subscribe with USDC</a>
+        <a href="/checkout-card/OMNI_BRIDGE" class="pr-card-cta">Subscribe with USDC</a>
       </div>
 
-      <!-- Product 5: Agent Orchestrator -->
       <div class="pr-card" style="animation-delay: 0.10s">
         <div class="pr-card-icon"><i class="ti ti-robot"></i></div>
         <div class="pr-card-name">Agent Orchestrator</div>
-        <div class="pr-card-desc">
-          Spawn and manage autonomous AI agents. Define goals, monitor
-          execution, and scale your workforce programmatically.
-        </div>
-        <div class="pr-card-badges">
-          <span class="pr-bdg cyan">Premium</span>
-          <span class="pr-bdg muted">API-first</span>
-        </div>
+        <div class="pr-card-desc">Spawn and manage autonomous AI agents. Define goals, monitor execution, scale programmatically.</div>
+        <div class="pr-card-badges"><span class="pr-bdg cyan">Premium</span><span class="pr-bdg muted">API-first</span></div>
         <ul class="pr-card-features">
           <li>Declarative agent goal definitions</li>
-          <li>Parallel agent execution with dependency resolution</li>
+          <li>Parallel execution with dependency resolution</li>
           <li>Step-by-step execution tracing &amp; replay</li>
           <li>Custom tool integration via plugin API</li>
         </ul>
         <div class="pr-card-price">$1,999 <small>/mo</small></div>
         <div class="pr-card-price-sub">+ $0.50 per agent-step executed</div>
-        <a href="/crypto/checkout/AGENT_ORCHESTRATOR" class="pr-card-cta">Subscribe with USDC</a>
+        <a href="/checkout-card/AGENT_ORCHESTRATOR" class="pr-card-cta">Subscribe with USDC</a>
       </div>
 
-      <!-- Product 6: B2B Pro -->
       <div class="pr-card" style="animation-delay: 0.15s">
         <div class="pr-card-icon"><i class="ti ti-building"></i></div>
         <div class="pr-card-name">B2B Pro</div>
-        <div class="pr-card-desc">
-          Enterprise B2B intelligence — property data, lead marketplace,
-          contractor prospecting, and competitive intelligence in one platform.
-        </div>
-        <div class="pr-card-badges">
-          <span class="pr-bdg cyan">Premium</span>
-          <span class="pr-bdg teal">Enterprise</span>
-        </div>
+        <div class="pr-card-desc">Enterprise B2B intelligence — property data, lead marketplace, contractor prospecting, and more.</div>
+        <div class="pr-card-badges"><span class="pr-bdg cyan">Premium</span><span class="pr-bdg teal">Enterprise</span></div>
         <ul class="pr-card-features">
           <li>Commercial property intelligence &amp; valuation</li>
           <li>Lead marketplace with verified buyer network</li>
@@ -1371,20 +1693,17 @@ def pricing_page(products: list = None) -> str:
         </ul>
         <div class="pr-card-price">$2,999 <small>/mo</small></div>
         <div class="pr-card-price-sub">+ $10 per lead purchased</div>
-        <a href="/crypto/checkout/B2B_PRO" class="pr-card-cta">Subscribe with USDC</a>
+        <a href="/checkout-card/B2B_PRO" class="pr-card-cta">Subscribe with USDC</a>
       </div>
-
     </div>
   </div>
 
-  <!-- ──────────────────────────────────────────────────────────────────── -->
-  <!-- SECTION 4: STRIKE PACKS                                             -->
-  <!-- ──────────────────────────────────────────────────────────────────── -->
-  <div class="pr-section">
+  <!-- ── STRIKE PACKS ─────────────────────────────────────────────── -->
+  <div class="pr-section pr-reveal pr-reveal-delay-2" id="strike-packs">
     <div class="pr-section-h">
       <span class="pr-section-num">04</span>
       <span class="pr-section-title">Strike Packs</span>
-      <span class="pr-section-sub">Per-lead subscriptions · 32 lanes</span>
+      <span class="pr-section-sub">Per-lead subscriptions · 41 lanes</span>
     </div>
 
     <p class="pr-sub" style="text-align:left; margin:0 0 28px; font-size:11px;">
@@ -1393,42 +1712,40 @@ def pricing_page(products: list = None) -> str:
     </p>
 
     <div class="pr-packs">
-
-      <!-- Standard -->
       <div class="pr-pack" style="animation-delay: 0.05s">
         <div class="pr-pack-tier standard">Standard</div>
         <div class="pr-pack-name">Roofing Strike</div>
         <div class="pr-pack-desc">Storm-damaged roofing leads in high-risk corridors</div>
-        <div class="pr-pack-price">$499 <small>/mo</small></div>
+        <div class="pr-pack-price" >$499 <small>/mo</small></div>
         <div class="pr-pack-ppl">+ $5 per lead</div>
         <div class="pr-pack-lanes">4 lanes · 150 leads/mo cap</div>
         <div class="pr-pack-channels">
           <span class="pr-pack-channel">Email</span>
           <span class="pr-pack-channel">SMS</span>
-        </div>            <a href="/crypto/checkout/STRIKE_STANDARD" class="pr-card-cta" style="font-size:9px; padding:8px 16px;">Subscribe with USDC</a>
+        </div>
+        <a href="/checkout-card/STRIKE_STANDARD" class="pr-card-cta" style="font-size:9px; padding:8px 16px;">Subscribe with USDC</a>
       </div>
 
-      <!-- Combo -->
       <div class="pr-pack" style="animation-delay: 0.10s">
         <div class="pr-pack-tier combo">Combo</div>
         <div class="pr-pack-name">Property Strike</div>
         <div class="pr-pack-desc">Multi-niche property leads (roofing, siding, gutters, windows)</div>
-        <div class="pr-pack-price">$999 <small>/mo</small></div>
+        <div class="pr-pack-price" >$999 <small>/mo</small></div>
         <div class="pr-pack-ppl">+ $8 per lead</div>
         <div class="pr-pack-lanes">8 lanes · 500 leads/mo cap</div>
         <div class="pr-pack-channels">
           <span class="pr-pack-channel">Email</span>
           <span class="pr-pack-channel">SMS</span>
           <span class="pr-pack-channel">Voice</span>
-        </div>            <a href="/crypto/checkout/STRIKE_COMBO" class="pr-card-cta" style="font-size:9px; padding:8px 16px;">Subscribe with USDC</a>
+        </div>
+        <a href="/checkout-card/STRIKE_COMBO" class="pr-card-cta" style="font-size:9px; padding:8px 16px;">Subscribe with USDC</a>
       </div>
 
-      <!-- Whale -->
       <div class="pr-pack" style="animation-delay: 0.15s">
         <div class="pr-pack-tier whale">Whale</div>
         <div class="pr-pack-name">Commercial Strike</div>
         <div class="pr-pack-desc">High-value commercial property leads with API delivery</div>
-        <div class="pr-pack-price">$2,999 <small>/mo</small></div>
+        <div class="pr-pack-price" >$2,999 <small>/mo</small></div>
         <div class="pr-pack-ppl">+ $25 per lead</div>
         <div class="pr-pack-lanes">16 lanes · 2,000 leads/mo cap</div>
         <div class="pr-pack-channels">
@@ -1436,33 +1753,31 @@ def pricing_page(products: list = None) -> str:
           <span class="pr-pack-channel">SMS</span>
           <span class="pr-pack-channel">Voice</span>
           <span class="pr-pack-channel">API</span>
-        </div>            <a href="/crypto/checkout/STRIKE_WHALE" class="pr-card-cta" style="font-size:9px; padding:8px 16px;">Subscribe with USDC</a>
+        </div>
+        <a href="/checkout-card/STRIKE_WHALE" class="pr-card-cta" style="font-size:9px; padding:8px 16px;">Subscribe with USDC</a>
       </div>
 
-      <!-- Enterprise -->
       <div class="pr-pack" style="animation-delay: 0.20s">
         <div class="pr-pack-tier enterprise">Enterprise</div>
         <div class="pr-pack-name">Full Spectrum</div>
-        <div class="pr-pack-desc">All 32 lanes · unlimited caps · dedicated support</div>
-        <div class="pr-pack-price">$7,999 <small>/mo</small></div>
+        <div class="pr-pack-desc">All 41 lanes · unlimited caps · dedicated support</div>
+        <div class="pr-pack-price" >$7,999 <small>/mo</small></div>
         <div class="pr-pack-ppl">+ $15 per lead</div>
-        <div class="pr-pack-lanes">32 lanes · unlimited</div>
+        <div class="pr-pack-lanes">41 lanes · unlimited</div>
         <div class="pr-pack-channels">
           <span class="pr-pack-channel">Email</span>
           <span class="pr-pack-channel">SMS</span>
           <span class="pr-pack-channel">Voice</span>
           <span class="pr-pack-channel">API</span>
           <span class="pr-pack-channel">Webhook</span>
-        </div>            <a href="/crypto/checkout/STRIKE_ENTERPRISE" class="pr-card-cta" style="font-size:9px; padding:8px 16px;">Subscribe with USDC</a>
+        </div>
+        <a href="/checkout-card/STRIKE_ENTERPRISE" class="pr-card-cta" style="font-size:9px; padding:8px 16px;">Subscribe with USDC</a>
       </div>
-
     </div>
   </div>
 
-  <!-- ──────────────────────────────────────────────────────────────────── -->
-  <!-- SECTION 5: ADDITIONAL NOTES                                        -->
-  <!-- ──────────────────────────────────────────────────────────────────── -->
-  <div class="pr-note">
+  <!-- ── NOTES ─────────────────────────────────────────────────────── -->
+  <div class="pr-note pr-reveal">
     <div class="pr-note-title">Enterprise &amp; Custom Pricing</div>
     <div class="pr-note-body">
       Need custom lane assignments, dedicated SLA tiers (enhanced/premium), webhook delivery,
@@ -1472,7 +1787,7 @@ def pricing_page(products: list = None) -> str:
     </div>
   </div>
 
-  <div class="pr-note" style="margin-top:16px; border-left-color: var(--strike-cyan);">
+  <div class="pr-note pr-reveal" style="margin-top:16px; border-left-color: var(--strike-cyan);">
     <div class="pr-note-title">Revenue Share Model</div>
     <div class="pr-note-body">
       In addition to subscription pricing, Empire AI charges a <strong style="color:var(--empire-white);">3% fee</strong>
@@ -1482,11 +1797,29 @@ def pricing_page(products: list = None) -> str:
     </div>
   </div>
 
-  <!-- FOOTER -->
+  <!-- ── TESTIMONIAL SLIDER ───────────────────────────────────────── -->
+  <div class="pr-testimonials pr-reveal" id="pr-testimonials">
+    <div class="pr-test-header">
+      <div class="pr-test-eyebrow">What Our Customers Say</div>
+      <div class="pr-test-title">Trusted by leading contractors nationwide</div>
+    </div>
+    <div class="pr-test-track">
+      <div class="pr-test-inner" id="pr-test-inner">
+        {test_cards_html}
+      </div>
+    </div>
+    <div class="pr-test-dots" id="pr-test-dots">
+      {test_dots_html}
+    </div>
+  </div>
+
+  <!-- ── FOOTER ───────────────────────────────────────────────────── -->
   <div class="pr-foot">
     <a href="/">Empire AI</a>
     <span class="sep">·</span>
     <a href="/command">Command Dashboard</a>
+    <span class="sep">·</span>
+    <a href="/mrr">MRR Pricing</a>
     <span class="sep">·</span>
     <a href="mailto:ops@empire-ai.co.uk">Contact</a>
     <br>
@@ -1496,6 +1829,97 @@ def pricing_page(products: list = None) -> str:
   </div>
 
 </div>
+
+<script>
+(function() {{
+  // ── HERO SLIDER ──────────────────────────────────────────────────
+  var currentSlide = 0;
+  var totalSlides = {len(hero_slides)};
+
+  function updateSlide() {{
+    var track = document.getElementById('pr-slide-track');
+    var slides = track.querySelectorAll('.pr-slide');
+    var dots = document.querySelectorAll('.pr-slide-dot');
+    slides.forEach(function(s, i) {{
+      s.style.display = i === currentSlide ? 'block' : 'none';
+    }});
+    dots.forEach(function(d, i) {{
+      d.classList.toggle('active', i === currentSlide);
+    }});
+  }}
+
+  window.prGoToSlide = function(idx) {{
+    currentSlide = idx;
+    updateSlide();
+  }};
+
+  window.prNextSlide = function() {{
+    currentSlide = (currentSlide + 1) % totalSlides;
+    updateSlide();
+  }};
+
+  window.prPrevSlide = function() {{
+    currentSlide = (currentSlide - 1 + totalSlides) % totalSlides;
+    updateSlide();
+  }};
+
+  // Auto-rotate hero slider every 5s
+  setInterval(window.prNextSlide, 5000);
+
+  // ── TESTIMONIAL SLIDER ──────────────────────────────────────────
+  var currentTest = 0;
+  var totalTests = {len(testimonials)};
+
+  window.prGoToTestimonial = function(idx) {{
+    currentTest = idx;
+    var inner = document.getElementById('pr-test-inner');
+    var dots = document.querySelectorAll('.pr-test-dot');
+    inner.style.transform = 'translateX(-' + (idx * 100) + '%)';
+    dots.forEach(function(d, i) {{
+      d.classList.toggle('active', i === idx);
+    }});
+  }};
+
+  setInterval(function() {{
+    window.prGoToTestimonial((currentTest + 1) % totalTests);
+  }}, 6000);
+
+  // ── SCROLL REVEAL ANIMATIONS ────────────────────────────────────
+  function checkReveals() {{
+    var reveals = document.querySelectorAll('.pr-reveal');
+    var stats = document.querySelectorAll('.pr-stat');
+    var winH = window.innerHeight;
+
+    reveals.forEach(function(el) {{
+      var rect = el.getBoundingClientRect();
+      if (rect.top < winH - 60) {{
+        el.classList.add('visible');
+      }}
+    }});
+
+    stats.forEach(function(el) {{
+      var rect = el.getBoundingClientRect();
+      if (rect.top < winH - 40) {{
+        el.classList.add('visible');
+      }}
+    }});
+  }}
+
+  window.addEventListener('scroll', checkReveals);
+  checkReveals();
+
+  // ── SMOOTH SCROLL FOR ANCHOR LINKS ──────────────────────────────
+  document.querySelectorAll('a[href^="#"]').forEach(function(a) {{
+    a.addEventListener('click', function(e) {{
+      var target = document.querySelector(this.getAttribute('href'));
+      if (target) {{
+        e.preventDefault();
+        target.scrollIntoView({{ behavior: 'smooth', block: 'start' }});
+      }}
+    }});
+  }});
+}})();
+</script>
 
 </body>
 </html>"""

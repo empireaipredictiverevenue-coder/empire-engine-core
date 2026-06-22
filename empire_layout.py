@@ -45,6 +45,7 @@ MODULES = [
     ("console",     "07", "Console",     "ti-terminal-2",         "sov"),
     ("audit",       "08", "Audit Log",   "ti-shield-check",       "sov"),
     ("operators",   "09", "Operators",   "ti-id-badge-2",         "sov"),
+    ("mc-os",       "10", "MC-OS",       "ti-eye",                 "sov"),
 ]
 
 # Each module slug maps to its URL. `pulse` is the canonical /command page;
@@ -54,6 +55,8 @@ def _module_href(slug: str) -> str:
         return "/command"
     if slug == "pulse-full":
         return "/view/pulse"
+    if slug == "mc-os":
+        return "http://localhost:8060"
     return f"/command/{slug}"
 
 

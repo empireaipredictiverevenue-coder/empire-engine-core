@@ -2041,6 +2041,15 @@ def register_contractor_referral_tracking_routes(
                 .eq("referral_code", code).limit(1).execute()
             if res.data:
                 log.info(f"[contractor_ref] tracking click: {code} -> {res.data[0].get('name', '?')}")
+                # Log click in referral_log for audit trail
+                try:
+                    _tmp_sb.table("referral_log").insert({
+                        "event_type": "click",
+                        "referral_code": code,
+                        "meta": {"source": "ref_redirect"},
+                    }).execute()
+                except Exception:
+                    pass
         except Exception:
             pass
 

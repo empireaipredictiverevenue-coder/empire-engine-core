@@ -15,6 +15,9 @@ from skills.harness import HarnessManager, HarnessConfig
 from skills.boundary import SkillBoundary, FidelityAuditor
 from skills.brain_skills import register_brain_skills
 from skills.trading_skills import register_trading_skills
+from skills.marketing_skills import register_marketing_skills
+from skills.email_skills import register_email_skills
+from skills.design_skills import register_design_skills
 from skills.dynamic import VaultSkillDiscoverer
 
 
@@ -96,7 +99,20 @@ class SkillsFramework:
         # 4. Register trading skills (market analysis, meme sniper, risk assessment, etc.)
         register_trading_skills(registry=self.registry)
 
-        # 5. Auto-discover vault-defined skills
+        # 5. Register marketing skills (emails, ads, SEO, referrals, CRO, etc.)
+        #    Wraps SKILL.md prompt templates from skills/marketingskills/
+        #    Wires ask_llm so skills can execute SKILL.md instructions via LLM
+        register_marketing_skills(registry=self.registry, ask_llm=ask_llm)
+
+        # 5a. Register email skills (strategy, deliverability, compliance, sequences, copy, analytics, provider config)
+        #     Wires ask_llm so skills can execute email marketing guidance via LLM
+        register_email_skills(registry=self.registry, ask_llm=ask_llm)
+
+        # 5b. Register design skills (UI, UX, visual, motion, accessibility, design ops)
+        #     Wires ask_llm so skills can execute design guidance via LLM
+        register_design_skills(registry=self.registry, ask_llm=ask_llm)
+
+        # 6. Auto-discover vault-defined skills
         if auto_discover_skills:
             try:
                 discovery_result = self.discoverer.scan_and_register()
@@ -112,7 +128,7 @@ class SkillsFramework:
             except Exception as e:
                 log.warning(f"[skills] vault skill auto-discovery failed: {e}")
 
-        # 6. Create harness manager
+        # 7. Create harness manager
         self.harness_mgr = HarnessManager(
             registry=self.registry,
             default_config=config,
