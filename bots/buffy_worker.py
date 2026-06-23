@@ -137,7 +137,7 @@ def heartbeat():
             "enabled": True,
             "capabilities": ["buffy", "render", "video", "ffmpeg", "tts"],
             "task_types": ["buffy.render"],
-            "meta": {"worker_id": WORKER_ID},
+            "metrics": {"worker_id": WORKER_ID},
         }, on_conflict="agent_name").execute()
     except Exception as e:
         log.debug(f"heartbeat failed: {e}")

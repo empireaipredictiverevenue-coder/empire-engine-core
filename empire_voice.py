@@ -780,11 +780,85 @@ class VoiceRouter:
 
     async def send_sms(self, to_number: str, message: str) -> dict:
         """Send a single SMS. Used by the SMS sequence engine."""
+        # ── Daily SMS cap (emergency cost control) ──
+        if await self._check_sms_daily_cap():
+            return {"ok": False, "error": "daily_sms_cap_exceeded"}
+
         adapter = self._pick_adapter(to_number, CallDirection.OUTBOUND)
         result = await adapter.send_sms(to_number, message)
         if result.get("ok"):
             self.stats["sms_sent"] += 1
         return result
+
+    _daily_cap_cache: int = -1
+    _daily_cap_cache_ts: float = 0.0
+    _sb_client: object = None  # cached Supabase client for cap queries
+
+    def _get_sb(self):
+        """Lazy-init and cache a Supabase client for cap queries."""
+        if self._sb_client is None:
+            from supabase import create_client as _sb_create
+            self._sb_client = _sb_create(
+                os.environ.get("SUPABASE_URL", ""),
+                os.environ.get("SUPABASE_SERVICE_KEY", ""),
+            )
+        return self._sb_client
+
+    def _get_daily_cap(self) -> int:
+        """Read max_sms_per_day from agent_config, falling back to SMS_DAILY_CAP env var.
+        Cached for 60 seconds."""
+        import time as _time
+        now = _time.time()
+        if now - self._daily_cap_cache_ts < 60 and self._daily_cap_cache >= 0:
+            return self._daily_cap_cache
+        # Default: 500 if nothing configured
+        cap = 500
+        try:
+            sb = self._get_sb()
+            r = sb.table("agent_config").select("config_json") \
+                .eq("agent_name", "sms_daily_cap").limit(1).execute()
+            if r.data:
+                cfg = r.data[0].get("config_json") or {}
+                cap = int(cfg.get("max_per_day", 500))
+        except Exception:
+            pass
+        # Env var overrides agent_config for emergency tuning
+        env_cap = os.environ.get("SMS_DAILY_CAP", "")
+        if env_cap and env_cap.isdigit():
+            cap = int(env_cap)
+        self._daily_cap_cache = cap
+        self._daily_cap_cache_ts = now
+        return cap
+
+    async def _check_sms_daily_cap(self) -> bool:
+        """Return True if daily SMS cap is exceeded. Cached for 30 seconds."""
+        cap = self._get_daily_cap()
+        if cap <= 0:
+            return False  # cap disabled
+
+        # Cache the count check for 30s to avoid sms_log queries on every send
+        now_ts = __import__("time").time()
+        if hasattr(self, "_cap_check_ts") and (now_ts - self._cap_check_ts) < 30:
+            return getattr(self, "_cap_exceeded", False)
+
+        try:
+            sb = self._get_sb()
+            from datetime import datetime, timezone, timedelta
+            cutoff = (datetime.now(timezone.utc) - timedelta(hours=24)).isoformat()
+            r = sb.table("sms_log").select("id", count="exact") \
+                .eq("direction", "outbound") \
+                .gte("created_at", cutoff) \
+                .execute()
+            count = r.count if r.count is not None else len(r.data or [])
+            exceeded = count > cap
+            self._cap_exceeded = exceeded
+            self._cap_check_ts = now_ts
+            if exceeded:
+                log.warning(f"[voice] SMS daily cap exceeded: {count} >= {cap} — blocking sends")
+            return exceeded
+        except Exception as e:
+            log.debug(f"[voice] SMS cap check failed: {e} — allowing send")
+            return False  # fail open on query error
 
     async def place_streaming_strike(
         self,
