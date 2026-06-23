@@ -58,3 +58,11 @@
 # Shorts video for Empire AI's channel. Kokoro TTS + WhisperX + FFmpeg.
 # Dry-run by default (no upload). Set YT_PUBLISH=1 in env to enable upload.
 0 9 * * * /bin/bash /root/empire-v49/agents/youtube_shorts/cron.sh >> /root/empire-v49/logs/agent_youtube_shorts.log 2>&1
+
+# System Supervisor — daily 09:00 UTC. Catches cron/route/money/email breaks,
+# posts to Telegram. Add to crontab with: cat agents/CRONTAB.fragment | crontab -
+0 9 * * * cd /root/empire-v49 && /usr/bin/python3 -m agents.system_supervisor >> logs/agent_system_supervisor.log 2>&1
+
+# Radar Asset Enricher — every 6h on :02. Backfills radar_targets.asset_value
+# from ATTOM/RentCast (if keys set) or business-signal formula.
+2 */6 * * * cd /root/empire-v49 && /usr/bin/python3 -m agents.radar_asset_enricher --limit 1000 >> logs/agent_radar_asset_enricher.log 2>&1

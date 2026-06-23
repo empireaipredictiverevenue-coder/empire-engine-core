@@ -771,7 +771,11 @@ async def _search_sub_niche(
             "email": email,
             "source_url": (place.get("website") or "")[:500],
             "status": "active",
-            "asset_value": urgency,
+            # FIX: do NOT write urgency (1-10) as asset_value — it corrupts
+            # lead_enricher scoring. Leave NULL so enricher falls back to
+            # warehouse_name keyword matching. The radar_asset_enricher agent
+            # backfills real \$ via ATTOM/RentCast/formula every 6h.
+            "asset_value": None if not place.get("rating") else None,
             "urgency_score": urgency,
             "meta": {
                 "source": "B2B Lead Gen",
