@@ -77,6 +77,7 @@ from empire_for_contractors import render_for_contractors_page
 from empire_resend_webhook import register_resend_webhook
 import agents.business_growth_agent as growth_agent
 from empire_funnel import register_funnel_route
+from empire_youtube_stats import register_youtube_routes
 
 from empire_fee_operator import register_operator_mark_settled
 from empire_claims import register_claims_routes
@@ -193,6 +194,7 @@ from products.inbound_router import InboundRouter, InboundRouterRoutes
 from products.data_vault import DataVault, DataVaultRoutes
 from products.buyer_spy import BuyerSpy, BuyerSpyRoutes
 from products.omni_bridge import OmniBridge, OmniBridgeRoutes
+from empire_omni_page import omni_dashboard_page
 from products.agent_orchestrator import AgentOrchestrator, AgentOrchestratorRoutes
 from products.b2b_pro import B2BPro, B2BProRoutes
 from products.lead_score import LeadScoreAI, LeadScoreRoutes
@@ -1271,6 +1273,7 @@ except Exception as _e:
     log.warning(f"[hub] resend webhook register failed: {_e}")
 try:
     register_funnel_route(app)
+    register_youtube_routes(app)
 except Exception as _e:
     log.warning(f"[hub] funnel route register failed: {_e}")
 
@@ -1290,6 +1293,13 @@ register_claim_webhook(app, get_db=get_db, broadcaster=live_broadcaster)
 async def cold_inbound_route():
     """Operator dashboard for cold inbound dispatches with assessment progress."""
     return HTMLResponse(await cold_inbound_dashboard(get_db))
+
+
+# ── Omni Bridge Dashboard ──
+@app.get("/omni", response_class=HTMLResponse)
+async def omni_dashboard_route():
+    """Omni Bridge dashboard — Deepgram STT, brand extraction, Zernio post stats."""
+    return HTMLResponse(omni_dashboard_page())
 
 
 # ── Cold Inbound Assessment Progress API ──
@@ -1417,6 +1427,37 @@ register_hexstrike_routes(app, get_db=get_db, require_auth=require_auth)
 register_growth_ops_routes(app, get_db=get_db, require_auth=require_auth)
 register_competitor_intel_routes(app, get_db=get_db, require_auth=require_auth)
 register_media_lab_routes(app, get_db=get_db, require_auth=require_auth)
+
+# ── YouTube Shorts Agent — faceless Shorts creation pipeline ──
+_yt_shorts_agent = None
+
+@app.get("/api/youtube-shorts/generate")
+async def yt_shorts_generate(
+    topic: str = "",
+    niche: str = "",
+    count: int = 1,
+    auth: bool = Depends(require_auth),
+):
+    """Run the YouTube Shorts pipeline — generate scripts, render videos."""
+    global _yt_shorts_agent
+    if _yt_shorts_agent is None:
+        from bots.youtube_shorts_agent import YouTubeShortsAgent
+        _yt_shorts_agent = YouTubeShortsAgent(get_db=get_db)
+    results = await _yt_shorts_agent.run_pipeline(
+        topic=topic, niche=niche, publish=False, count=count,
+    )
+    return {"ok": True, "videos": results, "count": len(results)}
+
+@app.get("/api/youtube-shorts/snapshot")
+async def yt_shorts_snapshot(
+    auth: bool = Depends(require_auth),
+):
+    """Return YouTube Shorts agent state snapshot."""
+    global _yt_shorts_agent
+    if _yt_shorts_agent is None:
+        from bots.youtube_shorts_agent import YouTubeShortsAgent
+        _yt_shorts_agent = YouTubeShortsAgent(get_db=get_db)
+    return _yt_shorts_agent.snapshot()
 register_recon_routes(app, get_db=get_db, require_auth=require_auth)
 
 # Agentic OS Kernel — instantiated here because it's needed by route registration below
@@ -2074,6 +2115,92 @@ async def billing_timeseries(days: int = 30, auth: bool = Depends(require_auth))
     return JSONResponse(result)
 
 
+# ── Revenue Ledger Summary — unified view of empire_revenue_ledger grouped by source_type ──
+@app.get("/api/v1/revenue/ledger-summary")
+async def revenue_ledger_summary(auth: bool = Depends(require_auth), days: int = 90, limit: int = 50):
+    """Return unified revenue summary from empire_revenue_ledger grouped by source_type.
+
+    Returns:
+      - sources: [{source_type, count, total_amount, total_usdc, pct_of_total}]
+      - totals: {total_rows, total_amount, total_usdc}
+      - recent: [{id, source_type, amount, usdc_amount, description, logged_at}]
+      - days: query window
+    """
+    db = get_db()
+    now = datetime.now(timezone.utc)
+    cutoff = (now - timedelta(days=days)).isoformat()
+
+    result = {
+        "sources": [],
+        "totals": {"total_rows": 0, "total_amount": 0.0, "total_usdc": 0.0},
+        "recent": [],
+        "days": days,
+    }
+
+    try:
+        # ── All rows in window ──
+        r = db.table("empire_revenue_ledger").select(
+            "source_type, amount, usdc_amount, description, logged_at, id"
+        ).gte("logged_at", cutoff).order("logged_at", desc=True).execute()
+        rows = r.data or []
+
+        # ── Group by source_type ──
+        source_buckets: dict = {}
+        total_amount = 0.0
+        total_usdc = 0.0
+
+        for row in rows:
+            st = (row.get("source_type") or "unknown").strip()
+            amt = float(row.get("amount") or 0)
+            usdc = float(row.get("usdc_amount") or 0)
+
+            total_amount += amt
+            total_usdc += usdc
+
+            if st not in source_buckets:
+                source_buckets[st] = {"source_type": st, "count": 0, "total_amount": 0.0, "total_usdc": 0.0}
+            b = source_buckets[st]
+            b["count"] += 1
+            b["total_amount"] += amt
+            b["total_usdc"] += usdc
+
+        # ── Build sources list with percentages ──
+        total_amount_safe = max(total_amount, 1)
+        sources = []
+        for st in sorted(source_buckets.keys(), key=lambda k: source_buckets[k]["total_amount"], reverse=True):
+            b = source_buckets[st]
+            b["total_amount"] = round(b["total_amount"], 2)
+            b["total_usdc"] = round(b["total_usdc"], 2)
+            b["pct_of_total"] = round((b["total_amount"] / total_amount_safe) * 100, 1)
+            sources.append(b)
+
+        # ── Recent entries (most recent 50) ──
+        recent = []
+        for row in rows[:limit]:
+            recent.append({
+                "id": str(row.get("id", "")),
+                "source_type": row.get("source_type"),
+                "amount": float(row.get("amount") or 0),
+                "usdc_amount": float(row.get("usdc_amount") or 0),
+                "description": (row.get("description") or "")[:120],
+                "logged_at": row.get("logged_at"),
+            })
+
+        result.update({
+            "sources": sources,
+            "totals": {
+                "total_rows": len(rows),
+                "total_amount": round(total_amount, 2),
+                "total_usdc": round(total_usdc, 2),
+            },
+            "recent": recent,
+        })
+    except Exception as e:
+        log.warning(f"[revenue-ledger] summary query failed: {e}")
+
+    return JSONResponse(result)
+
+
 # ── Traffic Specialist — autonomous traffic orchestration ─────────
 register_traffic_specialist_routes(app, require_auth=require_auth)
 
@@ -2106,6 +2233,94 @@ crypto_payment_engine = CryptoPaymentEngine(
 # /api/v1/voice/answer and /api/v1/voice/events. The VoiceRouter class does
 # NOT have answer_webhook/event_webhook methods — those handlers live in the
 # register_voice_routes closure.
+
+
+# ── Revenue P&L Summary — net profit/loss from ledger vs costs ──
+@app.get("/api/v1/revenue/pnl-summary")
+async def revenue_pnl_summary(auth: bool = Depends(require_auth), days: int = 90):
+    """Return profit/loss summary comparing revenue sources vs costs.
+
+    Queries empire_revenue_ledger grouped by source_type for revenue
+    and cost_category for costs, with daily time series.
+
+    Returns:
+      - total_revenue: sum of non-cost entries
+      - total_costs: sum of infra_cost entries
+      - revenue_sources: count of distinct revenue source types
+      - cost_sources: count of distinct cost source types
+      - series: [{date, revenue, costs}] daily aggregation
+    """
+    db = get_db()
+    now = datetime.now(timezone.utc)
+    cutoff = (now - timedelta(days=days)).isoformat()
+
+    result = {
+        "total_revenue": 0.0,
+        "total_costs": 0.0,
+        "revenue_rows": 0,
+        "cost_rows": 0,
+        "revenue_sources": 0,
+        "cost_sources": 0,
+        "series": [],
+        "days": days,
+    }
+
+    try:
+        r = db.table("empire_revenue_ledger").select(
+            "source_type, amount, cost_category, logged_at"
+        ).gte("logged_at", cutoff).execute()
+        rows = r.data or []
+
+        from collections import defaultdict
+        daily: dict = defaultdict(lambda: {"date": "", "revenue": 0.0, "costs": 0.0})
+        revenue_sources = set()
+        cost_sources = set()
+        total_revenue = 0.0
+        total_costs = 0.0
+        revenue_rows = 0
+        cost_rows = 0
+
+        for row in rows:
+            st = row.get("source_type", "") or ""
+            d = (row.get("logged_at") or "")[:10]
+            amt = float(row.get("amount") or 0)
+            cc = row.get("cost_category") or ""
+
+            # Cost entries have source_type='infra_cost' and cost_category set
+            if cc or st == "infra_cost":
+                total_costs += amt
+                cost_rows += 1
+                cat = cc or "uncategorized"
+                cost_sources.add(cat)
+                if d:
+                    daily[d]["costs"] += amt
+                    daily[d]["date"] = d
+            else:
+                total_revenue += amt
+                revenue_rows += 1
+                revenue_sources.add(st)
+                if d:
+                    daily[d]["revenue"] += amt
+                    daily[d]["date"] = d
+
+        series = sorted(daily.values(), key=lambda x: x["date"])
+        for s in series:
+            s["revenue"] = round(s["revenue"], 2)
+            s["costs"] = round(s["costs"], 2)
+
+        result.update({
+            "total_revenue": round(total_revenue, 2),
+            "total_costs": round(total_costs, 2),
+            "revenue_rows": revenue_rows,
+            "cost_rows": cost_rows,
+            "revenue_sources": len(revenue_sources),
+            "cost_sources": len(cost_sources),
+            "series": series,
+        })
+    except Exception as e:
+        log.warning(f"[pnl-summary] query failed: {e}")
+
+    return JSONResponse(result)
 @app.post("/webhook/vonage-answer")
 async def vonage_answer_alias(request: Request):
     """Proxy to /api/v1/voice/answer — the real Vonage answer webhook."""
