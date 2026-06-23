@@ -614,8 +614,10 @@ class SMSSequenceEngine:
             except Exception as e:
                 log.debug(f"[sms] send-time compliance check failed: {e}")
 
-            # Send
-            result = await self.voice_router.send_sms(phone, body)
+            # Tier-aware send: hot leads bypass the 500/day cap
+            seq_meta = row.get("meta") or {}
+            is_hot = bool(seq_meta.get("is_hot", False))
+            result = await self.voice_router.send_sms(phone, body, is_hot=is_hot)
 
             # Log the attempt — delivery confirmation comes later via
             # the Vonage webhook or the timeout-based vonage_engineer_agent.
@@ -629,6 +631,7 @@ class SMSSequenceEngine:
                     "step":         step,
                     "message_uuid": result.get("message_uuid"),
                     "delivered":    None,  # webhook or engineer agent confirms
+                    "meta":         {"is_hot": is_hot, "lead_tier": seq_meta.get("lead_tier", "unknown")},
                 }).execute()
             except Exception as e:
                 log.debug(f"[sms] log insert: {e}")

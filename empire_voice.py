@@ -778,11 +778,19 @@ class VoiceRouter:
 
         return result
 
-    async def send_sms(self, to_number: str, message: str) -> dict:
-        """Send a single SMS. Used by the SMS sequence engine."""
-        # ── Daily SMS cap (emergency cost control) ──
-        if await self._check_sms_daily_cap():
-            return {"ok": False, "error": "daily_sms_cap_exceeded"}
+    async def send_sms(self, to_number: str, message: str, is_hot: bool = False) -> dict:
+        """Send a single SMS. Used by the SMS sequence engine.
+
+        If is_hot=True (lead tier = hot), bypasses the normal 500/day cap
+        and checks a separate hot cap (200/day) instead.
+        """
+        # ── Tiered SMS cap (emergency cost control) ──
+        if is_hot:
+            if await self._check_hot_sms_daily_cap():
+                return {"ok": False, "error": "hot_sms_daily_cap_exceeded"}
+        else:
+            if await self._check_sms_daily_cap():
+                return {"ok": False, "error": "daily_sms_cap_exceeded"}
 
         adapter = self._pick_adapter(to_number, CallDirection.OUTBOUND)
         result = await adapter.send_sms(to_number, message)
@@ -792,6 +800,8 @@ class VoiceRouter:
 
     _daily_cap_cache: int = -1
     _daily_cap_cache_ts: float = 0.0
+    _hot_cap_cache: int = -1
+    _hot_cap_cache_ts: float = 0.0
     _sb_client: object = None  # cached Supabase client for cap queries
 
     def _get_sb(self):
@@ -830,6 +840,30 @@ class VoiceRouter:
         self._daily_cap_cache_ts = now
         return cap
 
+    def _get_hot_daily_cap(self) -> int:
+        """Read max_hot_sms_per_day from agent_config, falling back to SMS_HOT_DAILY_CAP env var.
+        Default 200. Cached for 60 seconds."""
+        import time as _time
+        now = _time.time()
+        if now - self._hot_cap_cache_ts < 60 and self._hot_cap_cache >= 0:
+            return self._hot_cap_cache
+        cap = 200  # default hot cap
+        try:
+            sb = self._get_sb()
+            r = sb.table("agent_config").select("config_json") \
+                .eq("agent_name", "sms_hot_daily_cap").limit(1).execute()
+            if r.data:
+                cfg = r.data[0].get("config_json") or {}
+                cap = int(cfg.get("max_per_day", 200))
+        except Exception:
+            pass
+        env_cap = os.environ.get("SMS_HOT_DAILY_CAP", "")
+        if env_cap and env_cap.isdigit():
+            cap = int(env_cap)
+        self._hot_cap_cache = cap
+        self._hot_cap_cache_ts = now
+        return cap
+
     async def _check_sms_daily_cap(self) -> bool:
         """Return True if daily SMS cap is exceeded. Cached for 30 seconds."""
         cap = self._get_daily_cap()
@@ -858,6 +892,38 @@ class VoiceRouter:
             return exceeded
         except Exception as e:
             log.debug(f"[voice] SMS cap check failed: {e} — allowing send")
+            return False  # fail open on query error
+
+    async def _check_hot_sms_daily_cap(self) -> bool:
+        """Return True if the hot-lead SMS cap is exceeded. Cached for 30 seconds."""
+        cap = self._get_hot_daily_cap()
+        if cap <= 0:
+            return False  # cap disabled
+
+        now_ts = __import__("time").time()
+        if hasattr(self, "_hot_cap_check_ts") and (now_ts - self._hot_cap_check_ts) < 30:
+            return getattr(self, "_hot_cap_exceeded", False)
+
+        try:
+            sb = self._get_sb()
+            from datetime import datetime, timezone, timedelta
+            cutoff = (datetime.now(timezone.utc) - timedelta(hours=24)).isoformat()
+            # Query sms_log for hot leads — identified by meta->is_hot in the logged row
+            # We filter on sms_log where meta->>'is_hot' = 'true'
+            r = sb.table("sms_log").select("id", count="exact") \
+                .eq("direction", "outbound") \
+                .gte("created_at", cutoff) \
+                .eq("meta->>is_hot", "true") \
+                .execute()
+            count = r.count if r.count is not None else len(r.data or [])
+            exceeded = count > cap
+            self._hot_cap_exceeded = exceeded
+            self._hot_cap_check_ts = now_ts
+            if exceeded:
+                log.warning(f"[voice] Hot SMS daily cap exceeded: {count} >= {cap} — blocking hot sends")
+            return exceeded
+        except Exception as e:
+            log.debug(f"[voice] Hot SMS cap check failed: {e} — allowing send")
             return False  # fail open on query error
 
     async def place_streaming_strike(

@@ -197,18 +197,42 @@ def _pick_sequence(lead: dict) -> str:
     return "manual"
 
 
+def _classify_lead_tier(lead: dict) -> str:
+    """Classify a lead as hot, warm, or cold based on urgency and asset value.
+
+    Hot:  urgency_score >= 7 AND asset_value >= $50K  → SMS eligible
+    Warm: urgency_score 4-6 OR asset_value $10K-$50K   → email only
+    Cold: urgency_score < 4 AND asset_value < $10K      → email only
+    """
+    urgency = int(lead.get("urgency_score") or 0)
+    asset = float(lead.get("asset_value") or 0)
+
+    if urgency >= 7 and asset >= 50000:
+        return "hot"
+    if urgency >= 4 or asset >= 10000:
+        return "warm"
+    return "cold"
+
+
 def _pick_channel(lead: dict, channels: list) -> str:
-    """Pick the channel. SMS first if phone, voice as backup,
-    email for leads that have email but no phone.
+    """Pick the channel. Hot leads get SMS, warm/cold get email.
+    Voice is a backup for hot leads without email.
     If no contact info at all, skip (returns None so caller can handle).
     """
-    if "sms" in channels and lead.get("phone"):
+    tier = _classify_lead_tier(lead)
+
+    # Hot leads → SMS (with voice fallback)
+    if tier == "hot" and "sms" in channels and lead.get("phone"):
         return "sms"
-    if "voice" in channels and lead.get("phone"):
+    if tier == "hot" and "voice" in channels and lead.get("phone"):
         return "voice"
+
+    # Warm/cold leads → email only
     if "email" in channels and lead.get("email"):
         return "email"
-    return None  # no reachable channel — skip
+
+    # No reachable channel — skip
+    return None
 
 
 def _render_message(template: str, lead: dict) -> str:
@@ -287,6 +311,7 @@ def _do_live_send(channel: str, phone: str, body: str, lead: dict) -> tuple[bool
         normalized = _normalize_phone(phone)
         if not normalized:
             return False, "phone_normalize_failed"
+        tier = _classify_lead_tier(lead)
         url = f"{hub_url}/api/v1/sms/enroll"
         payload = json.dumps({
             "phone": normalized,
@@ -297,6 +322,10 @@ def _do_live_send(channel: str, phone: str, body: str, lead: dict) -> tuple[bool
                 "warehouse_name": lead.get("warehouse_name"),
                 "source": "lead_converter",
                 "body_preview": body[:200],
+                "lead_tier": tier,
+                "is_hot": tier == "hot",
+                "urgency_score": int(lead.get("urgency_score") or 0),
+                "asset_value": float(lead.get("asset_value") or 0),
             },
         }).encode()
     elif channel == "email":
