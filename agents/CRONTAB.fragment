@@ -74,3 +74,7 @@
 # Silent supervisor - every 5 min, runs all 7 checks + auto-triggers self-healer
 # on critical. Pairs with self-healer (every 6h) for sub-5min fix latency.
 */5 * * * * cd /root/empire-v49 && /usr/bin/python3 -m agents.system_supervisor --no-tg --auto-fix > /dev/null 2>&1
+
+# Email Outreach - every 6h on :20. Resend-based cadence for contractors
+# with valid emails. Skips those with phone-only (Vonage path).
+20 */6 * * * cd /root/empire-v49 && /usr/bin/python3 -m agents.email_outreach >> logs/agent_email_outreach.log 2>&1
