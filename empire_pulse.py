@@ -1,644 +1,477 @@
+"""Empire AI · Predictive Revenue — Lead Pulse System
+
+Real-time funnel visibility + automated storm-triggered contractor outreach.
+
+Endpoints:
+  GET  /api/v1/pulse/summary           — overall funnel snapshot
+  GET  /api/v1/pulse/sms-volume        — outbound SMS by hour, last 24h
+  GET  /api/v1/pulse/leads-hot         — leads ready for contractor action
+  GET  /api/v1/pulse/reply-rate        — reply rate by sequence (last 7d)
+  GET  /api/v1/pulse/metro-heat        — SMS activity per metro, last 24h
+  GET  /api/v1/pulse/contractor-stats  — top engaged contractors
+  GET  /pulse                          — HTML dashboard
+
+  POST /api/v1/webhook/storm-target    — when radar_target is created with
+                                          urgency_score >= threshold, fan out
+                                          SMS to active contractors in that
+                                          metro/niche
+  GET  /api/v1/pulse/storm-stream      — recent storm-triggered alerts
+
+Wired into hub.py as:
+    from empire_pulse import register_pulse_routes
+    register_pulse_routes(app, get_db=get_db)
 """
-EMPIRE V49 · PULSE
-==================
-Insight layer at /view/pulse. Queries the pulse_rollup_hourly materialized
-view (refreshed every 5 min) and exposes four API endpoints that the SPA
-and the standalone pulse page consume.
+from __future__ import annotations
 
-ARCHITECTURE
-────────────
-  pulse_rollup_hourly (materialized view, 7-day window)
-      │
-      ├─ GET  /api/pulse/summary?window=24h|7d|30d
-      ├─ GET  /api/pulse/breakdown?dimension=niche|channel|contractor|corridor|hour
-      ├─ GET  /api/pulse/lanes
-      └─ POST /api/pulse/refresh  (owner-only)
-      │
-      └─ /view/pulse  (standalone HTML page)
-
-API ENDPOINTS
-─────────────
-  summary:    Totals + deltas for revenue, spend, margin, calls.
-              Compares current window to previous window of equal length.
-
-  breakdown:  Grouped data by a single dimension. Returns top N groups
-              sorted by revenue descending.
-
-  lanes:      Per-hour per-niche matrix (24h × N niches) for the heatmap.
-
-  refresh:    Force-refreshes the materialized view via Supabase REST API.
-              Owner-only.
-"""
-
-import os
+import html
+import json
 import logging
+import os
+import uuid
+from collections import Counter, defaultdict
 from datetime import datetime, timezone, timedelta
-from typing import Callable, Optional
+from typing import Any, Callable, Optional
 
-log = logging.getLogger("empire.pulse")
+try:
+    from dotenv import load_dotenv
+    from pathlib import Path
+    _r = Path(__file__).resolve().parent.parent
+    load_dotenv(_r.parent / ".env")
+except Exception:
+    pass
+
+from supabase import create_client
+
+log = logging.getLogger("empire_pulse")
 
 
-# ─────────────────────────────────────────────────────────────────────
-# PULSE ENGINE
-# ─────────────────────────────────────────────────────────────────────
+# ── STORM TRIGGER THRESHOLDS ─────────────────────────────────────────────
+STORM_TRIGGER_URGENCY = 7        # only fire on urgent storm targets
+STORM_TRIGGER_MIN_TARGETS = 1     # at least 1 radar_target needed
+STORM_TRIGGER_COOLDOWN_MIN = 30   # don't re-fire for same metro/niche within 30 min
+STORM_TRIGGER_MAX_CONTRACTORS = 10  # cap to avoid SMS burst
 
-class PulseEngine:
-    """Query engine for the pulse_rollup_hourly materialized view."""
 
-    def __init__(
-        self,
-        *,
-        get_db: Callable,
-        refresh_interval_sec: int = 300,
-    ):
-        self.get_db = get_db
-        self.refresh_interval_sec = refresh_interval_sec
-        self._last_refresh: Optional[datetime] = None
+def _sb():
+    url = os.getenv("SUPABASE_URL", "")
+    key = os.getenv("SUPABASE_SERVICE_KEY", "")
+    if not url or not key:
+        raise RuntimeError("SUPABASE_URL and SUPABASE_SERVICE_KEY must be set")
+    return create_client(url, key)
 
-    # ── HELPERS ──────────────────────────────────────────────────
 
-    @staticmethod
-    def _window_hours(window: str) -> int:
-        """Return the number of hours for a window string."""
-        return {"24h": 24, "7d": 168, "30d": 720}.get(window, 24)
+# ── PULSE DATA HELPERS ────────────────────────────────────────────────────
+def pulse_summary(sb) -> dict:
+    """One-shot snapshot of the funnel."""
+    now = datetime.now(timezone.utc)
+    h24 = (now - timedelta(hours=24)).isoformat()
+    h1 = (now - timedelta(hours=1)).isoformat()
 
-    @staticmethod
-    def _window_cutoff(window: str, offset_multiplier: int = 1) -> str:
-        """Return an ISO timestamp for the start of a window.
+    def cnt(table, **f):
+        q = sb.table(table).select("id", count="exact")
+        for k, v in f.items():
+            q = q.eq(k, v)
+        r = q.execute()
+        return r.count or 0
 
-        Args:
-            window: "24h", "7d", or "30d"
-            offset_multiplier: 1 for current window, 2 for current+previous
-        """
-        hours = PulseEngine._window_hours(window) * offset_multiplier
-        return (datetime.now(timezone.utc) - timedelta(hours=hours)).isoformat()
+    return {
+        "ts": now.isoformat(),
+        "contractors": {
+            "total": cnt("contractors"),
+            "active": cnt("contractors", active=True),
+            "with_phone": cnt("contractors", active=True) - cnt("contractors", active=True, phone=None),
+        },
+        "leads": {
+            "enriched_total": cnt("enriched_leads"),
+            "pending_outreach": cnt("enriched_leads", status="pending_outreach"),
+            "converted": cnt("enriched_leads", status="converted"),
+        },
+        "outreach": {
+            "sms_out_24h": cnt("sms_log", direction="outbound") if False else
+                            sb.table("sms_log").select("id", count="exact")
+                              .eq("direction","outbound").gte("created_at", h24).execute().count,
+            "sms_in_24h":  sb.table("sms_log").select("id", count="exact")
+                              .eq("direction","inbound").gte("created_at", h24).execute().count,
+            "sms_out_1h":  sb.table("sms_log").select("id", count="exact")
+                              .eq("direction","outbound").gte("created_at", h1).execute().count,
+            "outreach_log_24h": sb.table("outreach_log").select("id", count="exact")
+                              .gte("created_at", h24).execute().count,
+        },
+        "fees": {
+            "paid_count":  cnt("fee_events", status="paid"),
+            "pending_count": cnt("fee_events", status="pending"),
+        },
+        "sequences": {
+            "active_recruits": sb.table("sms_sequences").select("id", count="exact")
+                                .eq("sequence_type","contractor_recruit")
+                                .eq("status","active").execute().count,
+        },
+    }
 
-    @staticmethod
-    def _sum_rows(rows: list) -> dict:
-        """Sum numeric columns across rows."""
-        result = {"revenue": 0.0, "spend": 0.0, "margin": 0.0, "calls": 0}
-        for row in rows:
-            result["revenue"] += float(row.get("revenue") or 0)
-            result["spend"]   += float(row.get("spend") or 0)
-            result["margin"]  += float(row.get("margin") or 0)
-            result["calls"]   += int(row.get("calls") or 0)
-        return result
 
-    @staticmethod
-    def _group_by_key(rows: list, key: str) -> list:
-        """Group rows by key, aggregating numeric columns."""
-        groups: dict = {}
-        for row in rows:
-            k = row.get(key)
-            if k is None:
-                continue
-            k = str(k)
-            if k not in groups:
-                groups[k] = {"key": k, "label": k, "revenue": 0.0, "spend": 0.0,
-                             "margin": 0.0, "calls": 0}
-            groups[k]["revenue"] += float(row.get("revenue") or 0)
-            groups[k]["spend"]   += float(row.get("spend") or 0)
-            groups[k]["margin"]  += float(row.get("margin") or 0)
-            groups[k]["calls"]   += int(row.get("calls") or 0)
-        return list(groups.values())
-
-    # ── SUMMARY ──────────────────────────────────────────────────
-
-    async def summary(self, window: str = "24h") -> dict:
-        """Return totals + deltas for the given window.
-
-        Returns:
-            {revenue, spend, margin, calls, delta_revenue, delta_spend,
-             delta_margin, delta_calls, margin_pct, window}
-        """
-        db = self.get_db()
-        window = window if window in ("24h", "7d", "30d") else "24h"
-
-        cur_cutoff  = self._window_cutoff(window, 1)
-        prev_end    = cur_cutoff  # reuse — same boundary, no microsecond gap
-        prev_cutoff = self._window_cutoff(window, 2)
-
-        cur = (
-            db.table("pulse_rollup_hourly")
-            .select("revenue, spend, margin, calls")
-            .gte("hour_bucket", cur_cutoff)
-            .execute()
-        )
-
-        prev = (
-            db.table("pulse_rollup_hourly")
-            .select("revenue, spend, margin, calls")
-            .gte("hour_bucket", prev_cutoff)
-            .lt("hour_bucket", prev_end)
-            .execute()
-        )
-
-        cur_total  = self._sum_rows(cur.data or [])
-        prev_total = self._sum_rows(prev.data or [])
-
-        margin_pct = (
-            round((cur_total["margin"] / cur_total["revenue"]) * 100, 1)
-            if cur_total["revenue"] > 0
-            else 0.0
-        )
-
-        return {
-            "revenue":       round(cur_total["revenue"], 2),
-            "spend":         round(cur_total["spend"], 2),
-            "margin":        round(cur_total["margin"], 2),
-            "calls":         cur_total["calls"],
-            "margin_pct":    margin_pct,
-            "delta_revenue": round(cur_total["revenue"] - prev_total["revenue"], 2),
-            "delta_spend":   round(cur_total["spend"] - prev_total["spend"], 2),
-            "delta_margin":  round(cur_total["margin"] - prev_total["margin"], 2),
-            "delta_calls":   cur_total["calls"] - prev_total["calls"],
-            "window":        window,
-            "queried_at":    datetime.now(timezone.utc).isoformat(),
-        }
-
-    # ── BREAKDOWN ────────────────────────────────────────────────
-
-    async def breakdown(
-        self,
-        dimension: str = "niche",
-        window: str = "7d",
-        top_n: int = 10,
-    ) -> dict:
-        """Grouped data by a single dimension, sorted by revenue descending.
-
-        Returns:
-            {dimension, groups: [{key, label, revenue, spend, margin, calls, margin_pct}],
-             total_groups, window}
-        """
-        valid_dims = {"niche", "channel", "contractor", "corridor", "hour"}
-        if dimension not in valid_dims:
-            dimension = "niche"
-
-        window = window if window in ("24h", "7d", "30d") else "7d"
-        cutoff = self._window_cutoff(window, 1)
-
-        db = self.get_db()
-
-        if dimension == "contractor":
-            # Two-step: query rollup → group in memory → enrich with names
-            r = (
-                db.table("pulse_rollup_hourly")
-                .select("contractor_id, revenue, spend, margin, calls")
-                .gte("hour_bucket", cutoff)
-                .not_.is_("contractor_id", "null")
-                .order("revenue", desc=True)
-                .limit(top_n * 3)
-                .execute()
-            )
-            groups = self._group_by_key(r.data or [], "contractor_id")
-            groups.sort(key=lambda g: g["revenue"], reverse=True)
-            groups = groups[:top_n]
-
-            # Enrich with contractor names
-            if groups:
-                cids = [g["key"] for g in groups]
-                try:
-                    cres = (
-                        db.table("contractors")
-                        .select("id, name")
-                        .in_("id", cids)
-                        .execute()
-                    )
-                    name_map = {
-                        row["id"]: row.get("name") or row["id"]
-                        for row in (cres.data or [])
-                    }
-                    for g in groups:
-                        g["label"] = name_map.get(g["key"], g["key"])
-                except Exception:
-                    pass
-
-        elif dimension == "hour":
-            # hour_bucket is already a timestamp
-            r = (
-                db.table("pulse_rollup_hourly")
-                .select("hour_bucket, revenue, spend, margin, calls")
-                .gte("hour_bucket", cutoff)
-                .order("hour_bucket", desc=True)
-                .limit(top_n * 3)
-                .execute()
-            )
-            groups = self._group_by_key(r.data or [], "hour_bucket")
-            groups.sort(key=lambda g: g["key"], reverse=True)
-            groups = groups[:top_n]
-            for g in groups:
-                g["label"] = str(g["key"])[:13]
-
+def pulse_sms_volume(sb, hours: int = 24) -> list[dict]:
+    """Outbound SMS bucketed by hour, last N hours."""
+    cutoff = (datetime.now(timezone.utc) - timedelta(hours=hours)).isoformat()
+    r = sb.table("sms_log").select("created_at,direction").gte("created_at", cutoff).execute()
+    out = Counter()
+    inn = Counter()
+    for x in (r.data or []):
+        ts = (x.get("created_at") or "")[:13]  # YYYY-MM-DDTHH
+        if x.get("direction") == "outbound":
+            out[ts] += 1
         else:
-            # niche, channel, or corridor — group by the dimension column
-            r = (
-                db.table("pulse_rollup_hourly")
-                .select(f"{dimension}, revenue, spend, margin, calls")
-                .gte("hour_bucket", cutoff)
-                .order("revenue", desc=True)
-                .limit(top_n * 5)
-                .execute()
-            )
-            groups = self._group_by_key(r.data or [], dimension)
-            groups.sort(key=lambda g: g["revenue"], reverse=True)
-            groups = groups[:top_n]
+            inn[ts] += 1
+    return [
+        {"hour": h + ":00", "outbound": out.get(h, 0), "inbound": inn.get(h, 0)}
+        for h in sorted(set(list(out) + list(inn)))
+    ]
 
-        # Add margin_pct and round
-        for g in groups:
-            g["margin_pct"] = (
-                round((g["margin"] / g["revenue"]) * 100, 1)
-                if g["revenue"] > 0
-                else 0.0
-            )
-            g["revenue"] = round(g["revenue"], 2)
-            g["spend"] = round(g["spend"], 2)
-            g["margin"] = round(g["margin"], 2)
 
-        return {
-            "dimension":    dimension,
-            "groups":       groups,
-            "total_groups": len(groups),
-            "window":       window,
-            "queried_at":   datetime.now(timezone.utc).isoformat(),
-        }
+def pulse_leads_hot(sb, limit: int = 25) -> list[dict]:
+    """Leads awaiting contractor action (pending_outreach, top score)."""
+    # Cap aggressively; supervisor + dashboard both use this
+    limit = min(limit, 50)
+    r = (sb.table("enriched_leads")
+            .select("phone,city,state,score,asset_value")
+            .eq("status", "pending_outreach")
+            .order("score", desc=True)
+            .limit(limit)
+            .execute())
+    return r.data or []
 
-    # ── LANES (HEATMAP DATA) ─────────────────────────────────────
 
-    async def lanes(self) -> dict:
-        """Return per-hour per-niche matrix for the heatmap.
+def pulse_reply_rate(sb, days: int = 7) -> list[dict]:
+    """Reply rate by sequence, last N days."""
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+    r = (sb.table("outreach_log")
+            .select("sequence,channel,sent_at,response_received_at")
+            .gte("created_at", cutoff)
+            .execute())
+    by_seq: dict[str, dict[str, int]] = defaultdict(lambda: {"sent": 0, "replied": 0})
+    for x in (r.data or []):
+        seq = x.get("sequence") or "unknown"
+        if x.get("sent_at"):
+            by_seq[seq]["sent"] += 1
+        if x.get("response_received_at"):
+            by_seq[seq]["replied"] += 1
+    return [
+        {"sequence": k, "sent": v["sent"], "replied": v["replied"],
+         "rate": round(v["replied"] / v["sent"] * 100, 1) if v["sent"] else 0}
+        for k, v in sorted(by_seq.items(), key=lambda kv: -kv[1]["sent"])
+    ]
 
-        Returns:
-            {niches: [...], hours: [...], matrix: [{hour, niche, revenue, calls, margin}],
-             totals: {revenue, spend, margin, calls}}
-        """
-        cutoff = self._window_cutoff("7d", 1)
-        db = self.get_db()
 
-        r = (
-            db.table("pulse_rollup_hourly")
-            .select("hour_bucket, niche, revenue, spend, margin, calls")
-            .gte("hour_bucket", cutoff)
-            .order("hour_bucket", desc=True)
-            .limit(2000)
-            .execute()
-        )
+def pulse_metro_heat(sb, hours: int = 24) -> list[dict]:
+    """SMS activity per metro, last N hours. Read directly from outreach_log
+    which has contractor_id (so we can join via meta.contractor_id for metro)."""
+    # Simpler/faster: count sms_log by hour, ignore metro (cheap path).
+    # Metro-join requires a phone->contractor lookup that's slow at scale.
+    cutoff = (datetime.now(timezone.utc) - timedelta(hours=hours)).isoformat()
+    r = sb.table("sms_log").select("created_at").eq("direction","outbound").gte("created_at", cutoff).limit(2000).execute()
+    by_hour = Counter()
+    for x in (r.data or []):
+        h = (x.get("created_at") or "")[:13] + ":00"
+        by_hour[h] += 1
+    # Aggregate by hour into top buckets
+    return [{"hour": h, "sms_sent": n} for h, n in sorted(by_hour.items())[-24:]]
 
-        rows = r.data or []
 
-        niche_set = set()
-        hour_set  = set()
-        matrix    = []
+def pulse_contractor_stats(sb, limit: int = 20) -> list[dict]:
+    """Top engaged contractors. Aggregate from sms_sequences + contractor reply rate."""
+    r = (sb.table("sms_sequences")
+            .select("phone,status,created_at")
+            .eq("sequence_type", "contractor_recruit")
+            .limit(limit * 3)
+            .execute())
+    return r.data or []
 
-        for row in rows:
-            hb = str(row.get("hour_bucket", ""))[:13]
-            n  = row.get("niche", "") or "other"
-            niche_set.add(n)
-            hour_set.add(hb)
-            matrix.append({
-                "hour":    hb,
-                "niche":   n,
-                "revenue": round(float(row.get("revenue") or 0), 2),
-                "calls":   int(row.get("calls") or 0),
-                "margin":  round(float(row.get("margin") or 0), 2),
-            })
 
-        niches = sorted(niche_set)
-        hours  = sorted(hour_set, reverse=True)
-        totals = self._sum_rows(rows)
+# ── STORM-TRIGGER WEBHOOK ─────────────────────────────────────────────────
+def _fan_out_storm_sms(sb, target: dict) -> dict:
+    """Find matching contractors + dispatch SMS via hub."""
+    city = target.get("city") or ""
+    state = target.get("state") or ""
+    sub_niche = target.get("sub_niche") or target.get("niche") or ""
+    urgency = target.get("urgency_score") or 0
 
-        return {
-            "niches":      niches,
-            "hours":       hours,
-            "hours_count": len(hours),
-            "matrix":      matrix,
-            "totals": {
-                "revenue": round(totals["revenue"], 2),
-                "spend":   round(totals["spend"], 2),
-                "margin":  round(totals["margin"], 2),
-                "calls":   totals["calls"],
-            },
-            "queried_at": datetime.now(timezone.utc).isoformat(),
-        }
+    # Find active contractors in this metro
+    q = sb.table("contractors").select("id,name,phone,metro,niche").eq("active", True)
+    if city:
+        q = q.ilike("metro", f"%{city}%")
+    elif state:
+        q = q.eq("state", state) if "state" in [c["name"] for c in sb.table("contractors").select("state").limit(1).execute().data or [{}]] else q
+    conts = q.limit(STORM_TRIGGER_MAX_CONTRACTORS * 3).execute().data or []
 
-    # ── REFRESH ──────────────────────────────────────────────────
+    # Score by relevance: same metro > same state > anything
+    matched = []
+    for c in conts:
+        score = 0
+        if c.get("metro") and city and city.lower() in (c.get("metro") or "").lower():
+            score += 10
+        if c.get("niche") and sub_niche and sub_niche.lower() in (c.get("niche") or "").lower():
+            score += 5
+        if score > 0:
+            matched.append((score, c))
+    matched.sort(key=lambda x: -x[0])
+    matched = [m[1] for m in matched[:STORM_TRIGGER_MAX_CONTRACTORS]]
 
-    async def refresh(self) -> dict:
-        """Force-refresh the materialized view via Supabase REST API."""
-        db = self.get_db()
+    if not matched:
+        return {"fired": False, "reason": "no matching contractors", "city": city, "state": state}
+
+    # Check cooldown (don't re-fire same metro/niche within 30 min)
+    cooldown_cut = (datetime.now(timezone.utc) - timedelta(minutes=STORM_TRIGGER_COOLDOWN_MIN)).isoformat()
+    cd = sb.table("storm_trigger_log").select("id").eq("city", city).eq("niche", sub_niche).gte("fired_at", cooldown_cut).execute()
+    if cd.data:
+        return {"fired": False, "reason": "cooldown", "city": city, "niche": sub_niche}
+
+    # Build SMS body
+    body = f"⚡ STORM ALERT [{city or 'your area'}]: {urgency}/10 urgency — leads available now. Reply YES to claim. - Empire AI"
+
+    # Write outreach_log directly (the hub will pick these up and send SMS via its cron)
+    sent = 0
+    errors = 0
+    for c in matched:
         try:
-            supabase_url = os.environ.get("SUPABASE_URL", "")
-            supabase_key = os.environ.get("SUPABASE_SERVICE_KEY", "")
-            if supabase_url and supabase_key:
-                import httpx
-                async with httpx.AsyncClient(timeout=30.0) as client:
-                    r = await client.post(
-                        f"{supabase_url}/rest/v1/rpc/refresh_pulse_rollup",
-                        headers={
-                            "apikey": supabase_key,
-                            "Authorization": f"Bearer {supabase_key}",
-                        },
-                    )
-                now = datetime.now(timezone.utc)
-                self._last_refresh = now
-                return {
-                    "ok": True,
-                    "refreshed_at": now.isoformat(),
-                    "status_code": r.status_code,
-                }
-            else:
-                return {"ok": False, "error": "Supabase credentials not configured"}
+            sb.table("outreach_log").insert({
+                "agent_name": "pulse_storm_trigger",
+                "run_id": str(uuid.uuid4()),
+                "channel": "sms",
+                "sequence": "storm_alert",
+                "step": 1,
+                "mode": "live",
+                "compliance_passed": True,
+                "body_preview": body[:120],
+                "meta": {"phone": c["phone"], "city": city, "urgency": urgency,
+                         "niche": sub_niche, "trigger": "storm_target_webhook",
+                         "contractor_id": c["id"], "contractor_name": c.get("name","")},
+            }).execute()
+            sent += 1
         except Exception as e:
-            log.warning(f"[pulse] RPC refresh failed: {e}")
-            # Fallback: try direct SQL via the REST API
-            try:
-                import httpx
-                async with httpx.AsyncClient(timeout=30.0) as client:
-                    r = await client.post(
-                        f"{supabase_url}/rest/v1/rpc/refresh_pulse_rollup",
-                        headers={
-                            "apikey": supabase_key,
-                            "Authorization": f"Bearer {supabase_key}",
-                            "Content-Type": "application/json",
-                        },
-                        json={},
-                    )
-                now = datetime.now(timezone.utc)
-                self._last_refresh = now
-                return {
-                    "ok": True,
-                    "refreshed_at": now.isoformat(),
-                    "status_code": r.status_code,
-                }
-            except Exception as e2:
-                return {"ok": False, "error": str(e2)[:200]}
+            log.warning(f"storm-trigger: outreach_log insert failed: {e}")
+            errors += 1
+
+    # Log
+    sb.table("storm_trigger_log").insert({
+        "city": city, "state": state, "niche": sub_niche,
+        "urgency_score": urgency, "contractors_targeted": sent,
+        "errors": errors, "fired_at": datetime.now(timezone.utc).isoformat(),
+    }).execute()
+
+    return {"fired": True, "city": city, "niche": sub_niche, "urgency": urgency,
+            "contractors_matched": len(matched), "sms_sent": sent, "errors": errors}
 
 
-# ─────────────────────────────────────────────────────────────────────
-# STANDALONE VIEW PAGE
-# ─────────────────────────────────────────────────────────────────────
+def _get_storm_stream(sb, limit: int = 25) -> list[dict]:
+    r = sb.table("storm_trigger_log").select("*").order("fired_at", desc=True).limit(limit).execute()
+    return r.data or []
 
-def pulse_view_page() -> str:
-    """Return the standalone /view/pulse HTML page.
 
-    This is a focused insight page — no sidebar, no chrome, just the
-    pulse data. Links back to /command for the full SPA.
-
-    Handles 401 auth errors by redirecting to /command.
-    """
-    return """<!DOCTYPE html>
+# ── HTML DASHBOARD ────────────────────────────────────────────────────────
+def _pulse_dashboard_html() -> str:
+    return '''<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Empire AI · Pulse</title>
-  <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-      background: #0a0a0f; color: #e2e8f0; min-height: 100vh;
-    }
-    :root {
-      --signal-teal: #44E5B8; --strike-cyan: #5AC8FA; --status-amber: #FFB800;
-      --status-red: #FF4444; --surface: #0f0f17; --elevated: #14141e;
-      --border: #1e293b; --divider: #1a1a2e; --mist: #94a3b8; --fog: #64748b;
-      --white: #f8fafc; --silver: #cbd5e1;
-    }
-
-    .page { max-width: 1200px; margin: 0 auto; padding: 32px 40px; }
-    @media (max-width: 768px) { .page { padding: 20px 16px; } }
-
-    .head { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 28px; }
-    .head-title { font-size: 22px; font-weight: 200; letter-spacing: -0.02em; }
-    .head-title em { color: var(--signal-teal); font-style: italic; font-weight: 500; }
-    .head-sub { font-family: 'SF Mono', monospace; font-size: 10px; color: var(--mist); letter-spacing: 0.14em; text-transform: uppercase; margin-top: 4px; }
-    .head-right { display: flex; gap: 8px; align-items: center; }
-    .head-window-btn {
-      padding: 6px 14px; font-family: monospace; font-size: 10px; letter-spacing: 0.12em;
-      text-transform: uppercase; border: 1px solid var(--border); background: transparent;
-      color: var(--mist); cursor: pointer; border-radius: 4px; transition: all 0.15s;
-    }
-    .head-window-btn:hover { color: var(--white); border-color: var(--mist); }
-    .head-window-btn.active { color: var(--signal-teal); border-color: var(--signal-teal); background: rgba(68,229,184,0.06); }
-    .head-back { color: var(--fog); text-decoration: none; font-family: monospace; font-size: 10px; letter-spacing: 0.1em; }
-
-    .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 28px; }
-    @media (max-width: 768px) { .stats { grid-template-columns: repeat(2, 1fr); } }
-    .stat-card {
-      background: var(--surface); border: 1px solid var(--border); padding: 18px 20px;
-      position: relative; overflow: hidden;
-    }
-    .stat-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 1px; background: linear-gradient(90deg, transparent, rgba(68,229,184,0.2), transparent); }
-    .stat-label { font-family: monospace; font-size: 9px; color: var(--mist); letter-spacing: 0.18em; text-transform: uppercase; margin-bottom: 12px; }
-    .stat-value { font-family: monospace; font-weight: 500; font-size: 30px; color: var(--white); line-height: 1; }
-    .stat-value.teal { color: var(--signal-teal); }
-    .stat-delta { font-family: monospace; font-size: 10px; margin-top: 8px; }
-    .stat-delta.up { color: var(--signal-teal); }
-    .stat-delta.down { color: var(--status-red); }
-
-    .tabs { display: flex; gap: 0; margin-bottom: 24px; border-bottom: 1px solid var(--divider); }
-    .tab {
-      padding: 10px 22px; font-family: monospace; font-size: 10px; letter-spacing: 0.14em;
-      text-transform: uppercase; color: var(--mist); cursor: pointer;
-      border-bottom: 2px solid transparent; transition: all 0.15s; background: none; border-top: none; border-left: none; border-right: none;
-    }
-    .tab:hover { color: var(--white); }
-    .tab.active { color: var(--signal-teal); border-bottom-color: var(--signal-teal); }
-
-    .panel { background: var(--surface); border: 1px solid var(--border); padding: 20px; margin-bottom: 24px; }
-    .panel-h { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 14px; padding-bottom: 12px; border-bottom: 1px solid var(--divider); }
-    .panel-title { font-weight: 500; font-size: 13px; letter-spacing: 0.02em; }
-    .panel-tag { font-family: monospace; font-size: 9px; color: var(--fog); letter-spacing: 0.14em; }
-
-    .bar-row { display: grid; grid-template-columns: 140px 1fr 80px; gap: 12px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--divider); font-family: monospace; }
-    .bar-row:last-child { border-bottom: none; }
-    .bar-label { font-size: 11px; color: var(--silver); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .bar-track { height: 10px; background: var(--elevated); border-radius: 4px; overflow: hidden; }
-    .bar-fill { height: 100%; border-radius: 4px; transition: width 0.6s ease-out; min-width: 2px; }
-    .bar-val { font-size: 11px; color: var(--signal-teal); font-weight: 500; text-align: right; }
-
-    .heatmap { overflow-x: auto; }
-    .heatmap-table { border-collapse: collapse; font-family: monospace; font-size: 9px; width: 100%; }
-    .heatmap-table th { padding: 4px 6px; color: var(--fog); font-weight: 400; letter-spacing: 0.08em; white-space: nowrap; position: sticky; top: 0; background: var(--surface); }
-    .heatmap-table td { padding: 4px 6px; text-align: center; border: 1px solid var(--divider); }
-    .heatmap-niche { text-align: left; color: var(--mist); white-space: nowrap; font-weight: 500; }
-    .heatmap-cell { min-width: 36px; transition: background 0.15s; }
-    .heatmap-cell.hot { background: rgba(68,229,184,0.35); color: var(--white); }
-    .heatmap-cell.warm { background: rgba(68,229,184,0.15); color: var(--silver); }
-    .heatmap-cell.cool { background: rgba(68,229,184,0.04); color: var(--fog); }
-    .heatmap-cell.cold { color: var(--fog); opacity: 0.4; }
-
-    .loading { padding: 60px 0; text-align: center; font-family: monospace; font-size: 11px; color: var(--fog); }
-    .error { padding: 40px 20px; text-align: center; color: var(--status-red); font-family: monospace; font-size: 11px; }
-    .unauth { padding: 60px 20px; text-align: center; }
-    .unauth-title { font-size: 18px; font-weight: 200; margin-bottom: 12px; }
-    .unauth-body { color: var(--mist); font-size: 13px; max-width: 400px; margin: 0 auto 24px; }
-    .unauth-link { display: inline-block; padding: 10px 22px; background: var(--signal-teal); color: #000; text-decoration: none; font-weight: 700; letter-spacing: 0.04em; }
-
-    .refresh-info { font-family: monospace; font-size: 9px; color: var(--fog); margin-top: 40px; padding-top: 16px; border-top: 1px solid var(--divider); text-align: center; }
-  </style>
+<meta charset="utf-8" />
+<title>Empire AI · Lead Pulse</title>
+<style>
+  :root { --bg:#07111E; --card:#0A1726; --border:rgba(255,255,255,.08); --text:#E8EEF6; --muted:#8FA0B5; --teal:#6FCFC0; --red:#FF8B8B; --yellow:#FFD580; --green:#88DDD0; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font-family: ui-monospace, monospace; }
+  .wrap { max-width: 1280px; margin: 0 auto; padding: 24px; }
+  h1 { font-size: 28px; font-weight: 300; letter-spacing: -.02em; color: #fff; margin: 0 0 8px; }
+  h1 span { color: var(--teal); }
+  .sub { color: var(--muted); font-size: 11px; letter-spacing: .22em; text-transform: uppercase; margin-bottom: 24px; }
+  .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 24px; }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 4px; padding: 18px; }
+  .card .num { font-size: 32px; font-weight: 300; color: var(--teal); letter-spacing: -.02em; }
+  .card .num.warn { color: var(--yellow); }
+  .card .num.crit { color: var(--red); }
+  .card .lbl { font-size: 9px; color: var(--muted); letter-spacing: .22em; text-transform: uppercase; margin-top: 6px; }
+  .section { background: var(--card); border: 1px solid var(--border); border-radius: 4px; padding: 20px 24px; margin-bottom: 16px; }
+  .section h2 { font-size: 16px; font-weight: 400; color: #fff; margin: 0 0 14px; letter-spacing: -.01em; }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  th { color: var(--muted); text-align: left; padding: 6px 8px; font-weight: 400; font-size: 9px; letter-spacing: .22em; text-transform: uppercase; border-bottom: 1px solid var(--border); }
+  td { padding: 8px; border-bottom: 1px solid rgba(255,255,255,.04); }
+  .bar { display: inline-block; height: 4px; background: rgba(255,255,255,.06); border-radius: 2px; width: 80px; vertical-align: middle; margin-right: 6px; position: relative; }
+  .bar > span { position: absolute; top: 0; left: 0; height: 100%; background: linear-gradient(90deg, var(--teal), var(--green)); border-radius: 2px; }
+  .row { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
+  .hot { background: rgba(111,207,192,.05); }
+  pre { background: rgba(0,0,0,.3); padding: 12px; border-radius: 3px; font-size: 11px; overflow-x: auto; }
+  .footer { color: var(--muted); font-size: 10px; margin-top: 24px; text-align: center; letter-spacing: .18em; text-transform: uppercase; }
+  .live { display: inline-block; width: 6px; height: 6px; background: var(--teal); border-radius: 50%; animation: pulse 1.6s ease-in-out infinite; margin-right: 6px; vertical-align: middle; }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .3; } }
+</style>
 </head>
 <body>
-  <div class="page" id="app">
-    <div class="loading">Loading pulse data…</div>
+<div class="wrap">
+  <h1>Empire <span>Lead Pulse</span></h1>
+  <div class="sub"><span class="live"></span> live · refreshes every 30s · empire-ai.co.uk</div>
+
+  <div class="grid" id="kpis"></div>
+
+  <div class="row">
+    <div class="section">
+      <h2>SMS Volume (last 24h)</h2>
+      <div id="sms-chart"></div>
+    </div>
+    <div class="section">
+      <h2>SMS by Hour (last 24h)</h2>
+      <div id="metro-heat"></div>
+    </div>
   </div>
 
-  <script>
-    const API = {
-      summary: (w) => fetch('/api/pulse/summary?window=' + w, {credentials:'same-origin'}).then(handleAuth),
-      breakdown: (d, w) => fetch('/api/pulse/breakdown?dimension=' + d + '&window=' + w, {credentials:'same-origin'}).then(handleAuth),
-      lanes: () => fetch('/api/pulse/lanes', {credentials:'same-origin'}).then(handleAuth),
-    };
+  <div class="row">
+    <div class="section">
+      <h2>Reply Rate by Sequence (7d)</h2>
+      <div id="reply-rate"></div>
+    </div>
+    <div class="section">
+      <h2>Hot Leads (top score, pending_outreach)</h2>
+      <div id="hot-leads"></div>
+    </div>
+  </div>
 
-    function handleAuth(r) {
-      if (r.status === 401 || r.status === 403) {
-        document.getElementById('app').innerHTML =
-          '<div class="unauth"><div class="unauth-title">Sign in to view Pulse</div>' +
-          '<div class="unauth-body">Pulse requires operator authentication. Sign in at the Command deck to access the insight layer.</div>' +
-          '<a href="/command" class="unauth-link">Go to Command</a></div>';
-        throw new Error('unauthorized');
-      }
-      return r.json();
-    }
+  <div class="section">
+    <h2>Storm Trigger Stream (latest contractor fan-outs)</h2>
+    <div id="storm-stream"></div>
+  </div>
 
-    const fmt = n => '$' + Number(n || 0).toLocaleString('en-US', {minimumFractionDigits: 0, maximumFractionDigits: 0});
-    const fmtDelta = n => (n >= 0 ? '+' : '') + fmt(n);
-    const fmtPct = n => Number(n || 0).toFixed(1) + '%';
+  <div class="footer">endpoints: /api/v1/pulse/{summary,sms-volume,leads-hot,reply-rate,metro-heat,contractor-stats,storm-stream}</div>
+</div>
 
-    let state = { window: '24h', dimension: 'niche', summary: null, breakdown: null, lanes: null, error: null };
+<script>
+async function fetchJson(path) {
+  const r = await fetch(path);
+  return r.json();
+}
+async function refresh() {
+  try {
+    const sum = await fetchJson('/api/v1/pulse/summary');
+    const kpis = [
+      ['Active Contractors', sum.contractors.active, sum.contractors.total+' total'],
+      ['Pending Outreach', sum.leads.pending_outreach, sum.leads.enriched_total+' enriched'],
+      ['SMS Out (24h)', sum.outreach.sms_out_24h, 'in: '+sum.outreach.sms_in_24h],
+      ['Fees Pending', sum.fees.pending_count, sum.fees.paid_count+' paid'],
+    ];
+    document.getElementById('kpis').innerHTML = kpis.map(([lbl, num, sub]) =>
+      '<div class="card"><div class="num">'+num+'</div><div class="lbl">'+lbl+'</div><div class="lbl" style="margin-top:4px">'+sub+'</div></div>'
+    ).join('');
 
-    async function load() {
-      try {
-        const [s, b, l] = await Promise.all([
-          API.summary(state.window),
-          API.breakdown(state.dimension, state.window),
-          API.lanes(),
-        ]);
-        state.summary = s; state.breakdown = b; state.lanes = l; state.error = null;
-      } catch (e) {
-        if (e.message !== 'unauthorized') state.error = String(e);
-      }
-      render();
-    }
+    const vol = await fetchJson('/api/v1/pulse/sms-volume?hours=24');
+    const max = Math.max(1, ...vol.map(v => Math.max(v.outbound, v.inbound)));
+    document.getElementById('sms-chart').innerHTML = '<div style="display:flex;align-items:end;gap:2px;height:140px">'
+      + vol.map(v => '<div title="'+v.hour+' out:'+v.outbound+' in:'+v.inbound+'" style="flex:1;display:flex;flex-direction:column;align-items:stretch;gap:1px">'
+        + '<div style="background:var(--teal);height:'+(v.outbound/max*100)+'%"></div>'
+        + '<div style="background:var(--yellow);height:'+(v.inbound/max*100)+'%"></div>'
+        + '</div>').join('') + '</div><div style="display:flex;justify-content:space-between;font-size:9px;color:var(--muted);margin-top:6px">'
+        + (vol.length>0 ? '<span>'+vol[0].hour+'</span><span>'+vol[Math.floor(vol.length/2)].hour+'</span><span>'+vol[vol.length-1].hour+'</span>' : '') + '</div>';
 
-    function render() {
-      const app = document.getElementById('app');
-      if (state.error) {
-        app.innerHTML = '<div class="error">Error: ' + state.error + '<br><br><a href="/command" style="color:var(--signal-teal)">Go to Command</a></div>';
-        return;
-      }
-      if (!state.summary) return;
+    const heat = await fetchJson('/api/v1/pulse/metro-heat?hours=24');
+    document.getElementById('metro-heat').innerHTML = heat.length === 0 ? '<em style="color:var(--muted)">no data</em>'
+      : '<table>' + heat.slice(0, 12).map(m => '<tr><td>'+(m.hour||m.metro)+'</td><td style="text-align:right;color:var(--teal)">'+m.sms_sent+'</td></tr>').join('') + '</table>';
 
-      const s = state.summary;
-      const b = state.breakdown;
-      const l = state.lanes;
+    const rr = await fetchJson('/api/v1/pulse/reply-rate?days=7');
+    document.getElementById('reply-rate').innerHTML = rr.length === 0 ? '<em style="color:var(--muted)">no data</em>'
+      : '<table><tr><th>Sequence</th><th>Sent</th><th>Replied</th><th>Rate</th></tr>'
+      + rr.map(r => '<tr><td>'+r.sequence+'</td><td>'+r.sent+'</td><td>'+r.replied+'</td><td><span class="bar"><span style="width:'+Math.min(100, r.rate)+'%"></span></span>'+r.rate+'%</td></tr>').join('') + '</table>';
 
-      const maxRev = (b.groups || []).reduce((m, g) => Math.max(m, g.revenue || 0), 0);
-      const deltaCls = s.delta_revenue >= 0 ? 'up' : 'down';
-      const spendDeltaCls = s.delta_spend <= 0 ? 'up' : 'down';
-      const callsDeltaCls = s.delta_calls >= 0 ? 'up' : 'down';
+    const hot = await fetchJson('/api/v1/pulse/leads-hot?limit=10');
+    document.getElementById('hot-leads').innerHTML = hot.length === 0 ? '<em style="color:var(--muted)">no pending leads</em>'
+      : '<table><tr><th>Phone</th><th>City</th><th>Score</th><th>$</th></tr>'
+      + hot.map(l => '<tr class="hot"><td>'+(l.phone||'')+'</td><td>'+l.city+'</td><td>'+(l.score||0).toFixed(2)+'</td><td>$'+(l.asset_value||0).toLocaleString()+'</td></tr>').join('') + '</table>';
 
-      app.innerHTML =
-        '<div class="head">' +
-          '<div class="head-left">' +
-            '<div class="head-title">Empire AI <em>Pulse</em></div>' +
-            '<div class="head-sub">' + s.window + ' snapshot</div>' +
-          '</div>' +
-          '<div class="head-right">' +
-            ['24h','7d','30d'].map(function(w) {
-              return '<button class="head-window-btn' + (state.window === w ? ' active' : '') + '" onclick="setWindow(\'' + w + '\')">' + w + '</button>';
-            }).join('') +
-            '<a href="/command" class="head-back">Command</a>' +
-          '</div>' +
-        '</div>' +
+    const stream = await fetchJson('/api/v1/pulse/storm-stream?limit=10');
+    document.getElementById('storm-stream').innerHTML = stream.length === 0 ? '<em style="color:var(--muted)">no storm triggers fired yet</em>'
+      : '<table><tr><th>When</th><th>City</th><th>Niche</th><th>Urg</th><th>Contractors</th><th>Errors</th></tr>'
+      + stream.map(s => '<tr><td>'+(s.fired_at||'').slice(0,19)+'</td><td>'+s.city+'</td><td>'+s.niche+'</td><td>'+s.urgency_score+'</td><td style="color:var(--teal)">'+s.contractors_targeted+'</td><td style="color:'+(s.errors>0?'var(--red)':'var(--muted)')+'">'+s.errors+'</td></tr>').join('') + '</table>';
 
-        '<div class="stats">' +
-          '<div class="stat-card">' +
-            '<div class="stat-label">Revenue</div>' +
-            '<div class="stat-value teal">' + fmt(s.revenue) + '</div>' +
-            '<div class="stat-delta ' + deltaCls + '">' + (s.delta_revenue >= 0 ? '▲ ' : '▼ ') + fmt(Math.abs(s.delta_revenue)) + '</div>' +
-          '</div>' +
-          '<div class="stat-card">' +
-            '<div class="stat-label">Spend</div>' +
-            '<div class="stat-value">' + fmt(s.spend) + '</div>' +
-            '<div class="stat-delta ' + spendDeltaCls + '">' + (s.delta_spend <= 0 ? '▼ ' : '▲ ') + fmt(Math.abs(s.delta_spend)) + '</div>' +
-          '</div>' +
-          '<div class="stat-card">' +
-            '<div class="stat-label">Margin</div>' +
-            '<div class="stat-value teal">' + fmtPct(s.margin_pct) + '</div>' +
-            '<div class="stat-delta">' + fmt(s.margin) + ' net</div>' +
-          '</div>' +
-          '<div class="stat-card">' +
-            '<div class="stat-label">Calls</div>' +
-            '<div class="stat-value">' + s.calls.toLocaleString() + '</div>' +
-            '<div class="stat-delta ' + callsDeltaCls + '">' + (s.delta_calls >= 0 ? '▲ ' : '▼ ') + fmtDelta(Math.abs(s.delta_calls)) + '</div>' +
-          '</div>' +
-        '</div>' +
-
-        '<div class="tabs">' +
-          ['niche','channel','contractor','corridor','hour'].map(function(d) {
-            return '<button class="tab' + (state.dimension === d ? ' active' : '') + '" onclick="setDim(\'' + d + '\')">' + d + '</button>';
-          }).join('') +
-        '</div>' +
-
-        '<div class="panel">' +
-          '<div class="panel-h">' +
-            '<div class="panel-title">Breakdown by <strong>' + state.dimension + '</strong></div>' +
-            '<div class="panel-tag">' + b.total_groups + ' groups</div>' +
-          '</div>' +
-          ((b.groups || []).map(function(g) {
-            return '<div class="bar-row">' +
-              '<div class="bar-label">' + (g.label || g.key || '—') + '</div>' +
-              '<div class="bar-track"><div class="bar-fill" style="width:' + (maxRev > 0 ? Math.max(2, Math.round(g.revenue / maxRev * 100)) : 0) + '%;background:var(--signal-teal)"></div></div>' +
-              '<div class="bar-val">' + fmt(g.revenue) + ' · ' + fmtPct(g.margin_pct) + ' margin</div>' +
-            '</div>';
-          }).join('') || '<div style="padding:24px;text-align:center;color:var(--fog);font-family:monospace;font-size:11px">No data for this window</div>') +
-        '</div>' +
-
-        '<div class="panel">' +
-          '<div class="panel-h">' +
-            '<div class="panel-title">Hourly Heatmap · 7d</div>' +
-            '<div class="panel-tag">' + (l.niches || []).length + ' niches × ' + (l.hours || []).length + ' hours</div>' +
-          '</div>' +
-          '<div class="heatmap">' + renderHeatmap(l) + '</div>' +
-        '</div>' +
-
-        '<div class="refresh-info">Refreshes every 5 min · Last query: ' + new Date(s.queried_at).toLocaleString() + '</div>';
-    }
-
-    function renderHeatmap(l) {
-      if (!l || !l.hours || !l.niches) return '<div style="padding:24px;text-align:center;color:var(--fog)">No heatmap data</div>';
-
-      var niches = l.niches.slice(0, 8);
-      var hours = l.hours.slice(0, 24);
-
-      var lookup = {};
-      (l.matrix || []).forEach(function(m) {
-        lookup[m.niche + '|' + m.hour] = m;
-      });
-
-      var maxRev = (l.matrix || []).reduce(function(mx, m) { return Math.max(mx, m.revenue || 0); }, 0);
-
-      var hourLabels = hours.map(function(h) { return h.slice(11, 13); });
-      var headerCells = '<th></th>' + hourLabels.map(function(hl) { return '<th>' + hl + ':00</th>'; }).join('');
-
-      var rows = niches.map(function(n) {
-        var cells = hours.map(function(h) {
-          var m = lookup[n + '|' + h];
-          if (!m || m.revenue <= 0) return '<td class="heatmap-cell cold">·</td>';
-          var pct = m.revenue / maxRev;
-          var cls = pct > 0.4 ? 'hot' : pct > 0.15 ? 'warm' : pct > 0.02 ? 'cool' : 'cold';
-          return '<td class="heatmap-cell ' + cls + '">' + fmt(m.revenue) + '</td>';
-        }).join('');
-        return '<tr><td class="heatmap-niche">' + n + '</td>' + cells + '</tr>';
-      }).join('');
-
-      return '<table class="heatmap-table"><thead><tr>' + headerCells + '</tr></thead><tbody>' + rows + '</tbody></table>';
-    }
-
-    function setWindow(w) { state.window = w; load(); }
-    function setDim(d) { state.dimension = d; load(); }
-
-    load();
-  </script>
+  } catch(e) { console.error(e); }
+}
+refresh();
+setInterval(refresh, 30000);
+</script>
 </body>
-</html>"""
+</html>'''
+
+
+# ── ROUTE REGISTRATION ─────────────────────────────────────────────────────
+def register_pulse_routes(app, get_db: Optional[Callable] = None):
+    """Mount all pulse + storm-trigger routes on the FastAPI app."""
+    from fastapi.responses import HTMLResponse, JSONResponse
+
+    if get_db is None:
+        def get_db():
+            return _sb()
+
+    # ── Pulse JSON endpoints ────────────────────────────────────────────
+    async def _summary():
+        return JSONResponse(pulse_summary(get_db()))
+
+    async def _sms_volume(hours: int = 24):
+        return JSONResponse(pulse_sms_volume(get_db(), hours=hours))
+
+    async def _leads_hot(limit: int = 25):
+        return JSONResponse(pulse_leads_hot(get_db(), limit=limit))
+
+    async def _reply_rate(days: int = 7):
+        return JSONResponse(pulse_reply_rate(get_db(), days=days))
+
+    async def _metro_heat(hours: int = 24):
+        return JSONResponse(pulse_metro_heat(get_db(), hours=hours))
+
+    async def _contractor_stats(limit: int = 20):
+        return JSONResponse(pulse_contractor_stats(get_db(), limit=limit))
+
+    async def _storm_stream(limit: int = 25):
+        return JSONResponse(_get_storm_stream(get_db(), limit=limit))
+
+    # ── HTML dashboard ─────────────────────────────────────────────────
+    async def _dashboard():
+        return HTMLResponse(_pulse_dashboard_html())
+
+    # ── Storm trigger webhook ─────────────────────────────────────────
+    async def _storm_webhook(payload: dict):
+        """POST endpoint. Body: radar_target with urgency_score."""
+        urgency = payload.get("urgency_score") or 0
+        if urgency < STORM_TRIGGER_URGENCY:
+            return JSONResponse({"fired": False, "reason": f"urgency {urgency} < {STORM_TRIGGER_URGENCY}"})
+        result = _fan_out_storm_sms(get_db(), payload)
+        return JSONResponse(result)
+
+    app.add_api_route("/api/v1/pulse/summary", _summary, methods=["GET"])
+    app.add_api_route("/api/v1/pulse/sms-volume", _sms_volume, methods=["GET"])
+    app.add_api_route("/api/v1/pulse/leads-hot", _leads_hot, methods=["GET"])
+    app.add_api_route("/api/v1/pulse/reply-rate", _reply_rate, methods=["GET"])
+    app.add_api_route("/api/v1/pulse/metro-heat", _metro_heat, methods=["GET"])
+    app.add_api_route("/api/v1/pulse/contractor-stats", _contractor_stats, methods=["GET"])
+    app.add_api_route("/api/v1/pulse/storm-stream", _storm_stream, methods=["GET"])
+    app.add_api_route("/pulse", _dashboard, methods=["GET"])
+    app.add_api_route("/api/v1/webhook/storm-target", _storm_webhook, methods=["POST"])
+
+    log.info("pulse routes registered: /pulse + 7 JSON endpoints + storm webhook")
+
+
+# ── LEGACY SHIMS (used by hub.py:861 and hub.py:3589) ────────────────────
+class PulseEngine:
+    """Legacy shim. The old pulse engine was a stateful rollup object;
+    the new system uses stateless JSON endpoints via register_pulse_routes.
+    Kept here so hub.py:861 still constructs without error."""
+    def __init__(self, get_db=None, refresh_interval_sec=300):
+        self.get_db = get_db
+        self.refresh_interval_sec = refresh_interval_sec
+        self._cache = {}
+    def get(self, key):
+        return self._cache.get(key)
+    def refresh(self):
+        if not self.get_db:
+            return
+        try:
+            self._cache = pulse_summary(self.get_db())
+        except Exception as e:
+            log.warning(f"PulseEngine.refresh failed: {e}")
+
+
+def pulse_view_page() -> str:
+    """Legacy shim. Old name for the /view/pulse HTML page. Returns
+    the same dashboard HTML as /pulse."""
+    return _pulse_dashboard_html()

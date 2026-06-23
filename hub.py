@@ -72,6 +72,11 @@ from empire_crypto_payments import CryptoPaymentEngine, register_crypto_payment_
 from empire_moonpay_checkout import register_moonpay_checkout_routes
 from empire_fee import register_fee_routes
 from empire_payment_page import register_payment_routes
+try:
+    from empire_pulse import register_pulse_routes as _register_pulse
+    register_pulse_routes = _register_pulse
+except Exception:
+    register_pulse_routes = None
 from empire_mrr import register_mrr_routes
 from empire_for_contractors import render_for_contractors_page
 from empire_resend_webhook import register_resend_webhook
@@ -1239,6 +1244,12 @@ register_payout_routes(app, engine=payout_engine, require_auth=require_auth, req
 register_bounty_payout_routes(app, require_auth=require_auth, payout_engine=payout_engine)
 register_fee_routes(app, require_auth=require_auth, get_db=get_db)
 register_payment_routes(app, get_db=get_db)
+try:
+    if register_pulse_routes:
+        register_pulse_routes(app, get_db=get_db)
+        log.info("[hub] pulse routes registered")
+except Exception as _e:
+    log.warning(f"[hub] pulse routes register failed: {_e}")
 try:
     register_mrr_routes(app, require_auth=None, get_db=get_db)
 except Exception as _e:
