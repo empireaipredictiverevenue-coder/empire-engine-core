@@ -83,3 +83,10 @@ deploy/*/pg_data/
 deploy/*/data/
 deploy/*/superset_data/
 deploy/*/assets/
+
+# Generated video output
+youtube_shorts_output/
+
+# Screenshot artifacts
+screenshots/
+tmp_revenue_ledger.png
