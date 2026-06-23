@@ -35,7 +35,7 @@ DB_PATH = BASE_DIR / "data" / "storm_alerts.sqlite"
 DEEPGRAM_API_KEY = os.environ.get("DEEPGRAM_API_KEY", "")
 DEEPGRAM_MODEL = os.environ.get("DEEPGRAM_MODEL", "nova-3")  # or "flux" for real-time
 ZERNIO_API_KEY = os.environ.get("ZERNIO_API_KEY", "")
-ZERNIO_BASE_URL = os.environ.get("ZERNIO_BASE_URL", "https://api.zernio.com")
+ZERNIO_BASE_URL = os.environ.get("ZERNIO_BASE_URL", "https://zernio.com/api/v1")
 
 
 class OmniBridge:
@@ -135,46 +135,54 @@ class OmniBridge:
 
     # ── STEP 3: Zernio multi-platform post (async via httpx) ────────────
 
-    async def post_to_zernio(self, message_text: str, platforms: list[str]) -> bool:
-        """Push a structured payload to Zernio's social/messaging API for
-        distribution across the specified platforms. Uses httpx.AsyncClient
-        so it doesn't block the async event loop."""
+    async def post_to_zernio(self, message_text: str) -> dict:
+        """Push content to Zernio as a draft post. Returns dict with
+        success status and actual channels hit.
+
+        Note: Zernio requires social accounts to be connected via OAuth
+        before posts can be distributed to platforms. Without connected
+        accounts, the post is created as a draft in the Zernio dashboard.
+        Platform names as strings are NOT accepted — connected account IDs
+        are required for channel delivery.
+        """
+        result = {"posted": False, "channels_hit": 0}
+
         if not ZERNIO_API_KEY:
-            log.info(f"[omni] Zernio API key not set — simulated post to {platforms}")
-            self.stats["posted"] += 1
-            return True
+            log.info("[omni] Zernio API key not set — post skipped")
+            self.stats["errors"] += 1
+            return result
 
         import httpx
         headers = {
             "Authorization": f"Bearer {ZERNIO_API_KEY}",
             "Content-Type": "application/json",
         }
-        payload = {
-            "text": message_text,
-            "platforms": platforms,
-            "auto_plug": True,
-        }
+        # Only `content` is required — platforms/accountIds can't be
+        # strings; they need connected account IDs from OAuth flow.
+        payload = {"content": message_text}
 
         try:
             async with httpx.AsyncClient(timeout=15.0) as client:
                 resp = await client.post(
-                    f"{ZERNIO_BASE_URL}/v1/posts",
+                    f"{ZERNIO_BASE_URL}/posts",
                     json=payload,
                     headers=headers,
                 )
                 if resp.status_code < 300:
                     self.stats["posted"] += 1
-                    log.info(f"[omni] Zernio posted to {len(platforms)} channels: {platforms}")
-                    return True
+                    log.info("[omni] Zernio post created as draft (no connected accounts for channel delivery)")
+                    result["posted"] = True
+                    result["channels_hit"] = 0  # draft only — no real channels
+                    return result
                 else:
                     body = resp.text[:200]
                     log.warning(f"[omni] Zernio error {resp.status_code}: {body}")
                     self.stats["errors"] += 1
-                    return False
+                    return result
         except Exception as e:
             log.warning(f"[omni] Zernio POST failed: {e}")
             self.stats["errors"] += 1
-            return False
+            return result
 
     # ── PIPELINE: end-to-end ──────────────────────────────────────────
 
@@ -209,10 +217,12 @@ class OmniBridge:
         )
 
         # 5. Post to Zernio (async — doesn't block event loop)
-        posted = await self.post_to_zernio(social_blast_text, platforms)
+        zernio_result = await self.post_to_zernio(social_blast_text)
+        posted = zernio_result.get("posted", False)
+        channels_hit = zernio_result.get("channels_hit", 0)
 
         # 6. Log to usage ledger
-        self._log_ledger(account_id, audio_url, len(platforms) if posted else 0)
+        self._log_ledger(account_id, audio_url, channels_hit)
 
         # 7. Meter via suite
         if self.log_usage:
@@ -235,7 +245,7 @@ class OmniBridge:
             "account_id": account_id,
             "deepgram_match": bool(transcript),
             "transcript_length": len(transcript),
-            "zernio_channels_hit": len(platforms) if posted else 0,
+            "zernio_channels_hit": channels_hit,
             "extracted_identity": detected_brand,
             "tier": entitlement.get("tier", "unknown"),
         }
