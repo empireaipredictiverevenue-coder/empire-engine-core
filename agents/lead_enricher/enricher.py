@@ -209,14 +209,14 @@ def _fetch_storm_risk(sb) -> dict[str, int]:
 
 # ── FEATURE ENGINEERING ─────────────────────────────────────────────────
 
-def _engineer_features(row: dict, storm_risk_map: dict[str, int] | None = None) -> Tuple[List[float], Dict]:
+def _engineer_features(row: dict, storm_risk_map: dict[str, int] | None = None, rt_asset_map: dict | None = None) -> Tuple[List[float], Dict]:
     """
     Engineer features from a lead row. Returns (feature_vector, trace).
 
     Feature vector (5 dimensions):
       [0] urgency_score: logistic decay 0->1 based on age
       [1] completeness_ratio: 0.0-1.0 fraction of required fields
-      [2] asset_value_score: 0.0, 0.33, 0.66, or 1.0
+      [2] asset_value_score: 0.0-1.0 (radar_targets.asset_value tiered, fallback to keyword)
       [3] contact_ready: 0.0 or 1.0
       [4] storm_risk: 0.0-1.0 based on active NWS alerts in lead's metro
     """
@@ -234,24 +234,44 @@ def _engineer_features(row: dict, storm_risk_map: dict[str, int] | None = None) 
     completeness = have / len(_REQUIRED_FIELDS)
     trace["completeness"] = {"have": have, "of": len(_REQUIRED_FIELDS), "ratio": completeness}
 
-    # Feature 2: Asset value (keyword match)
-    wh = (row.get("warehouse_name") or "").lower()
+    # Feature 2: Asset value — primary signal is radar_targets.asset_value (numeric $).
+    # Tier the $ amount into 0.0-1.0:
+    #   >=$5M = 1.0  |  >=$1M = 0.85  |  >=$250k = 0.7  |  >=$50k = 0.55  |  else 0.35
+    # Fallback to keyword match on warehouse_name for rows without radar link.
+    rt_id = row.get("radar_target_id")
+    rt_av = (rt_asset_map or {}).get(rt_id) if rt_id else None
     asset_score = 0.0
-    matched = None
-    for kw in _HIGH_VALUE_KEYWORDS:
-        if kw in wh:
+    asset_source = None
+    if rt_av and rt_av > 0:
+        if rt_av >= 5_000_000:
             asset_score = 1.0
-            matched = kw
-            break
-    if asset_score == 0.0:
-        for kw in _MEDIUM_VALUE_KEYWORDS:
+        elif rt_av >= 1_000_000:
+            asset_score = 0.85
+        elif rt_av >= 250_000:
+            asset_score = 0.7
+        elif rt_av >= 50_000:
+            asset_score = 0.55
+        else:
+            asset_score = 0.35
+        asset_source = f"radar:${rt_av:,.0f}"
+    else:
+        wh = (row.get("warehouse_name") or "").lower()
+        matched = None
+        for kw in _HIGH_VALUE_KEYWORDS:
             if kw in wh:
-                asset_score = 0.66
+                asset_score = 1.0
                 matched = kw
                 break
-    if asset_score == 0.0 and wh:
-        asset_score = 0.33  # has a name but no high-value match
-    trace["asset_value"] = {"matched": matched, "score": asset_score}
+        if asset_score == 0.0:
+            for kw in _MEDIUM_VALUE_KEYWORDS:
+                if kw in wh:
+                    asset_score = 0.66
+                    matched = kw
+                    break
+        if asset_score == 0.0 and wh:
+            asset_score = 0.33
+        asset_source = f"kw:{matched}" if matched else "kw:none"
+    trace["asset_value"] = {"source": asset_source, "score": asset_score}
 
     # Feature 3: Contact readiness
     contact = 1.0 if (row.get("phone") or row.get("email")) else 0.0
@@ -434,6 +454,25 @@ def run() -> dict:
     if storm_risk_map:
         log.info(f"[enricher] loaded storm risk for {len(storm_risk_map)} metros")
 
+    # 2b) Bulk-fetch asset_value from radar_targets for any rows that have radar_target_id.
+    # This is the primary signal for feature [2] (asset_value_score). Keyword fallback
+    # still applies for rows without radar link.
+    rt_asset_map = {}
+    rt_ids = sorted({r["radar_target_id"] for r in rows if r.get("radar_target_id")})
+    if rt_ids:
+        try:
+            rt_res = (sb.table("radar_targets")
+                        .select("id, asset_value")
+                        .in_("id", rt_ids)
+                        .execute())
+            for r in (rt_res.data or []):
+                av = r.get("asset_value") or 0
+                if av > 0:
+                    rt_asset_map[r["id"]] = av
+            log.info(f"[enricher] pulled asset_value for {len(rt_asset_map)}/{len(rt_ids)} radar_targets")
+        except Exception as e:
+            log.warning(f"[enricher] radar_targets asset pull failed: {e}")
+
     # 3) Score each row
     rows_processed = 0
     rows_blocked = 0
@@ -447,7 +486,7 @@ def run() -> dict:
     for row in rows:
         try:
             # Engineer features (now includes storm_risk feature)
-            features, trace = _engineer_features(row, storm_risk_map=storm_risk_map)
+            features, trace = _engineer_features(row, storm_risk_map=storm_risk_map, rt_asset_map=rt_asset_map)
 
             # Bayesian probability score
             prob_result = _features_to_probability(
@@ -474,12 +513,19 @@ def run() -> dict:
             new_meta["enrichment_block_reason"] = block_reason
             new_meta["enrichment_scored_at"] = datetime.now(timezone.utc).isoformat()
 
-            sb.table("enriched_leads").update({
+            # If the radar_target has a real asset_value, mirror it into enriched_leads
+            # so dashboards + downstream pipeline see the real $ (currently all $10 placeholder).
+            update_payload = {
                 "score": score,
                 "status": new_status,
                 "last_enriched_at": datetime.now(timezone.utc).isoformat(),
                 "meta": new_meta,
-            }).eq("id", row["id"]).execute()
+            }
+            rt_av_for_row = rt_asset_map.get(row.get("radar_target_id")) if row.get("radar_target_id") else None
+            if rt_av_for_row and rt_av_for_row > (row.get("asset_value") or 0):
+                update_payload["asset_value"] = rt_av_for_row
+
+            sb.table("enriched_leads").update(update_payload).eq("id", row["id"]).execute()
             rows_processed += 1
 
             # Track predictions for SI core calibration
