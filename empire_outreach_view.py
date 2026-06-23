@@ -2,8 +2,9 @@
 EMPIRE V49 · OUTREACH PERFORMANCE VIEW
 ========================================
 Standalone page at /view/outreach — auto-fetches /api/v1/outreach/template-stats
-and renders a stat-cards + table view. Uses localStorage.hub_token for auth
-(the same as the Command SPA). Links back to /command.
+and /api/v1/ab-test/variant-trend, renders stat-cards + table + trend chart.
+Uses localStorage.hub_token for auth (the same as the Command SPA).
+Links back to /command.
 """
 
 
@@ -26,6 +27,7 @@ def outreach_view_page() -> str:
   <meta name="twitter:title" content="Empire AI · Outreach Performance">
   <meta name="twitter:description" content="Empire AI outreach A/B test analytics, reply rates, and conversion tracking.">
   <link rel="canonical" href="https://empire-ai.co.uk/view/outreach">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
@@ -37,6 +39,7 @@ def outreach_view_page() -> str:
     }
     :root {
       --teal: #44E5B8; --cyan: #5AC8FA; --amber: #FFB800; --red: #FF4444;
+      --purple: #A78BFA; --rose: #F472B6;
       --surface: #15263F; --elevated: #1A2D4A; --border: rgba(122,140,163,0.18);
       --divider: rgba(122,140,163,0.1); --mist: #7A8CA3; --fog: #4A5A72;
       --white: #F8FAFD; --silver: #A0B4C8;
@@ -112,6 +115,15 @@ def outreach_view_page() -> str:
 
     .totals-row td { border-top: 2px solid rgba(68,229,184,0.15); font-weight: 600; color: var(--white); }
 
+    .chart-wrap { position: relative; width: 100%; height: 300px; margin: 8px 0 4px; }
+
+    .trend-legend {
+      display: flex; gap: 20px; justify-content: center; margin-top: 12px;
+      font-family: 'JetBrains Mono', monospace; font-size: 10px;
+    }
+    .trend-legend-item { display: flex; align-items: center; gap: 6px; color: var(--silver); }
+    .trend-legend-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+
     .loading { text-align: center; padding: 64px 0; }
     .loading-spinner {
       display: inline-block; width: 36px; height: 36px; border: 2px solid var(--divider);
@@ -148,7 +160,16 @@ def outreach_view_page() -> str:
 </div>
 
 <script>
-const API = '/api/v1/outreach/template-stats';
+const TEMPLATE_API = '/api/v1/outreach/template-stats';
+const TREND_API = '/api/v1/ab-test/variant-trend?days=30';
+
+const VARIANT_COLORS = {
+  'A': '#5AC8FA',
+  'B': '#44E5B8',
+  'C': '#A78BFA',
+};
+
+let trendChart = null;
 
 async function apiFetch(path) {
   const token = localStorage.getItem('hub_token') || '';
@@ -164,7 +185,7 @@ function fmtPct(n) {
   return (n * 100).toFixed(1) + '%';
 }
 
-function render(data) {
+function renderTemplateStats(data) {
   const variants = data.variants || [];
   const totalOutreach = data.total_outreach || 0;
   const totalVariants = data.total_variants || 0;
@@ -252,12 +273,138 @@ function render(data) {
   }
   html += '</div>';
 
+  // Trend chart placeholder — rendered by renderTrendChart()
+  html += '<div class="panel">';
+  html += '<div class="panel-h"><div class="panel-title">Conversion Rate Trend</div><div class="panel-tag">dispatch SMS variants · last 30d</div></div>';
+  html += '<div class="chart-wrap"><canvas id="trendChart"></canvas></div>';
+  html += '</div>';
+
   return html;
+}
+
+function renderTrendChart(data) {
+  const canvas = document.getElementById('trendChart');
+  if (!canvas) return;
+
+  // Destroy previous chart if it exists
+  if (trendChart) {
+    trendChart.destroy();
+    trendChart = null;
+  }
+
+  const series = data.series || [];
+  const variants = data.variants || [];
+  const totals = data.totals || {};
+
+  if (!series.length || !variants.length) {
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    const parent = canvas.parentElement;
+    parent.innerHTML = '<div style="text-align:center;padding:32px 0;font-family:JetBrains Mono,monospace;font-size:10px;color:var(--fog);">No dispatch variant data available yet. Send more SMS to see trends.</div>';
+    return;
+  }
+
+  const labels = series.map(s => {
+    const d = s.date;
+    return d.slice(5); // "MM-DD"
+  });
+
+  const datasets = variants.map(v => {
+    const color = VARIANT_COLORS[v] || '#44E5B8';
+    const tot = totals[v] || {};
+    return {
+      label: `Variant ${v} (${tot.sent || 0} sent, ${(tot.rate || 0).toFixed(1)}%)`,
+      data: series.map(s => s[`rate_${v}`]),
+      borderColor: color,
+      backgroundColor: color + '20',
+      pointBackgroundColor: color,
+      pointBorderColor: '#0A1A2F',
+      pointBorderWidth: 1,
+      pointRadius: 4,
+      pointHoverRadius: 6,
+      borderWidth: 2,
+      tension: 0.3,
+      fill: false,
+    };
+  });
+
+  const ctx = canvas.getContext('2d');
+  trendChart = new Chart(ctx, {
+    type: 'line',
+    data: { labels, datasets },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: {
+        mode: 'index',
+        intersect: false,
+      },
+      plugins: {
+        legend: {
+          display: true,
+          position: 'bottom',
+          labels: {
+            color: '#A0B4C8',
+            font: { family: 'JetBrains Mono, SF Mono, monospace', size: 10 },
+            padding: 14,
+            usePointStyle: true,
+            pointStyle: 'circle',
+          },
+        },
+        tooltip: {
+          backgroundColor: '#1A2D4A',
+          titleColor: '#F8FAFD',
+          bodyColor: '#A0B4C8',
+          borderColor: 'rgba(122,140,163,0.18)',
+          borderWidth: 1,
+          padding: 12,
+          bodyFont: { family: 'JetBrains Mono, SF Mono, monospace', size: 11 },
+          titleFont: { family: 'JetBrains Mono, SF Mono, monospace', size: 10 },
+          callbacks: {
+            title: (items) => {
+              if (items.length) {
+                const rawDate = series[items[0].dataIndex]?.date || '';
+                return rawDate || items[0].label;
+              }
+              return '';
+            },
+            label: (ctx) => {
+              const v = ctx.dataset.label.split(' ')[1] || '?';
+              const raw = ctx.parsed.y;
+              const pct = raw !== null ? raw.toFixed(1) + '%' : '—';
+              const sent = series[ctx.dataIndex]?.[`sent_${v}`] || 0;
+              const replied = series[ctx.dataIndex]?.[`replied_${v}`] || 0;
+              return `Variant ${v}: ${pct} (${replied}/${sent} replied)`;
+            },
+          },
+        },
+      },
+      scales: {
+        x: {
+          grid: { color: 'rgba(122,140,163,0.06)' },
+          ticks: {
+            color: '#4A5A72',
+            font: { family: 'JetBrains Mono, SF Mono, monospace', size: 9 },
+            maxTicksLimit: 10,
+          },
+        },
+        y: {
+          beginAtZero: true,
+          grid: { color: 'rgba(122,140,163,0.06)' },
+          ticks: {
+            color: '#4A5A72',
+            font: { family: 'JetBrains Mono, SF Mono, monospace', size: 9 },
+            callback: (val) => val.toFixed(0) + '%',
+          },
+        },
+      },
+    },
+  });
 }
 
 function renderError(msg) {
   return `<div class="error">
-    <div class="error-icon">⚠</div>
+    <div class="error-icon">&#9888;</div>
     <div class="error-title">Could not load data</div>
     <div class="error-body">${msg}<br><br>Make sure you're signed in at <a href="/command" style="color: var(--teal);">/command</a> first.</div>
   </div>`;
@@ -267,11 +414,19 @@ async function load() {
   const btn = document.getElementById('refreshBtn');
   if (btn) btn.disabled = true;
   const el = document.getElementById('content');
-  el.innerHTML = '<div class="loading"><div class="loading-spinner"></div><div class="loading-text">Fetching...</div></div>';
+  el.innerHTML = '<div class="loading"><div class="loading-spinner"></div><div class="loading-text">Fetching template stats...</div></div>';
 
   try {
-    const data = await apiFetch(API);
-    el.innerHTML = render(data);
+    // Fetch both APIs in parallel
+    const [templateData, trendData] = await Promise.all([
+      apiFetch(TEMPLATE_API),
+      apiFetch(TREND_API),
+    ]);
+
+    el.innerHTML = renderTemplateStats(templateData);
+
+    // Render the trend chart on next paint cycle after DOM is updated
+    requestAnimationFrame(() => renderTrendChart(trendData));
   } catch (e) {
     el.innerHTML = renderError(e.message);
   } finally {
