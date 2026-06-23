@@ -181,6 +181,7 @@ def _read_config(sb, default_max=100, default_lookback=2):
             "dry_run": True,
             "max_per_run": default_max,
             "lookback_hours": default_lookback,
+            "min_urgency_for_engagement": 5,
         }
     row = r.data[0]
     cfg = row.get("config_json") or {}
@@ -189,6 +190,7 @@ def _read_config(sb, default_max=100, default_lookback=2):
         "dry_run": row.get("dry_run", True),
         "max_per_run": cfg.get("max_per_run", default_max),
         "lookback_hours": cfg.get("lookback_hours", default_lookback),
+        "min_urgency_for_engagement": cfg.get("min_urgency_for_engagement", 5),
     }
 
 def _log_activity(sb, agent_name, run_id, started_at, status,
@@ -236,6 +238,27 @@ def run() -> dict:
                 .execute())
     # Filter to the lookback window in Python (so we can fall back to "all-time" if empty)
     candidates = [r for r in (rt_res.data or []) if r.get("created_at", "") >= since]
+
+    # ALSO pick up recently-upgraded targets (storm_log_to_targets bumps
+    # urgency_score on existing rows when storms hit their metros). Without
+    # this branch the pipeline stays idle when no NEW radar_targets arrive
+    # but storm severity rises on the existing 9k dataset.
+    min_urg = cfg.get("min_urgency_for_engagement", 5)
+    urg_res = (sb.table("radar_targets")
+                .select("id, address, city, state, phone, email, warehouse_name, asset_value, status, created_at, updated_at, urgency_score, meta, source")
+                .eq("status", "active")
+                .gte("urgency_score", min_urg)
+                .gte("updated_at", since)
+                .order("urgency_score", desc=True)
+                .limit(cfg["max_per_run"] * 2)
+                .execute())
+    urg_ids = {r["id"] for r in (urg_res.data or [])}
+    if urg_ids:
+        existing_ids = {r["id"] for r in candidates}
+        for r in (urg_res.data or []):
+            if r["id"] not in existing_ids:
+                candidates.append(r)
+        log.info(f"scanner: +{len(urg_ids)} urgent-upgraded candidates (urgency >= {min_urg})")
     in_fallback = False
     if not candidates:
         # First-run / backfill mode: no recent ones. Re-query for the NEWEST

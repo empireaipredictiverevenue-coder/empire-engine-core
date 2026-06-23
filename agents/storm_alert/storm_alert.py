@@ -180,7 +180,25 @@ def run_once(dry_run_override: Optional[bool] = None) -> dict:
     try:
         from empire_weather_scout import StormTracker
         tracker = StormTracker()
-        raw_alerts = asyncio.run(tracker.get_active_alerts())
+        # asyncio.run() can fail in some cron environments with
+        # "RuntimeError: cannot be called from a running event loop"
+        # when another lib (e.g. uvloop, supabase async) has implicitly
+        # created a loop. Try asyncio.run first, fall back to sync httpx.
+        try:
+            raw_alerts = asyncio.run(tracker.get_active_alerts())
+        except RuntimeError as loop_err:
+            if "running event loop" in str(loop_err):
+                import httpx as _httpx
+                _resp = _httpx.get(
+                    tracker.api,
+                    headers={"User-Agent": tracker.user_agent, "Accept": "application/geo+json"},
+                    timeout=20.0,
+                )
+                _resp.raise_for_status()
+                _data = _resp.json()
+                raw_alerts = _data.get("features", []) or []
+            else:
+                raise
         relevant = tracker.filter_relevant(raw_alerts)
     except Exception as e:
         err = f"{type(e).__name__}: {e}"
