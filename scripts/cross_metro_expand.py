@@ -137,7 +137,7 @@ def expand_metros(dry_run: bool = False, per_metro: int = DEFAULT_PER_METRO) -> 
                 synthetic_phone = f"+1555{metro_hash}0000"
 
             # Synthetic email to avoid uniqueness collisions
-            synthetic_email = f"crossmetro.{uuid.uuid4().hex[:8]}@empire-ai.placeholder"
+            synthetic_email = None  # migration 061: nullable. NO MORE PLACEHOLDERS.
 
             payload = {
                 "name": f"{orig_name} ({target_metro})",
