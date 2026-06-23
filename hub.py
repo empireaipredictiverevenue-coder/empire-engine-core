@@ -77,6 +77,11 @@ try:
     register_pulse_routes = _register_pulse
 except Exception:
     register_pulse_routes = None
+try:
+    from empire_niche_pages import register_niche_routes as _register_niche
+    register_niche_routes = _register_niche
+except Exception:
+    register_niche_routes = None
 from empire_mrr import register_mrr_routes
 from empire_for_contractors import render_for_contractors_page
 from empire_resend_webhook import register_resend_webhook
@@ -1250,6 +1255,12 @@ try:
         log.info("[hub] pulse routes registered")
 except Exception as _e:
     log.warning(f"[hub] pulse routes register failed: {_e}")
+try:
+    if register_niche_routes:
+        register_niche_routes(app, get_db=get_db)
+        log.info("[hub] niche pages registered")
+except Exception as _e:
+    log.warning(f"[hub] niche pages register failed: {_e}")
 try:
     register_mrr_routes(app, require_auth=None, get_db=get_db)
 except Exception as _e:
