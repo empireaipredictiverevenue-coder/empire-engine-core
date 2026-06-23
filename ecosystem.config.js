@@ -773,6 +773,86 @@ module.exports = {
       log_date_format: 'YYYY-MM-DD HH:mm:ss Z',
     },
 
+    // ── Omni Bridge (Deepgram STT → Zernio social distribution, port 8040) ──
+    {
+      name: 'omni-bridge',
+      script: '/root/empire-v49/products/omni_bridge.py',
+      cwd: '/root/empire-v49',
+      interpreter: 'python3',
+      exec_mode: 'fork',
+      instances: 1,
+      env: {
+        PYTHONUNBUFFERED: '1',
+        OMNI_PORT: '8040',
+        OMNI_HOST: '0.0.0.0',
+      },
+      // FastAPI app — needs time to bind to port
+      listen_timeout: 15000,
+      kill_timeout: 10000,
+      max_restarts: 10,
+      min_uptime: 20000,
+      restart_delay: 3000,
+      max_memory_restart: '300M',
+      error_file: '/root/.pm2/logs/omni-bridge-error.log',
+      out_file: '/root/.pm2/logs/omni-bridge-out.log',
+      pid_file: '/root/.pm2/pids/omni-bridge.pid',
+      merge_logs: true,
+      log_date_format: 'YYYY-MM-DD HH:mm:ss Z',
+    },
+
+    // ── Buffy Buffer — Queue Controller (concurrency gate for video renders) ──
+    {
+      name: 'buffy-buffer',
+      script: '/root/empire-v49/bots/buffy_buffer.py',
+      cwd: '/root/empire-v49',
+      interpreter: 'python3',
+      exec_mode: 'fork',
+      instances: 1,
+      env: {
+        PYTHONUNBUFFERED: '1',
+        BUFFY_MAX_CONCURRENT: '3',
+        BUFFY_POLL_SEC: '3',
+        BUFFY_STUCK_MINUTES: '15',
+      },
+      listen_timeout: 3000,
+      kill_timeout: 10000,
+      max_restarts: 10,
+      min_uptime: 15000,
+      restart_delay: 5000,
+      max_memory_restart: '200M',
+      error_file: '/root/.pm2/logs/buffy-buffer-error.log',
+      out_file: '/root/.pm2/logs/buffy-buffer-out.log',
+      pid_file: '/root/.pm2/pids/buffy-buffer.pid',
+      merge_logs: true,
+      log_date_format: 'YYYY-MM-DD HH:mm:ss Z',
+    },
+
+    // ── Buffy Worker — Render Executor (picks up RENDER_TRIGGERED jobs) ──
+    {
+      name: 'buffy-worker',
+      script: '/root/empire-v49/bots/buffy_worker.py',
+      cwd: '/root/empire-v49',
+      interpreter: 'python3',
+      exec_mode: 'fork',
+      instances: 1,
+      env: {
+        PYTHONUNBUFFERED: '1',
+        BUFFY_WORKER_POLL_SEC: '30',
+        BUFFY_WORKER_HEARTBEAT_SEC: '60',
+      },
+      listen_timeout: 3000,
+      kill_timeout: 10000,
+      max_restarts: 10,
+      min_uptime: 15000,
+      restart_delay: 5000,
+      max_memory_restart: '500M',
+      error_file: '/root/.pm2/logs/buffy-worker-error.log',
+      out_file: '/root/.pm2/logs/buffy-worker-out.log',
+      pid_file: '/root/.pm2/pids/buffy-worker.pid',
+      merge_logs: true,
+      log_date_format: 'YYYY-MM-DD HH:mm:ss Z',
+    },
+
     // ── Empire Facebook Bot (Messenger lead gen, polling mode) ──
 
     // ── Empire Facebook Bot (Messenger lead gen, polling mode) ──

@@ -422,8 +422,8 @@ _FLEET_JS = """
           headers: { 'Authorization': 'Bearer ' + TOKEN }
         }).catch(() => null),
       ]);
-      const soul = soulRes && soulRes.ok ? await soulRes.text() : '# SOUL\nIdentity document not loaded.';
-      const skills = skillsRes && skillsRes.ok ? await skillsRes.text() : '# SKILLS\nSkills registry not loaded.';
+      const soul = soulRes && soulRes.ok ? await soulRes.text() : '# SOUL\\nIdentity document not loaded.';
+      const skills = skillsRes && skillsRes.ok ? await skillsRes.text() : '# SKILLS\\nSkills registry not loaded.';
       let knowledgeNotes = [];
       if (knowledgeRes && knowledgeRes.ok) {
         const kd = await knowledgeRes.json();
@@ -549,7 +549,7 @@ _FLEET_JS = """
         const processInfo = agentOSProcesses[agent.id] || {};
 
         html += '<div class="agent-card" id="card-' + agent.id + '">';
-        html += '  <div class="agent-card-header" onclick="toggleAgent(\'' + agent.id + '\')">';
+        html += '  <div class="agent-card-header" onclick="toggleAgent(\\'' + agent.id + '\\')">';
         html += '    <div class="agent-card-info">';
         html += '      <div class="agent-card-avatar ' + agent.color + '">' + agent.icon + '</div>';
         html += '      <div>';
@@ -566,10 +566,10 @@ _FLEET_JS = """
         // ── BODY (expandable) ──
         html += '  <div class="agent-card-body">';
         html += '    <div class="agent-tabs" id="tabs-' + agent.id + '">';
-        html += '      <button class="agent-tab active" data-tab="soul" onclick="switchTab(\'' + agent.id + '\',\'soul\')">SOUL</button>';
-        html += '      <button class="agent-tab" data-tab="skills" onclick="switchTab(\'' + agent.id + '\',\'skills\')">Skills</button>';
-        html += '      <button class="agent-tab" data-tab="knowledge" onclick="switchTab(\'' + agent.id + '\',\'knowledge\')">Knowledge</button>';
-        html += '      <button class="agent-tab" data-tab="runtime" onclick="switchTab(\'' + agent.id + '\',\'runtime\')">Runtime</button>';
+        html += '      <button class="agent-tab active" data-tab="soul" onclick="switchTab(\\'' + agent.id + '\\',\\'soul\\')">SOUL</button>';
+        html += '      <button class="agent-tab" data-tab="skills" onclick="switchTab(\\'' + agent.id + '\\',\\'skills\\')">Skills</button>';
+        html += '      <button class="agent-tab" data-tab="knowledge" onclick="switchTab(\\'' + agent.id + '\\',\\'knowledge\\')">Knowledge</button>';
+        html += '      <button class="agent-tab" data-tab="runtime" onclick="switchTab(\\'' + agent.id + '\\',\\'runtime\\')">Runtime</button>';
         html += '    </div>';
 
         // ── TAB: SOUL ──
