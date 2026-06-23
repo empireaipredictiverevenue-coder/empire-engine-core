@@ -60,7 +60,7 @@ TEMPLATES = {
 Quick heads up: we just shipped 4 paid tiers for the Empire AI
 contractor network. Free tier stays free — no change there.
 
-What changed: Pro ($299/mo) and Enterprise ($499/mo) unlock
+What changed: Pro ($299/mo) and Enterprise ($499/mo) open up
 priority routing, faster lead delivery, lead history, and analytics.
 Basic ($99/mo) gets you priority routing for 50 leads a month.
 
