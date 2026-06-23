@@ -6,10 +6,9 @@ Queries dispatches where status='sent' and meta->>'follow_up_due' < now(),
 sends SMS reminders to contractors on a cadence.
 
 Cadences after initial dispatch:
-    24h  → follow_up_1  (gentle nudge)
-    72h  → follow_up_2  (urgency reminder)
-    7d   → follow_up_3  (final notice)
-    After 3 follow-ups: mark dispatch as 'expired' (contractor unresponsive)
+    2h   → follow_up_1  (first reminder)
+    24h  → follow_up_2  (final reminder)
+    After 2 follow-ups: mark dispatch as 'expired' (contractor unresponsive)
 
 Run modes:
     python3 scripts/dispatch_followup_agent.py                # live — sends SMS
@@ -49,11 +48,11 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(name)s] %(message
 AGENT_NAME = "dispatch_followup_agent"
 
 # ── Follow-up cadence: hours after DISPATCH (not from last follow-up) ──
-# Index 0 (24h) is the initial delay set in empire_matching.py.
+# Index 0 (2h) is the initial delay set in empire_matching.py.
 # Indices 1+ are the cadence milestones for follow-up_1, follow-up_2, etc.
 # After each follow-up, next_due = dispatch.created_at + FOLLOW_UP_HOURS[follow_up_num]
-FOLLOW_UP_HOURS = [24, 72, 168]  # dispatch+24h (init), +72h, +168h (7d)
-MAX_FOLLOW_UPS = len(FOLLOW_UP_HOURS)  # 3 follow-ups: 24h, 72h, 168h from dispatch
+FOLLOW_UP_HOURS = [2, 24]  # dispatch+2h (init), +24h (final)
+MAX_FOLLOW_UPS = len(FOLLOW_UP_HOURS)  # 2 follow-ups: 2h, 24h from dispatch
 
 # Rate limit between sends (seconds)
 SEND_DELAY = 0.5
@@ -154,25 +153,18 @@ def _build_followup_body(
     addr = lead_addr or "a property"
 
     if follow_up_num == 1:
-        # Gentle nudge — 24h
+        # First reminder — 2h
         return (
             f"{first_name}, quick reminder — the {city} lead at "
             f"{addr} is still available. First to accept wins. "
             f"Accept: {accept_link[:180]} STOP to opt out"
         )
-    elif follow_up_num == 2:
-        # Urgency push — 72h
-        return (
-            f"{first_name}, {city} lead at {addr} expiring soon. "
-            f"72hr insurance window closing. "
-            f"Accept: {accept_link[:180]} STOP to opt out"
-        )
     else:
-        # Final notice — 7d
+        # Final reminder — 24h
         return (
             f"{first_name}, final notice — {city} lead at {addr} "
-            f"will be released to the next contractor. "
-            f"Accept now: {accept_link[:180]} STOP to opt out"
+            f"expires today. First to accept wins. "
+            f"Accept: {accept_link[:180]} STOP to opt out"
         )
 
 
@@ -433,9 +425,9 @@ async def run_followups(
                 if follow_up_num < MAX_FOLLOW_UPS:
                     # Compute next due from dispatch time (not from now) so cadence
                     # is relative to the original dispatch, not the last follow-up.
-                    # follow_up_num is 1-indexed; FOLLOW_UP_HOURS[0] = 24h is the
+                    # follow_up_num is 1-indexed; FOLLOW_UP_HOURS[0] = 2h is the
                     # initial delay set in empire_matching.py, so follow_up_1 →
-                    # index 1 = 72h, follow_up_2 → index 2 = 168h.
+                    # index 1 = 24h (final follow-up).
                     next_hours = FOLLOW_UP_HOURS[follow_up_num]
                     dispatch_created = dispatch.get("created_at", "")
                     if dispatch_created:

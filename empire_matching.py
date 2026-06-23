@@ -577,7 +577,7 @@ class ContractorMatcher:
                     "lead_addr":   lead.get("address"),
                     "lead_metro":  lead.get("city"),
                     "sms_variant": variant,  # A/B test tracking
-                    "follow_up_due": (datetime.now(timezone.utc) + timedelta(hours=24)).isoformat(),
+                    "follow_up_due": (datetime.now(timezone.utc) + timedelta(hours=2)).isoformat(),
                 }
                 if strategy:
                     dispatch_meta["strategy"] = strategy
