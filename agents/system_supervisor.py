@@ -205,6 +205,21 @@ def _check_hub_routes() -> list[dict]:
     return issues
 
 
+def _check_vonage_volume(sb) -> list[dict]:
+    """Monitor outbound SMS volume. JWT auth (no balance API access)."""
+    issues = []
+    cutoff = (datetime.now(timezone.utc) - timedelta(hours=24)).isoformat()
+    r = sb.table("sms_log").select("id", count="exact").eq("direction","outbound").gte("created_at", cutoff).execute()
+    n = r.count or 0
+    if n > 1000:
+        issues.append({"check": "vonage_volume", "severity": "critical",
+                       "msg": f"{n} outbound SMS in last 24h - burn rate; check wallet"})
+    elif n > 500:
+        issues.append({"check": "vonage_volume", "severity": "warn",
+                       "msg": f"{n} outbound SMS in last 24h - high volume"})
+    return issues
+
+
 def run() -> dict:
     sb = _sb()
     findings = []
@@ -213,6 +228,7 @@ def run() -> dict:
     findings += _check_money_placeholders(sb)
     findings += _check_placeholder_emails(sb)
     findings += _check_zombie_outreach(sb)
+    findings += _check_vonage_volume(sb)
     findings += _check_hub_routes()
 
     crit = [f for f in findings if f.get("severity") == "critical"]
