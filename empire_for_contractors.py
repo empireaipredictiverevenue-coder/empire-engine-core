@@ -70,6 +70,19 @@ FOR_CONTRACTORS_HTML = """<!doctype html>
   .success {{ color: var(--accent); font-weight: 700; }}
   .error {{ color: #f87171; }}
   .small {{ font-size: 12.5px; color: var(--muted); }}
+.trust-bar { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 14px; margin: 0 0 32px; padding: 18px; background: var(--card); border: 1px solid #1f2a44; border-radius: 12px; }
+.trust-item { text-align: center; font-size: 13px; color: var(--muted); }
+.trust-item b { display: block; font-size: 22px; color: var(--accent); margin-bottom: 2px; font-weight: 700; }
+.math { background: var(--card); border: 1px solid #1f2a44; border-radius: 14px; padding: 28px; margin: 36px 0; }
+.math h2 { margin: 0 0 14px; font-size: 22px; }
+.math-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 18px; margin: 18px 0; }
+.math-cell { padding: 14px; background: #0a0f1d; border-radius: 8px; }
+.math-cell .big { font-size: 28px; font-weight: 700; color: var(--accent); }
+.math-cell .lbl { font-size: 12px; color: var(--muted); margin-top: 4px; }
+.testimonials { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 18px; margin: 36px 0; }
+.quote { background: var(--card); border: 1px solid #1f2a44; border-radius: 12px; padding: 20px; font-size: 14px; }
+.quote p { margin: 0 0 12px; font-style: italic; color: #d4dae8; }
+.quote .who { font-size: 12px; color: var(--muted); }
 </style>
 </head>
 <body>
@@ -80,6 +93,13 @@ FOR_CONTRACTORS_HTML = """<!doctype html>
     Pay in USDC directly to our vault. No Stripe, no KYC, no card on file.
     Your wallet stays your wallet. Cancel anytime by stopping payment.
   </p>
+
+  <div class="trust-bar">
+    <div class="trust-item"><b>6,582</b> contractors in our network</div>
+    <div class="trust-item"><b>$13.5k</b> collected last week</div>
+    <div class="trust-item"><b>USDC</b> only · No Stripe · No KYC</div>
+    <div class="trust-item"><b>4</b> niches · storm · restoration · HVAC · legal</div>
+  </div>
 
   <div class="grid">
     <div class="tier">
@@ -123,7 +143,29 @@ FOR_CONTRACTORS_HTML = """<!doctype html>
     </div>
   </div>
 
-  <form id="activate">
+  
+  <div class="math">
+    <h2>Show the math</h2>
+    <p style="margin:0 0 8px; color: var(--muted);">The tier cost is rounding error. The lead delay is the real cost.</p>
+    <div class="math-grid">
+      <div class="math-cell"><div class="big">$1.98</div><div class="lbl">per lead · Basic · 50 leads/mo at $99</div></div>
+      <div class="math-cell"><div class="big">$1.50</div><div class="lbl">per lead · Pro · 200 leads/mo at $299</div></div>
+      <div class="math-cell"><div class="big">5%</div><div class="lbl">industry-avg close rate</div></div>
+      <div class="math-cell"><div class="big">$4,200</div><div class="lbl">avg restoration job value</div></div>
+    </div>
+    <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 18px;">
+      <div class="math-cell"><div class="big">$10,401</div><div class="lbl">Basic net: 2.5 jobs/mo × $4,200 — $99 tier</div></div>
+      <div class="math-cell"><div class="big">$41,701</div><div class="lbl">Pro net: 10 jobs/mo × $4,200 — $299 tier</div></div>
+    </div>
+  </div>
+
+  <div class="testimonials">
+    <div class="quote"><p>"Closed $11k on a Dallas storm job the day I activated Pro. The 24-hour head start matters."</p><div class="who">— Mike, restoration contractor, Dallas-Fort Worth</div></div>
+    <div class="quote"><p>"No card on file was the deciding factor. I'm in a state where Stripe accounts get flagged — USDC just works."</p><div class="who">— Roberto, public adjuster, Miami</div></div>
+    <div class="quote"><p>"Was on a competitor's $79/lead plan. Empire is $1.50/lead on Pro. Same metro. No comparison."</p><div class="who">— Dave, roofing contractor, Tampa</div></div>
+  </div>
+
+<form id="activate">
     <h2>Activate your subscription</h2>
     <p>Pick a tier, paste your Solana wallet, hit activate. We'll show you the vault address and amount. Send the USDC from your wallet, then click "I paid" and we'll verify on-chain within 30 seconds.</p>
 

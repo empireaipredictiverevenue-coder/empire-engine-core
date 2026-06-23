@@ -39,6 +39,15 @@ SUBJECT_VARIANTS = {
     "tier_intro": {
         1: ["Empire AI · paid tiers are live",
             "Quick question about your roofing/restoration work",
+            # New from campaign brief 2026-06-22
+            "Right now another roofer is on your lead",
+            "He is on Free. You are on Basic.",
+            "24-hour delay = lost jobs",
+            "The lead-gen math that actually adds up",
+            "50 leads/mo at $99 = $2/lead. Yes really.",
+            "We do not use Stripe",
+            "USDC only. Here is why.",
+            "No card on file. No KYC. No problem.",
             "Did you see the storm pipeline update?"],
         2: ["Re: Empire AI · paid tiers",
             "Pricing for storm/restoration leads",
