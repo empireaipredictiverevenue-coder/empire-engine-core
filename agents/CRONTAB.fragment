@@ -70,3 +70,7 @@
 # Multi-touch Cadence — every 6h on :15. Advances contractor_recruit sequences
 # through 4-step SMS cadence (day 0, 3, 7, 14). Skips replied sequences.
 15 */6 * * * cd /root/empire-v49 && /usr/bin/python3 -m agents.multi_touch_cadence >> logs/agent_multi_touch_cadence.log 2>&1
+
+# Silent supervisor - every 5 min, runs all 7 checks + auto-triggers self-healer
+# on critical. Pairs with self-healer (every 6h) for sub-5min fix latency.
+*/5 * * * * cd /root/empire-v49 && /usr/bin/python3 -m agents.system_supervisor --no-tg --auto-fix > /dev/null 2>&1

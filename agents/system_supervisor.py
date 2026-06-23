@@ -305,6 +305,7 @@ def main():
     p.add_argument("--no-tg", action="store_true", help="don't send telegram")
     p.add_argument("--json", action="store_true", help="json output")
     p.add_argument("--always", action="store_true", help="send tg even when all clear")
+    p.add_argument("--no-auto-fix", action="store_true", help="don't trigger self-healer")
     args = p.parse_args()
 
     if args.always:
@@ -323,6 +324,26 @@ def main():
 
     if not args.no_tg:
         _send_telegram(report)
+
+    # Auto-trigger self-healer on critical findings (or with --auto-fix).
+    # self-healer has its own 5min cooldowns per action/target so this is
+    # safe to call frequently.
+    should_auto_fix = (
+        report.get("critical")
+        and not args.no_auto_fix
+        and os.getenv("SUPERVISOR_AUTO_FIX", "1") != "0"
+    )
+    if should_auto_fix:
+        try:
+            import sys as _sys
+            agents_dir = str(Path(__file__).resolve().parent)
+            if agents_dir not in _sys.path:
+                _sys.path.insert(0, agents_dir)
+            from self_healer import run as _healer_run
+            log.info("supervisor: auto-triggering self-healer (critical=%d)", len(report["critical"]))
+            _healer_run()
+        except Exception as e:
+            log.warning(f"supervisor: self-healer trigger failed: {e}")
 
 
 if __name__ == "__main__":
