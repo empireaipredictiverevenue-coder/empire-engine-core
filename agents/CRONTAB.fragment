@@ -66,3 +66,7 @@
 # Radar Asset Enricher — every 6h on :02. Backfills radar_targets.asset_value
 # from ATTOM/RentCast (if keys set) or business-signal formula.
 2 */6 * * * cd /root/empire-v49 && /usr/bin/python3 -m agents.radar_asset_enricher --limit 1000 >> logs/agent_radar_asset_enricher.log 2>&1
+
+# Multi-touch Cadence — every 6h on :15. Advances contractor_recruit sequences
+# through 4-step SMS cadence (day 0, 3, 7, 14). Skips replied sequences.
+15 */6 * * * cd /root/empire-v49 && /usr/bin/python3 -m agents.multi_touch_cadence >> logs/agent_multi_touch_cadence.log 2>&1
