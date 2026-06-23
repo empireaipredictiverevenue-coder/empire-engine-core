@@ -194,7 +194,14 @@ from products.inbound_router import InboundRouter, InboundRouterRoutes
 from products.data_vault import DataVault, DataVaultRoutes
 from products.buyer_spy import BuyerSpy, BuyerSpyRoutes
 from products.omni_bridge import OmniBridge, OmniBridgeRoutes
+from products.omni_cloner import OmniCloner, OmniClonerRoutes
+from products.omni_studio import OmniStudio, OmniStudioRoutes
 from empire_omni_page import omni_dashboard_page
+from empire_buffy_page import buffy_dashboard_page, buffy_stats_json
+from empire_calculator_roi import roi_calculator_json
+from empire_channel_page import channel_page
+from empire_calculator_page import calculator_roi_page
+from empire_claim_estimator_page import claim_estimator_page
 from products.agent_orchestrator import AgentOrchestrator, AgentOrchestratorRoutes
 from products.b2b_pro import B2BPro, B2BProRoutes
 from products.lead_score import LeadScoreAI, LeadScoreRoutes
@@ -1302,6 +1309,55 @@ async def omni_dashboard_route():
     return HTMLResponse(omni_dashboard_page())
 
 
+# ── Buffy Buffer Analytics ──
+@app.get("/api/v1/buffy/stats")
+async def buffy_stats_route():
+    """Buffy Buffer analytics — queue depth, throughput, failure rates."""
+    return JSONResponse(await buffy_stats_json(get_db))
+
+
+@app.get("/buffy", response_class=HTMLResponse)
+async def buffy_dashboard_route():
+    """Buffy Buffer dashboard — queue analytics, state distribution, throughput chart."""
+    return HTMLResponse(buffy_dashboard_page())
+
+
+# ── ROI Calculator ──
+@app.get("/api/v1/calculator/roi")
+async def calculator_roi_route():
+    """Live ROI estimates based on real contractor data from Supabase.
+
+    Returns summary cards, fee metrics, claim lifecycle, dispatch pipeline,
+    contractor stats, revenue ledger breakdown, metro distribution, and
+    monthly fee time series. No auth required — designed for public embedding
+    in internal dashboards.
+    """
+    return JSONResponse(await roi_calculator_json(get_db))
+
+
+@app.get("/calculator/roi", response_class=HTMLResponse)
+async def calculator_roi_page_route():
+    """Interactive Contractor ROI Calculator page — sliders for leads/month,
+    CPL, close rate, and avg job value with real-time ROI and breakeven analysis.
+    All client-side math, no API calls."""
+    return HTMLResponse(calculator_roi_page())
+
+
+# ── YouTube Channel Launch Page ──
+@app.get("/channel", response_class=HTMLResponse)
+async def youtube_channel():
+    """YouTube channel launch page — embeds latest Shorts, shows live subscriber count."""
+    return HTMLResponse(channel_page())
+
+
+@app.get("/calculator/claim-estimator", response_class=HTMLResponse)
+async def claim_estimator_route():
+    """Interactive Claim Settlement Estimator — roof sq ft, damage type,
+    and location inputs with real-time claim value, 3% Empire fee, and
+    detailed cost breakdown. All client-side math, no API calls."""
+    return HTMLResponse(claim_estimator_page())
+
+
 # ── Cold Inbound Assessment Progress API ──
 @app.get("/api/v1/cold-inbound/assessment-progress")
 async def cold_inbound_assessment_progress_route():
@@ -2122,8 +2178,9 @@ async def revenue_ledger_summary(auth: bool = Depends(require_auth), days: int =
 
     Returns:
       - sources: [{source_type, count, total_amount, total_usdc, pct_of_total}]
-      - totals: {total_rows, total_amount, total_usdc}
-      - recent: [{id, source_type, amount, usdc_amount, description, logged_at}]
+      - totals: {total_rows, total_amount, total_usdc, accrued_amount, settled_amount}
+      - recent: [{id, source_type, amount, usdc_amount, description, logged_at, status}]
+      - by_status: {accrued: {rows, amount}, settled: {rows, amount}}
       - days: query window
     """
     db = get_db()
@@ -2132,15 +2189,16 @@ async def revenue_ledger_summary(auth: bool = Depends(require_auth), days: int =
 
     result = {
         "sources": [],
-        "totals": {"total_rows": 0, "total_amount": 0.0, "total_usdc": 0.0},
+        "totals": {"total_rows": 0, "total_amount": 0.0, "total_usdc": 0.0, "accrued_amount": 0.0, "settled_amount": 0.0},
         "recent": [],
+        "by_status": {"accrued": {"rows": 0, "amount": 0.0}, "settled": {"rows": 0, "amount": 0.0}},
         "days": days,
     }
 
     try:
         # ── All rows in window ──
         r = db.table("empire_revenue_ledger").select(
-            "source_type, amount, usdc_amount, description, logged_at, id"
+            "source_type, amount, usdc_amount, description, logged_at, id, status"
         ).gte("logged_at", cutoff).order("logged_at", desc=True).execute()
         rows = r.data or []
 
@@ -2148,14 +2206,26 @@ async def revenue_ledger_summary(auth: bool = Depends(require_auth), days: int =
         source_buckets: dict = {}
         total_amount = 0.0
         total_usdc = 0.0
+        accrued_amount = 0.0
+        settled_amount = 0.0
+        accrued_rows = 0
+        settled_rows = 0
 
         for row in rows:
             st = (row.get("source_type") or "unknown").strip()
             amt = float(row.get("amount") or 0)
             usdc = float(row.get("usdc_amount") or 0)
+            row_status = (row.get("status") or "accrued").strip()
 
             total_amount += amt
             total_usdc += usdc
+
+            if row_status == "settled":
+                settled_amount += amt
+                settled_rows += 1
+            else:
+                accrued_amount += amt
+                accrued_rows += 1
 
             if st not in source_buckets:
                 source_buckets[st] = {"source_type": st, "count": 0, "total_amount": 0.0, "total_usdc": 0.0}
@@ -2184,6 +2254,7 @@ async def revenue_ledger_summary(auth: bool = Depends(require_auth), days: int =
                 "usdc_amount": float(row.get("usdc_amount") or 0),
                 "description": (row.get("description") or "")[:120],
                 "logged_at": row.get("logged_at"),
+                "status": (row.get("status") or "accrued").strip(),
             })
 
         result.update({
@@ -2192,6 +2263,12 @@ async def revenue_ledger_summary(auth: bool = Depends(require_auth), days: int =
                 "total_rows": len(rows),
                 "total_amount": round(total_amount, 2),
                 "total_usdc": round(total_usdc, 2),
+                "accrued_amount": round(accrued_amount, 2),
+                "settled_amount": round(settled_amount, 2),
+            },
+            "by_status": {
+                "accrued": {"rows": accrued_rows, "amount": round(accrued_amount, 2)},
+                "settled": {"rows": settled_rows, "amount": round(settled_amount, 2)},
             },
             "recent": recent,
         })
@@ -2249,6 +2326,7 @@ async def revenue_pnl_summary(auth: bool = Depends(require_auth), days: int = 90
       - revenue_sources: count of distinct revenue source types
       - cost_sources: count of distinct cost source types
       - series: [{date, revenue, costs}] daily aggregation
+      - by_status: {accrued_revenue, settled_revenue} breakdown
     """
     db = get_db()
     now = datetime.now(timezone.utc)
@@ -2262,12 +2340,13 @@ async def revenue_pnl_summary(auth: bool = Depends(require_auth), days: int = 90
         "revenue_sources": 0,
         "cost_sources": 0,
         "series": [],
+        "by_status": {"accrued_revenue": 0.0, "settled_revenue": 0.0},
         "days": days,
     }
 
     try:
         r = db.table("empire_revenue_ledger").select(
-            "source_type, amount, cost_category, logged_at"
+            "source_type, amount, cost_category, logged_at, status"
         ).gte("logged_at", cutoff).execute()
         rows = r.data or []
 
@@ -2279,12 +2358,15 @@ async def revenue_pnl_summary(auth: bool = Depends(require_auth), days: int = 90
         total_costs = 0.0
         revenue_rows = 0
         cost_rows = 0
+        accrued_revenue = 0.0
+        settled_revenue = 0.0
 
         for row in rows:
             st = row.get("source_type", "") or ""
             d = (row.get("logged_at") or "")[:10]
             amt = float(row.get("amount") or 0)
             cc = row.get("cost_category") or ""
+            row_status = (row.get("status") or "accrued").strip()
 
             # Cost entries have source_type='infra_cost' and cost_category set
             if cc or st == "infra_cost":
@@ -2299,6 +2381,10 @@ async def revenue_pnl_summary(auth: bool = Depends(require_auth), days: int = 90
                 total_revenue += amt
                 revenue_rows += 1
                 revenue_sources.add(st)
+                if row_status == "settled":
+                    settled_revenue += amt
+                else:
+                    accrued_revenue += amt
                 if d:
                     daily[d]["revenue"] += amt
                     daily[d]["date"] = d
@@ -2315,6 +2401,10 @@ async def revenue_pnl_summary(auth: bool = Depends(require_auth), days: int = 90
             "cost_rows": cost_rows,
             "revenue_sources": len(revenue_sources),
             "cost_sources": len(cost_sources),
+            "by_status": {
+                "accrued_revenue": round(accrued_revenue, 2),
+                "settled_revenue": round(settled_revenue, 2),
+            },
             "series": series,
         })
     except Exception as e:
@@ -2595,6 +2685,18 @@ suite_omni_bridge = OmniBridge(
     log_usage=lambda a, p, e, q=1, u="count", m=None: suite_guard.log_usage(a, p, e, q, u, m),
 )
 OmniBridgeRoutes(suite_omni_bridge, require_auth=require_auth).register(app)
+
+# Product 4c: Omni Studio — AI video editing + AI avatar generation
+suite_omni_studio = OmniStudio()
+OmniStudioRoutes(suite_omni_studio, require_auth=require_auth).register(app)
+# Product 4b: Omni Cloner — download + transcode + transcribe + syndicate any video from any channel
+suite_omni_cloner = OmniCloner(
+    guard=lambda a, f: suite_guard.check_access(a, f),
+    log_usage=lambda a, p, e, q=1, u="count", m=None: suite_guard.log_usage(a, p, e, q, u, m),
+    studio=suite_omni_studio,
+)
+
+OmniClonerRoutes(suite_omni_cloner, require_auth=require_auth).register(app)
 
 # Product 5: Agent Orchestrator — spawn + step autonomous agents
 suite_agent_orchestrator = AgentOrchestrator(

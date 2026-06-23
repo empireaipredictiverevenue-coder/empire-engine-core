@@ -1797,6 +1797,7 @@ const NAV_GROUPS = [
       { id: 'contractors',   label: 'Contractors',    sub: 'Applications & approvals' },
       { id: 'partners',      label: 'Partners',       sub: 'Buyers · pending · approvals' },
       { id: 'revenue',       label: 'Revenue',        sub: 'Predictive revenue · per-lane MRR · LLM forecast' },
+      { id: 'ledger',        label: 'Revenue Ledger', sub: 'Unified P&L · source breakdown · 90d history' },
       { id: 'closer',       label: 'Closer',         sub: 'AI pipeline · funnel · stats' },
       { id: 'products',     label: 'Products',       sub: 'Strike packs / SaaS tiers / subscriptions' },
       { id: 'pain-points',  label: 'Pain Points',    sub: 'Niche scripts · weights · conversion' },
@@ -7080,7 +7081,7 @@ function Revenue({ events, wsConnected }) {
                   `)}
               </tbody>
             </table>
-            <div style="font-family:var(--font-mono);font-size:9px;color:var(--empire-fog);margin-top:10px;text-align:right;letter-spacing:.04em">Source: Solana (empire_revenue_ledger) · 60s refresh</div>
+            <div style="font-family:var(--font-mono);font-size:9px;color:var(--empire-fog);margin-top:10px;text-align:right;letter-spacing:.04em">Source: Revenue Ledger (accrued + settled) · 60s refresh</div>
 
       <!-- Activation Failed Payments (Crypto) -->
       ${cryptoStats && cryptoStats.activation_failed && cryptoStats.activation_failed.length > 0 ? html`
@@ -7255,6 +7256,178 @@ function Revenue({ events, wsConnected }) {
 // ── APP SHELL ────────────────────────────────────────────────────────
 // ── SI STRATEGY EVOLUTION ─────────────────────────────────────────────
 // ── SI ADAPTIVE ENGINE ──────────────────────────────────────────────────
+
+function RevenueLedger() {
+  const [data, setData] = useState(null);
+  const [pnlData, setPnlData] = useState(null);
+  const [err, setErr] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  const load = useCallback(async () => {
+    try {
+      setLoading(true);
+      const [ledgerRes, pnlRes] = await Promise.all([
+        apiFetch('/api/v1/revenue/ledger-summary?days=90'),
+        apiFetch('/api/v1/revenue/pnl-summary?days=90'),
+      ]);
+      if (ledgerRes.ok) setData(await ledgerRes.json());
+      if (pnlRes.ok) setPnlData(await pnlRes.json());
+      setErr(null);
+    } catch (e) {
+      setErr(e.message);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { load(); const t = setInterval(load, 60000); return () => clearInterval(t); }, [load]);
+
+  if (loading) return html`<div class="body"><div class="psy-loading">Loading revenue ledger...</div></div>`;
+  if (err) return html`<div class="body"><div class="psy-error">Error: ${err}</div></div>`;
+  if (!data) return html`<div class="body"><div class="psy-error">No data</div></div>`;
+
+  const sources = data.sources || [];
+  const totals = data.totals || {};
+  const recent = data.recent || [];
+  const pnl = pnlData || {};
+  const totalRevenue = pnl.total_revenue || 0;
+  const totalCosts = pnl.total_costs || 0;
+  const netProfit = totalRevenue - totalCosts;
+  const profitMargin = totalRevenue > 0 ? (netProfit / totalRevenue * 100) : 0;
+
+  const SOURCE_COLORS = {
+    fee_event: '#44e5b8',
+    call_log: '#5ac8fa',
+    infra_cost: '#ff7b72',
+    invoice: '#ffd700',
+    crypto: '#9945FF',
+  };
+
+  const BAR_COLORS = ['#44e5b8','#5ac8fa','#ffb800','#ff7b72','#9945FF','#c8a2c8','#39FF14','#ff6b6b'];
+
+  return html`
+    <div class="section-h">
+      <div><div class="section-title">Revenue <em>Ledger</em></div><div class="section-sub">Unified P&L · source breakdown · 90-day window</div></div>
+      <div class="sec-actions"><button class="tbl-action go" onClick=${load}>↻ Refresh</button></div>
+    </div>
+
+    <!-- P&L Summary Cards -->
+    <div class="pulse-grid">
+      <div class="stat-card">
+        <div class="stat-label">Total Revenue</div>
+        <div class="stat-value teal">$${(totalRevenue).toLocaleString(undefined,{minimumFractionDigits:2})}</div>
+        <div class="stat-meta">${pnl.revenue_sources || 0} sources · ${pnl.revenue_rows || 0} entries</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Total Costs</div>
+        <div class="stat-value" style="color:var(--status-red)">$${(totalCosts).toLocaleString(undefined,{minimumFractionDigits:2})}</div>
+        <div class="stat-meta">${pnl.cost_sources || 0} sources · ${pnl.cost_rows || 0} entries</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Net Profit</div>
+        <div class="stat-value" style="color:${netProfit >= 0 ? 'var(--signal-teal)' : 'var(--status-red)'}">$${(netProfit).toLocaleString(undefined,{minimumFractionDigits:2})}</div>
+        <div class="stat-meta">${netProfit >= 0 ? '✅ Profitable' : '⚠ Loss'}</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Profit Margin</div>
+        <div class="stat-value" style="color:${profitMargin >= 20 ? 'var(--signal-teal)' : profitMargin >= 0 ? 'var(--status-amber)' : 'var(--status-red)'}">${profitMargin.toFixed(1)}%</div>
+        <div class="stat-meta">${profitMargin >= 20 ? 'Healthy' : profitMargin >= 0 ? 'Thin' : 'Negative'}</div>
+      </div>
+    </div>
+
+    <!-- P&L Bar Chart -->
+    <div class="rv-panel" style="margin-bottom:20px">
+      <div class="panel-h"><div class="panel-title">Revenue vs Costs</div><div class="panel-tag">last 90 days</div></div>
+      ${!pnl.series || pnl.series.length === 0 ? html`<div class="chart-empty">No P&L trend data</div>` : html`
+      <div style="display:flex;flex-direction:column;gap:6px">
+        ${pnl.series.slice(0, 30).map(function(s, i) {
+          const maxVal = Math.max(s.revenue || 0, s.costs || 0, 0.01);
+          const revPct = Math.max((s.revenue || 0) / maxVal * 100, 2);
+          const costPct = Math.max((s.costs || 0) / maxVal * 100, 2);
+          const isProfitable = (s.revenue || 0) > (s.costs || 0);
+          return html`
+            <div style="font-family:var(--font-mono);font-size:9px;display:grid;grid-template-columns:80px 1fr;gap:8px;align-items:center">
+              <span style="color:var(--empire-fog)">${s.date ? s.date.slice(5) : ''}</span>
+              <div style="display:flex;gap:3px;align-items:center">
+                <div style="flex:${revPct};height:14px;background:var(--signal-teal);border-radius:3px;min-width:2px;opacity:0.8;transition:width .5s var(--ease-out-empire)" title="Revenue: $${(s.revenue||0).toFixed(2)}"></div>
+                <div style="flex:${costPct};height:14px;background:var(--status-red);border-radius:3px;min-width:2px;opacity:0.6;transition:width .5s var(--ease-out-empire)" title="Costs: $${(s.costs||0).toFixed(2)}"></div>
+              </div>
+            </div>
+          `;
+        })}
+      </div>
+      <div style="display:flex;gap:16px;margin-top:12px;padding-top:10px;border-top:1px solid var(--empire-divider);font-family:var(--font-mono);font-size:9px;color:var(--empire-mist)">
+        <span><span style="display:inline-block;width:10px;height:10px;background:var(--signal-teal);border-radius:2px;margin-right:4px"></span> Revenue</span>
+        <span><span style="display:inline-block;width:10px;height:10px;background:var(--status-red);border-radius:2px;margin-right:4px"></span> Costs</span>
+      </div>
+      `}
+    </div>
+
+    <!-- Source Breakdown -->
+    <div class="rv-panel" style="margin-bottom:20px">
+      <div class="panel-h"><div class="panel-title">Revenue by Source</div><div class="panel-tag">${totals.total_rows || 0} total entries</div></div>
+      ${sources.length === 0 ? html`<div class="chart-empty">No revenue ledger data for this period</div>` : html`
+      <table class="tbl">
+        <thead><tr>
+          <th>Source</th>
+          <th>Entries</th>
+          <th>Amount</th>
+          <th>% of Total</th>
+          <th>USDC</th>
+        </tr></thead>
+        <tbody>
+          ${sources.map(function(s) {
+            const color = SOURCE_COLORS[s.source_type] || BAR_COLORS[sources.indexOf(s) % BAR_COLORS.length];
+            return html`
+            <tr>
+              <td><span style="display:inline-flex;align-items:center;gap:6px"><span style="width:8px;height:8px;border-radius:50%;background:${color};display:inline-block"></span><span style="font-weight:500;color:var(--empire-white)">${s.source_type}</span></span></td>
+              <td class="tbl-num">${s.count}</td>
+              <td class="tbl-mono" style="color:var(--signal-teal);font-weight:500">$${s.total_amount.toFixed(2)}</td>
+              <td class="tbl-num">${s.pct_of_total || 0}%</td>
+              <td class="tbl-mono">$${s.total_usdc.toFixed(2)}</td>
+            </tr>`;
+          })}
+        </tbody>
+        <tfoot>
+          <tr style="background:var(--empire-elevated)">
+            <td style="font-weight:600;color:var(--empire-white);padding:12px 14px">Total</td>
+            <td class="tbl-num" style="font-weight:600;color:var(--empire-white)">${totals.total_rows || 0}</td>
+            <td class="tbl-mono" style="font-weight:600;color:var(--signal-teal)">$${totals.total_amount ? totals.total_amount.toFixed(2) : '0.00'}</td>
+            <td></td>
+            <td class="tbl-mono" style="font-weight:600;color:var(--empire-white)">$${totals.total_usdc ? totals.total_usdc.toFixed(2) : '0.00'}</td>
+          </tr>
+        </tfoot>
+      </table>`}
+    </div>
+
+    <!-- Recent Entries -->
+    <div class="rv-panel">
+      <div class="panel-h"><div class="panel-title">Recent Entries</div><div class="panel-tag">most recent ${recent.length} of ${totals.total_rows || 0}</div></div>
+      ${recent.length === 0 ? html`<div class="chart-empty">No recent entries</div>` : html`
+      <table class="tbl">
+        <thead><tr>
+          <th>Date</th>
+          <th>Source</th>
+          <th>Description</th>
+          <th>Amount</th>
+          <th>USDC</th>
+        </tr></thead>
+        <tbody>
+          ${recent.slice(0, 25).map(function(r) {
+            return html`<tr>
+              <td style="font-family:var(--font-mono);font-size:10px;color:var(--empire-fog)">${r.logged_at ? r.logged_at.slice(0, 10) : ''}</td>
+              <td><span class="bdg" style="text-transform:none">${r.source_type}</span></td>
+              <td style="font-size:11px;color:var(--empire-silver);max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r.description || ''}</td>
+              <td class="tbl-mono" style="color:var(--signal-teal)">$${r.amount.toFixed(2)}</td>
+              <td class="tbl-mono">$${(r.usdc_amount || 0).toFixed(2)}</td>
+            </tr>`;
+          })}
+        </tbody>
+      </table>`}
+    </div>
+  `;
+}
+
 function SiAdaptive() {
   const [data, setData] = useState(null);
   const [err, setErr] = useState(null);
@@ -10864,6 +11037,7 @@ function App() {
             active.id === 'bridge'        ? html`<${Bridge} />` :
             active.id === 'affiliates'    ? html`<${Affiliates} />` :
             active.id === 'cpl-pricing'   ? html`<${CplPricing} />` :
+            active.id === 'ledger'       ? html`<${RevenueLedger} />` :
 
             active.id === 'traffic-ads'  ? html`<${TrafficAds} />` :
             active.id === 'email-tracking' ? html`<${EmailTracking} />` :

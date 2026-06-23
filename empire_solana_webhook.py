@@ -174,6 +174,7 @@ def register_solana_webhook_routes(
                 for match in vault_matches:
                     # Insert revenue ledger row
                     db.table("empire_revenue_ledger").upsert({
+                        "status": "settled",
                         "transaction_signature": tx_sig,
                         "sender_address": match["from"],
                         "destination_address": vault_wallet,

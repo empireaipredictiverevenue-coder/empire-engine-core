@@ -212,16 +212,42 @@ def run_poll(sb, since_hours: int = 168) -> dict:
     ).eq("status", "pending").execute().data or []
 
     pending_count = len(pending)
-    if not pending:
-        log.info("[watcher] no pending fees — nothing to match against")
-        result = {"pending": 0, "transfers": 0, "matched": 0, "marked": 0}
-        _log_activity(sb, run_id, started_at, result, pending_count)
-        return result
 
-    log.info(f"[watcher] {pending_count} pending fees, fetching transfers since {since_hours}h ago")
+    # ── Fetch transfers BEFORE the unmatched-insert loop ──────────
+    # Always fetch transfers (even when no pending fees) so the ledger
+    # captures ALL on-chain activity regardless of fee_event state.
     transfers = _fetch_recent_usdc_transfers(VAULT_WALLET, since_unix)
     log.info(f"[watcher] fetched {len(transfers)} transfers")
 
+    # ── Upsert ALL USDC transfers as settled rows ──────────
+    # This ensures the ledger is a complete record of on-chain activity
+    # even for transfers unmatched to fee_events (manual attribution later).
+    for tx in transfers:
+        if tx["kind"] != "usdc_spl":
+            continue
+        try:
+            # Idempotent: on_conflict on transaction_signature prevents duplicates.
+            # No pre-check needed — the upsert itself is the guard.
+            sb.table("empire_revenue_ledger").upsert({
+                "status": "settled",
+                "transaction_signature": tx["sig"],
+                "sender_address": tx["from"],
+                "destination_address": VAULT_WALLET,
+                "usdc_amount": tx["amount"],
+                "tracking_memo": "vault_watcher_poll | unmatched",
+                "block_time_stamp": datetime.fromtimestamp(tx["ts"], tz=timezone.utc).isoformat(),
+                "meta": {"source": "vault_watcher", "unmatched": True},
+            }, on_conflict="transaction_signature").execute()
+        except Exception as e:
+            log.warning(f"[watcher] unmatched ledger upsert failed for {tx['sig'][:12]}: {e}")
+
+    if not pending:
+        log.info("[watcher] no pending fees — nothing to match against")
+        result = {"pending": 0, "transfers": len(transfers), "matched": 0, "marked": 0}
+        _log_activity(sb, run_id, started_at, result, pending_count)
+        return result
+
+    # (transfers already fetched above — reuse the same list)
     if not transfers:
         result = {"pending": pending_count, "transfers": 0, "matched": 0, "marked": 0}
         _log_activity(sb, run_id, started_at, result, pending_count)
@@ -258,6 +284,25 @@ def run_poll(sb, since_hours: int = 168) -> dict:
             except Exception as e:
                 log.warning(f"[watcher] mark_paid failed for {fee['claim_id'][:24]}: {e}")
                 errors += 1
+
+            # ── Upsert into empire_revenue_ledger with status='settled' ──
+            # This is the critical link: every detected on-chain USDC transfer
+            # gets a settled row in the ledger so the dashboard/reports show
+            # real on-chain activity distinct from accrued book entries.
+            try:
+                sb.table("empire_revenue_ledger").upsert({
+                    "status": "settled",
+                    "transaction_signature": tx["sig"],
+                    "sender_address": tx["from"],
+                    "destination_address": VAULT_WALLET,
+                    "usdc_amount": tx["amount"],
+                    "tracking_memo": f"vault_watcher_poll | fee_event={fee['claim_id'][:24]}",
+                    "block_time_stamp": datetime.fromtimestamp(tx["ts"], tz=timezone.utc).isoformat(),
+                    "meta": {"source": "vault_watcher", "fee_event_id": fee["id"]},
+                }, on_conflict="transaction_signature").execute()
+                log.info(f"[watcher] ledger upserted SETTLED: {tx['sig'][:12]}... ${tx['amount']:,.2f}")
+            except Exception as e:
+                log.warning(f"[watcher] ledger upsert failed for {tx['sig'][:12]}: {e}")
 
             # Thank-you SMS + Telegram ping
             cid = fee.get("contractor_id")

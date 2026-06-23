@@ -137,7 +137,7 @@ def fetch_data() -> dict:
 
     # ── Revenue ledger ─────────────────────────────────────────────
     r_rl = sb.table("empire_revenue_ledger") \
-        .select("transaction_signature,sender_address,usdc_amount,tracking_memo,block_time_stamp,logged_at") \
+        .select("transaction_signature,sender_address,usdc_amount,tracking_memo,block_time_stamp,logged_at,status") \
         .order("block_time_stamp", desc=True) \
         .limit(50) \
         .execute()
@@ -219,6 +219,12 @@ def fetch_data() -> dict:
     ledger_total = sum(float(tx.get("usdc_amount") or 0) for tx in ledger_rows)
     today_ledger_total = sum(float(tx.get("usdc_amount") or 0) for tx in today_ledger)
 
+    # ── Accrued vs settled breakdown ────────────────────────────────
+    settled_rows = [tx for tx in ledger_rows if (tx.get("status") or "").strip() == "settled"]
+    accrued_rows = [tx for tx in ledger_rows if (tx.get("status") or "").strip() != "settled"]
+    ledger_settled = sum(float(tx.get("usdc_amount") or 0) for tx in settled_rows)
+    ledger_accrued = sum(float(tx.get("usdc_amount") or 0) for tx in accrued_rows)
+
     # Enrollment stats
     active_enrollments = [e for e in enrollments if e.get("status") == "active"]
     verified_enrollments = [e for e in enrollments if e.get("verified_at")]
@@ -258,6 +264,10 @@ def fetch_data() -> dict:
         "ledger_count": len(ledger_rows),
         "today_ledger_total": round(today_ledger_total, 2),
         "today_ledger_count": len(today_ledger),
+        "ledger_settled": round(ledger_settled, 2),
+        "ledger_settled_count": len(settled_rows),
+        "ledger_accrued": round(ledger_accrued, 2),
+        "ledger_accrued_count": len(accrued_rows),
         "recent_ledger": ledger_rows[:5],
         "active_enrollments": len(active_enrollments),
         "verified_enrollments": len(verified_enrollments),
@@ -338,19 +348,24 @@ def build_message(data: dict) -> str:
     parts.append("")
 
     # ── Revenue Ledger (Solana USDC) ───────────────────────────────
-    parts.append("<b>🔗 Solana USDC Ledger</b>")
+    parts.append("<b>🔗 Revenue Ledger</b>")
     if data["ledger_count"] > 0:
-        parts.append(f"  Total inflow: <b>${data['ledger_total']:,.2f}</b> ({data['ledger_count']} txs)")
+        parts.append(f"  Total: <b>${data['ledger_total']:,.2f}</b> ({data['ledger_count']} rows)")
+        if data["ledger_settled_count"] > 0:
+            parts.append(f"  ✅ Settled (on-chain): ${data['ledger_settled']:,.2f} ({data['ledger_settled_count']} txs)")
+        if data["ledger_accrued_count"] > 0:
+            parts.append(f"  📋 Accrued (booked): ${data['ledger_accrued']:,.2f} ({data['ledger_accrued_count']} rows)")
         if data["today_ledger_count"] > 0:
-            parts.append(f"  Today: ${data['today_ledger_total']:,.2f} ({data['today_ledger_count']} txs)")
+            parts.append(f"  Today: ${data['today_ledger_total']:,.2f} ({data['today_ledger_count']} entries)")
         if data["recent_ledger"]:
             tx = data["recent_ledger"][0]
             amt = float(tx.get("usdc_amount") or 0)
             ts = (tx.get("block_time_stamp") or tx.get("logged_at") or "")[:16]
             memo = (tx.get("tracking_memo") or "-")[:40]
-            parts.append(f"  Latest: ${amt:,.2f} · {ts} · {memo}")
+            status = (tx.get("status") or "accrued")[:10]
+            parts.append(f"  Latest: ${amt:,.2f} · {ts} · {memo} [{status}]")
     else:
-        parts.append("  No on-chain USDC transactions yet")
+        parts.append("  No ledger entries yet")
     parts.append("")
 
     # ── Carrier Enrollments ────────────────────────────────────────
