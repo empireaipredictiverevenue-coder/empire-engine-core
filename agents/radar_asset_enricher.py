@@ -44,6 +44,7 @@ import httpx
 from supabase import create_client
 
 log = logging.getLogger("empire.radar_asset_enricher")
+_ZHVI_MAP = None  # lazy-loaded cache for the 26,274-zip Zillow ZHVI map
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(name)s] %(message)s")
 
 
@@ -141,6 +142,75 @@ def _formula_estimate(row: dict) -> int:
     return max(50_000, est)
 
 
+def _try_zhvi(address: str, row: dict = None) -> int | None:
+    """Look up Zillow ZHVI median home value by zip / city / metro / state.
+    Uses the pre-downloaded combined map (data/zhvi_combined.json,
+    46,719 entries: 26,274 zips + 19,467 cities + 927 metros + 51 states)."""
+    global _ZHVI_MAP
+    try:
+        if _ZHVI_MAP is None:
+            from pathlib import Path
+            map_path = Path(__file__).resolve().parents[1] / "data" / "zhvi_combined.json"
+            if not map_path.exists():
+                # Fall back to old single-purpose zip map
+                old_path = Path(__file__).resolve().parents[1] / "data" / "zhvi_zip_map.json"
+                if old_path.exists():
+                    with open(old_path) as f:
+                        import json as _json
+                        old = _json.load(f)
+                    _ZHVI_MAP = {"zip": old, "city": {}, "state": {}, "metro": {}}
+                else:
+                    return None
+            else:
+                with open(map_path) as f:
+                    import json as _json
+                    _ZHVI_MAP = _json.load(f)
+    except Exception:
+        return None
+    if not address and not row:
+        return None
+    import re as _re
+
+    def _ok(v):
+        return v and 10000 < v < 50000000
+
+    # 1. Try zip from address
+    if address:
+        m = _re.search(r"\b(\d{5})(?:-\d{4})?\b", address)
+        if m:
+            v = _ZHVI_MAP.get("zip", {}).get(m.group(1))
+            if _ok(v):
+                return int(v)
+
+    # 2. Try city from row or address
+    city = None
+    state = None
+    if row:
+        city = (row.get("city") or "").strip()
+        state = (row.get("state") or "").strip()
+    if not city and address:
+        # Best-effort: extract city from "City, ST" pattern
+        cm = _re.search(r"\b([A-Z][a-zA-Z ]+?)[,\s]+([A-Z]{2})\b", address)
+        if cm:
+            city = cm.group(1).strip()
+            state = cm.group(2).strip()
+    if city and state:
+        v = _ZHVI_MAP.get("city", {}).get(f"{city.lower()}|{state.upper()}")
+        if _ok(v):
+            return int(v)
+        # 3. Try metro (use first 3 words of city as metro guess)
+        # (most ZHVI metros are "City1-City2-City3, ST" — first word is the city)
+        v = _ZHVI_MAP.get("metro", {}).get(f"{city}, {state.upper()}")
+        if _ok(v):
+            return int(v)
+        # 4. Try state median
+        if state:
+            v = _ZHVI_MAP.get("state", {}).get(state.upper())
+            if _ok(v):
+                return int(v)
+    return None
+
+
 def _try_attom(address: str) -> int | None:
     """Use ATTOM property API if key set. Returns $ or None."""
     key = os.getenv("ATTOM_DATA_API_KEY", "")
@@ -199,6 +269,10 @@ def _lookup_asset(row: dict) -> tuple[int, str]:
         v = _try_rentcast(addr)
         if v:
             return v, "rentcast"
+    # Try Zillow ZHVI zip / city / metro / state data first (best free signal).
+    v = _try_zhvi(addr, row)
+    if v:
+        return v, "zillow_zhvi"
     return _formula_estimate(row), "formula"
 
 
