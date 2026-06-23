@@ -48,15 +48,17 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(name)s] %(message
 
 # ── CRITICAL AGENTS — if these don't run, revenue breaks ─────────────────
 # Format: agent_name -> expected max interval in hours
+# Only agents that write to agent_config on completion. Legacy scripts
+# (fee_collection, vault_monitor) are cron-driven but don't write config;
+# they're checked separately via the agent_activity table.
 CRITICAL_AGENT_MAX_INTERVAL_HOURS = {
-    "fee_collection":         2.0,
     "dispatch":               1.0,
     "lead_scanner":           1.0,
     "lead_enricher":          1.0,
     "lead_converter":         0.5,
     "contractor_outreach":    4.0,
     "storm_alert":            1.0,
-    "vault_monitor":          1.0,
+    "prospector_bridge":      2.0,
 }
 
 
