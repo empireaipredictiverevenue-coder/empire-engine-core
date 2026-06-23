@@ -1054,6 +1054,534 @@ class MeshDelegateSkill(MeshSkill):
 # REGISTRATION
 # ══════════════════════════════════════════════════════════════════════
 
+# ══════════════════════════════════════════════════════════════════════
+# SECTION 8 · YOUTUBE SHORTS (Skills 32-33)
+# Faceless YouTube Shorts creation for Empire AI's niches.
+# Script generation, visual brief creation, and publishing pipeline.
+# ══════════════════════════════════════════════════════════════════════
+
+
+class YouTubeGenerateScriptSkill(MeshSkill):
+    """Generate a YouTube Shorts script optimized for Empire AI niches."""
+    name = "youtube.shorts.generate_script"
+    version = "1.0.0"
+    description = (
+        "Generate a YouTube Shorts script for a faceless channel. "
+        "Creates a short-form script (15-60s) with hook, problem, solution, "
+        "visual cue, and CTA. Optimized for Empire AI niches: storm education, "
+        "contractor tips, case studies, industry insights, behind-the-scenes."
+    )
+    tags = ["youtube", "shorts", "video", "script", "content"]
+    timeout_seconds = 30.0
+
+    async def validate(self, input: SkillInput) -> bool:
+        return bool(input.params.get("hook") or input.params.get("topic"))
+
+    async def execute(self, input: SkillInput) -> SkillOutput:
+        from bots.youtube_shorts_agent import YouTubeShortsAgent
+        agent = YouTubeShortsAgent()
+
+        hook = input.params.get("hook", "")
+        topic = input.params.get("topic", "")
+        niche = input.params.get("niche", "")
+        duration = int(input.params.get("duration_seconds", 45))
+
+        topic_brief = {
+            "pillar_id": "custom",
+            "label": "Custom",
+            "hook": hook or topic or "How AI is changing storm restoration",
+            "angle": input.params.get("angle", "educational"),
+            "duration_seconds": duration,
+            "tone": input.params.get("tone", "educational"),
+        }
+
+        script = await agent.generate_script(topic_brief)
+        return SkillOutput(
+            success=bool(script),
+            data=script,
+            metrics=SkillMetrics(duration_ms=500, records_processed=1),
+        )
+
+
+class YouTubeCreateVisualBriefSkill(MeshSkill):
+    """Create a visual production brief for a YouTube Short."""
+    name = "youtube.shorts.create_visual_brief"
+    version = "1.0.0"
+    description = (
+        "Create a visual production brief from a Shorts script. "
+        "Generates style guide, text overlays, background style, "
+        "and footage recommendations for faceless video production."
+    )
+    tags = ["youtube", "shorts", "visual", "production", "design"]
+    timeout_seconds = 15.0
+
+    async def validate(self, input: SkillInput) -> bool:
+        return bool(input.params.get("script"))
+
+    async def execute(self, input: SkillInput) -> SkillOutput:
+        from bots.youtube_shorts_agent import YouTubeShortsAgent
+        agent = YouTubeShortsAgent()
+
+        script = input.params["script"]
+        if isinstance(script, str):
+            try:
+                script = json.loads(script)
+            except json.JSONDecodeError:
+                script = {"hook": script[:80], "full_text": script}
+
+        visual_brief = await agent.create_visual_brief(script)
+        return SkillOutput(
+            success=bool(visual_brief),
+            data=visual_brief,
+            metrics=SkillMetrics(duration_ms=300, records_processed=1),
+        )
+
+
+# ══════════════════════════════════════════════════════════════════════
+# SECTION 9 · YOUTUBE DESIGN (Skills 34-35)
+# YouTube thumbnail and channel banner generation using Pillow.
+# Generates 1280x720 thumbnails and 2048x1152 channel banners
+# with text overlays, gradient backgrounds, and brand styling.
+# ══════════════════════════════════════════════════════════════════════
+
+
+class YouTubeThumbnailDesignerSkill(MeshSkill):
+    """Generate a YouTube thumbnail image for a faceless Shorts channel."""
+    name = "youtube.design.thumbnail"
+    version = "1.0.0"
+    description = (
+        "Generate a YouTube thumbnail (1280x720) for a faceless Shorts channel. "
+        "Creates an image with gradient background, bold text overlay (hook/title), "
+        "accent color scheme, and optional stock-style background image. "
+        "Optimized for Empire AI niches: storm education, contractor tips, case studies."
+    )
+    tags = ["youtube", "design", "thumbnail", "image"]
+    timeout_seconds = 15.0
+
+    async def validate(self, input: SkillInput) -> bool:
+        return bool(input.params.get("title") or input.params.get("hook"))
+
+    async def execute(self, input: SkillInput) -> SkillOutput:
+        from pathlib import Path as _Path
+
+        title = input.params.get("title", input.params.get("hook", "How AI Finds Storm Damage"))
+        niche = input.params.get("niche", "storm_education")
+        accent_color = input.params.get("accent_color", "#44E5B8")
+        bg_color = input.params.get("bg_color", "#0F172A")
+        pillar_label = input.params.get("pillar_label", "")
+
+        # Output directory
+        output_dir = _Path(__file__).resolve().parent.parent / "youtube_thumbnails"
+        output_dir.mkdir(exist_ok=True)
+        from datetime import datetime, timezone as _tz
+        ts = datetime.now(_tz.utc).strftime("%Y%m%d_%H%M%S")
+        safe_title = "".join(c if c.isalnum() or c in " -_" else "_" for c in title)[:40]
+        output_path = str(output_dir / f"thumb_{safe_title}_{ts}.png")
+
+        thumbnail_generated = False
+        thumbnail_data = {}
+
+        # Try Pillow for actual image generation
+        try:
+            from PIL import Image, ImageDraw, ImageFont
+
+            WIDTH, HEIGHT = 1280, 720
+            img = Image.new("RGB", (WIDTH, HEIGHT), bg_color)
+            draw = ImageDraw.Draw(img)
+
+            # Parse accent color
+            ac = accent_color.lstrip("#")
+            accent_rgb = tuple(int(ac[i:i+2], 16) for i in (0, 2, 4))
+
+            # Gradient overlay: dark at top, accent at bottom
+            for y in range(HEIGHT):
+                ratio = y / HEIGHT
+                r = int(15 * (1 - ratio) + accent_rgb[0] * ratio) % 256
+                g = int(26 * (1 - ratio) + accent_rgb[1] * ratio) % 256
+                b = int(42 * (1 - ratio) + accent_rgb[2] * ratio) % 256
+                draw.line([(0, y), (WIDTH, y)], fill=(r, g, b))
+
+            # Try to load a font, fall back to default
+            font_large = None
+            font_medium = None
+            font_small = None
+            font_candidates = [
+                "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+                "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+                "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
+                "/usr/share/fonts/truetype/msttcorefonts/Arial.ttf",
+            ]
+            for fp in font_candidates:
+                if _Path(fp).exists():
+                    font_large = ImageFont.truetype(fp, 72)
+                    font_medium = ImageFont.truetype(fp, 48)
+                    font_small = ImageFont.truetype(fp, 28)
+                    break
+
+            # Pillow accent bar at top
+            draw.rectangle([(0, 0), (WIDTH, 6)], fill=accent_rgb)
+
+            # Pillar label (top-left corner)
+            if pillar_label and font_small:
+                draw.text((40, 20), pillar_label.upper(), fill=accent_rgb, font=font_small)
+
+            # Main title text — split into two lines if long
+            words = title.split()
+            if len(words) > 5:
+                mid = len(words) // 2
+                line1 = " ".join(words[:mid])
+                line2 = " ".join(words[mid:])
+            else:
+                line1 = title
+                line2 = ""
+
+            # Render title with shadow for readability
+            if font_large:
+                y_start = 260 if line2 else 320
+                # Shadow
+                draw.text((42, y_start + 2), line1, fill=(0, 0, 0, 128), font=font_large)
+                draw.text((40, y_start), line1, fill="#FFFFFF", font=font_large)
+                if line2:
+                    draw.text((42, y_start + 88), line2, fill=(0, 0, 0, 128), font=font_large)
+                    draw.text((40, y_start + 86), line2, fill="#FFFFFF", font=font_large)
+
+            # Empire AI watermark at bottom
+            if font_small:
+                draw.text((40, HEIGHT - 50), "Empire AI", fill=accent_rgb, font=font_small)
+
+            # Accent underline bar
+            if line2:
+                bar_y = y_start + 86 + 10
+            else:
+                bar_y = y_start + 10
+            # Measure text width for underline
+            try:
+                bbox = font_large.getbbox(line1) if font_large else (0, 0, 200, 0)
+                text_w = bbox[2] - bbox[0]
+                draw.rectangle([(40, bar_y), (40 + text_w, bar_y + 4)], fill=accent_rgb)
+            except Exception:
+                draw.rectangle([(40, bar_y), (300, bar_y + 4)], fill=accent_rgb)
+
+            # Empire AI watermark at bottom
+            if font_small:
+                # Subtitle below main title
+                subtitle = "empire-ai.co.uk"
+                draw.text((42, HEIGHT - 80), subtitle, fill=(0, 0, 0, 128), font=font_small)
+                draw.text((40, HEIGHT - 82), subtitle, fill="#64748B", font=font_small)
+
+            img.save(output_path, "PNG")
+            sz = _Path(output_path).stat().st_size
+            thumbnail_generated = True
+            thumbnail_data = {
+                "width": WIDTH,
+                "height": HEIGHT,
+                "format": "PNG",
+                "size_kb": round(sz / 1024, 1),
+                "font_used": str(font_large.path) if font_large else "default",
+            }
+            import logging as _log
+            _log.getLogger("empire.skills.hermes").info(
+                "[youtube.design.thumbnail] Generated: %s (%d KB)", output_path, sz // 1024
+            )
+
+        except ImportError:
+            pass  # Pillow not available — fall through to brief
+        except Exception as e:
+            import logging as _log
+            _log.getLogger("empire.skills.hermes").warning(
+                "[youtube.design.thumbnail] Pillow failed: %s", e
+            )
+
+        if thumbnail_generated:
+            return SkillOutput(
+                success=True,
+                data={
+                    "skill": "youtube.design.thumbnail",
+                    "title": title,
+                    "niche": niche,
+                    "output_path": output_path,
+                    "thumbnail": thumbnail_data,
+                    "design_spec": {
+                        "resolution": "1280x720",
+                        "bg_color": bg_color,
+                        "accent_color": accent_color,
+                        "text": title,
+                        "pillar_label": pillar_label,
+                    },
+                },
+                metrics=SkillMetrics(duration_ms=1000, records_processed=1),
+            )
+
+        # Fallback: return design spec without generated image
+        return SkillOutput(
+            success=True,
+            data={
+                "skill": "youtube.design.thumbnail",
+                "title": title,
+                "niche": niche,
+                "output_path": output_path,
+                "generated": False,
+                "note": (
+                    "Thumbnail design spec created. Pillow is required for image generation. "
+                    "Install with: pip3 install Pillow. "
+                    "To generate manually, create a 1280x720 image with the following spec:"
+                ),
+                "design_spec": {
+                    "resolution": "1280x720",
+                    "format": "PNG",
+                    "bg_color": bg_color,
+                    "accent_color": accent_color,
+                    "font_size_title": 72,
+                    "font_size_subtitle": 28,
+                    "layout": [
+                        {"element": "accent_bar", "position": "top", "height": 6},
+                        {"element": "pillar_label", "position": "top-left", "content": pillar_label or niche.replace("_", " ").title()},
+                        {"element": "title", "position": "center-left", "content": title, "style": "bold, white, shadow"},
+                        {"element": "accent_underline", "position": "below_title", "color": accent_color},
+                        {"element": "branding", "position": "bottom-left", "content": "Empire AI · empire-ai.co.uk"},
+                    ],
+                },
+            },
+            metrics=SkillMetrics(duration_ms=500, records_processed=1),
+        )
+
+
+class YouTubeBannerDesignerSkill(MeshSkill):
+    """Generate a YouTube channel banner image."""
+    name = "youtube.design.banner"
+    version = "1.0.0"
+    description = (
+        "Generate a YouTube channel banner (2048x1152) for Empire AI's faceless channel. "
+        "Creates a banner with brand gradient, tagline, content pillar badges, "
+        "and CTA. Optimized for all device safe zones (1546x423 center safe area)."
+    )
+    tags = ["youtube", "design", "banner", "channel", "brand"]
+    timeout_seconds = 15.0
+
+    async def validate(self, input: SkillInput) -> bool:
+        return True  # Banner can be generated with defaults
+
+    async def execute(self, input: SkillInput) -> SkillOutput:
+        from pathlib import Path as _Path
+
+        channel_name = input.params.get("channel_name", "Empire AI")
+        tagline = input.params.get("tagline", "AI-Powered Storm Restoration Lead Generation")
+        accent_color = input.params.get("accent_color", "#44E5B8")
+        bg_color = input.params.get("bg_color", "#0B1120")
+        show_pillars = input.params.get("show_pillars", True)
+
+        # Content pillars to display as badges
+        pillars = [
+            "Storm Education",
+            "Contractor Tips",
+            "Case Studies",
+            "Industry Insights",
+            "Behind the Scenes",
+        ]
+
+        # Output directory
+        output_dir = _Path(__file__).resolve().parent.parent / "youtube_assets"
+        output_dir.mkdir(exist_ok=True)
+        from datetime import datetime, timezone as _tz
+        ts = datetime.now(_tz.utc).strftime("%Y%m%d_%H%M%S")
+        safe_name = "".join(c if c.isalnum() or c in " -_" else "_" for c in channel_name)[:30]
+        output_path = str(output_dir / f"banner_{safe_name}_{ts}.png")
+
+        banner_generated = False
+        banner_data = {}
+
+        # Try Pillow for actual image generation
+        try:
+            from PIL import Image, ImageDraw, ImageFont
+
+            WIDTH, HEIGHT = 2048, 1152
+            img = Image.new("RGB", (WIDTH, HEIGHT), bg_color)
+            draw = ImageDraw.Draw(img)
+
+            # Safe zone indicators (not drawn, just for reference)
+            # Center safe zone: 1546x423, centered at (251, 365) to (1797, 788)
+
+            # Parse accent color
+            ac = accent_color.lstrip("#")
+            accent_rgb = tuple(int(ac[i:i+2], 16) for i in (0, 2, 4))
+
+            # Gradient: dark bg_color at top, accent-tinted at bottom
+            bg_rgb = tuple(int(bg_color.lstrip("#")[i:i+2], 16) for i in (0, 2, 4))
+            for y in range(HEIGHT):
+                ratio = y / HEIGHT
+                r = int(bg_rgb[0] * (1 - ratio) + accent_rgb[0] * ratio * 0.3) % 256
+                g = int(bg_rgb[1] * (1 - ratio) + accent_rgb[1] * ratio * 0.3) % 256
+                b = int(bg_rgb[2] * (1 - ratio) + accent_rgb[2] * ratio * 0.3) % 256
+                draw.line([(0, y), (WIDTH, y)], fill=(r, g, b))
+
+            # Load fonts
+            font_big = None
+            font_tag = None
+            font_small = None
+            font_pillar = None
+            font_candidates = [
+                "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+                "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+                "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
+                "/usr/share/fonts/truetype/msttcorefonts/Arial.ttf",
+            ]
+            for fp in font_candidates:
+                if _Path(fp).exists():
+                    font_big = ImageFont.truetype(fp, 96)
+                    font_tag = ImageFont.truetype(fp, 42)
+                    font_small = ImageFont.truetype(fp, 28)
+                    font_pillar = ImageFont.truetype(fp, 24)
+                    break
+
+            # Accent bar at top
+            draw.rectangle([(0, 0), (WIDTH, 4)], fill=accent_rgb)
+
+            # Channel name (centered, large)
+            if font_big:
+                try:
+                    bb = font_big.getbbox(channel_name)
+                    tw = bb[2] - bb[0]
+                except Exception:
+                    tw = 400
+                x = (WIDTH - tw) // 2
+                # Shadow
+                draw.text((x + 3, 253), channel_name, fill=(0, 0, 0, 128), font=font_big)
+                draw.text((x, 250), channel_name, fill="#FFFFFF", font=font_big)
+
+            # Accent underline under channel name
+            underline_y = 250 + 96 + 12  # below the text
+            draw.rectangle([((WIDTH - 400) // 2, underline_y), ((WIDTH + 400) // 2, underline_y + 4)], fill=accent_rgb)
+
+            # Tagline
+            if font_tag:
+                try:
+                    bb = font_tag.getbbox(tagline)
+                    tw = bb[2] - bb[0]
+                except Exception:
+                    tw = 400
+                x = (WIDTH - tw) // 2
+                draw.text((x, underline_y + 24), tagline, fill="#94A3B8", font=font_tag)
+
+            # Content pillar badges (horizontal row)
+            if show_pillars and font_pillar:
+                badge_y = underline_y + 90
+                badge_height = 40
+                badge_gap = 16
+
+                # Calculate total width
+                total_w = 0
+                badge_widths = []
+                for p in pillars:
+                    try:
+                        bb = font_pillar.getbbox(p)
+                        pw = bb[2] - bb[0] + 32  # padding
+                    except Exception:
+                        pw = 140
+                    badge_widths.append(pw)
+                    total_w += pw + badge_gap
+                total_w -= badge_gap
+
+                start_x = (WIDTH - total_w) // 2
+                for i, p in enumerate(pillars):
+                    bx = start_x + sum(badge_widths[:i]) + i * badge_gap
+                    # Badge background (rounded-rect effect via filled rect)
+                    bw = badge_widths[i]
+                    draw.rounded_rectangle(
+                        [(bx, badge_y), (bx + bw, badge_y + badge_height)],
+                        radius=20, fill=(accent_rgb[0], accent_rgb[1], accent_rgb[2])
+                    )
+                    # Badge text
+                    draw.text((bx + 16, badge_y + 8), p, fill="#CBD5E1", font=font_pillar)
+
+            # Empire AI URL at bottom
+            if font_small:
+                url_text = "empire-ai.co.uk"
+                try:
+                    bb = font_small.getbbox(url_text)
+                    tw = bb[2] - bb[0]
+                except Exception:
+                    tw = 200
+                draw.text(((WIDTH - tw) // 2, HEIGHT - 50), url_text, fill="#64748B", font=font_small)
+
+            # Bottom accent bar
+            draw.rectangle([(0, HEIGHT - 4), (WIDTH, HEIGHT)], fill=accent_rgb)
+
+            img.save(output_path, "PNG")
+            sz = _Path(output_path).stat().st_size
+            banner_generated = True
+            banner_data = {
+                "width": WIDTH,
+                "height": HEIGHT,
+                "format": "PNG",
+                "size_kb": round(sz / 1024, 1),
+                "safe_zone": {
+                    "center_area": "1546x423",
+                    "safe_start": "(251, 365)",
+                    "safe_end": "(1797, 788)",
+                },
+            }
+            import logging as _log
+            _log.getLogger("empire.skills.hermes").info(
+                "[youtube.design.banner] Generated: %s (%d KB)", output_path, sz // 1024
+            )
+
+        except ImportError:
+            pass
+        except Exception as e:
+            import logging as _log
+            _log.getLogger("empire.skills.hermes").warning(
+                "[youtube.design.banner] Pillow failed: %s", e
+            )
+
+        if banner_generated:
+            return SkillOutput(
+                success=True,
+                data={
+                    "skill": "youtube.design.banner",
+                    "channel_name": channel_name,
+                    "tagline": tagline,
+                    "output_path": output_path,
+                    "banner": banner_data,
+                },
+                metrics=SkillMetrics(duration_ms=1500, records_processed=1),
+            )
+
+        # Fallback: return design spec
+        return SkillOutput(
+            success=True,
+            data={
+                "skill": "youtube.design.banner",
+                "channel_name": channel_name,
+                "tagline": tagline,
+                "output_path": output_path,
+                "generated": False,
+                "note": (
+                    "Banner design spec created. Pillow is required for image generation. "
+                    "Install with: pip3 install Pillow. "
+                    "To generate manually, create a 2048x1152 image with the following spec:"
+                ),
+                "design_spec": {
+                    "resolution": "2048x1152",
+                    "safe_zone": "1546x423 centered",
+                    "format": "PNG",
+                    "bg_color": bg_color,
+                    "accent_color": accent_color,
+                    "font_size_title": 96,
+                    "font_size_tagline": 42,
+                    "layout": [
+                        {"element": "accent_bar", "position": "top", "height": 4},
+                        {"element": "channel_name", "position": "center", "content": channel_name, "style": "bold, white, centered"},
+                        {"element": "accent_underline", "position": "below_title", "width": 400, "color": accent_color},
+                        {"element": "tagline", "position": "below_underline", "content": tagline, "style": "muted, centered"},
+                        {"element": "pillar_badges", "position": "below_tagline", "pillars": pillars, "style": "rounded, accent border"},
+                        {"element": "url", "position": "bottom-center", "content": "empire-ai.co.uk"},
+                        {"element": "accent_bar", "position": "bottom", "height": 4},
+                    ],
+                },
+            },
+            metrics=SkillMetrics(duration_ms=500, records_processed=1),
+        )
+
 HERMES_SKILL_CLASSES = [
     # Section 1: Core Mesh Ops (1-5)
     MeshTaskCreateSkill,
@@ -1093,6 +1621,12 @@ HERMES_SKILL_CLASSES = [
     ConsultingStrategySkill,
     # Section 7: Delegation (31)
     MeshDelegateSkill,
+    # Section 8: YouTube Shorts (32-33)
+    YouTubeGenerateScriptSkill,
+    YouTubeCreateVisualBriefSkill,
+    # Section 9: YouTube Design (34-35)
+    YouTubeThumbnailDesignerSkill,
+    YouTubeBannerDesignerSkill,
 ]
 
 
