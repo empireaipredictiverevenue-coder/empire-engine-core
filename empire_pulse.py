@@ -42,6 +42,11 @@ except Exception:
     pass
 
 from supabase import create_client
+try:
+    from empire_vonage_email import _vonage_readiness, _skip_trace_batch
+except ImportError:
+    _vonage_readiness = None
+    _skip_trace_batch = None
 
 log = logging.getLogger("empire_pulse")
 
@@ -648,6 +653,19 @@ def register_pulse_routes(app, get_db: Optional[Callable] = None):
     async def _admin_health_route():
         return JSONResponse(_admin_health(get_db()))
     app.add_api_route("/api/v1/admin/health", _admin_health_route, methods=["GET"])
+
+    # Vonage readiness + email skip-trace
+    async def _vonage_ready_route():
+        if _vonage_readiness is None:
+            return JSONResponse({"error": "module not loaded"})
+        return JSONResponse(_vonage_readiness())
+    app.add_api_route("/api/v1/admin/vonage-ready", _vonage_ready_route, methods=["GET"])
+
+    async def _skip_trace_route(limit: int = 100):
+        if _skip_trace_batch is None:
+            return JSONResponse({"error": "module not loaded"})
+        return JSONResponse(_skip_trace_batch(get_db(), limit=limit))
+    app.add_api_route("/api/v1/admin/skip-trace", _skip_trace_route, methods=["POST"])
 
     # Real replies: SMS from real contractors (excludes 555 sandbox)
     async def _real_replies_route(limit: int = 50, hours: int = 168):
