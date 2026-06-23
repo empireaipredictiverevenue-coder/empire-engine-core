@@ -316,37 +316,6 @@ async def bbb_stats():
         by_niche[n] = by_niche.get(n, 0) + 1
     return JSONResponse({"total": len(r), "by_metro": dict(sorted(by_metro.items(), key=lambda x: -x[1])[:20]), "by_niche": dict(sorted(by_niche.items(), key=lambda x: -x[1])[:20])})
 
-
-@app.get("/api/v1/bbb/recent")
-async def bbb_recent(limit: int = 50, metro: str = None, niche: str = None):
-    from fastapi.responses import JSONResponse
-    from supabase import create_client as _sb_create
-    sb = _sb_create(os.environ["SUPABASE_URL"], os.environ["SUPABASE_SERVICE_KEY"])
-    q = sb.table("prospects").select("id,business_name,phone,website,niche,metro,created_at,buy_signal_score").like("notes", "%bbb-search%").order("created_at", desc=True).limit(limit)
-    if metro: q = q.eq("metro", metro)
-    if niche: q = q.eq("niche", niche)
-    return JSONResponse({"prospects": [{"name": r.get("business_name"), **r} for r in (q.execute().data or [])]})
-
-@app.get("/api/v1/bbb/stats")
-async def bbb_stats():
-    from fastapi.responses import JSONResponse
-    from supabase import create_client as _sb_create
-    sb = _sb_create(os.environ["SUPABASE_URL"], os.environ["SUPABASE_SERVICE_KEY"])
-    r = sb.table("prospects").select("metro,niche").like("notes", "%bbb-search%").execute().data or []
-    by_metro = {}; by_niche = {}
-    for row in r:
-        m = row.get("metro") or "?"
-        n = row.get("niche") or "?"
-        by_metro[m] = by_metro.get(m, 0) + 1
-        by_niche[n] = by_niche.get(n, 0) + 1
-    return JSONResponse({"total": len(r), "by_metro": dict(sorted(by_metro.items(), key=lambda x: -x[1])[:20]), "by_niche": dict(sorted(by_niche.items(), key=lambda x: -x[1])[:20])})
-
-
-
-    return {"ok": True, "msg": "test2 endpoint"}
-    return {"ok": True, "msg": "test2 endpoint"}
-
-
 app.include_router(customer_router)
 
 app.add_middleware(
