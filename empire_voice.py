@@ -958,6 +958,8 @@ def register_voice_routes(
     # ── INBOUND ANSWER WEBHOOK ──────────────────────────────────────────
     @app.get("/api/v1/voice/answer")
     @app.post("/api/v1/voice/answer")
+    @app.get("/webhook/vonage-answer")
+    @app.post("/webhook/vonage-answer")
     async def voice_answer(request: Request, background_tasks: BackgroundTasks):
         """
         Vonage hits this when a call comes in. Returns NCCO immediately;
@@ -1230,6 +1232,8 @@ def register_voice_routes(
 
     # ── EVENT WEBHOOK ───────────────────────────────────────────────────
     @app.post("/api/v1/voice/events")
+    @app.post("/webhook/vonage-event")
+    @app.post("/api/v1/vonage/status")
     async def voice_events(request: Request):
         """
         Vonage posts call lifecycle events here: ringing, answered,

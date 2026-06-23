@@ -2380,48 +2380,6 @@ async def revenue_pnl_summary(auth: bool = Depends(require_auth), days: int = 90
         log.warning(f"[pnl-summary] query failed: {e}")
 
     return JSONResponse(result)
-@app.post("/webhook/vonage-answer")
-async def vonage_answer_alias(request: Request):
-    """Proxy to /api/v1/voice/answer — the real Vonage answer webhook."""
-    body = await request.body()
-    params = dict(request.query_params)
-    try:
-        async with _httpx.AsyncClient(base_url="http://localhost:8001", timeout=5.0) as client:
-            resp = await client.post(
-                "/api/v1/voice/answer",
-                content=body,
-                params=params,
-                headers={"Content-Type": "application/json"},
-            )
-        return Response(
-            content=resp.content,
-            status_code=resp.status_code,
-            media_type=resp.headers.get("content-type", "application/json"),
-        )
-    except Exception as e:
-        log.warning(f"[vonage-answer-alias] proxy failed: {e}")
-        return JSONResponse({"ok": False, "error": "vonage proxy unavailable"}, status_code=502)
-
-@app.post("/webhook/vonage-event")
-async def vonage_event_alias(request: Request):
-    """Proxy to /api/v1/voice/events — the real Vonage event webhook."""
-    body = await request.body()
-    try:
-        async with _httpx.AsyncClient(base_url="http://localhost:8001", timeout=5.0) as client:
-            resp = await client.post(
-                "/api/v1/voice/events",
-                content=body,
-                headers={"Content-Type": "application/json"},
-            )
-        return Response(
-            content=resp.content,
-            status_code=resp.status_code,
-            media_type=resp.headers.get("content-type", "application/json"),
-        )
-    except Exception as e:
-        log.warning(f"[vonage-event-alias] proxy failed: {e}")
-        return JSONResponse({"ok": False, "error": "vonage proxy unavailable"}, status_code=502)
-
 # Old Vonage dashboard webhook URL aliases — the dashboard was configured
 # with /api/v1/vonage/inbound and /api/v1/vonage/status (legacy paths).
 # These proxy to the real endpoints so existing Vonage app config doesn't
@@ -2489,26 +2447,6 @@ async def vonage_inbound_legacy(request: Request):
         status_code=resp.status_code,
         media_type=resp.headers.get("content-type", "application/json"),
     )
-
-@app.post("/api/v1/vonage/status")
-async def vonage_status_legacy(request: Request):
-    """Legacy alias for /api/v1/voice/events — kept for Vonage dashboard config."""
-    body = await request.body()
-    try:
-        async with _httpx.AsyncClient(base_url="http://localhost:8001", timeout=5.0) as client:
-            resp = await client.post(
-                "/api/v1/voice/events",
-                content=body,
-                headers={"Content-Type": "application/json"},
-            )
-        return Response(
-            content=resp.content,
-            status_code=resp.status_code,
-            media_type=resp.headers.get("content-type", "application/json"),
-        )
-    except Exception as e:
-        log.warning(f"[vonage-status-legacy] proxy failed: {e}")
-        return JSONResponse({"ok": False, "error": "vonage proxy unavailable"}, status_code=502)
 
 # Vonage SMS delivery receipt webhook — called by Vonage Messages API
 # when an outbound SMS delivery status changes. Updates sms_log.delivered
