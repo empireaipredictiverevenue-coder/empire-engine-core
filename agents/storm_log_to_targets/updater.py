@@ -901,6 +901,45 @@ def run_once(dry_run_override: Optional[bool] = None) -> dict:
             log.info(f"[{AGENT_NAME}] severity_fill: set damage_severity on {filled} targets (urgency already sufficient)")
 
     total_upgraded = len(updates_to_apply) + len(severity_fill)
+
+    # ── 4. Storm-trigger webhook (fire for any metro with urgent targets) ──
+    webhook_fired = 0
+    webhook_skipped = 0
+    if not dry_run and total_upgraded > 0:
+        try:
+            import httpx
+            hub_url = os.getenv("HUB_URL", "http://localhost:8001").rstrip("/")
+            for metro in qualifying:
+                urg = _RISK_RANK_MAP.get(metro["risk_rank"], ("Moderate", 5))[1]
+                if urg < 7:
+                    continue
+                # Only fire if this metro actually had targets upgraded
+                metro_targets = [tid for tid, (sev, u) in updates_to_apply.items() if u >= 7]
+                if not metro_targets:
+                    continue
+                payload = {
+                    "city": metro["metro"],
+                    "urgency_score": urg,
+                    "sub_niche": metro.get("sub_niche") or "general",
+                }
+                try:
+                    r = httpx.post(
+                        f"{hub_url}/api/v1/webhook/storm-target",
+                        json=payload,
+                        timeout=8,
+                    )
+                    if r.status_code in (200, 201, 202) and r.json().get("fired"):
+                        webhook_fired += 1
+                    else:
+                        webhook_skipped += 1
+                except Exception as e:
+                    log.warning(f"storm-trigger webhook failed for {metro['metro']}: {e}")
+                    webhook_skipped += 1
+            if webhook_fired:
+                log.info(f"[{AGENT_NAME}] storm-trigger webhook: fired for {webhook_fired} metros, skipped {webhook_skipped}")
+        except Exception as e:
+            log.warning(f"[{AGENT_NAME}] storm-trigger webhook block failed: {e}")
+
     summary = (
         f"[{'DRY-RUN' if dry_run else 'LIVE'}] "
         f"metros={len(qualifying)} "
@@ -909,6 +948,7 @@ def run_once(dry_run_override: Optional[bool] = None) -> dict:
         f"severity_filled={len(severity_fill)} "
         f"targets_updated={updated} "
         f"errors={errors}"
+        f"webhook_fired={webhook_fired} webhook_skipped={webhook_skipped}"
     )
     log.info(summary)
     finished_at = _log_activity(
