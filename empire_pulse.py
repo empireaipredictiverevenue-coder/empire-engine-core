@@ -517,6 +517,80 @@ def _admin_health(sb) -> dict:
 
 
 
+
+
+# ── REAL REPLIES (filtered: is_test=false) ──────────────────────────────
+def _real_replies(sb, limit: int = 50, hours: int = 168) -> list[dict]:
+    """Inbound SMS from real contractors (excludes 555 sandbox numbers).
+    Joins to contractors by phone, shows name/metro/niche + which
+    sequence they were on."""
+    try:
+        cutoff = (datetime.now(timezone.utc) - timedelta(hours=hours)).isoformat()
+        r = sb.table("sms_log").select("phone,body,created_at").eq("direction","inbound").eq("is_test", False).gte("created_at", cutoff).order("created_at", desc=True).limit(limit).execute()
+        inbound = r.data or []
+    except Exception as e:
+        return [{"error": str(e)[:200]}]
+    if not inbound:
+        return []
+    # join to contractors
+    phones = list({x.get("phone","") for x in inbound if x.get("phone")})
+    c_map: dict = {}
+    try:
+        for i in range(0, len(phones), 500):
+            chunk = phones[i:i+500]
+            rs = sb.table("contractors").select("id,name,phone,metro,niche,active,trust_score,completed_jobs").in_("phone", chunk).execute()
+            for c in (rs.data or []):
+                c_map[c["phone"]] = c
+            # Also try without +1 prefix
+            for phone in chunk:
+                if phone.startswith("+1") and len(phone) == 12:
+                    short = phone[2:]
+                    if short not in c_map:
+                        try:
+                            r2 = sb.table("contractors").select("id,name,phone,metro,niche,active,trust_score,completed_jobs").eq("phone", short).limit(1).execute()
+                            if r2.data:
+                                c_map[phone] = r2.data[0]
+                        except: pass
+    except Exception as e:
+        pass
+    # also check sms_sequences for step info
+    seq_map: dict = {}
+    try:
+        for phone in phones:
+            r = sb.table("sms_sequences").select("phone,status,current_step,last_sent_at,created_at").eq("phone", phone).eq("sequence_type","contractor_recruit").execute()
+            for s in (r.data or []):
+                seq_map[s["phone"]] = s
+    except: pass
+
+    out = []
+    for x in inbound:
+        p = x.get("phone","")
+        c = c_map.get(p, {})
+        s = seq_map.get(p, {})
+        out.append({
+            "phone": p,
+            "body": (x.get("body") or "")[:140],
+            "created_at": x.get("created_at"),
+            "contractor": {
+                "id": c.get("id"),
+                "name": c.get("name"),
+                "metro": c.get("metro"),
+                "niche": c.get("niche"),
+                "active": c.get("active"),
+                "trust_score": c.get("trust_score"),
+                "completed_jobs": c.get("completed_jobs"),
+            } if c else None,
+            "sequence": {
+                "status": s.get("status"),
+                "current_step": s.get("current_step"),
+                "last_sent_at": s.get("last_sent_at"),
+            } if s else None,
+        })
+    return out
+
+
+
+
 def register_pulse_routes(app, get_db: Optional[Callable] = None):
     """Mount all pulse + storm-trigger routes on the FastAPI app."""
     from fastapi.responses import HTMLResponse, JSONResponse
@@ -574,6 +648,11 @@ def register_pulse_routes(app, get_db: Optional[Callable] = None):
     async def _admin_health_route():
         return JSONResponse(_admin_health(get_db()))
     app.add_api_route("/api/v1/admin/health", _admin_health_route, methods=["GET"])
+
+    # Real replies: SMS from real contractors (excludes 555 sandbox)
+    async def _real_replies_route(limit: int = 50, hours: int = 168):
+        return JSONResponse(_real_replies(get_db(), limit=limit, hours=hours))
+    app.add_api_route("/api/v1/pulse/replies", _real_replies_route, methods=["GET"])
 
     log.info("pulse routes registered: /pulse + 7 JSON endpoints + storm webhook")
 
