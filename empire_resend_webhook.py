@@ -120,6 +120,9 @@ def _find_outreach_id_from_event(data: dict) -> Optional[str]:
     """Pull the contractor_outreach row id from the email's tags."""
     tags = data.get("tags") or []
     for tag in tags:
+        # Resend sometimes sends tags as plain strings instead of objects.
+        if not isinstance(tag, dict):
+            continue
         if tag.get("name") == "outreach_id":
             return tag.get("value")
     return None
