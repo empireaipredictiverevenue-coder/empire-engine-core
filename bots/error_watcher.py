@@ -188,6 +188,21 @@ def _save_finding(sb, finding: dict) -> None:
 
         sb.table("watcher_findings").insert(finding).execute()
         log.info(f"[watcher] 🆕 finding: [{finding['severity']}] {finding['title']}")
+        # Mirror to self_healer_log so all 3 oversight layers (supervisor,
+        # self-healer, error-watcher) share one queryable log. Error-watcher
+        # is non-auto-fix by design — it feeds the coder. self_healer is
+        # auto-fix. Putting both rows in self_healer_log makes the timeline
+        # of every issue (detected + fixed-or-not) trivially queryable.
+        try:
+            sb.table("self_healer_log").insert({
+                "action": "watcher_finding:" + finding.get("finding_type", "?"),
+                "target": finding.get("agent_name", "?"),
+                "status": finding.get("severity", "info"),  # info|warn|critical
+                "detail": (finding.get("title", "") + " | " + (finding.get("summary") or ""))[:500],
+                "fired_at": datetime.now(timezone.utc).isoformat(),
+            }).execute()
+        except Exception as e:
+            log.debug(f"[watcher] self_healer_log mirror failed: {e}")
     except Exception as e:
         # If table doesn't exist, log a one-time message
         if "relation" in str(e).lower() and "watcher_findings" in str(e).lower():

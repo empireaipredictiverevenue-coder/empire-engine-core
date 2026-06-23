@@ -26,6 +26,7 @@ from __future__ import annotations
 import html
 import json
 import logging
+import re
 import os
 import uuid
 from collections import Counter, defaultdict
@@ -129,10 +130,8 @@ def pulse_sms_volume(sb, hours: int = 24) -> list[dict]:
 
 def pulse_leads_hot(sb, limit: int = 25) -> list[dict]:
     """Leads awaiting contractor action (pending_outreach, top score)."""
-    # Cap aggressively; supervisor + dashboard both use this
-    limit = min(limit, 50)
     r = (sb.table("enriched_leads")
-            .select("phone,city,state,score,asset_value")
+            .select("id,phone,city,state,score,asset_value,created_at,address")
             .eq("status", "pending_outreach")
             .order("score", desc=True)
             .limit(limit)
@@ -162,26 +161,32 @@ def pulse_reply_rate(sb, days: int = 7) -> list[dict]:
 
 
 def pulse_metro_heat(sb, hours: int = 24) -> list[dict]:
-    """SMS activity per metro, last N hours. Read directly from outreach_log
-    which has contractor_id (so we can join via meta.contractor_id for metro)."""
-    # Simpler/faster: count sms_log by hour, ignore metro (cheap path).
-    # Metro-join requires a phone->contractor lookup that's slow at scale.
+    """SMS activity per metro, last N hours (from contractors.metro)."""
     cutoff = (datetime.now(timezone.utc) - timedelta(hours=hours)).isoformat()
-    r = sb.table("sms_log").select("created_at").eq("direction","outbound").gte("created_at", cutoff).limit(2000).execute()
-    by_hour = Counter()
-    for x in (r.data or []):
-        h = (x.get("created_at") or "")[:13] + ":00"
-        by_hour[h] += 1
-    # Aggregate by hour into top buckets
-    return [{"hour": h, "sms_sent": n} for h, n in sorted(by_hour.items())[-24:]]
+    # Get outbound sms from last 24h with phone
+    r = sb.table("sms_log").select("phone").eq("direction","outbound").gte("created_at", cutoff).limit(5000).execute()
+    phones = [x.get("phone") for x in (r.data or []) if x.get("phone")]
+    if not phones:
+        return []
+    # Lookup metros for these phones (chunked)
+    by_metro = Counter()
+    for i in range(0, len(phones), 500):
+        chunk = phones[i:i+500]
+        conts = sb.table("contractors").select("phone,metro").in_("phone", chunk).execute()
+        for c in (conts.data or []):
+            m = c.get("metro") or "?"
+            by_metro[m] += 1
+    return [{"metro": m, "sms_sent": n} for m, n in by_metro.most_common(20)]
 
 
 def pulse_contractor_stats(sb, limit: int = 20) -> list[dict]:
-    """Top engaged contractors. Aggregate from sms_sequences + contractor reply rate."""
+    """Top engaged contractors (most outreach activity, most replies)."""
+    # We don't have direct per-contractor metrics — derive from sms_sequences
     r = (sb.table("sms_sequences")
-            .select("phone,status,created_at")
+            .select("phone,status,created_at,last_step_at,total_steps")
             .eq("sequence_type", "contractor_recruit")
-            .limit(limit * 3)
+            .order("last_step_at", desc=True, nullsfirst=False)
+            .limit(limit)
             .execute())
     return r.data or []
 
@@ -227,27 +232,30 @@ def _fan_out_storm_sms(sb, target: dict) -> dict:
     # Build SMS body
     body = f"⚡ STORM ALERT [{city or 'your area'}]: {urgency}/10 urgency — leads available now. Reply YES to claim. - Empire AI"
 
-    # Write outreach_log directly (the hub will pick these up and send SMS via its cron)
+    # Dispatch via hub
+    import httpx
+    hub = os.getenv("HUB_URL", "http://localhost:8001").rstrip("/")
     sent = 0
     errors = 0
     for c in matched:
         try:
-            sb.table("outreach_log").insert({
-                "agent_name": "pulse_storm_trigger",
-                "run_id": str(uuid.uuid4()),
-                "channel": "sms",
-                "sequence": "storm_alert",
-                "step": 1,
-                "mode": "live",
-                "compliance_passed": True,
-                "body_preview": body[:120],
-                "meta": {"phone": c["phone"], "city": city, "urgency": urgency,
-                         "niche": sub_niche, "trigger": "storm_target_webhook",
-                         "contractor_id": c["id"], "contractor_name": c.get("name","")},
-            }).execute()
-            sent += 1
+            r = httpx.post(
+                f"{hub}/api/v1/sms/enroll",
+                json={
+                    "phone": c["phone"],
+                    "sequence": "storm_alert",
+                    "step": 1,
+                    "metadata": {"city": city, "urgency": urgency, "niche": sub_niche,
+                                 "contractor_id": c["id"], "trigger": "storm_target_webhook"},
+                },
+                timeout=10,
+            )
+            if r.status_code in (200, 201, 202):
+                sent += 1
+            else:
+                errors += 1
         except Exception as e:
-            log.warning(f"storm-trigger: outreach_log insert failed: {e}")
+            log.warning(f"storm-trigger: hub post failed for {c.get('phone')}: {e}")
             errors += 1
 
     # Log
@@ -315,7 +323,7 @@ def _pulse_dashboard_html() -> str:
       <div id="sms-chart"></div>
     </div>
     <div class="section">
-      <h2>SMS by Hour (last 24h)</h2>
+      <h2>Metro Heat (SMS last 24h)</h2>
       <div id="metro-heat"></div>
     </div>
   </div>
@@ -368,7 +376,7 @@ async function refresh() {
 
     const heat = await fetchJson('/api/v1/pulse/metro-heat?hours=24');
     document.getElementById('metro-heat').innerHTML = heat.length === 0 ? '<em style="color:var(--muted)">no data</em>'
-      : '<table>' + heat.slice(0, 12).map(m => '<tr><td>'+(m.hour||m.metro)+'</td><td style="text-align:right;color:var(--teal)">'+m.sms_sent+'</td></tr>').join('') + '</table>';
+      : '<table>' + heat.slice(0, 12).map(m => '<tr><td>'+m.metro+'</td><td style="text-align:right;color:var(--teal)">'+m.sms_sent+'</td></tr>').join('') + '</table>';
 
     const rr = await fetchJson('/api/v1/pulse/reply-rate?days=7');
     document.getElementById('reply-rate').innerHTML = rr.length === 0 ? '<em style="color:var(--muted)">no data</em>'
@@ -395,6 +403,120 @@ setInterval(refresh, 30000);
 
 
 # ── ROUTE REGISTRATION ─────────────────────────────────────────────────────
+
+
+# ── UNIFIED ADMIN HEALTH (one endpoint, all 3 oversight layers) ────────
+def _admin_health(sb) -> dict:
+    """Returns a single snapshot: supervisor + self_healer + error-watcher
+    + pm2 state + recent agent errors. Used by /api/v1/admin/health."""
+    out = {"ts": datetime.now(timezone.utc).isoformat()}
+
+    # 1) Supervisor: most recent agent_config rows
+    try:
+        cfg = sb.table("agent_config").select("agent_name,last_run_at,last_run_status,enabled").order("last_run_at", desc=True, nullsfirst=False).limit(20).execute()
+        supervisor = []
+        stale_cutoff = datetime.now(timezone.utc) - timedelta(hours=4)
+        for c in (cfg.data or []):
+            last = c.get("last_run_at")
+            age_h = None
+            status = "no_data"
+            if last:
+                try:
+                    # Use the same proven parser as agents/system_supervisor.py
+                    last_clean = last
+                    for suffix in ("Z", "+00:00", "-00:00"):
+                        if last_clean.endswith(suffix):
+                            last_clean = last_clean[:-len(suffix)]
+                            break
+                    last_clean = re.sub(r"[+-]\d{2}:?\d{2}$", "", last_clean)
+                    if "." in last_clean:
+                        last_clean = last_clean.split(".")[0]
+                    last_dt = datetime.fromisoformat(last_clean).replace(tzinfo=timezone.utc)
+                    age_h = round((datetime.now(timezone.utc) - last_dt).total_seconds() / 3600, 2)
+                    status = "ok" if age_h < 4 else "stale"
+                except Exception as e:
+                    status = f"parse_error: {type(e).__name__}: {str(e)[:80]}"
+            supervisor.append({
+                "agent": c.get("agent_name"),
+                "last_run_at": last,
+                "age_hours": age_h,
+                "status": status,
+                "enabled": c.get("enabled", True),
+                "last_status": c.get("last_run_status"),
+            })
+        out["supervisor"] = supervisor
+    except Exception as e:
+        out["supervisor"] = {"error": str(e)[:200]}
+
+    # 2) Self-healer: last 5 fixes
+    try:
+        r = sb.table("self_healer_log").select("action,target,status,detail,fired_at").order("fired_at", desc=True).limit(5).execute()
+        out["self_healer"] = {
+            "recent_fixes": r.data or [],
+            "total_fixes": sb.table("self_healer_log").select("id", count="exact").execute().count or 0,
+        }
+    except Exception as e:
+        out["self_healer"] = {"error": str(e)[:200]}
+
+    # 3) Error-watcher: most recent watcher_findings (if table exists)
+    try:
+        r = sb.table("watcher_findings").select("id,source,severity,summary,created_at").order("created_at", desc=True).limit(5).execute()
+        out["error_watcher"] = {
+            "recent_findings": r.data or [],
+            "open_count": sb.table("watcher_findings").select("id", count="exact").eq("status", "open").execute().count or 0,
+        }
+    except Exception as e:
+        # watcher_findings may not exist yet — that's fine
+        out["error_watcher"] = {"recent_findings": [], "open_count": 0, "note": "watcher_findings not yet populated"}
+
+    # 4) PM2 process state
+    try:
+        import subprocess
+        rr = subprocess.run(["pm2", "jlist"], capture_output=True, text=True, timeout=5)
+        procs = json.loads(rr.stdout) if rr.returncode == 0 else []
+        states = {}
+        for p in procs:
+            st = p.get("pm2_env", {}).get("status", "?")
+            states[st] = states.get(st, 0) + 1
+        out["pm2"] = {
+            "total": len(procs),
+            "by_state": states,
+            "online": states.get("online", 0),
+        }
+    except Exception as e:
+        out["pm2"] = {"error": str(e)[:200]}
+
+    # 5) Recent agent errors (last hour, all agents)
+    try:
+        cutoff = (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat()
+        r = sb.table("agent_activity").select("agent_name,status,rows_errored,error,started_at").gte("started_at", cutoff).gt("rows_errored", 0).order("started_at", desc=True).limit(10).execute()
+        out["agent_errors_1h"] = r.data or []
+    except Exception as e:
+        out["agent_errors_1h"] = {"error": str(e)[:200]}
+
+    # 6) Vonage volume (from pulse_summary)
+    try:
+        out["vonage_24h"] = sb.table("sms_log").select("id", count="exact").eq("direction","outbound").gte("created_at", (datetime.now(timezone.utc) - timedelta(hours=24)).isoformat()).execute().count or 0
+    except Exception as e:
+        out["vonage_24h"] = 0
+
+    # Overall health verdict
+    crit = []
+    if isinstance(out.get("self_healer"), dict) and out["self_healer"].get("recent_fixes"):
+        for f in out["self_healer"]["recent_fixes"][:5]:
+            if f.get("status") in ("failed", "error"):
+                crit.append(f"self_healer: {f.get('action')} on {f.get('target')} {f.get('status')}")
+    if out.get("pm2", {}).get("by_state", {}).get("errored", 0) > 0:
+        crit.append(f"pm2: {out['pm2']['by_state']['errored']} errored process(es)")
+    if out.get("vonage_24h", 0) > 1000:
+        crit.append(f"vonage: {out['vonage_24h']} SMS in 24h (burn rate)")
+    out["health"] = "ok" if not crit else "warn"
+    out["concerns"] = crit
+    return out
+
+
+
+
 def register_pulse_routes(app, get_db: Optional[Callable] = None):
     """Mount all pulse + storm-trigger routes on the FastAPI app."""
     from fastapi.responses import HTMLResponse, JSONResponse
@@ -447,6 +569,11 @@ def register_pulse_routes(app, get_db: Optional[Callable] = None):
     app.add_api_route("/api/v1/pulse/storm-stream", _storm_stream, methods=["GET"])
     app.add_api_route("/pulse", _dashboard, methods=["GET"])
     app.add_api_route("/api/v1/webhook/storm-target", _storm_webhook, methods=["POST"])
+
+    # Unified admin health: one endpoint, all 3 oversight layers + pm2 + vonage
+    async def _admin_health_route():
+        return JSONResponse(_admin_health(get_db()))
+    app.add_api_route("/api/v1/admin/health", _admin_health_route, methods=["GET"])
 
     log.info("pulse routes registered: /pulse + 7 JSON endpoints + storm webhook")
 
