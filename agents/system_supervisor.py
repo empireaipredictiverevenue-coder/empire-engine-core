@@ -244,6 +244,48 @@ def _check_vonage_number_health() -> dict:
     return {"_": info, "issues": issues}
 
 
+
+
+def _check_resend_domain() -> list[dict]:
+    """Warn if the Resend 'from' domain isn't verified — the most common
+    cause of email-send 403s (Resend error code 1010). Verifies the
+    domain by checking the /domains endpoint with the env key."""
+    import urllib.request as _ur
+    import json as _j
+    key = os.getenv("RESEND_AFFILIATE_KEY") or os.getenv("RESEND_API_KEY")
+    if not key:
+        return [{"check": "resend_domain", "severity": "warn",
+                "msg": "no Resend key in env — no email will go out"}]
+    try:
+        req = _ur.Request("https://api.resend.com/domains",
+                         headers={"Authorization": f"Bearer {key}"})
+        with _ur.urlopen(req, timeout=8) as r:
+            d = _j.loads(r.read())
+        domains = d.get("data", [])
+        if not domains:
+            return [{"check": "resend_domain", "severity": "critical",
+                    "msg": "Resend account has no domains registered. Add empire-ai.co.uk in dashboard."}]
+        unverified = [x["name"] for x in domains if x.get("status") != "verified"]
+        if unverified:
+            return [{"check": "resend_domain", "severity": "critical",
+                    "msg": f"Resend domains NOT verified: {unverified}. "
+                           f"Add the DNS records shown in Resend dashboard to verify. "
+                           f"Until verified, all email send 403s (code 1010)."}]
+        return []  # all verified, all good
+    except urllib.error.HTTPError as e:
+        body = e.read()[:200].decode("utf-8", errors="replace") if e.fp else ""
+        if e.code in (401, 403):
+            return [{"check": "resend_domain", "severity": "warn",
+                    "msg": f"Resend key rejected ({e.code}). Check RESEND_API_KEY / RESEND_AFFILIATE_KEY in env. body={body}"}]
+        return [{"check": "resend_domain", "severity": "warn",
+                "msg": f"Resend domain check got HTTP {e.code}: {body}"}]
+    except Exception as e:
+        return [{"check": "resend_domain", "severity": "warn",
+                "msg": f"could not check Resend domains: {type(e).__name__}: {e}"}]
+
+
+
+
 def run() -> dict:
     sb = _sb()
     findings = []
@@ -260,6 +302,7 @@ def run() -> dict:
     findings += _check_placeholder_emails(sb)
     findings += _check_zombie_outreach(sb)
     findings += _check_vonage_volume(sb)
+    findings += _check_resend_domain()
     findings += _check_hub_routes()
 
     crit = [f for f in findings if f.get("severity") == "critical"]
