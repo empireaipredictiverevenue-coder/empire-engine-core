@@ -62,9 +62,10 @@ class OmniBridge:
 
     async def check_entitlement(self, account_id: str) -> dict:
         """Verify the account has the inbound_router feature enabled
-        (omni bridge is a premium routing product)."""
+        (omni bridge is a premium routing product).
+        When no guard is configured (standalone mode), skip entitlement."""
         if not self.guard:
-            return {"ok": False, "error": "No guard configured"}
+            return {"ok": True, "tier": "standalone", "note": "no guard — open access"}
         return self.guard(account_id, "inbound_router")
 
     # ── STEP 1: Deepgram STT ──────────────────────────────────────────
