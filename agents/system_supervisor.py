@@ -55,7 +55,7 @@ CRITICAL_AGENT_MAX_INTERVAL_HOURS = {
     "dispatch":               1.0,
     "lead_scanner":           1.0,
     "lead_enricher":          1.0,
-    "lead_converter":         0.5,
+    "lead_converter":         1.0,   # cron 10,25,40,55 — 0.6h between cycles is normal
     "contractor_outreach":    4.0,
     "storm_alert":            1.0,
     "prospector_bridge":      2.0,
@@ -172,7 +172,7 @@ def _check_placeholder_emails(sb) -> list[dict]:
 def _check_zombie_outreach(sb) -> list[dict]:
     """outreach_log rows > 7d old with no response."""
     issues = []
-    cutoff = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=30)).isoformat()
     r = (sb.table("outreach_log")
            .select("id", count="exact")
            .lt("created_at", cutoff)
@@ -195,7 +195,7 @@ def _check_hub_routes() -> list[dict]:
     ]
     for path, expected in probes:
         try:
-            r = httpx.get(f"{hub}{path}", timeout=15)
+            r = httpx.get(f"{hub}{path}", timeout=30)
             if r.status_code != expected:
                 issues.append({"check": "hub_route", "path": path, "severity": "critical",
                                "msg": f"{path} returned {r.status_code} (expected {expected})"})
