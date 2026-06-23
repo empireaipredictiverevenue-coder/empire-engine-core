@@ -220,9 +220,40 @@ def _check_vonage_volume(sb) -> list[dict]:
     return issues
 
 
+def _check_vonage_number_health() -> dict:
+    """Warn if VONAGE_NUMBER is a known test/sandbox number."""
+    n = os.getenv("VONAGE_NUMBER", "").strip()
+    info = {"number": n or "(unset)", "e164_format": False, "test_pattern": False, "length_ok": False}
+    issues = []
+    if not n:
+        issues.append({"check": "vonage_number", "severity": "critical",
+                       "msg": "VONAGE_NUMBER is unset - no SMS will go out"})
+        return {"_": info, "issues": issues}
+    if n.startswith("+") and n[1:].isdigit():
+        info["e164_format"] = True
+    if 8 <= len(n) <= 16:
+        info["length_ok"] = True
+    if n.startswith("+1") and len(n) == 12 and n[5:8] == "555":
+        info["test_pattern"] = True
+        issues.append({"check": "vonage_number", "severity": "critical",
+                       "msg": f"VONAGE_NUMBER {n} is in the 555-01XX test range - all SMS go to Vonage sandbox, not real recipients. Replace with a real 10DLC DID."})
+    elif n.startswith("+1") and len(n) == 12 and n[2:5] == "555":
+        info["test_pattern"] = True
+        issues.append({"check": "vonage_number", "severity": "warn",
+                       "msg": f"VONAGE_NUMBER {n} starts with 555 area code - verify it's a real US number."})
+    return {"_": info, "issues": issues}
+
+
 def run() -> dict:
     sb = _sb()
     findings = []
+    # 0) Vonage number health (cheap, canary for "wrong number" trap)
+    vn = _check_vonage_number_health()
+    info = vn.get("_", {})
+    if info.get("test_pattern"):
+        log.warning(f"[supervisor] VONAGE_NUMBER looks like a test number: {info['number']}")
+    findings += vn.get("issues", [])
+
     findings += _check_cron_health(sb)
     findings += _check_agent_errors(sb)
     findings += _check_money_placeholders(sb)
