@@ -46,24 +46,23 @@ DEEPGRAM_TTS_MODEL = os.environ.get("DEEPGRAM_TTS_MODEL", "aura-asteria-en")
 # ── TTS Providers ────────────────────────────────────────────────────
 
 def _tts_kokoro(text: str, wav_path: str, speed: float = 1.0) -> float:
-    """Generate TTS audio using local Kokoro model.
+    """Generate TTS audio using local kokoro-onnx (v1.0) model.
     Args:
         text: Text to speak
         wav_path: Output WAV path
         speed: Speaking speed multiplier (0.5-2.0, default 1.0)
     Returns duration in seconds.
     """
-    from kokoro import KPipeline
-    pipeline = KPipeline(lang_code="a", model="af_heart")
-    audio_gen = pipeline(text, voice="af_heart", speed=speed)
-    all_audio = []
-    for gs, ps, audio in audio_gen:
-        all_audio.append(audio)
-    if not all_audio:
-        raise RuntimeError("Kokoro TTS produced no audio")
-    full = np.concatenate(all_audio)
-    sf.write(wav_path, full, 24000)
-    return len(full) / 24000
+    import os as _os
+    _os.environ.setdefault("TMPDIR", "/root/tmp_kokoro")
+    from kokoro_onnx import Kokoro
+    model_path = os.environ.get("KOKORO_MODEL_PATH", "/root/empire-v49/models/kokoro/kokoro-v1.0.onnx")
+    voices_path = os.environ.get("KOKORO_VOICES_PATH", "/root/empire-v49/models/kokoro/voices-v1.0.bin")
+    voice = os.environ.get("KOKORO_VOICE", "af_sarah")
+    k = Kokoro(model_path, voices_path)
+    samples, sr = k.create(text, voice=voice, speed=speed, lang="en-us")
+    sf.write(wav_path, samples, sr)
+    return len(samples) / sr
 
 
 def _tts_deepgram(text: str, wav_path: str, speed: float = 1.0) -> float:
@@ -119,8 +118,7 @@ def render_short(script_text: str, bg_video: str = "", output_path: str = "",
     if not voice_provider:
         voice_provider = os.environ.get("BUFFY_DEFAULT_VOICE", "deepgram")
 
-    import whisperx
-
+    # (WhisperX removed - sentence-level captions instead)
     bg = bg_video or DEFAULT_BG
     if not os.path.exists(bg):
         return {"ok": False, "error": f"Background video not found: {bg}"}
@@ -144,43 +142,67 @@ def render_short(script_text: str, bg_video: str = "", output_path: str = "",
         duration = tts_fn(script_text, wav_path, speed=voice_speed)
         print(f"  ✓ {duration:.1f}s audio  (speed={voice_speed})")
 
-        # ── Step 2: WhisperX word alignment ─────────────────────────
-        print("2/4 Aligning words (WhisperX)...")
-        model = whisperx.load_model("tiny", device="cpu", compute_type="int8")
-        audio = whisperx.load_audio(wav_path)
-        res = model.transcribe(audio, batch_size=4)
-        ma, meta = whisperx.load_align_model(language_code=res["language"], device="cpu")
-        aligned = whisperx.align(res["segments"], ma, meta, audio, "cpu")
-        print(f"  ✓ {len(aligned['segments'])} segments")
+        # ── Step 2: Sentence-level caption timing (no WhisperX) ─────
+        # Strategy: split script into sentences, allocate timing proportional
+        # to word count. 150 wpm = 2.5 words/sec average speaking rate.
+        # This avoids the WhisperX alignment hang (Lightning checkpoint upgrade
+        # v1.5.4 → v2.6.5 deadlocks on this box).
+        print("2/4 Building sentence-level captions (no WhisperX)...")
+        import re as _re_caps
+        # Split script into sentences on [.!?] followed by whitespace
+        raw_sentences = _re_caps.split(r"(?<=[.!?])\s+", script_text.strip())
+        sentences = [s2.strip() for s2 in raw_sentences if s2.strip()]
+        word_counts = [len(s2.split()) for s2 in sentences]
+        total_words = max(1, sum(word_counts))
+        timings = []
+        cursor = 0.0
+        for sc in word_counts:
+            dur = (sc / total_words) * duration
+            timings.append((cursor, cursor + dur, sentences[len(timings)]))
+            cursor += dur
+        print(f"  ✓ {len(sentences)} sentences, {total_words} words, {duration:.1f}s audio")
 
         # ── Step 3: Build ASS captions ──────────────────────────────
         print("3/4 Building captions...")
         ass_path = str(builds_dir / f"captions_{os.getpid()}.ass")
-        KEYWORDS = {"lead", "smart", "instant", "roof", "roofs",
-                     "storm", "storms", "hail", "damage", "damages",
-                     "free", "claim", "claims", "no", "no-risk", "yes",
-                     "empire", "ai", "dollar", "dollars", "12", "000",
-                     "fees", "money", "k"}
+        KEYWORDS = {"hail", "storm", "damage", "claim", "free",
+                     "1-833-274-6063", "833", "274", "6063", "phone", "call", "now",
+                     "insurance", "denied", "soft", "metal", "roof", "emergency"}
         with open(ass_path, "w") as f:
             f.write("[Script Info]\nScriptType: v4.00+\nPlayResX: 1080\nPlayResY: 1920\n")
             f.write("[V4+ Styles]\nFormat: Name, Fontname, Fontsize, PrimaryColour, "
                     "BackColour, Bold, Underline, BorderStyle, Outline, Shadow, "
                     "Alignment, MarginL, MarginR, MarginV, AlphaLevel\n")
-            f.write("Style: Default,Arial,48,&H00FFFFFF,&H00000000,0,0,1,2,2,2,"
-                    "10,10,10,0\n")
-            f.write("Style: Highlight,Arial,48,&H0014FF39,&H00000000,0,0,1,2,2,2,"
-                    "10,10,10,0\n")
+            f.write("Style: Default,Arial,56,&H00FFFFFF,&H00000000,0,0,1,3,2,2,"
+                    "20,20,80,0\n")
+            f.write("Style: Highlight,Arial,56,&H0014FF39,&H00000000,0,0,1,3,2,2,"
+                    "20,20,80,0\n")
             f.write("[Events]\nFormat: Layer, Start, End, Style, Name, "
                     "MarginL, MarginR, MarginV, Effect, Text\n")
-            for seg in aligned["segments"]:
-                for w in seg.get("words", []):
-                    ws = w.get("start", seg["start"])
-                    we = w.get("end", seg["end"])
-                    wt = w.get("word", "").strip().lower()
-                    if wt:
-                        style = "Highlight" if wt.strip(".,!?").lower() in KEYWORDS else "Default"
-                        f.write(f"Dialogue: 0,{ws:.2f},{we:.2f},{style},,"
-                                f"0,0,0,,{w.get('word','').strip()}\n")
+            for start, end, sentence in timings:
+                s_lower = sentence.lower()
+                is_keyword = any(kw in s_lower for kw in KEYWORDS)
+                style = "Highlight" if is_keyword else "Default"
+                def _hms(t):
+                    h = int(t // 3600)
+                    m = int((t % 3600) // 60)
+                    s3 = t - h*3600 - m*60
+                    cs = int((s3 - int(s3)) * 100)
+                    return f"{h}:{m:02d}:{int(s3):02d}.{cs:02d}"
+                # Group words into chunks of ~6 for readability
+                words = sentence.split()
+                chunks = []
+                cur = []
+                for w in words:
+                    cur.append(w)
+                    if len(cur) >= 6:
+                        chunks.append(" ".join(cur))
+                        cur = []
+                if cur:
+                    chunks.append(" ".join(cur))
+                text = "\\n".join(chunks)
+                f.write(f"Dialogue: 0,{_hms(start)},{_hms(end)},{style},,,"
+                        f"0,0,0,,{text}\n")
         print(f"  ✓ {ass_path}")
 
         # ── Step 4: FFmpeg render ───────────────────────────────────
