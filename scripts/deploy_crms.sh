@@ -145,10 +145,11 @@ params = ""
 [smtp]
 host = "smtp.resend.com"
 port = 587
-auth_protocol = "login"
-username = "resend"
-password = "__SMTP_PASSWORD__"
+user = "resend"
+pass = "__SMTP_PASSWORD__"
 from_email = "ops@empire-ai.co.uk"
+auth_type = "plain"
+ssl_skip_verify = false
 TOML
     # Replace placeholder with actual password (escaping special chars for sed)
     ESCAPED_PASS=$(echo "${RESEND_API_KEY}" | sed 's/[&/\]/\\&/g')
@@ -224,15 +225,15 @@ TOML
       UPDATE settings SET value = jsonb_build_array(jsonb_build_object(
         'enabled', true,
         'host', 'smtp.resend.com',
-        'port', 465,
-        'auth_type', 'login',
+        'port', 587,
+        'auth_type', 'plain',
         'user', 'resend',
         'pass', '${RESEND_API_KEY}',
         'from_email', 'ops@empire-ai.co.uk',
         'max_conns', 10,
         'ssl_skip_verify', false
       )) WHERE key = 'smtp';
-    " 2>/dev/null && log "Updated DB SMTP setting to use Resend (port 465, implicit TLS)" || warn "Could not update DB SMTP setting (may need restart)"
+    " 2>/dev/null && log "Updated DB SMTP setting to use Resend (port 587, auth_type=plain)" || warn "Could not update DB SMTP setting (may need restart)"
   fi
 
   # ── 7. Wait for health ─────────────────────────────────────────────
