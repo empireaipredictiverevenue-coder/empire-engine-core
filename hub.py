@@ -232,6 +232,7 @@ from products.elite_scraper import EliteScraperProduct, EliteScraperRoutes
 from products.agent_reach_enrichment import AgentReachEnricher, AgentReachRoutes
 from products.graphify_bridge import GraphifyBridge, GraphifyRoutes
 from empire_listmonk import register_listmonk_routes
+from empire_resend_sender import register_resend_sender_routes
 from empire_twenty_crm import register_twenty_crm_routes
 from products.media_automation_hub.routes import register_media_hub_routes
 from products.omnichannel_engine.routes import register_omni_routes
@@ -2293,6 +2294,9 @@ register_media_hub_routes(app, require_auth=require_auth)
 
 # ── ListMonk — email campaign manager (port 9000) ───────────────────────
 register_listmonk_routes(app, require_auth=require_auth)
+
+# ── Resend API Sender — direct HTTP email sending (bypasses ListMonk SMTP) ──
+register_resend_sender_routes(app, require_auth=require_auth)
 
 # ── Twenty CRM — pipeline management (port 3003) ─────────────────────────
 register_twenty_crm_routes(app, require_auth=require_auth)
