@@ -38,7 +38,7 @@ except ImportError:
 
 try:
     from supabase import create_client
-    sb = create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_SERVICE_KEY"])
+    sb = create_client(os.environ["SUPABASE_URL"], os.getenv("SUPABASE_SERVICE_KEY"))
 except Exception as e:
     sb = None
     print(f"[youtube_scraper] Supabase init failed: {e}")

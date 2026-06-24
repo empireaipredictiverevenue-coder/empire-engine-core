@@ -222,10 +222,10 @@ def main() -> int:
                    help="Interactively set destination_phone for each lane")
     args = p.parse_args()
 
-    if not os.environ.get("SUPABASE_URL") or not os.environ.get("SUPABASE_SERVICE_KEY"):
+    if not os.environ.get("SUPABASE_URL") or not os.getenv("SUPABASE_SERVICE_KEY"):
         print("[ERROR] SUPABASE_URL and SUPABASE_SERVICE_KEY required")
         return 1
-    sb = create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_SERVICE_KEY"])
+    sb = create_client(os.environ["SUPABASE_URL"], os.getenv("SUPABASE_SERVICE_KEY"))
 
     if args.set_phones:
         print("=== Set destination_phone per lane ===")

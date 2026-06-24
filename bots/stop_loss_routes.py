@@ -23,7 +23,11 @@ from fastapi import Depends, HTTPException, Query
 log = logging.getLogger("empire.stop_loss.routes")
 
 
-def register_stop_loss_routes(app, require_auth=None):
+# ── Sentinels ────────────────────────────────────────────────────────────
+_AUTH_OPTIONAL = None  # default: endpoints are public unless callers pass require_auth
+
+
+def register_stop_loss_routes(app, require_auth=_AUTH_OPTIONAL):
     """Register stop loss management endpoints on the FastAPI app."""
 
     # Lazy import to avoid circular deps at module level
@@ -32,7 +36,7 @@ def register_stop_loss_routes(app, require_auth=None):
     @app.post("/api/v1/stoploss/add")
     async def stoploss_add(
         body: dict,
-        auth=Depends(require_auth) if require_auth else None,
+        auth=Depends(require_auth) if require_auth is not _AUTH_OPTIONAL else None,
     ):
         """Add a new position to monitor for stop loss.
 
@@ -80,7 +84,7 @@ def register_stop_loss_routes(app, require_auth=None):
 
     @app.get("/api/v1/stoploss/list")
     async def stoploss_list(
-        auth=Depends(require_auth) if require_auth else None,
+        auth=Depends(require_auth) if require_auth is not _AUTH_OPTIONAL else None,
     ):
         """List all tracked positions with their status."""
         bot = get_bot()
@@ -89,7 +93,7 @@ def register_stop_loss_routes(app, require_auth=None):
     @app.post("/api/v1/stoploss/cancel")
     async def stoploss_cancel(
         body: dict,
-        auth=Depends(require_auth) if require_auth else None,
+        auth=Depends(require_auth) if require_auth is not _AUTH_OPTIONAL else None,
     ):
         """Cancel monitoring a position.
 
@@ -109,7 +113,7 @@ def register_stop_loss_routes(app, require_auth=None):
     @app.delete("/api/v1/stoploss/remove/{position_id}")
     async def stoploss_remove(
         position_id: str,
-        auth=Depends(require_auth) if require_auth else None,
+        auth=Depends(require_auth) if require_auth is not _AUTH_OPTIONAL else None,
     ):
         """Hard-delete a position entirely (removed from DB, not just cancelled).
 
@@ -127,7 +131,7 @@ def register_stop_loss_routes(app, require_auth=None):
 
     @app.get("/api/v1/stoploss/status")
     async def stoploss_status(
-        auth=Depends(require_auth) if require_auth else None,
+        auth=Depends(require_auth) if require_auth is not _AUTH_OPTIONAL else None,
     ):
         """Stop loss bot health and stats."""
         bot = get_bot()

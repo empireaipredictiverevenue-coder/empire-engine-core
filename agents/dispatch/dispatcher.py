@@ -175,7 +175,7 @@ def _send_circuit_telegram(event: str, state: dict):
     """Send a Telegram alert when the circuit breaker trips or recovers.
     Best-effort — failures here are logged but never propagated."""
     try:
-        tg_token = os.environ.get("TELEGRAM_BOT_TOKEN", "")
+        tg_token = os.getenv("TELEGRAM_BOT_TOKEN", "")
         tg_chat = os.environ.get("TELEGRAM_HOME_CHANNEL", "808657420")
         if not tg_token:
             return

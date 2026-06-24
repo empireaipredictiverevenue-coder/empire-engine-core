@@ -47,7 +47,7 @@ BOUNTY_NOTE = "Auto-earned on referred contractor's first settled claim"
 async def _push_ntfy(title: str, message: str, tags: str = "money-bag") -> None:
     """Push an ntfy notification. Silent if NTFY_TOPIC not configured."""
     topic = os.environ.get("NTFY_TOPIC", "").strip()
-    token = os.environ.get("NTFY_TOKEN", "").strip() if os.environ.get("NTFY_TOKEN") else ""
+    token = os.getenv("NTFY_TOKEN", "").strip() if os.getenv("NTFY_TOKEN") else ""
     if not topic:
         log.debug("[bounty_tracker] NTFY_TOPIC not set — skipping ntfy notification")
         return
@@ -74,8 +74,8 @@ async def _send_referrer_sms(phone: str, referrer_name: str, bounty_amount: floa
         return
     try:
         import httpx
-        vonage_key = os.environ.get("VONAGE_API_KEY", "").strip()
-        vonage_secret = os.environ.get("VONAGE_API_SECRET", "").strip()
+        vonage_key = os.getenv("VONAGE_API_KEY", "").strip()
+        vonage_secret = os.getenv("VONAGE_API_SECRET", "").strip()
         vonage_from = os.environ.get("VONAGE_NUMBER", "").strip()
         if not (vonage_key and vonage_secret and vonage_from):
             log.debug("[bounty_tracker] Vonage not configured — skipping referrer SMS")
@@ -144,7 +144,7 @@ async def check_bounty_eligible(
                 from supabase import create_client
                 db = create_client(
                     os.environ.get("SUPABASE_URL", ""),
-                    os.environ.get("SUPABASE_SERVICE_KEY", ""),
+                    os.getenv("SUPABASE_SERVICE_KEY", ""),
                 )
             except Exception as e:
                 log.error(f"[bounty_tracker] db unavailable: {e}")
@@ -313,7 +313,7 @@ async def run_catchup(hours_back: int = 72, batch_size: int = 50):
         from supabase import create_client
         db = create_client(
             os.environ.get("SUPABASE_URL", ""),
-            os.environ.get("SUPABASE_SERVICE_KEY", ""),
+            os.getenv("SUPABASE_SERVICE_KEY", ""),
         )
 
         since = (datetime.now(timezone.utc) - timedelta(hours=hours_back)).isoformat()
@@ -367,7 +367,7 @@ async def run_loop(interval_minutes: int = 15):
             from supabase import create_client
             sb = create_client(
                 os.environ.get("SUPABASE_URL", ""),
-                os.environ.get("SUPABASE_SERVICE_KEY", ""),
+                os.getenv("SUPABASE_SERVICE_KEY", ""),
             )
             sb.table("agent_registry").upsert({
                 "agent_name": "bounty_tracker",
@@ -411,7 +411,7 @@ def register_bounty_tracker_routes(app, *, require_auth: Callable):
             from supabase import create_client
             db = create_client(
                 os.environ.get("SUPABASE_URL", ""),
-                os.environ.get("SUPABASE_SERVICE_KEY", ""),
+                os.getenv("SUPABASE_SERVICE_KEY", ""),
             )
             total_pending = 0
             total_earned = 0
@@ -471,7 +471,7 @@ if __name__ == "__main__":
             from supabase import create_client
             sb = create_client(
                 os.environ.get("SUPABASE_URL", ""),
-                os.environ.get("SUPABASE_SERVICE_KEY", ""),
+                os.getenv("SUPABASE_SERVICE_KEY", ""),
             )
             pr = sb.table("contractor_referrals").select("bounty_status").limit(5000).execute()
             rows = pr.data or []

@@ -7,13 +7,13 @@ Fetches live campaign performance data from Meta Marketing API and
 returns it in the format empire_traffic_ads_agent.py expects.
 
 REQUIRED CREDENTIALS (set in /root/.env):
-  META_ACCESS_TOKEN          — long-lived access token with ads_read scope
+  META_ACCESS_TOKEN          — long-lived auth credential with ads_read scope
   META_AD_ACCOUNT_ID         — ad account ID (format: act_123456789)
 
 SETUP STEPS (human):
   1. Go to https://developers.facebook.com/
   2. Create an app, add "Marketing API" product
-  3. Get a System User access token with ads_read permission
+  3. Generate a System User auth credential with ads_read permission
   4. Go to Business Settings → System Users → Generate Token
   5. Set the env vars above and restart the traffic-specialist
 
@@ -45,7 +45,7 @@ class MetaAdsConnector:
     """Connects to Meta (Facebook/Instagram) Ads API and fetches campaign data."""
 
     def __init__(self):
-        self.access_token = os.environ.get("META_ACCESS_TOKEN", "").strip()
+        self.access_token = os.getenv("META_ACCESS_TOKEN", "").strip()
         self.ad_account_id = os.environ.get("META_AD_ACCOUNT_ID", "").strip()
 
     @property

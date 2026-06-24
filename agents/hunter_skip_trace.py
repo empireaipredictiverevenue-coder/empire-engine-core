@@ -40,12 +40,12 @@ GENERIC_PATTERNS = ["info", "contact", "office", "hello", "sales", "team", "admi
 
 
 def _sb():
-    return create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_SERVICE_KEY"])
+    return create_client(os.environ["SUPABASE_URL"], os.getenv("SUPABASE_SERVICE_KEY"))
 
 
 def _hunter_get(path: str, params: dict) -> dict:
     """Hunter uses ?api_key=KEY URL param (NOT Bearer header)."""
-    key = os.environ.get("HUNTER_API_KEY")
+    key = os.getenv("HUNTER_API_KEY")
     if not key or "PLACEHOLDER" in key:
         return {"error": "no HUNTER_API_KEY"}
     qs = "&".join(f"{k}={urllib.parse.quote(str(v))}" for k, v in params.items() if v is not None)

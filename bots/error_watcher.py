@@ -29,6 +29,7 @@ import re
 import sys
 import json
 import time
+import uuid
 import asyncio
 import logging
 import subprocess
@@ -54,6 +55,16 @@ logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [watcher] %(message)s",
 )
+
+# ── Safe-text helper ──────────────────────────────────────────────────
+# Prevents UnicodeEncodeError when log messages contain emoji, surrogate
+# pairs, or other characters that Python's StreamHandler can't encode.
+# Happens in PM2's log pipeline when surrogates appear in agent names,
+# finding titles, or kanban task payloads.
+def _safe(text: object) -> str:
+    """Convert to string, replacing any un-encodable characters."""
+    s = str(text) if not isinstance(text, str) else text
+    return s.encode("utf-8", errors="replace").decode("utf-8")
 
 # ── Constants ──────────────────────────────────────────────────────────
 
@@ -187,7 +198,7 @@ def _save_finding(sb, finding: dict) -> None:
             return
 
         sb.table("watcher_findings").insert(finding).execute()
-        log.info(f"[watcher] 🆕 finding: [{finding['severity']}] {finding['title']}")
+        log.info(f"[watcher] 🆕 finding: [{finding['severity']}] {_safe(finding['title'])}")
         # Mirror to self_healer_log so all 3 oversight layers (supervisor,
         # self-healer, error-watcher) share one queryable log. Error-watcher
         # is non-auto-fix by design — it feeds the coder. self_healer is
@@ -198,7 +209,7 @@ def _save_finding(sb, finding: dict) -> None:
                 "action": "watcher_finding:" + finding.get("finding_type", "?"),
                 "target": finding.get("agent_name", "?"),
                 "status": finding.get("severity", "info"),  # info|warn|critical
-                "detail": (finding.get("title", "") + " | " + (finding.get("summary") or ""))[:500],
+                "detail": (finding.get("title", "") + " | " + (finding.get("detail") or ""))[:500],
                 "fired_at": datetime.now(timezone.utc).isoformat(),
             }).execute()
         except Exception as e:
@@ -559,7 +570,7 @@ async def dispatch_to_coder(sb, report: dict) -> None:
             "title": f["title"],
             "detail": f["detail"],
             "error_count": f["error_count"],
-            "sample_errors": json.dumps(f.get("sample_errors", [])),
+            "sample_errors": f.get("sample_errors", []),
             "recommended_action": f.get("action", ""),
             "source_table": f.get("source_table", ""),
         })
@@ -646,10 +657,10 @@ def _create_kanban_tasks(sb, report: dict) -> None:
                 "assigned_agent": "predictive_revenue",
                 "priority": 5,  # high priority for critical findings
             }).execute()
-            log.info(f"[watcher] \ud83d\udccb kanban task created: {dedup_key}")
+            log.info(f"[watcher] \ud83d\udccb kanban task created: {_safe(dedup_key)}")
             created_count += 1
         except Exception as e:
-            log.warning(f"[watcher] kanban task insert failed for {dedup_key}: {e}")
+            log.warning(f"[watcher] kanban task insert failed for {_safe(dedup_key)}: {_safe(e)}")
 
     if created_count:
         log.info(f"[watcher] Created {created_count} kanban task(s) for critical findings")
@@ -763,7 +774,7 @@ async def run_loop(interval_seconds: int = None):
             try:
                 sb.table("agent_activity").insert({
                     "agent_name": AGENT_NAME,
-                    "run_id": f"cycle_{cycles}_{int(time.time())}",
+                    "run_id": str(uuid.uuid4()),
                     "started_at": datetime.now(timezone.utc).isoformat(),
                     "finished_at": datetime.now(timezone.utc).isoformat(),
                     "status": "ok",
@@ -772,8 +783,8 @@ async def run_loop(interval_seconds: int = None):
                     "rows_errored": 0,
                     "summary": f"{report['total_findings']} findings ({report['critical']} critical, {report['warning']} warnings)",
                 }).execute()
-            except Exception:
-                pass
+            except Exception as e:
+                log.warning(f"[watcher] agent_activity insert failed: {e}")
 
             cycles += 1
         except Exception as e:

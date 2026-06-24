@@ -43,10 +43,10 @@ from supabase import create_client
 import urllib.request
 
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "")
-SUPABASE_KEY = os.environ.get("SUPABASE_SERVICE_KEY") or os.environ.get("SUPABASE_KEY", "")
-TG_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "")
+SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_KEY") or os.getenv("SUPABASE_KEY", "")
+TG_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
 TG_CHAT = os.environ.get("TELEGRAM_HOME_CHANNEL", "808657420")
-RESEND_WEBHOOK_SECRET = os.environ.get("RESEND_WEBHOOK_SECRET", "")
+RESEND_WEBHOOK_SECRET = os.getenv("RESEND_WEBHOOK_SECRET", "")
 INBOUND_PORT = int(os.environ.get("INBOUND_PORT", "9120"))
 
 if not SUPABASE_URL or not SUPABASE_KEY:
@@ -131,7 +131,7 @@ def draft_followup(carrier: str, intent: str, original_subject: str) -> Optional
 
 def send_email(to: str, subject: str, body: str) -> str:
     """Send via Resend. Returns the message_id or an error string."""
-    resend_key = os.environ.get("RESEND_API_KEY", "")
+    resend_key = os.getenv("RESEND_API_KEY", "")
     if not resend_key:
         return "ERROR: no RESEND_API_KEY"
     payload = json.dumps({
@@ -493,7 +493,7 @@ async def inbound_sms(request: Request):
     sent_id = None
     if body:
         # Send via the hub's SMS endpoint (same one the converter uses)
-        hub_token = os.environ.get("HUB_TOKEN", "")
+        hub_token = os.getenv("HUB_TOKEN", "")
         hub_url   = os.environ.get("HUB_URL", "http://127.0.0.1:8001")
         try:
             data = json.dumps({

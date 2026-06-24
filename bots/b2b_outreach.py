@@ -34,7 +34,7 @@ logging.basicConfig(level=logging.INFO, format="%(levelname)s:%(name)s:%(message
 
 # ── Config ───────────────────────────────────────────────────────────
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "")
-SUPABASE_KEY = os.environ.get("SUPABASE_SERVICE_KEY", "")
+SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_KEY", "")
 OLLAMA_URL = os.environ.get("OLLAMA_URL", "http://127.0.0.1:11434")
 OLLAMA_MODEL = os.environ.get("AI_MODEL_DRAFT", "llama3.2:3b")
 
@@ -87,10 +87,10 @@ STRICT RULES:
 
 async def query_llm(prompt: str, system: str = "", temperature: float = 0.5) -> str:
     """Query LLM for drafting — Groq → xAI/Grok → Anthropic → OpenAI → Ollama."""
-    groq_key = os.environ.get("GROQ_API_KEY", "")
-    xai_key = os.environ.get("XAI_API_KEY", "")
-    anthropic_key = os.environ.get("ANTHROPIC_API_KEY", "")
-    openai_key = os.environ.get("OPENAI_API_KEY", "")
+    groq_key = os.getenv("GROQ_API_KEY", "")
+    xai_key = os.getenv("XAI_API_KEY", "")
+    anthropic_key = os.getenv("ANTHROPIC_API_KEY", "")
+    openai_key = os.getenv("OPENAI_API_KEY", "")
 
     # ── Groq path (free tier, fast Llama inference) ────────────
     if groq_key and len(groq_key) > 10:

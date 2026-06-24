@@ -38,7 +38,7 @@ DEFAULT_BG = str(MEDIA_ENGINE_DIR / "templates/videos/fallback.mp4")
 OUTPUT_DIR = REPO / "youtube_shorts_output"
 OUTPUT_DIR.mkdir(exist_ok=True)
 
-DEEPGRAM_API_KEY = os.environ.get("DEEPGRAM_API_KEY", "")
+DEEPGRAM_API_KEY = os.getenv("DEEPGRAM_API_KEY", "")
 DEEPGRAM_TTS_MODEL = os.environ.get("DEEPGRAM_TTS_MODEL", "aura-asteria-en")
 
 # ── Render Pipeline ──────────────────────────────────────────────────
@@ -199,7 +199,7 @@ def render_short(script_text: str, bg_video: str = "", output_path: str = "",
             "-t", f"{duration:.2f}",
             output_path,
         ]
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+        result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=120)
         if result.returncode != 0:
             return {"ok": False, "error": f"FFmpeg failed: {result.stderr[-500:]}"}
 
@@ -278,7 +278,7 @@ def main():
             from supabase import create_client
             sb = create_client(
                 os.environ.get("SUPABASE_URL", ""),
-                os.environ.get("SUPABASE_SERVICE_KEY", "")
+                os.getenv("SUPABASE_SERVICE_KEY", "")
             )
             now = datetime.now().isoformat()
             if result.get("ok"):

@@ -90,3 +90,4 @@ youtube_shorts_output/
 # Screenshot artifacts
 screenshots/
 tmp_revenue_ledger.png
+.env

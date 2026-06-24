@@ -40,7 +40,7 @@ DEFAULT_METROS = [
 
 
 async def run(niches: List[str], metros: List[str], max_per: int, deep_scrape: bool) -> Dict:
-    sb = create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_SERVICE_KEY"])
+    sb = create_client(os.environ["SUPABASE_URL"], os.getenv("SUPABASE_SERVICE_KEY"))
 
     total_found = 0
     total_saved = 0

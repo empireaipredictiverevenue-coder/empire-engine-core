@@ -102,6 +102,9 @@ DEFAULT_IDENTITY_PREFIX = "Empire AI:"
 STOP_KEYWORDS = {"STOP", "STOPALL", "UNSUBSCRIBE", "CANCEL", "END", "QUIT", "REMOVE"}
 HELP_KEYWORDS = {"HELP", "INFO", "SUPPORT"}
 
+# Solana wallet address pattern: base58, 32-44 chars, no ambiguous chars (0,O,I,l)
+SOLANA_WALLET_RE = re.compile(r"^[1-9A-HJ-NP-Za-km-z]{32,44}$")
+
 # Quiet hours — no SMS during these local hours (TCPA + good practice)
 QUIET_HOURS_START = 21  # 9 PM (RESTORED from TEMP 24)
 QUIET_HOURS_END   = 8   # 8 AM
@@ -816,6 +819,49 @@ class SMSSequenceEngine:
                 "Reply STOP to opt out. Questions: ops@empire-ai.co.uk",
             )
             return {"ok": True, "action": "help_sent"}
+
+        # ── Solana wallet detection: if the reply looks like a wallet address,
+        # save it to the contractor's profile and confirm via SMS ────
+        if SOLANA_WALLET_RE.match(body_clean):
+            log.info(f"[sms] wallet address detected from {normalized}: {body_clean[:12]}...")
+            try:
+                wallet_db = self.get_db()
+                # Look up the contractor by phone
+                c_res = wallet_db.table("contractors").select("id,name,solana_wallet").eq("phone", normalized).limit(1).execute()
+                if c_res.data:
+                    contractor = c_res.data[0]
+                    cid = contractor["id"]
+                    cname = contractor.get("name", "") or ""
+                    existing_wallet = contractor.get("solana_wallet")
+                    if existing_wallet and existing_wallet != body_clean:
+                        log.info(f"[sms] wallet already set for {normalized} ({existing_wallet[:12]}...) — updating to new address")
+                    # Save or update the wallet
+                    wallet_db.table("contractors").update({
+                        "solana_wallet": body_clean,
+                    }).eq("id", cid).execute()
+                    log.info(f"[sms] wallet saved for contractor {cid[:12]}...")
+                    # Send confirmation SMS
+                    greeting = f"Hi {cname.split()[0]}," if cname else f"{self.identity_prefix}"
+                    confirm_msg = (
+                        f"{greeting} Wallet saved ✓. "
+                        "You can now activate a subscription at empire-ai.co.uk/for-contractors. "
+                        "Reply HELP for help. STOP to opt out."
+                    )
+                    await self.voice_router.send_sms(normalized, confirm_msg)
+                    return {"ok": True, "action": "wallet_saved", "from": normalized, "body": body_clean}
+                else:
+                    # Phone not found in contractors — maybe they're a lead, not a contractor
+                    log.info(f"[sms] wallet reply from non-contractor phone {normalized} — no wallet saved")
+                    # Send a helpful reply anyway
+                    help_msg = (
+                        f"{self.identity_prefix} We see you sent a wallet address. If you're a contractor, "
+                        "visit empire-ai.co.uk/for-contractors to activate. Reply HELP for help. STOP to opt out."
+                    )
+                    await self.voice_router.send_sms(normalized, help_msg)
+                    # Fall through to the "Other reply" handler so the sequence
+                    # is still paused and the reply is stored
+            except Exception as e:
+                log.warning(f"[sms] wallet save failed for {normalized}: {e}")
 
         # ── Other reply: pause sequence, store reply text, flag for human follow-up ─
         db = self.get_db()

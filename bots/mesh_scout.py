@@ -35,7 +35,7 @@ logging.basicConfig(level=logging.INFO, format="%(levelname)s:%(name)s:%(message
 
 # ── Config ───────────────────────────────────────────────────────────
 SUPABASE_URL: str = os.environ.get("SUPABASE_URL", "")
-SUPABASE_KEY: str = os.environ.get("SUPABASE_SERVICE_KEY", "")
+SUPABASE_KEY: str = os.getenv("SUPABASE_SERVICE_KEY", "")
 OLLAMA_URL: str = os.environ.get("OLLAMA_URL", "http://127.0.0.1:11434")
 
 if not SUPABASE_URL or not SUPABASE_KEY:

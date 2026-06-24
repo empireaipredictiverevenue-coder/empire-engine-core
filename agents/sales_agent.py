@@ -36,12 +36,12 @@ VAULT = "egJ1t9NZkDs8FvMbfnQTqXzC4KNuhAc9XSfpG9y9AZM"
 
 
 def _sb():
-    return create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_SERVICE_KEY"])
+    return create_client(os.environ["SUPABASE_URL"], os.getenv("SUPABASE_SERVICE_KEY"))
 
 
 def _send_vonage_sms(to: str, body: str) -> dict:
     app_id = os.environ.get("VONAGE_APPLICATION_ID", "")
-    key_path = os.environ.get("VONAGE_PRIVATE_KEY_PATH", "/root/vonage_private.key")
+    key_path = os.getenv("VONAGE_PRIVATE_KEY_PATH", "/root/vonage_private.key")
     from_number = os.environ.get("VONAGE_NUMBER", "12142277528").lstrip("+")
     if not (app_id and os.path.exists(key_path)):
         return {"ok": False, "error": "vonage creds missing"}

@@ -15,7 +15,6 @@ except ImportError:
 from supabase import create_client
 
 from empire_outbound_dialer import initiate_storm_call, ComplianceBlock
-import json
 
 LEAD_DIR = "/root/empire-v49/leads"
 PROCESSED_DIR = "/root/empire-v49/leads/processed"
@@ -45,8 +44,8 @@ def heartbeat(status="ACTIVE", leads_today=0, blocked=0):
             "leads_today": leads_today,
             "last_ping": datetime.now(timezone.utc).isoformat(),
             "enabled": True,
-            "capabilities": json.dumps(["recruit_contractors", "target_outreach", "track_signups"]),
-            "task_types": json.dumps(["contractor.recruit", "contractor.track"]),
+            "capabilities": ["recruit_contractors", "target_outreach", "track_signups"],
+            "task_types": ["contractor.recruit", "contractor.track"],
         }, on_conflict="agent_name").execute()
     except Exception as e:
         print(f"[HEARTBEAT] Error: {e}")

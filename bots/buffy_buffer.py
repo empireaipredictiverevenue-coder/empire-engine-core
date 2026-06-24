@@ -46,7 +46,7 @@ log = logging.getLogger("buffy")
 
 # ── Config ───────────────────────────────────────────────────────────
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "")
-SUPABASE_KEY = os.environ.get("SUPABASE_SERVICE_KEY", "")
+SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_KEY", "")
 MAX_CONCURRENT = int(os.environ.get("BUFFY_MAX_CONCURRENT", "3"))
 POLL_INTERVAL = int(os.environ.get("BUFFY_POLL_SEC", "3"))
 STUCK_THRESHOLD_MIN = int(os.environ.get("BUFFY_STUCK_MINUTES", "15"))

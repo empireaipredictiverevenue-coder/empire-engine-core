@@ -40,11 +40,11 @@ EMAIL_PATTERNS = ["info", "contact", "office", "hello", "sales", "team", "admin"
 
 
 def _sb():
-    return create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_SERVICE_KEY"])
+    return create_client(os.environ["SUPABASE_URL"], os.getenv("SUPABASE_SERVICE_KEY"))
 
 
 def _apollo_post(path: str, body: dict) -> dict:
-    key = os.environ.get("APOLLO_API_KEY")
+    key = os.getenv("APOLLO_API_KEY")
     if not key:
         return {"error": "no APOLLO_API_KEY in env"}
     try:
@@ -152,7 +152,7 @@ def _is_valid_email(e: str) -> bool:
 
 def run(limit: int = 100) -> dict:
     started = datetime.now(timezone.utc)
-    api_key = os.environ.get("APOLLO_API_KEY")
+    api_key = os.getenv("APOLLO_API_KEY")
     if not api_key:
         return {"status": "error", "error": "no APOLLO_API_KEY in env"}
 

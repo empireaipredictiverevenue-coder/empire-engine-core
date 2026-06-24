@@ -1249,8 +1249,8 @@ class RevenueBrain:
                 "status": "ACTIVE",
                 "last_ping": datetime.now(timezone.utc).isoformat(),
                 "enabled": True,
-                "capabilities": json.dumps(["forecast_revenue", "detect_anomalies", "model_pipeline"]),
-                "task_types": json.dumps(["revenue.forecast", "revenue.anomaly"]),
+                "capabilities": ["forecast_revenue", "detect_anomalies", "model_pipeline"],
+                "task_types": ["revenue.forecast", "revenue.anomaly"],
             }, on_conflict="agent_name").execute()
         except Exception:
             pass

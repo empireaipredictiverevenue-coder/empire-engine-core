@@ -5,17 +5,15 @@ Multi-provider LLM abstraction for deep reasoning.
 
 Uses **LiteLLM Router** as the primary engine for battle-tested
 multi-provider routing with automatic:
-  - Fallbacks (Gemini → Claude → Ollama)
+  - Fallbacks (Claude → Gemini, MiniMax → Gemini)
   - Rate-limit cooldowns and retries
   - Request timeouts and error classification
   - Provider-agnostic API (same interface for all models)
 
-Supports three backends tried in cascade:
+Supports multiple cloud backends:
   1. Gemini (free tier via Google AI Studio — no credit card required)
   2. Claude (Anthropic API — trial credits available)
-  3. Ollama (local fallback — always available, zero cost)
-
-Falls back to direct HTTP calls if LiteLLM is not installed.
+  3. MiniMax (via OpenAI-compatible endpoint)
 
 Usage:
     from bots.space_providers import SpaceReasoner
@@ -34,16 +32,15 @@ log = logging.getLogger("empire.space")
 
 # ── Configuration ──────────────────────────────────────────────────────
 
-GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
-CLAUDE_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
-MINIMAX_API_KEY = os.environ.get("MINIMAX_API_KEY", "")
-OLLAMA_URL = os.environ.get("OLLAMA_URL", "http://localhost:11434")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
+CLAUDE_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
+MINIMAX_API_KEY = os.getenv("MINIMAX_API_KEY", "")
+MINIMAX_BASE_URL = os.environ.get("MINIMAX_BASE_URL", "https://api.minimax.io/v1")
 
 # Model selection (overridable via env)
 GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.0-flash")
 CLAUDE_MODEL = os.environ.get("CLAUDE_MODEL", "claude-sonnet-4-20250514")
 MINIMAX_MODEL = os.environ.get("MINIMAX_MODEL", "minimax/MiniMax-M3")
-OLLAMA_MODEL = os.environ.get("AI_MODEL_SPACE", "qwen2.5-coder:14b")
 
 # ── Provider Results ───────────────────────────────────────────────────
 
@@ -97,44 +94,33 @@ def _build_model_list() -> list:
         })
 
     if MINIMAX_API_KEY:
+        # MiniMax uses an OpenAI-compatible API, so use the `openai/` prefix
+        # and point api_base to the MiniMax endpoint.
         model_list.append({
             "model_name": "minimax",
             "litellm_params": {
-                "model": MINIMAX_MODEL,
+                "model": f"openai/{MINIMAX_MODEL}",
                 "api_key": MINIMAX_API_KEY,
+                "api_base": MINIMAX_BASE_URL,
             },
         })
-
-    # Ollama always available locally
-    model_list.append({
-        "model_name": "ollama",
-        "litellm_params": {
-            "model": f"ollama/{OLLAMA_MODEL}",
-            "api_base": OLLAMA_URL,
-        },
-    })
 
     return model_list
 
 
 def _build_fallbacks() -> list:
-    """Build fallback chain: Gemini → Claude → MiniMax → Ollama.
+    """Build fallback chain: all paid providers → Gemini (free tier).
 
+    Gemini has a generous free tier so it serves as the universal catch-all.
     Only includes providers whose API keys are configured.
     """
     fallbacks = []
-    if GEMINI_API_KEY and CLAUDE_API_KEY:
-        fallbacks.append({"gemini": ["claude"]})
-    if CLAUDE_API_KEY and MINIMAX_API_KEY:
-        fallbacks.append({"claude": ["minimax"]})
-    elif GEMINI_API_KEY and MINIMAX_API_KEY:
-        fallbacks.append({"gemini": ["minimax"]})
-    if MINIMAX_API_KEY:
-        fallbacks.append({"minimax": ["ollama"]})
-    elif CLAUDE_API_KEY:
-        fallbacks.append({"claude": ["ollama"]})
-    elif GEMINI_API_KEY:
-        fallbacks.append({"gemini": ["ollama"]})
+    # Claude → Gemini (Claude credit balance is often $0)
+    if CLAUDE_API_KEY and GEMINI_API_KEY:
+        fallbacks.append({"claude": ["gemini"]})
+    # MiniMax → Gemini (MiniMax token plan exhausts quickly)
+    if MINIMAX_API_KEY and GEMINI_API_KEY:
+        fallbacks.append({"minimax": ["gemini"]})
     return fallbacks
 
 
@@ -157,9 +143,10 @@ class _LiteLLMEngine:
             self._router = LiteLLMRouter(
                 model_list=model_list,
                 fallbacks=fallbacks,
-                cooldown_time=30,
-                num_retries=1,
-                timeout=20,
+                cooldown_time=30,       # cooldown for rate-limited providers
+                num_retries=2,           # one more retry before falling back
+                timeout=20,              # cloud providers are fast
+                allowed_fails=3,         # allow 3 consecutive failures before cooldown
             )
             log.info(f"[space] LiteLLM Router initialised with {len(model_list)} deployments")
         except Exception as e:
@@ -176,14 +163,14 @@ class _LiteLLMEngine:
         """Generate using LiteLLM Router with fallbacks.
 
         Tries the preferred provider first, then falls back through
-        the configured chain (Gemini → Claude → Ollama).
+        the configured chain (Claude → Gemini, MiniMax → Gemini).
         """
         if not _HAS_LITELLM or self._router is None:
             return ProviderResult(error="LiteLLM not available", provider="litellm")
 
         # Determine starting model based on preference
         # Router fallbacks handle missing API keys gracefully
-        model_name = prefer if prefer in ("gemini", "claude", "minimax", "ollama") else "gemini"
+        model_name = prefer if prefer in ("gemini", "claude", "minimax") else "gemini"
 
         messages = []
         if system:
@@ -247,7 +234,7 @@ class SpaceReasoner:
     multi-provider routing with automatic fallbacks and retries.
     Falls back to direct HTTP calls if LiteLLM is not available.
 
-    Tries providers in cascade: Gemini (free) → Claude → Ollama (local).
+    Tries Gemini first, then falls back through Claude or MiniMax if configured.
     Use `prefer` to force a specific provider first.
 
     Public methods:

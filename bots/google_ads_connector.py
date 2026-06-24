@@ -48,10 +48,10 @@ class GoogleAdsConnector:
     """Connects to Google Ads API and fetches campaign performance data."""
 
     def __init__(self):
-        self.dev_token = os.environ.get("GOOGLE_ADS_DEVELOPER_TOKEN", "").strip()
+        self.dev_token = os.getenv("GOOGLE_ADS_DEVELOPER_TOKEN", "").strip()
         self.client_id = os.environ.get("GOOGLE_ADS_CLIENT_ID", "").strip()
-        self.client_secret = os.environ.get("GOOGLE_ADS_CLIENT_SECRET", "").strip()
-        self.refresh_token = os.environ.get("GOOGLE_ADS_REFRESH_TOKEN", "").strip()
+        self.client_secret = os.getenv("GOOGLE_ADS_CLIENT_SECRET", "").strip()
+        self.refresh_token = os.getenv("GOOGLE_ADS_REFRESH_TOKEN", "").strip()
         self.login_customer_id = os.environ.get("GOOGLE_ADS_LOGIN_CUSTOMER_ID", "").strip()
         self.customer_id = os.environ.get("GOOGLE_ADS_CUSTOMER_ID", "").strip()
         self._access_token: Optional[str] = None
@@ -66,7 +66,7 @@ class GoogleAdsConnector:
         ])
 
     async def _get_access_token(self) -> Optional[str]:
-        """Get or refresh the OAuth2 access token."""
+        """Get or refresh the OAuth2 bearer credential."""
         now = time.time()
         if self._access_token and now < self._token_expiry - 60:
             return self._access_token

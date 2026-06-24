@@ -42,7 +42,7 @@ log = logging.getLogger("buffy-worker")
 
 # ── Config ───────────────────────────────────────────────────────────
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "")
-SUPABASE_KEY = os.environ.get("SUPABASE_SERVICE_KEY", "")
+SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_KEY", "")
 REPO = Path(__file__).resolve().parent.parent
 RENDER_SCRIPT = REPO / "bots" / "render_short.py"
 POLL_INTERVAL = int(os.environ.get("BUFFY_WORKER_POLL_SEC", "30"))

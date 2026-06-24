@@ -36,9 +36,9 @@ logging.basicConfig(
 log = logging.getLogger("mesh.sovereign")
 
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "")
-SUPABASE_SERVICE_KEY = os.environ.get("SUPABASE_SERVICE_KEY", "")
+SUPABASE_SERVICE_KEY = os.getenv("SUPABASE_SERVICE_KEY", "")
 HUB_URL = os.environ.get("EMPIRE_HUB_URL", "http://localhost:8001")
-HUB_TOKEN = os.environ.get("HUB_TOKEN", "dev-token-insecure")
+HUB_TOKEN = os.getenv("HUB_TOKEN", "dev-token-insecure")
 SOVEREIGN_MATRIX_URL = os.environ.get("SOVEREIGN_MATRIX_URL", "http://localhost:8010")
 POLL_INTERVAL = int(os.environ.get("MESH_SOVEREIGN_POLL_SEC", "120"))
 AGENT_NAME = "mesh.sovereign"

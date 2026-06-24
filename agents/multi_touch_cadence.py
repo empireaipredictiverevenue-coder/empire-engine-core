@@ -71,7 +71,7 @@ STEPS = [
 
 
 def _sb():
-    return create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_SERVICE_KEY"])
+    return create_client(os.environ["SUPABASE_URL"], os.getenv("SUPABASE_SERVICE_KEY"))
 
 
 def _first_name(full: str) -> str:
@@ -121,7 +121,7 @@ def run() -> dict:
     now_iso = started.isoformat()
 
     # 1) Find active sequences that need a step advance
-    r = sb.table("sms_sequences").select("id,phone,status,current_step,last_sent_at,created_at,meta").eq("sequence_type", SEQUENCE).eq("status", "active").limit(2000).execute()
+    r = sb.table("sms_sequences").select("id,phone,status,current_step,last_sent_at,created_at,meta").eq("sequence_type", SEQUENCE).eq("status", "active").limit(100).execute()
     seqs = r.data or []
     log.info(f"multi_touch_cadence: {len(seqs)} active sequences")
 
@@ -135,14 +135,15 @@ def run() -> dict:
         by_phone[ph] = s  # most recent wins
 
     # 3) Load contractor details for the phones
-    phones = list(by_phone.keys())
+    phones = list(by_phone.keys())[:100]  # hard cap per cycle
     if not phones:
         return {"status": "ok", "rows_seen": 0, "rows_sent": 0}
     conts: dict[str, dict] = {}
-    for i in range(0, len(phones), 500):
-        chunk = phones[i:i+500]
-        for c in (sb.table("contractors").select("id,name,phone,metro,active").in_("phone", chunk).execute().data or []):
+    try:
+        for c in (sb.table("contractors").select("id,name,phone,metro,active").in_("phone", phones).execute().data or []):
             conts[c["phone"]] = c
+    except Exception as e:
+        log.warning(f"contractor lookup failed: {e}")
 
     sent = 0
     skipped = 0

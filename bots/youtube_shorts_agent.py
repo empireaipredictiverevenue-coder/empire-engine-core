@@ -51,9 +51,9 @@ logging.basicConfig(
 )
 
 # ── Config ───────────────────────────────────────────────────────────────
-YOUTUBE_API_KEY = os.environ.get("YOUTUBE_API_KEY", "")
+YOUTUBE_API_KEY = os.getenv("YOUTUBE_API_KEY", "")
 YOUTUBE_CLIENT_ID = os.environ.get("YOUTUBE_CLIENT_ID", "")
-YOUTUBE_CLIENT_SECRET = os.environ.get("YOUTUBE_CLIENT_SECRET", "")
+YOUTUBE_CLIENT_SECRET = os.getenv("YOUTUBE_CLIENT_SECRET", "")
 YOUTUBE_CHANNEL_ID = os.environ.get("YOUTUBE_CHANNEL_ID", "")
 
 OUTPUT_DIR = REPO / "youtube_shorts_output"
@@ -484,7 +484,7 @@ class YouTubeShortsAgent:
                 if sb is None:
                     from supabase import create_client
                     sb_url = os.environ.get("SUPABASE_URL", "")
-                    sb_key = os.environ.get("SUPABASE_SERVICE_KEY", "")
+                    sb_key = os.getenv("SUPABASE_SERVICE_KEY", "")
                     sb = create_client(sb_url, sb_key) if sb_url and sb_key else None
 
                 if sb:

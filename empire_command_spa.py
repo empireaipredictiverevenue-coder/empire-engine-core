@@ -3330,7 +3330,7 @@ function Pipeline() {
               ${svgLines}
               ${arrows}
             
-                  <g style="opacity:${showCumulative ? 1 : 0}">${() => {
+                  <g style="opacity:${showCumulative ? 1 : 0}">${(() => {
                     const lastIdx = series.length - 1;
                     if (lastIdx < 1) return '';
                     const forecastDays = 14;
@@ -3354,7 +3354,7 @@ function Pipeline() {
                       dots += '<circle class="bill-chart-line-dot-forecast" cx="' + fx.toFixed(1) + '" cy="' + fy.toFixed(1) + '" r="2"/>';
                     }
                     return '<polyline class="bill-chart-line-forecast" points="' + pts.trim() + '" vector-effect="non-scaling-stroke"/>' + dots;
-                  })()}}</g> }                  
+                  })()}</g>
                   ${(() => {
                     const ptsSet = roll7Set.map((v, i) => { const x = (barStep / 2) + i * (barStep + 3); const y = chartH - (v / maxRoll7) * chartH; return x.toFixed(1) + ',' + y.toFixed(1); }).join(' ');
                     const ptsPM = roll7PM.map((v, i) => { const x = (barStep / 2) + i * (barStep + 3); const y = chartH - (v / maxRoll7) * chartH; return x.toFixed(1) + ',' + y.toFixed(1); }).join(' ');
@@ -5921,17 +5921,17 @@ function DispatchHealth() {
           <div style="font-size:10px;color:var(--empire-fog);margin-top:6px">
             \${cb.consecutive_failures ? cb.consecutive_failures + ' consecutive failures' : 'No recent failures'}
           </div>
-          \${cb.import_error ? html`
+          ${cb.import_error ? html`
             <div style="margin-top:8px;padding:8px 10px;background:rgba(255,184,0,0.08);border:1px solid rgba(255,184,0,0.2);border-radius:4px;font-family:var(--font-mono);font-size:9px;color:var(--status-amber);line-height:1.4">
               ⚠ Circuit state unavailable: \${cb.import_error}
             </div>
           ` : null}
-          \${cb.backoff_until ? html`
+          ${cb.backoff_until ? html`
             <div style="font-size:9px;color:var(--status-amber);margin-top:4px;font-family:var(--font-mono)">
               Backoff until \${(cb.backoff_until || '').slice(0,19)}
             </div>
           ` : null}
-          \${cb.last_failure_at ? html`
+          ${cb.last_failure_at ? html`
             <div style="font-size:9px;color:var(--empire-fog);margin-top:2px;font-family:var(--font-mono)">
               Last failure: \${(cb.last_failure_at || '').slice(0,19)}
             </div>
@@ -5957,7 +5957,7 @@ function DispatchHealth() {
         </div>
         <div class="fee-stat">
           <div class="fee-stat-label">Matcher</div>
-          \${data.matcher_stats ? html`
+          ${data.matcher_stats ? html`
             <div class="fee-stat-value dim" style="font-size:20px">\${data.matcher_stats.matches_computed || 0} runs</div>
             <div style="font-size:9px;color:var(--empire-fog);margin-top:4px;font-family:var(--font-mono)">
               \${data.matcher_stats.dispatches_sent || 0} sent · \${data.matcher_stats.dispatches_accepted || 0} accepted
@@ -5969,13 +5969,13 @@ function DispatchHealth() {
         </div>
       </div>
 
-      \${(data.recent_errors || []).length > 0 ? html`
+      ${(data.recent_errors || []).length > 0 ? html`
         <div class="panel" style="margin-bottom:24px;border-color:rgba(255,184,0,0.2)">
           <div class="panel-head" style="display:flex;justify-content:space-between;align-items:center">
             <span style="color:var(--status-amber)">⚠ Recent Dispatch Errors</span>
             <span class="sec-meta" style="margin:0">\${data.recent_errors.length} errors in 24h</span>
           </div>
-          \${data.recent_errors.map((e, i) => html`
+          ${data.recent_errors.map((e, i) => html`
             <div style="padding:10px 0;border-bottom:1px solid var(--empire-divider);\${i === data.recent_errors.length - 1 ? 'border-bottom:none' : ''}">
               <div style="display:flex;gap:12px;align-items:baseline;margin-bottom:4px">
                 <span style="font-family:var(--font-mono);font-size:9px;color:var(--empire-fog);flex-shrink:0">\${(e.at || '').slice(0,19)}</span>
@@ -6001,7 +6001,7 @@ function DispatchHealth() {
       <div class="split">
         <div class="panel">
           <div class="panel-head">Matcher Score Breakdown</div>
-          \${data.matcher_stats ? html`
+          ${data.matcher_stats ? html`
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
               <div style="text-align:center;padding:12px;background:var(--empire-elevated);border-radius:4px">
                 <div style="font-family:var(--font-mono);font-size:22px;color:var(--signal-teal)">\${data.matcher_stats.matches_computed || 0}</div>

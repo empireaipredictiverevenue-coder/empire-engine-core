@@ -2,7 +2,7 @@
 EMPIRE V49 · STOP LOSS BOT
 ============================
 Standalone PM2 service that monitors open trading positions and
-automatically executes stop losses when triggered.
+executes stop losses when price thresholds are breached.
 
 Architecture:
   - Positions stored in ~/.empire/stop_loss_positions.json
@@ -55,7 +55,7 @@ DEFAULT_OUTPUT_MINT = WSOL_MINT
 
 # Wallet — base58-encoded 64-byte Ed25519 private key for stop loss execution.
 # If unset, the bot runs in dry-run mode (quotes only, no real swaps).
-_STOPLOSS_SIGNING_KEY = os.environ.get("STOPLOSS_WALLET_PRIVATE_KEY", "").strip()
+_STOPLOSS_SIGNING_KEY = os.getenv("STOPLOSS_WALLET_PRIVATE_KEY", "").strip()
 _SOLANA_RPC_URL = os.environ.get("SOLANA_RPC_URL", "https://api.mainnet-beta.solana.com")
 _SOLANA_TIMEOUT_SEC = int(os.environ.get("STOPLOSS_SOLANA_TIMEOUT", "30"))
 
@@ -153,17 +153,17 @@ class PositionStore:
                 log.info(f"[stoploss] migrating {len(legacy)} positions from {old_json} → SQLite")
                 conn = sqlite3.connect(self._path)
                 conn.executescript(self._SCHEMA)
-                _insert_sql = """
-                    INSERT OR IGNORE INTO positions (
-                        id, token_mint, output_mint, entry_price, amount,
-                        stop_loss_percent, current_stop_level, highest_price, lowest_price,
-                        trailing, status, label, slippage_bps,
-                        take_profit_percent, take_profit_level,
-                        created_at, triggered_at, triggered_price, tx_signature,
-                        last_checked_price, last_checked_at, peak_drawdown_pct,
-                        cancelled_at, last_swap_result
-                    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
-                """
+                _cols = [
+                    "id", "token_mint", "output_mint", "entry_price", "amount",
+                    "stop_loss_percent", "current_stop_level", "highest_price", "lowest_price",
+                    "trailing", "status", "label", "slippage_bps",
+                    "take_profit_percent", "take_profit_level",
+                    "created_at", "triggered_at", "triggered_price", "tx_signature",
+                    "last_checked_price", "last_checked_at", "peak_drawdown_pct",
+                    "cancelled_at", "last_swap_result",
+                ]
+                _placeholders = ",".join("?" * len(_cols))
+                _insert_sql = f"INSERT OR IGNORE INTO positions ({','.join(_cols)}) VALUES ({_placeholders})"
                 for pos_id, p in legacy.items():
                     conn.execute(_insert_sql, (
                         p.get("id", pos_id),
@@ -240,16 +240,19 @@ class PositionStore:
         pos_id = position["id"]
         swap_json = json.dumps(position.get("last_swap_result")) if position.get("last_swap_result") else None
         async with self._conn() as db:
+            _cols = [
+                "id", "token_mint", "output_mint", "entry_price", "amount",
+                "stop_loss_percent", "current_stop_level", "highest_price", "lowest_price",
+                "trailing", "status", "label", "slippage_bps",
+                "take_profit_percent", "take_profit_level",
+                "created_at", "triggered_at", "triggered_price", "tx_signature",
+                "last_checked_price", "last_checked_at", "peak_drawdown_pct",
+                "cancelled_at", "last_swap_result",
+            ]
+            _placeholders = ",".join("?" * len(_cols))
+            _insert_sql = f"INSERT INTO positions ({','.join(_cols)}) VALUES ({_placeholders})"
             await db.execute(
-                """INSERT INTO positions (
-                    id, token_mint, output_mint, entry_price, amount,
-                    stop_loss_percent, current_stop_level, highest_price, lowest_price,
-                    trailing, status, label, slippage_bps,
-                    take_profit_percent, take_profit_level,
-                    created_at, triggered_at, triggered_price, tx_signature,
-                    last_checked_price, last_checked_at, peak_drawdown_pct,
-                    cancelled_at, last_swap_result
-                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                _insert_sql,
                 (
                     pos_id,
                     position["token_mint"],

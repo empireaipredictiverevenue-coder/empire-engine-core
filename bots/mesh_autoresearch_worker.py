@@ -29,9 +29,9 @@ logging.basicConfig(
 log = logging.getLogger("mesh.autoresearch")
 
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "")
-SUPABASE_SERVICE_KEY = os.environ.get("SUPABASE_SERVICE_KEY", "")
+SUPABASE_SERVICE_KEY = os.getenv("SUPABASE_SERVICE_KEY", "")
 HUB_URL = os.environ.get("EMPIRE_HUB_URL", "http://localhost:8001")
-HUB_TOKEN = os.environ.get("HUB_TOKEN", "dev-token-insecure")
+HUB_TOKEN = os.getenv("HUB_TOKEN", "dev-token-insecure")
 POLL_INTERVAL = int(os.environ.get("MESH_AUTORESEARCH_POLL_SEC", "120"))
 AGENT_NAME = "mesh.autoresearch"
 

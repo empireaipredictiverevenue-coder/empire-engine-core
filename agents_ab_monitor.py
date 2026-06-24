@@ -10,10 +10,16 @@ time. This monitor is the polling arm — the dispatcher does the firing.
 import os, sys, json
 from datetime import datetime, timezone
 from pathlib import Path
-sys.path.insert(0, str(Path("/root/empire-v49").resolve()))
+REPO = Path("/root/empire-v49").resolve()
+sys.path.insert(0, str(REPO))
+
+try:
+    from dotenv import load_dotenv
+    load_dotenv(REPO.parent / ".env")
+except ImportError:
+    pass
 
 from supabase import create_client
-import uuid
 import httpx
 
 AGENT_NAME = "ab_monitor"
@@ -50,7 +56,7 @@ def run_once() -> dict:
     # log to agent_activity for the operator SPA
     sb.table("agent_activity").insert({
         "agent_name": AGENT_NAME,
-        "run_id": str(uuid.uuid4()),
+        "run_id": str(__import__("uuid").uuid4()),
         "started_at": started_at.isoformat(),
         "finished_at": started_at.isoformat(),
         "status": "ok",

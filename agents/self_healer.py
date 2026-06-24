@@ -81,7 +81,7 @@ def _cooldown_ok(action: str, target: str) -> bool:
 
 
 def _sb():
-    return create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_SERVICE_KEY"])
+    return create_client(os.environ["SUPABASE_URL"], os.getenv("SUPABASE_SERVICE_KEY"))
 
 
 def _log_fix(sb, action: str, target: str, status: str, detail: str = "") -> None:
@@ -116,7 +116,7 @@ def _send_telegram(text: str) -> bool:
 def _pm2_list() -> list[dict]:
     """Get list of pm2 processes with state."""
     try:
-        r = subprocess.run(["pm2", "jlist"], capture_output=True, text=True, timeout=10)
+        r = subprocess.run(["pm2", "jlist"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=10)
         if r.returncode != 0:
             return []
         return json.loads(r.stdout)
@@ -127,7 +127,7 @@ def _pm2_list() -> list[dict]:
 
 def _pm2_restart(name: str) -> bool:
     try:
-        r = subprocess.run(["pm2", "restart", name], capture_output=True, text=True, timeout=30)
+        r = subprocess.run(["pm2", "restart", name], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=30)
         return r.returncode == 0
     except Exception as e:
         log.warning(f"pm2 restart {name} failed: {e}")
@@ -136,7 +136,7 @@ def _pm2_restart(name: str) -> bool:
 
 def _pm2_start(name: str) -> bool:
     try:
-        r = subprocess.run(["pm2", "start", name], capture_output=True, text=True, timeout=30)
+        r = subprocess.run(["pm2", "start", name], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=30)
         return r.returncode == 0
     except Exception as e:
         log.warning(f"pm2 start {name} failed: {e}")

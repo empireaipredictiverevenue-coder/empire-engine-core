@@ -34,7 +34,7 @@ log = logging.getLogger("agi.revenue")
 logging.basicConfig(level=logging.INFO, format="%(levelname)s:%(name)s:%(message)s")
 
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "")
-SUPABASE_KEY = os.environ.get("SUPABASE_SERVICE_KEY", "")
+SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_KEY", "")
 OLLAMA_URL   = os.environ.get("OLLAMA_URL", "http://localhost:11434")
 INTERVAL     = int(os.environ.get("AGI_REVENUE_INTERVAL_SEC", "3600"))
 
@@ -551,8 +551,8 @@ def run():
             "status": "ACTIVE",
             "last_ping": datetime.now(timezone.utc).isoformat(),
             "enabled": True,
-            "capabilities": json.dumps(["agi", "revenue", "optimizer", "tuning"]),
-            "task_types": json.dumps(["revenue.agi_tune", "revenue.calibrate"]),
+            "capabilities": ["agi", "revenue", "optimizer", "tuning"],
+            "task_types": ["revenue.agi_tune", "revenue.calibrate"],
         }, on_conflict="agent_name").execute()
     except Exception:
         pass

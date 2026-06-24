@@ -76,7 +76,7 @@ async def discover_emails_batch(leads: list) -> list:
 
 
 def run(max_per_run: int = MAX_PER_RUN) -> dict:
-    sb = create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_SERVICE_KEY"])
+    sb = create_client(os.environ["SUPABASE_URL"], os.getenv("SUPABASE_SERVICE_KEY"))
 
     r = sb.table("enriched_leads").select("id,warehouse_name,status,meta").is_("phone", "null").is_("email", "null").in_("status", ["pending_outreach", "pending_enrichment", "blocked"]).limit(max_per_run).execute()
     leads = r.data or []

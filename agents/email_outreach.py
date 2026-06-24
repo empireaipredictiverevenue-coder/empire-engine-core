@@ -35,7 +35,7 @@ FROM_ADDR = "Empire AI <ops@empire-ai.co.uk>"
 
 
 def _sb():
-    return create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_SERVICE_KEY"])
+    return create_client(os.environ["SUPABASE_URL"], os.getenv("SUPABASE_SERVICE_KEY"))
 
 
 def _send_email(api_key: str, to: str, subject: str, html: str) -> dict:
@@ -149,7 +149,7 @@ def _log_send(sb, contractor_id: str, step: int, status: str, detail: str = "", 
 
 def run() -> dict:
     started = datetime.now(timezone.utc)
-    api_key = os.environ.get("RESEND_AFFILIATE_KEY") or os.environ.get("RESEND_API_KEY")
+    api_key = os.getenv("RESEND_AFFILIATE_KEY") or os.getenv("RESEND_API_KEY")
     if not api_key:
         return {"status": "error", "error": "no resend key", "sent": 0}
 

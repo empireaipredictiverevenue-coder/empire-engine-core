@@ -51,7 +51,7 @@ logging.basicConfig(level=logging.INFO, format="%(levelname)s:%(name)s:%(message
 
 # ── Config ───────────────────────────────────────────────────────────
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "")
-SUPABASE_KEY = os.environ.get("SUPABASE_SERVICE_KEY", "")
+SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_KEY", "")
 OLLAMA_URL   = os.environ.get("OLLAMA_URL", "http://localhost:11434")
 INTERVAL     = int(os.environ.get("AGI_LANE_INTERVAL_SEC", "60"))
 MAX_LANES    = 36
@@ -389,25 +389,29 @@ class AGILaneEngine:
         return actions
 
     async def _ollama_chat_json(self, system: str, prompt: str) -> Dict[str, Any]:
-        """Direct Ollama chat for AGI lane decision-making."""
-        import httpx
+        """Multi-provider LLM call with fallback chain via SpaceReasoner.
+
+        Uses SpaceReasoner which routes through the fallback chain
+        (Gemini free tier → Ollama local), so lane decisions keep working
+        even if Ollama is momentarily unavailable or Gemini is rate-limited.
+        """
+        from bots.space_providers import get_reasoner
         try:
-            async with httpx.AsyncClient(timeout=90.0) as client:
-                r = await client.post(
-                    f"{OLLAMA_URL}/api/chat",
-                    json={
-                        "model": "llama3.2:3b",
-                        "messages": [
-                            {"role": "system", "content": system},
-                            {"role": "user", "content": prompt},
-                        ],
-                        "stream": False,
-                        "format": "json",
-                    },
-                )
-                r.raise_for_status()
-                data = r.json()
-                return json.loads(data["message"]["content"])
+            reasoner = get_reasoner(prefer="ollama")  # prefer Ollama for speed, fallback to Gemini
+            result = await reasoner.reason_json(
+                prompt=prompt,
+                system=system,
+                max_tokens=2048,
+            )
+            if result.get("ok"):
+                data = result.get("data", {})
+                if isinstance(data, dict):
+                    return data
+                log.warning(f"[agi.lane] LLM returned non-dict: {type(data).__name__}")
+                return {"_error": f"LLM returned non-dict: {type(data).__name__}"}
+
+            log.error(f"[agi.lane] LLM call failed: {result.get('error', 'unknown')}")
+            return {"_error": result.get("error", "unknown")}
         except Exception as e:
             log.error(f"[agi.lane] LLM call failed: {e}")
             return {"_error": str(e)}
@@ -590,7 +594,7 @@ async def heartbeat():
             "status": AGENT_STATUS,
             "last_ping": datetime.now(timezone.utc).isoformat(),
             "enabled": True,
-            "capabilities": json.dumps(["controller", "agi", "lane_engine", "orchestrator"]),
+            "capabilities": ["controller", "agi", "lane_engine", "orchestrator"],
             "task_types": list(ACTION_TASK_MAP.values()),
         }, on_conflict="agent_name").execute()
         log.info(f"[agi.lane] heartbeat: {AGENT_NAME} → {AGENT_STATUS}")

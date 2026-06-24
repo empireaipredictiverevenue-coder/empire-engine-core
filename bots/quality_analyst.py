@@ -40,8 +40,8 @@ logging.basicConfig(level=logging.INFO, format="%(levelname)s:%(name)s:%(message
 
 # ── CONFIG ──────────────────────────────────────────────────────────
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "")
-SUPABASE_KEY = os.environ.get("SUPABASE_SERVICE_KEY", "")
-OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
+SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_KEY", "")
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 WHISPERX_MODEL = os.environ.get("WHISPERX_MODEL", "base")
 WHISPERX_DEVICE = os.environ.get("WHISPERX_DEVICE", "cpu")
 WHISPERX_BATCH_SIZE = int(os.environ.get("WHISPERX_BATCH_SIZE", "8"))

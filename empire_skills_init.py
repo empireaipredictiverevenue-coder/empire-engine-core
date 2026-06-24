@@ -20,6 +20,7 @@ from skills.email_skills import register_email_skills
 from skills.design_skills import register_design_skills
 from skills.hermes_skills import register_hermes_skills
 from skills.query_skills import register_query_skills
+from skills.traffic_skills import register_traffic_skills
 from skills.dynamic import VaultSkillDiscoverer
 
 
@@ -118,7 +119,33 @@ class SkillsFramework:
         #     29 skills that make the mesh dispatch layer invocable via HarnessManager.run()
         register_hermes_skills(registry=self.registry)
 
-        # 5d. Register query & knowledge skills (DB query, RAG vector search, knowledge base)
+        # 5d. Register traffic skills (budget allocation, channel optimization, native ads, affiliate, etc.)
+        #     12 skills: traffic.* namespace for the traffic_director role
+        #     Wires ask_llm so skills can execute traffic management guidance via LLM
+        register_traffic_skills(registry=self.registry, ask_llm=ask_llm)
+
+        # 5d(ii). Register traffic_director boundary for skill fidelity enforcement
+        #         Locks traffic_director to only call traffic.* skills
+        self.register_agent_boundary(
+            agent_name="traffic_director",
+            equips=[
+                "traffic.budget-allocation",
+                "traffic.mix-optimization",
+                "traffic.native-ads",
+                "traffic.ppc",
+                "traffic.affiliate",
+                "traffic.seo",
+                "traffic.email-sms",
+                "traffic.content-distribution",
+                "traffic.community-engagement",
+                "traffic.reporting",
+                "traffic.channel-activation",
+                "traffic.search-ads",
+                "traffic.social-ads",
+            ],
+        )
+
+        # 5e. Register query & knowledge skills (DB query, RAG vector search, knowledge base)
         #     3 skills: query.db.sql, query.rag.search, query.kb.search
         register_query_skills(
             registry=self.registry,

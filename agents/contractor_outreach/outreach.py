@@ -262,7 +262,28 @@ def run() -> dict:
     log.info(f"contractor_outreach: {len(candidates)} active contractors (filter metros={cfg['metros']})")
     rows_seen = len(candidates)
 
-    # 2) Filter to those without an active recruit sequence AND have a phone
+    # 2) Hub precheck: in live mode, skip run if hub is unreachable
+    # to avoid blasting 100 contractors into URLErrors
+    if not cfg["dry_run"]:
+        import socket as _socket
+        hub_url = os.getenv("HUB_URL", "http://127.0.0.1:8001")
+        hub_alive = False
+        try:
+            hostport = hub_url.split("://", 1)[1].split("/", 1)[0]
+            host, port_s = hostport.rsplit(":", 1) if ":" in hostport else (hostport, "80")
+            with _socket.create_connection((host, int(port_s)), timeout=2.0):
+                hub_alive = True
+        except Exception:
+            pass
+        if not hub_alive:
+            _log_activity(sb, "contractor_outreach", run_id, started_at, "skipped_disabled",
+                          rows_seen=0, rows_processed=0, rows_errored=0,
+                          summary="hub at HUB_URL unreachable — skipping run to avoid blasting URLErrors")
+            _update_config(sb, "contractor_outreach", "skipped_disabled", datetime.now(timezone.utc).isoformat())
+            log.info("[contractor_outreach] hub unreachable — skipped")
+            return {"status": "skipped_disabled", "rows_processed": 0}
+
+    # 3) Filter to those without an active recruit sequence AND have a phone
     to_enroll = []
     for c in candidates:
         phone = _normalize_phone(c.get("phone", ""))

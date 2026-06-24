@@ -17,7 +17,7 @@ from datetime import datetime, timezone, timedelta
 from typing import Optional
 
 import httpx as _httpx
-from fastapi import FastAPI, Request, Depends, HTTPException, Query
+from fastapi import FastAPI, Request, Header, Depends, HTTPException, Query
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -109,6 +109,7 @@ from empire_hourly_digest import HourlyDigestLoop
 from empire_skills_init import skills_framework, build_brain_context
 from bots.seo_agent import run_loop as seo_run_loop
 from bots.traffic_specialist import run_loop as traffic_specialist_run_loop, register_traffic_specialist_routes
+from bots.predictive_traffic_specialist_agent import PredictiveTrafficSpecialistAgent
 from bots.affiliate_recruiter import run_loop as affiliate_recruiter_run_loop, register_affiliate_recruiter_routes
 from bots.bounty_tracker import run_loop as bounty_tracker_run_loop, register_bounty_tracker_routes
 from bots.email_pulse_monitor import run_loop as email_pulse_run_loop
@@ -4285,6 +4286,7 @@ async def _deferred_background_tasks():
     asyncio.create_task(hourly_digest.run(), name="hourly-digest")
     asyncio.create_task(seo_run_loop(), name="seo-agent")
     asyncio.create_task(traffic_specialist_run_loop(), name="traffic-specialist")
+    asyncio.create_task(PredictiveTrafficSpecialistAgent().run_continuously(), name="predictive-traffic-specialist")
     asyncio.create_task(affiliate_recruiter_run_loop(), name="affiliate-recruiter")
     asyncio.create_task(bounty_tracker_run_loop(), name="bounty-tracker")
     asyncio.create_task(email_pulse_run_loop(), name="email-pulse-monitor")
@@ -6335,7 +6337,7 @@ from empire_affiliate_utils import _resolve_affiliate_code_from_request, _safe_u
 
 
 @app.post("/webhook/lead")
-async def webhook_lead(request: fastapi.Request, x_empire_secret: str = fastapi.Header(None, alias="x_empire_secret")):
+async def webhook_lead(request: Request, x_empire_secret: str = Header(None, alias="x_empire_secret")):
     import os
     from fastapi.responses import JSONResponse
     from supabase import create_client

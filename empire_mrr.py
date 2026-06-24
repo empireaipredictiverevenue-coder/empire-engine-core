@@ -45,6 +45,28 @@ def _sb():
     return create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_SERVICE_KEY"])
 
 
+def _resolve_contractor(phone: str = "", email: str = "") -> dict:
+    """Resolve a contractor by phone or email. Returns {id, name} or error dict."""
+    sb = _sb()
+    if phone:
+        # Normalize phone: strip non-digits, add + prefix
+        digits = "".join(c for c in phone if c.isdigit())
+        if len(digits) == 10:
+            phone_norm = "+1" + digits
+        elif len(digits) == 11 and digits.startswith("1"):
+            phone_norm = "+" + digits
+        else:
+            phone_norm = phone if phone.startswith("+") else "+" + phone
+        r = sb.table("contractors").select("id,name").eq("phone", phone_norm).limit(1).execute()
+        if r.data:
+            return {"ok": True, "id": r.data[0]["id"], "name": r.data[0].get("name", "") or ""}
+    if email:
+        r = sb.table("contractors").select("id,name").eq("email", email.strip().lower()).limit(1).execute()
+        if r.data:
+            return {"ok": True, "id": r.data[0]["id"], "name": r.data[0].get("name", "") or ""}
+    return {"ok": False, "error": "No contractor found with that phone or email. Make sure the number matches what we have on file."}
+
+
 def register_mrr_routes(app, require_auth=None, get_db=None):
     @app.get("/api/v1/subscribe/tiers")
     async def list_tiers():
@@ -62,10 +84,18 @@ def register_mrr_routes(app, require_auth=None, get_db=None):
                 return JSONResponse({"detail": "auth required"}, status_code=401)
         body = await request.json()
         cid = body.get("contractor_id")
+        phone = body.get("phone", "")
+        email = body.get("email", "")
         wallet = body.get("wallet")
         tier = body.get("tier", "basic")
+        # Resolve contractor by phone/email if no direct contractor_id
+        if not cid:
+            resolved = _resolve_contractor(phone=phone, email=email)
+            if not resolved.get("ok"):
+                return JSONResponse(resolved, status_code=404)
+            cid = resolved["id"]
         if not cid or not wallet:
-            return JSONResponse({"detail": "contractor_id and wallet required"}, status_code=400)
+            return JSONResponse({"detail": "Phone/email + wallet required"}, status_code=400)
         result = activate_subscription(cid, wallet, tier)
         # Attribution: if the activation came from an outreach email,
         # mark that outreach row as paid-driven.
@@ -82,6 +112,15 @@ def register_mrr_routes(app, require_auth=None, get_db=None):
                 log.warning(f"[mrr] outreach attribution failed: {_ae}")
         if not result.get("ok"):
             return JSONResponse(result, status_code=400)
+        # Attach resolved info so the frontend can use it
+        result["contractor_id"] = cid
+        # Look up the contractor name for a personalized response
+        try:
+            _cr = _sb().table("contractors").select("name").eq("id", cid).limit(1).execute()
+            if _cr.data and _cr.data[0].get("name"):
+                result["contractor_name"] = _cr.data[0]["name"]
+        except Exception:
+            pass
         return JSONResponse(result)
 
     @app.post("/api/v1/subscribe/verify")

@@ -50,10 +50,10 @@ log = logging.getLogger("empire.affiliate_recruiter")
 
 # ── CONFIG ───────────────────────────────────────────────────────────
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "")
-SUPABASE_KEY = os.environ.get("SUPABASE_SERVICE_KEY", "")
+SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_KEY", "")
 HUB_URL = os.environ.get("PUBLIC_BASE_URL", "http://localhost:8001")
-RESEND_API_KEY = os.environ.get("RESEND_API_KEY", "")
-RESEND_AFFILIATE_KEY = os.environ.get("RESEND_AFFILIATE_KEY", "") or RESEND_API_KEY
+RESEND_API_KEY = os.getenv("RESEND_API_KEY", "")
+RESEND_AFFILIATE_KEY = os.getenv("RESEND_AFFILIATE_KEY", "") or RESEND_API_KEY
 
 _sb = None
 
@@ -368,7 +368,11 @@ class AffiliateRecruiter:
         try:
             sb = _get_sb()
             name = prospect["name"]
-            email = prospect["email"]
+            email = prospect.get("email", "") or ""
+            # Validate email — NULL/empty email violates affiliates.email NOT NULL constraint
+            if not email:
+                log.info(f"[affiliate_recruiter] Skipping {name}: no email address")
+                return None
             phone = prospect.get("phone", "")
             source = prospect.get("source", "manual")
 

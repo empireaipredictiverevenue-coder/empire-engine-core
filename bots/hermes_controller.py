@@ -75,7 +75,7 @@ logging.basicConfig(level=logging.INFO, format="%(levelname)s:%(name)s:%(message
 
 # ── Config ───────────────────────────────────────────────────────────
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "")
-SUPABASE_KEY = os.environ.get("SUPABASE_SERVICE_KEY", "")
+SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_KEY", "")
 OLLAMA_URL   = os.environ.get("OLLAMA_URL", "http://localhost:11434")
 INTERVAL     = int(os.environ.get("HERMES_CTL_INTERVAL_SEC", "60"))
 MAX_LOOKBACK = int(os.environ.get("HERMES_CTL_LOOKBACK_MIN", "10"))
@@ -653,7 +653,7 @@ async def heartbeat():
             "status": AGENT_STATUS,
             "last_ping": datetime.now(timezone.utc).isoformat(),
             "enabled": True,
-            "capabilities": json.dumps(["controller", "orchestrator", "godmode"]),
+            "capabilities": ["controller", "orchestrator", "godmode"],
             "task_types": [],
         }, on_conflict="agent_name").execute()
         log.info(f"[controller] heartbeat: {AGENT_NAME} → {AGENT_STATUS}")

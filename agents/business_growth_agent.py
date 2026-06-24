@@ -3,8 +3,7 @@ Empire AI · Business Growth Agent
 ====================================
 
 Meta-orchestrator that monitors the entire funnel and either:
-  - Logs a recommendation (human review)
-  - Auto-executes a small action (with safety bounds)
+  - Logs a recommendation (human review)    - Executes a small whitelisted action (with safety bounds)
 
 Checks performed each cycle:
   1. Open rate below 15% on outreach > 50 sent → recommend A/B test subject
@@ -37,11 +36,11 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(name)s] %(message
 
 
 def _sb():
-    return create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_SERVICE_KEY"])
+    return create_client(os.environ["SUPABASE_URL"], os.getenv("SUPABASE_SERVICE_KEY"))
 
 
 def _post(category: str, severity: str, title: str, description: str,
-          recommended_action: str = None, auto_executable: bool = False,
+          recommended_action: str = None, is_executable: bool = False,
           metadata: dict = None) -> dict:
     """Log a recommendation to the business_recommendations table."""
     sb = _sb()
@@ -51,7 +50,7 @@ def _post(category: str, severity: str, title: str, description: str,
         "title": title,
         "description": description,
         "recommended_action": recommended_action,
-        "auto_executable": auto_executable,
+        "auto_executable": is_executable,
         "metadata": metadata or {},
     }
     sb.table("business_recommendations").insert(row).execute()
@@ -139,7 +138,7 @@ def detect_and_recommend(snapshot: dict) -> list:
             "title": f"Outreach open rate is {snapshot['open_rate']:.1f}% (target: 25%+)",
             "description": f"Of {snapshot['outreach_sent']} sent, only {snapshot['outreach_opened']} opened.",
             "recommended_action": "Test new subject lines: shorter, more direct. Examples: 'Quick question about your roofing work' or 'Did you see the storm pipeline update?'. A/B test via separate templates.",
-            "auto_executable": False,
+            "is_executable": False,
         })
 
     # Rule 2: low click rate (people open but don't click)
@@ -150,7 +149,7 @@ def detect_and_recommend(snapshot: dict) -> list:
             "title": f"Click-through rate is {snapshot['click_rate']:.1f}% (target: 5%+)",
             "description": f"Only {snapshot['outreach_clicked']} of {snapshot['outreach_opened']} openers clicked. Body or CTA isn't compelling enough.",
             "recommended_action": "Rewrite the email body to lead with a specific number (50 leads/mo) and the pain point (24-hour lead delay = lost jobs). Move the link earlier in the email.",
-            "auto_executable": False,
+            "is_executable": False,
         })
 
     # Rule 3: zero conversions after substantial outreach
@@ -161,7 +160,7 @@ def detect_and_recommend(snapshot: dict) -> list:
             "title": f"0 paid conversions from {snapshot['outreach_sent']} outreach emails",
             "description": "Conversion rate is 0%. Either the funnel isn't reaching contractors, or they're not activating.",
             "recommended_action": "Check /for-contractors page (curl https://empire-ai.co.uk/for-contractors). Verify Resend webhook is wired (open + click events). Confirm tier pricing is competitive vs market ($99-499/mo is mid-tier; could try a $49 lead-in tier).",
-            "auto_executable": False,
+            "is_executable": False,
         })
 
     # Rule 4: high bounce rate
@@ -172,7 +171,7 @@ def detect_and_recommend(snapshot: dict) -> list:
             "title": f"Bounce rate is {snapshot['bounce_rate']:.1f}%",
             "description": f"{snapshot['outreach_bounced']} bounced emails indicate bad data. Today we found 27 placeholder emails from BBB scraper.",
             "recommended_action": "Add email validation gate to enroll_universe() in scripts/contractor_outreach.py. Reject addresses with control chars, missing @, or no TLD.",
-            "auto_executable": True,
+            "is_executable": True,
             "metadata": {"script": "scripts/contractor_outreach.py", "function": "enroll_universe"},
         })
 
@@ -184,7 +183,7 @@ def detect_and_recommend(snapshot: dict) -> list:
             "title": f"Only {snapshot['sub_active']} active subscription(s) after {snapshot['outreach_sent']} outreach sends",
             "description": "Either pricing is wrong, tier mix is off, or contractors don't see enough value at $99/mo.",
             "recommended_action": "Add a $49 'starter' tier with 10 leads/mo. Add social proof on /for-contractors ('47 contractors signed up this week'). Test a 'first month free' promo to lower the barrier.",
-            "auto_executable": False,
+            "is_executable": False,
         })
 
     # Rule 6: MRR stalled
@@ -195,7 +194,7 @@ def detect_and_recommend(snapshot: dict) -> list:
             "title": f"MRR is ${snapshot['mrr_usdc']:.0f}/mo (target: $1k+ in 30d, $10k+ in 90d)",
             "description": "Need to expand reach. Current contractors are storm/restoration focused.",
             "recommended_action": "Activate 9 unprovisioned buyer lanes (4 legal + 4 insurance + 1 HVAC). Provision their destination_phone numbers in /root/.env via the Vonage dashboard. This unlocks 3 verticals that have zero MRR.",
-            "auto_executable": False,
+            "is_executable": False,
         })
 
     # Rule 7: pipeline shrinking or flat
@@ -206,7 +205,7 @@ def detect_and_recommend(snapshot: dict) -> list:
             "title": f"Only {snapshot['contractors_with_email']} contractors with valid emails",
             "description": "Need more top-of-funnel supply to scale outreach.",
             "recommended_action": "Run bots/bbb_prospector.py --metros 54 --niches 5 --max 8 right now. Adds ~3,000 fresh contractors overnight. Already wired to cron nightly 03:30.",
-            "auto_executable": True,
+            "is_executable": True,
             "metadata": {"script": "bots/bbb_prospector.py"},
         })
 
@@ -218,7 +217,7 @@ def detect_and_recommend(snapshot: dict) -> list:
             "title": f"{snapshot['buyers_missing_phone']} buyer lanes have no destination_phone",
             "description": "Outreach to those niches generates 0 calls. The whole vertical is blocked.",
             "recommended_action": "Action: provision Vonage numbers, update buyers.destination_phone in Supabase. This is human action — we can't auto-provision phone numbers.",
-            "auto_executable": False,
+            "is_executable": False,
         })
 
     # Rule 9: dispatch invoice collection
@@ -235,16 +234,16 @@ def detect_and_recommend(snapshot: dict) -> list:
     return recs
 
 
-def auto_execute_if_safe(rec: dict) -> bool:
-    """Execute an auto-action if marked auto_executable + has a script in metadata.
-    For now, just log the action; actual execution depends on safety guardrails."""
-    if not rec.get("auto_executable"):
+def execute_whitelisted_script(rec: dict) -> bool:
+    """Execute a whitelisted script if marked executable + has a script in metadata.
+    Only runs scripts that appear in the SAFE_SCRIPTS whitelist."""
+    if not rec.get("is_executable"):
         return False
     metadata = rec.get("metadata") or {}
     script = metadata.get("script")
     if not script:
         return False
-    # Safety: only auto-execute known-safe scripts
+    # Safety: only execute known-safe scripts from the whitelist
     SAFE_SCRIPTS = {"bots/bbb_prospector.py"}
     if script not in SAFE_SCRIPTS:
         log.info(f"  skip auto-exec (not in safe list): {script}")
@@ -278,24 +277,24 @@ def run():
     recs = detect_and_recommend(snapshot)
     if not recs:
         log.info("no recommendations")
-        return {"recs": 0, "auto_executed": 0}
+        return {"recs": 0, "executed": 0}
 
-    auto_executed = 0
+    executed_count = 0
     for rec in recs:
         log.info(f"  [{rec['severity']}] {rec['category']}: {rec['title']}")
         _post(**rec)
         if rec.get("auto_executable"):
-            if auto_execute_if_safe(rec):
-                auto_executed += 1
+            if execute_whitelisted_script(rec):
+                executed_count += 1
 
     print(json.dumps({
         "snapshot": snapshot,
         "recommendations": len(recs),
-        "auto_executed": auto_executed,
+        "executed": executed_count,
     }, indent=2, default=str))
 
     duration_ms = int((time.time() - t0) * 1000)
-    _log_action("growth_cycle", {"recs": len(recs), "auto_executed": auto_executed}, "ok", duration_ms)
+    _log_action("growth_cycle", {"recs": len(recs), "executed": executed_count}, "ok", duration_ms)
 
 
 def list_recommendations(status: str = "open", limit: int = 50) -> list:

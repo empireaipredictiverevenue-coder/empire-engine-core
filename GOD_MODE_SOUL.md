@@ -65,6 +65,7 @@ traffic_director
 ├── email_sms_specialist      — Email + SMS outreach
 ├── social_specialist         — Social ads + community
 ├── affiliate_specialist      — Affiliates + partners
+├── predictive_traffic_specialist — 4-weight scoring + synthetic brain predictions
 └── ai_hacking_agent          — Unconventional marketing (growth hacking)
 ```
 

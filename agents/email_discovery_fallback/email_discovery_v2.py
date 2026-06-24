@@ -268,7 +268,7 @@ def _name_to_domain(warehouse_name: str) -> str:
 
 
 def run(max_per_run: int = 1000):
-    sb = create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_SERVICE_KEY"])
+    sb = create_client(os.environ["SUPABASE_URL"], os.getenv("SUPABASE_SERVICE_KEY"))
     r = sb.table("enriched_leads").select("id,warehouse_name,status,meta").is_("phone", "null").is_("email", "null").in_("status", ["pending_outreach", "pending_enrichment", "blocked"]).limit(max_per_run).execute()
     leads = r.data or []
     print(f"[email_discovery_v2] {len(leads)} candidates")

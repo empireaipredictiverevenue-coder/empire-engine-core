@@ -340,7 +340,23 @@ ROLE_DEFINITIONS: Dict[str, Dict] = {
         "source_module": "bots/predictive_revenue.py",
         "expected_interval_minutes": 120,
         "is_core": True,
-    },    "b2b_lead_scraper": {
+    },
+    "predictive_traffic_specialist": {
+        "display_name": "Predictive Traffic Specialist",
+        "description": "Scores traffic opportunities with a 4-weight model (volume, quality, cost, conversion) via synthetic brain reasoning",
+        "parent_role": "traffic_director",
+        "priority": 8,
+        "capabilities": [
+            "score_traffic_opportunities", "predict_channel_performance",
+            "generate_recommendations", "weighted_scoring",
+            "synthetic_brain_reasoning", "rank_opportunities",
+        ],
+        "task_types": ["predictive.opportunities", "predictive.score", "predictive.recommend"],
+        "source_module": "bots/predictive_traffic_specialist_agent.py",
+        "expected_interval_minutes": 60,
+        "is_core": False,
+    },
+    "b2b_lead_scraper": {
         "display_name": "B2B Lead Scraper",
         "description": "Scrapes B2B leads from web directories",
         "parent_role": "cron_controller",

@@ -33,7 +33,7 @@ logging.basicConfig(level=logging.INFO, format="%(levelname)s:%(name)s:%(message
 
 # ── Config ───────────────────────────────────────────────────────────
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "")
-SUPABASE_KEY = os.environ.get("SUPABASE_SERVICE_KEY", "")
+SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_KEY", "")
 MEDIA_ENGINE_DIR = "/root/empire_media_engine"
 RENDER_SCRIPT = "render_pro.py"
 DEFAULT_BG = "templates/videos/pexels_test.mp4"

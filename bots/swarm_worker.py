@@ -33,6 +33,7 @@ import sys
 import json
 import asyncio
 import logging
+import threading
 from pathlib import Path
 from typing import Dict, Any, List, Optional
 from datetime import datetime, timezone
@@ -55,9 +56,52 @@ SWARM_OUTPUT_DIR = BASE_DIR / "builds" / "swarm_vault"
 TEMPLATES_DIR.mkdir(parents=True, exist_ok=True)
 SWARM_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
+# ── Concurrency Semaphore ──────────────────────────────────────────────
+# Limits how many resource-heavy operations (Ollama + Kokoro + FFmpeg)
+# run simultaneously. Prevents memory spikes >1GB and CPU overload.
+# Set to 2 because each worker peak-loads ~300MB RAM + 1 full CPU core
+# (Ollama call → Kokoro ~200MB model → FFmpeg ~200MB temp).
+_SWARM_SEMAPHORE = asyncio.Semaphore(2)
+
+# ── Kokoro model cache ─────────────────────────────────────────────────
+# Loading the 200MB Kokoro ONNX model for every single target is the #1
+# cause of memory spikes. Cache it at module level and reuse across all
+# TTS calls. Thread-safe via threading.Lock (TTS runs in a thread pool).
+# ── Kokoro model cache ─────────────────────────────────────────────────
+# Loading the 200MB Kokoro ONNX model for every single target is the #1
+# cause of memory spikes. Cache it at module level and reuse across all
+# TTS calls. Thread-safe via threading.Lock (TTS runs in a thread pool).
+_KOKORO_INSTANCE = None
+_kokoro_lock = threading.Lock()
+
+
+def _get_kokoro():
+    """Lazy-load and cache the Kokoro TTS model. Thread-safe, idempotent.
+    Returns Kokoro instance or None on failure."""
+    global _KOKORO_INSTANCE
+    if _KOKORO_INSTANCE is not None:
+        return _KOKORO_INSTANCE
+    with _kokoro_lock:
+        # Double-check: another thread may have loaded it while we waited
+        if _KOKORO_INSTANCE is not None:
+            return _KOKORO_INSTANCE
+        kokoro_model = BASE_DIR / "kokoro-v1.0.onnx"
+        kokoro_voices = BASE_DIR / "voices-v1.0.bin"
+        if not kokoro_model.exists() or not kokoro_voices.exists():
+            log.warning(f"[swarm_worker] Kokoro model files not found: {kokoro_model}")
+            return None
+        try:
+            from kokoro_onnx import Kokoro
+            _KOKORO_INSTANCE = Kokoro(str(kokoro_model), str(kokoro_voices))
+            log.info(f"[swarm_worker] Kokoro model loaded and cached")
+        except Exception as e:
+            log.warning(f"[swarm_worker] Kokoro load failed: {e}")
+            _KOKORO_INSTANCE = None
+    return _KOKORO_INSTANCE
+
 # ── Supabase (optional — for agent_registry heartbeat) ───────────────
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "")
-SUPABASE_KEY = os.environ.get("SUPABASE_SERVICE_KEY", "")
+SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_KEY", "")
 _sb = None
 
 
@@ -254,21 +298,18 @@ class SwarmOrchestrationNode:
 
             def run_tts():
                 try:
-                    from kokoro_onnx import Kokoro
-                    kokoro_model = BASE_DIR / "kokoro-v1.0.onnx"
-                    kokoro_voices = BASE_DIR / "voices-v1.0.bin"
-                    if kokoro_model.exists() and kokoro_voices.exists():
-                        kokoro = Kokoro(str(kokoro_model), str(kokoro_voices))
+                    kokoro = _get_kokoro()
+                    if kokoro is None:
+                        log.warning("[swarm_worker] Kokoro not available — creating empty audio")
+                        with open(audio_dest, "wb") as f:
+                            f.write(b"")
+                    else:
                         samples, sample_rate = kokoro.create(
                             script_text, voice="am_michael", speed=1.15, lang="en-us"
                         )
                         import soundfile as sf
                         sf.write(str(audio_dest), samples, sample_rate)
                         log.info(f"[swarm_worker] TTS complete: {audio_dest}")
-                    else:
-                        log.warning("[swarm_worker] Kokoro model files not found — creating empty audio")
-                        with open(audio_dest, "wb") as f:
-                            f.write(b"")
                 except Exception as e:
                     log.warning(f"[swarm_worker] TTS failed: {e}")
                     with open(audio_dest, "wb") as f:
@@ -481,8 +522,18 @@ class SwarmOrchestrationNode:
                         log.debug(f"[swarm_worker] SI genome: {best} for {t.get('company', '?')}")
             except Exception as e:
                 log.debug(f"[swarm_worker] SI lookup skipped: {e}")
-        log.info(f"[EMPIRE_AI] Booting Swarm Fleet Process Loops across {len(targets)} distinct targets.")
-        tasks = [self.deploy_single_swarm_worker(lead) for lead in targets]
+        log.info(f"[EMPIRE_AI] Booting Swarm Fleet Process Loops across {len(targets)} distinct targets "
+                 f"(concurrency-limit=2, kokoro-model-cached)")
+        # Limit concurrency to 2 simultaneous workers to prevent OOM.
+        # Each worker peak-loads ~300MB RAM (Ollama → Kokoro ~200MB → FFmpeg).
+        # 2 concurrent workers = ~600MB peak, safely under the 1GB PM2 limit.
+        sem = _SWARM_SEMAPHORE
+
+        async def _bounded(lead):
+            async with sem:
+                return await self.deploy_single_swarm_worker(lead)
+
+        tasks = [_bounded(lead) for lead in targets]
         raw = await asyncio.gather(*tasks, return_exceptions=True)
         results = []
         for i, r in enumerate(raw):

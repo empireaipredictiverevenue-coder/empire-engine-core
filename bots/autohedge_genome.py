@@ -45,7 +45,7 @@ try:
     from supabase import create_client
     _sb = create_client(
         os.environ.get("SUPABASE_URL", ""),
-        os.environ.get("SUPABASE_SERVICE_KEY", ""),
+        os.getenv("SUPABASE_SERVICE_KEY", ""),
     )
 except Exception:
     _sb = None

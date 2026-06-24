@@ -167,10 +167,10 @@ FOR_CONTRACTORS_HTML = """<!doctype html>
 
 <form id="activate">
     <h2>Activate your subscription</h2>
-    <p>Pick a tier, paste your Solana wallet, hit activate. We'll show you the vault address and amount. Send the USDC from your wallet, then click "I paid" and we'll verify on-chain within 30 seconds.</p>
+    <p>Enter the phone number we have on file, paste your Solana wallet, and pick a tier. Hit activate. We'll show you the vault address and amount. Send the USDC from your wallet, then click "I paid" and we'll verify on-chain within 30 seconds.</p>
 
-    <label for="contractor_id">Contractor ID (from your invite link)</label>
-    <input id="contractor_id" placeholder="UUID" />
+    <label for="phone">Phone number (the number we have on file)</label>
+    <input id="phone" type="tel" placeholder="e.g. +12145551234" />
 
     <label for="wallet">Your Solana wallet (USDC sender)</label>
     <input id="wallet" placeholder="e.g. 9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM" />
@@ -189,8 +189,8 @@ FOR_CONTRACTORS_HTML = """<!doctype html>
 
   <div style="margin-top: 36px;">
     <h2>How it works</h2>
-    <div class="step"><span class="n">1</span> Activate with your contractor ID + wallet above.</div>
-    <div class="step"><span class="n">2</span> We give you a vault address + a memo tag. Send USDC.</div>
+    <div class="step"><span class="n">1</span> Enter your phone number and wallet above.</div>
+    <div class="step"><span class="n">2</span> We look you up, then give you a vault address + a memo tag. Send USDC.</div>
     <div class="step"><span class="n">3</span> Click "I paid" — we verify on-chain and your tier activates.</div>
     <div class="step"><span class="n">4</span> Each month, send the same amount. We auto-verify. Skip a month and your tier lapses.</div>
   </div>
@@ -204,6 +204,7 @@ FOR_CONTRACTORS_HTML = """<!doctype html>
 <script>
 const VAULT = "{vault}";
 let activeTier = 'pro';
+let resolvedContractorId = null;
 function selectTier(t) {{
   document.getElementById('tier').value = t;
   document.getElementById('activate').scrollIntoView({{behavior:'smooth'}});
@@ -211,39 +212,40 @@ function selectTier(t) {{
 
 document.getElementById('activate').onsubmit = async (e) => {{
   e.preventDefault();
-  const contractor_id = document.getElementById('contractor_id').value.trim();
+  const phone = document.getElementById('phone').value.trim();
   const wallet = document.getElementById('wallet').value.trim();
   const tier = document.getElementById('tier').value;
   activeTier = tier;
   const res = await fetch('/api/v1/subscribe/activate', {{
     method: 'POST',
     headers: {{'Content-Type':'application/json'}},
-    body: JSON.stringify({{contractor_id, wallet, tier}})
+    body: JSON.stringify({{phone, wallet, tier}})
   }});
   const data = await res.json();
   const r = document.getElementById('result');
   if (data.ok) {{
+    resolvedContractorId = data.contractor_id;
     r.innerHTML = `
       <div class="step">
-        <p class="success">Subscription activated (status: pending payment).</p>
+        <p class="success">Welcome${data.contractor_name ? ' ' + data.contractor_name.split(' ')[0] : ''}! Subscription created (status: pending payment).</p>
         <p>Send <strong>$${{data.monthly_usdc}} USDC</strong> from your wallet to:</p>
         <div class="wallet">${{VAULT}}</div>
         <p class="small">Memo: <code>${{data.memo}}</code></p>
         <p>Then click the button below to verify.</p>
-        <button class="cta" onclick="verifyNow('{contractor_id}')">I paid — verify now</button>
+        <button class="cta" onclick="verifyNow()">I paid — verify now</button>
       </div>`;
   }} else {{
     r.innerHTML = `<p class="error">${{data.error || 'failed'}}</p>`;
   }}
 }};
 
-async function verifyNow(cid) {{
+async function verifyNow() {{
   const r = document.getElementById('result');
   r.innerHTML += '<p>verifying on-chain...</p>';
   const res = await fetch('/api/v1/subscribe/verify', {{
     method: 'POST',
     headers: {{'Content-Type':'application/json'}},
-    body: JSON.stringify({{contractor_id: cid}})
+    body: JSON.stringify({{contractor_id: resolvedContractorId}})
   }});
   const data = await res.json();
   if (data.verified) {{

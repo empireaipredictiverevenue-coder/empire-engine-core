@@ -45,13 +45,13 @@ log = logging.getLogger("voice.streaming")
 logging.basicConfig(level=logging.INFO, format="%(levelname)s:%(name)s:%(message)s")
 
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "")
-SUPABASE_KEY = os.environ.get("SUPABASE_SERVICE_KEY", "")
+SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_KEY", "")
 
 # synthetic_brain server (local) - we register streams here before
 # placing the Vonage call. Vonage then opens a WebSocket to this
 # server to pull the live Kokoro audio.
 SYNTHETIC_BRAIN_URL = os.environ.get("SYNTHETIC_BRAIN_URL", "http://127.0.0.1:8005")
-SYNTHETIC_BRAIN_API_KEY = os.environ.get("SYNTHETIC_BRAIN_API_KEY", "")
+SYNTHETIC_BRAIN_API_KEY = os.getenv("SYNTHETIC_BRAIN_API_KEY", "")
 
 # Public URL of this synthetic_brain (used to build the wss:// URL
 # that Vonage will connect to). If unset, defaults to the loopback

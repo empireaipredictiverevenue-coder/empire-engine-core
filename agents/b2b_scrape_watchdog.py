@@ -18,7 +18,7 @@ os.chdir("/root/empire-v49")
 from supabase import create_client
 import httpx
 
-sb = create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_SERVICE_KEY"])
+sb = create_client(os.environ["SUPABASE_URL"], os.getenv("SUPABASE_SERVICE_KEY"))
 
 # 1. Check agent_config
 r = sb.table("agent_config").select("*").eq("agent_name", "b2b_lead_scraper").limit(1).execute()
@@ -31,7 +31,7 @@ if not cfg.get("enabled"):
     sys.exit(0)
 
 # 2. Probe Google Places quota with a tiny text query
-api_key = os.environ.get("GOOGLE_MAPS_API_KEY", "")
+api_key = os.getenv("GOOGLE_MAPS_API_KEY", "")
 if not api_key:
     print("watchdog: no GOOGLE_MAPS_API_KEY; exit")
     sys.exit(0)

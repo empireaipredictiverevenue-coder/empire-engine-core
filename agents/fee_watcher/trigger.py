@@ -29,7 +29,7 @@ def main():
     p.add_argument("--dry-run", action="store_true", help="Don't write, just compute and show")
     args = p.parse_args()
 
-    sb = create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_SERVICE_KEY"])
+    sb = create_client(os.environ["SUPABASE_URL"], os.getenv("SUPABASE_SERVICE_KEY"))
     fee = round(args.claim_amount * 0.03, 2)
 
     # Resolve contractor contact info for meta

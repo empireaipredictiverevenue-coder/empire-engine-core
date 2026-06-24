@@ -52,7 +52,7 @@ AGENT_NAME = "email_pulse_monitor"
 
 def _sb():
     url = os.environ.get("SUPABASE_URL", "")
-    key = os.environ.get("SUPABASE_SERVICE_KEY", "")
+    key = os.getenv("SUPABASE_SERVICE_KEY", "")
     if not url or not key:
         raise RuntimeError("SUPABASE_URL and SUPABASE_SERVICE_KEY required")
     return create_client(url, key)

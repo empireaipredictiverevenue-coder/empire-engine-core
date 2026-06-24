@@ -51,7 +51,7 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s [space] %(message)s"
 # ── Configuration ──────────────────────────────────────────────────────
 
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "")
-SUPABASE_KEY = os.environ.get("SUPABASE_SERVICE_KEY", "")
+SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_KEY", "")
 INTERVAL = int(os.environ.get("SPACE_REASONER_INTERVAL_SEC", "30"))
 AGENT_NAME = "space_reasoner"
 AGENT_STATUS = "ACTIVE"

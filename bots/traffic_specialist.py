@@ -63,9 +63,9 @@ log = logging.getLogger("empire.traffic_specialist")
 
 # ── CONFIG ───────────────────────────────────────────────────────────
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "")
-SUPABASE_KEY = os.environ.get("SUPABASE_SERVICE_KEY", "")
+SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_KEY", "")
 HUB_URL = os.environ.get("PUBLIC_BASE_URL", "http://localhost:8001")
-HUB_TOKEN = os.environ.get("HUB_TOKEN", "dev-token-insecure")
+HUB_TOKEN = os.getenv("HUB_TOKEN", "dev-token-insecure")
 
 _sb = None
 
@@ -202,7 +202,7 @@ class TrafficSpecialist:
     """
 
     def __init__(self):
-        self.channels = {c["channel_id"]: dict(c) for c in TRAFFIC_CHANNELS}
+        self.channels: dict = {c["channel_id"]: dict(c) for c in TRAFFIC_CHANNELS}
         self.stats = {
             "cycles_run": 0,
             "campaigns_created": 0,
@@ -357,7 +357,7 @@ class TrafficSpecialist:
             # Channel breakdown
             by_channel = defaultdict(lambda: {"calls": 0, "revenue": 0.0, "qualified": 0})
             for c in call_data:
-                ch = c.get("channel", "unknown")
+                ch = c.get("channel", "unknown") or "unknown"
                 by_channel[ch]["calls"] += 1
                 by_channel[ch]["revenue"] += float(c.get("fee_earned", 0) or 0)
                 if c.get("qualified"):
@@ -387,6 +387,11 @@ class TrafficSpecialist:
         """
         self.stats["cycles_run"] += 1
         self._last_cycle = datetime.now(timezone.utc).isoformat()
+
+        # Safety: if self.channels is None or not a dict (unlikely but crash-safe)
+        if not isinstance(getattr(self, 'channels', None), dict):
+            log.warning(f"[traffic_specialist] run_cycle: self.channels is {type(self.channels).__name__}, reinitializing")
+            self.channels = {c["channel_id"]: dict(c) for c in TRAFFIC_CHANNELS}
 
         # Gather live data from all channels
         native_stats = self._query_native_ads_stats()
@@ -436,24 +441,37 @@ class TrafficSpecialist:
 
     def _update_channel_statuses(self, native: dict, affiliate: dict, seo: dict, email_sms: dict):
         """Update channel statuses based on whether they have real activity."""
+        # Safety: if self.channels is malformed, bail early
+        if not isinstance(self.channels, dict):
+            log.warning("[traffic_specialist] _update_channel_statuses: self.channels is not a dict, skipping")
+            return
+
         # Native ads: active if there are active campaigns
-        if native.get("active_campaigns", 0) > 0:
-            self.channels["native_ads"]["status"] = "active"
-            self.channels["native_ads"]["requires_action"] = ""
+        if isinstance(native, dict) and native.get("active_campaigns", 0) > 0:
+            ch = self.channels.get("native_ads")
+            if isinstance(ch, dict):
+                ch["status"] = "active"
+                ch["requires_action"] = ""
 
         # Affiliate: active if there are links with clicks
-        if affiliate.get("active_links", 0) > 0:
-            self.channels["affiliate_network"]["status"] = "active" if affiliate.get("total_clicks", 0) > 0 else "standby"
-            if affiliate.get("total_clicks", 0) > 0:
-                self.channels["affiliate_network"]["requires_action"] = ""
+        if isinstance(affiliate, dict) and affiliate.get("active_links", 0) > 0:
+            ch = self.channels.get("affiliate_network")
+            if isinstance(ch, dict):
+                ch["status"] = "active" if affiliate.get("total_clicks", 0) > 0 else "standby"
+                if affiliate.get("total_clicks", 0) > 0:
+                    ch["requires_action"] = ""
 
         # SEO: active if there are keywords tracked
-        if seo.get("keywords_tracked", 0) > 0:
-            self.channels["seo_organic"]["status"] = "active"
+        if isinstance(seo, dict) and seo.get("keywords_tracked", 0) > 0:
+            ch = self.channels.get("seo_organic")
+            if isinstance(ch, dict):
+                ch["status"] = "active"
 
         # Email/SMS: active if there are sequences or campaigns
-        if email_sms.get("active_sms_sequences", 0) > 0 or email_sms.get("active_strike_campaigns", 0) > 0:
-            self.channels["email_outreach"]["status"] = "active"
+        if isinstance(email_sms, dict) and (email_sms.get("active_sms_sequences", 0) > 0 or email_sms.get("active_strike_campaigns", 0) > 0):
+            ch = self.channels.get("email_outreach")
+            if isinstance(ch, dict):
+                ch["status"] = "active"
 
     def _channels_snapshot(self) -> List[Dict]:
         """Return current state of all traffic channels with computed metrics."""
@@ -527,6 +545,9 @@ class TrafficSpecialist:
             # Active paid channel — allocate based on revenue signal
             channel_rev = 0
             for src_ch, src_data in by_channel.items():
+                # Guard: src_ch or cid can be None (NULL channel in call_logs)
+                if src_ch is None or cid is None:
+                    continue
                 if cid in src_ch or src_ch in cid:
                     channel_rev += src_data.get("revenue", 0)
 
@@ -901,7 +922,15 @@ async def run_loop(interval_minutes: int = 30):
             await heartbeat()
         except Exception as e:
             log.error(f"[traffic_specialist] Cycle error: {e}")
-            specialist.stats["errors"] += 1
+            if hasattr(specialist, 'stats'):
+                specialist.stats["errors"] += 1
+            # Log full traceback so we can identify the exact crash line
+            import traceback
+            log.error(f"[traffic_specialist] Cycle traceback:\n{traceback.format_exc()}")
+            # If channels got into a bad state, reset them
+            if hasattr(specialist, 'channels') and not isinstance(specialist.channels, dict):
+                log.warning("[traffic_specialist] Resetting corrupted channels")
+                specialist.channels = {c["channel_id"]: dict(c) for c in TRAFFIC_CHANNELS}
 
         await asyncio.sleep(interval_minutes * 60)
 

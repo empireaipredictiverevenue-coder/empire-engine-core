@@ -17,7 +17,7 @@ def _get_db():
     if _sb is None:
         _sb = create_client(
             os.environ.get("SUPABASE_URL", ""),
-            os.environ.get("SUPABASE_SERVICE_KEY", ""),
+            os.getenv("SUPABASE_SERVICE_KEY", ""),
         )
     return _sb
 

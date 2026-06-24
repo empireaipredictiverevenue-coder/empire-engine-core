@@ -131,11 +131,11 @@ def bridge_live_targets() -> int:
     matching buyer's number (if the quality gate passes). Returns the
     number of calls successfully initiated.
     """
-    if not os.environ.get("SUPABASE_URL") or not os.environ.get("SUPABASE_SERVICE_KEY"):
+    if not os.environ.get("SUPABASE_URL") or not os.getenv("SUPABASE_SERVICE_KEY"):
         print("[BRIDGE] SUPABASE_URL / SUPABASE_SERVICE_KEY missing")
         return 0
 
-    sb = create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_SERVICE_KEY"])
+    sb = create_client(os.environ["SUPABASE_URL"], os.getenv("SUPABASE_SERVICE_KEY"))
     initiate_legal_call, ComplianceBlock = _get_dialer()
     if initiate_legal_call is None:
         return 0

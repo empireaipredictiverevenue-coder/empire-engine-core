@@ -145,8 +145,8 @@ def heartbeat(count):
             "leads_today": count,
             "last_ping": datetime.now(timezone.utc).isoformat(),
             "enabled": True,
-            "capabilities": json.dumps(["storm_scan", "geo_analyze", "find_targets"]),
-            "task_types": json.dumps(["scout.storm_scan", "scout.find_roofs"]),
+            "capabilities": ["storm_scan", "geo_analyze", "find_targets"],
+            "task_types": ["scout.storm_scan", "scout.find_roofs"],
         }, on_conflict="agent_name").execute()
     except Exception as e:
         print(f"[PREDICT] heartbeat error: {e}")
