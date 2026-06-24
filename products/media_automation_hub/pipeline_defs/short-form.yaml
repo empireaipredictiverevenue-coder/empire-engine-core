@@ -1,0 +1,79 @@
+# ── Short-Form Pipeline ──────────────────────────────────────────────
+# YouTube Shorts / TikTok / Reels vertical video production.
+# Takes a topic or script → renders a 1080×1920 MP4 with captions.
+
+name: short-form
+label: Short-Form Vertical Video
+description: >
+  Produces a vertical 1080×1920 video from a topic or script using
+  TTS narration, AI-generated or stock visuals, word-level captions,
+  and FFmpeg composition. Supports YouTube Shorts, TikTok, and Reels.
+version: "1.0"
+output_format: mp4
+platforms:
+  - youtube
+  - tiktok
+  - instagram
+
+stages:
+  - name: research
+    description: Research trending topics and hooks for the given niche
+    tools:
+      - trend_researcher
+      - youtube_scraper
+    config:
+      max_topics: 5
+      source: youtube_trending
+
+  - name: script
+    description: Generate a short-form script with hook, body, and CTA
+    tools:
+      - script_generator
+      - hook_optimizer
+    config:
+      max_duration_s: 60
+      tone: direct
+      include_cta: true
+
+  - name: assets
+    description: Generate TTS narration, visuals, and background music
+    tools:
+      - kokoro_tts
+      - deepgram_tts
+      - image_selector
+      - music_selector
+    config:
+      voice_provider: deepgram
+      fallback_provider: kokoro
+      resolution: 1080x1920
+
+  - name: render
+    description: Compose the final video with captions, transitions, and audio
+    tools:
+      - caption_burner
+      - ffmpeg_composer
+      - short_renderer
+    config:
+      include_captions: true
+      highlight_keywords: true
+      transition: fade
+
+  - name: thumbnails
+    description: Extract key frames from rendered video for YouTube thumbnail and SEO
+    tools:
+      - keyframe_extractor
+    config:
+      mode: thumbnail
+      count: 6
+      format: jpg
+      quality: 5
+
+  - name: publish
+    description: Upload to target platforms with SEO metadata
+    tools:
+      - youtube_uploader
+      - tiktok_uploader
+    config:
+      auto_publish: false
+      notify_telegram: true
+    requires_approval: true

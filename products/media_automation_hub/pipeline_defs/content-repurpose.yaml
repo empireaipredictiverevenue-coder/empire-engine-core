@@ -1,0 +1,62 @@
+# ── Content Repurpose Pipeline ────────────────────────────────────────
+# Takes long-form content (webinars, podcasts, streams) and produces
+# multiple short-form clips optimized for social distribution.
+
+name: content-repurpose
+label: Content Repurpose (Long → Short)
+description: >
+  Takes a long-form video or audio source and produces multiple
+  ranked short-form clips with captions, optimized for YouTube
+  Shorts, TikTok, and Instagram Reels.
+version: "1.0"
+output_format: mp4
+platforms:
+  - youtube
+  - tiktok
+  - instagram
+
+stages:
+  - name: ingest
+    description: Transcribe source content and detect scene boundaries
+    tools:
+      - transcriber
+      - scene_detector
+      - keyframe_extractor
+    config:
+      source_type: auto
+      language: en
+      keyframe_mode: scenes
+      keyframe_threshold: 0.3
+      keyframe_max_frames: 20
+      keyframe_format: jpg
+
+  - name: extract
+    description: Identify high-engagement hook moments and rank clips
+    tools:
+      - hook_optimizer
+      - revenue_miner
+    config:
+      max_clips: 8
+      min_duration_s: 15
+      max_duration_s: 60
+      ranking: engagement_score
+
+  - name: render
+    description: Render each clip with captions and aspect-ratio framing
+    tools:
+      - caption_burner
+      - ffmpeg_composer
+    config:
+      include_captions: true
+      auto_reframe: true
+      highlight_keywords: true
+
+  - name: publish
+    description: Package clips with platform-specific metadata
+    tools:
+      - youtube_uploader
+      - tiktok_uploader
+    config:
+      batch_publish: true
+      auto_publish: false
+    requires_approval: true

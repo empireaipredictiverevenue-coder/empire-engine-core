@@ -1,0 +1,46 @@
+# ── Cross-Post Pipeline ───────────────────────────────────────────────
+# Detects newly rendered videos and cross-posts them to all target
+# platforms with platform-optimized metadata.
+
+name: cross-post
+label: Cross-Platform Distribution
+description: >
+  Monitors the output directory for new videos and cross-posts them
+  to all configured platforms (YouTube, TikTok, Instagram) with
+  platform-optimized titles, descriptions, and hashtags.
+version: "1.0"
+output_format: mp4
+platforms:
+  - youtube
+  - tiktok
+  - instagram
+
+stages:
+  - name: detect
+    description: Scan output directory for unposted videos
+    tools:
+      - scheduler
+    config:
+      watch_dir: youtube_shorts_output
+      check_interval_s: 60
+
+  - name: optimize
+    description: Generate platform-specific metadata for each video
+    tools:
+      - script_generator
+      - hook_optimizer
+    config:
+      generate_titles: true
+      generate_hashtags: true
+      generate_descriptions: true
+
+  - name: publish
+    description: Upload to each target platform
+    tools:
+      - youtube_uploader
+      - tiktok_uploader
+    config:
+      track_state: true
+      deduplicate: true
+      notify_telegram: true
+    requires_approval: false

@@ -1,0 +1,57 @@
+# ── YouTube Clone Pipeline ───────────────────────────────────────────
+# Takes any video URL (YouTube, TikTok, IG, Twitter, etc.) and produces
+# a downloadable copy with transcript, keyframes, and metadata.
+# Designed for content repurposing and competitive research.
+
+name: youtube-clone
+label: YouTube Clone & Extract
+description: >
+  Downloads any video from 1000+ sites (YouTube, TikTok, IG, etc.),
+  extracts audio + transcript via Deepgram, and extracts key frames
+  for thumbnails and scene analysis. Output: MP4, WAV transcript,
+  keyframe gallery, and full metadata JSON.
+version: "1.0"
+output_format: mp4
+platforms:
+  - youtube
+  - tiktok
+  - instagram
+  - twitter
+  - facebook
+
+stages:
+  - name: extract_info
+    description: Pull rich metadata (title, duration, views, uploader) without downloading
+    tools:
+      - video_cloner
+    config:
+      action: info
+
+  - name: download
+    description: Download video + auto-generated thumbnail + subtitles
+    tools:
+      - video_cloner
+    config:
+      action: download
+      extract_audio: false
+      format_spec: "bestvideo[height<=1080]+bestaudio/best[height<=1080]"
+
+  - name: transcribe
+    description: Transcribe the already-downloaded video file via Deepgram
+    tools:
+      - video_cloner
+    config:
+      action: transcribe
+      video_path: "{{ctx.download.file_path}}"
+
+  - name: keyframes
+    description: Extract key frames from the cloned video for thumbnails and scene analysis
+    tools:
+      - keyframe_extractor
+    config:
+      video_path: "{{ctx.download.file_path}}"
+      mode: scenes
+      threshold: 0.3
+      max_frames: 20
+      format: jpg
+      quality: 5

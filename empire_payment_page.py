@@ -340,12 +340,41 @@ def _build_solana_pay_qr_svg(wallet: str, amount_usdc: float, label: str = "Empi
 
 
 def _resolve_fee(claim_id: str):
-    """Look up fee_event by claim_id. Returns the row or None."""
+    """Look up fee_event by claim_id, with a fallback to dispatch_id.
+
+    Why the fallback: SMS templates historically embedded dispatch_id
+    in the pay URL (e.g. empire-ai.co.uk/pay/<dispatch_id>), but
+    fee_events rows are keyed by claim_id (carrier_claims.id). Without
+    the fallback every old SMS link 404s, which is why contractors
+    see "Payment not found" when they tap the link.
+
+    Resolution order:
+      1. fee_events.claim_id == claim_id           (canonical, post-fix SMS)
+      2. fee_events.meta->>dispatch_id == claim_id (legacy SMS links)
+    Returns the row or None.
+    """
     from supabase import create_client
     db = create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_SERVICE_KEY"])
+    # 1. canonical: by carrier_claim.id
     r = db.table("fee_events").select("*").eq("claim_id", claim_id).limit(1).execute()
     if r.data:
         return r.data[0]
+    # 2. legacy: by dispatches.id stored in meta
+    try:
+        r2 = db.table("fee_events").select("*").eq("meta->>dispatch_id", claim_id).limit(1).execute()
+        if r2.data:
+            return r2.data[0]
+    except Exception:
+        # Some PostgREST versions / older schemas may not support ->> on jsonb.
+        # Fall back to a Python-side filter over a small page of pending fees.
+        try:
+            r3 = db.table("fee_events").select("*").eq("status", "pending").limit(500).execute()
+            for row in r3.data or []:
+                meta = row.get("meta") or {}
+                if meta.get("dispatch_id") == claim_id:
+                    return row
+        except Exception:
+            pass
     return None
 
 

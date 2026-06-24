@@ -414,6 +414,20 @@ async def run_collection(
         last_attempt = collection_history[-1] if collection_history else None
         attempt_type = "initial"
 
+        # HARD CAP (added 2026-06-24): max 8 total collection attempts
+        # per fee. After that, the contractor either paid (skip) or is
+        # considered unreachable until manual intervention. Prevents the
+        # agent from over-texting/emailing — observed 12+ attempts on a
+        # single fee in 48h before this cap.
+        MAX_TOTAL_ATTEMPTS = 8
+        if len(collection_history) >= MAX_TOTAL_ATTEMPTS and not force_now:
+            log.info(
+                f"  SKIP {fee_id[:12]}: {name[:20]} — "
+                f"max attempts reached ({len(collection_history)}/{MAX_TOTAL_ATTEMPTS})"
+            )
+            skipped_already_contacted += 1
+            continue
+
         # Track whether this attempt should use email instead of SMS
         force_email = False
 

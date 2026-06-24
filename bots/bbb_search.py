@@ -52,6 +52,17 @@ NICHE_TO_BBB_CATEGORY = {
     "paving": "paving-contractors",
     "commercial roofing": "roofing-contractors",
     "commercial solar": "solar-energy-contractors",
+    # ── added 2026-06-24: 2 new revenue lanes (kanban t_5184edcf) ──
+    "auto insurance": "insurance-agency",
+    "medical claims": "medical-billing",
+    # ── added 2026-06-24: 6 B2B lanes (replacing b2b_lead_scraper Google) ──
+    "managed it": "managed-it-services",
+    "merchant services": "merchant-services",
+    "hr staffing": "employment-agencies",
+    "staffing": "employment-agencies",
+    "commercial roofing": "roofing-contractors",
+    "commercial solar": "solar-energy-contractors",
+    "debt relief": "debt-counseling",
 }
 
 # BBB profile URL pattern. The camofox a11y snapshot embeds paths like:

@@ -1,0 +1,2 @@
+timestamp,total_events,predictions_fired,sample_rate,sample_pct,actual_pct,groq_model,cost_per_prediction,cost_rate_3_weekly,cost_rate_5_weekly,cost_delta_weekly,cost_delta_pct
+2026-06-24T13:00:02Z,0,0,3,33.3,0.0,?,?,?,?,?,?

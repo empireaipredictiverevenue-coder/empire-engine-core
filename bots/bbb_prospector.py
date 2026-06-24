@@ -32,7 +32,7 @@ from supabase import create_client
 
 log = logging.getLogger("bbb_prospector")
 
-DEFAULT_NICHES = ["roofing", "hvac", "restoration", "general contractor", "solar"]
+DEFAULT_NICHES = ["roofing", "hvac", "restoration", "general contractor", "solar", "auto insurance", "medical claims", "managed it", "merchant services", "hr staffing", "debt relief", "commercial roofing", "commercial solar"]
 DEFAULT_METROS = [
     "Dallas-Fort Worth", "Houston", "San Antonio", "Austin",
     "Miami", "Tampa", "Orlando", "Atlanta", "Nashville", "Charlotte",

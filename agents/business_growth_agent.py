@@ -296,6 +296,56 @@ def run():
     duration_ms = int((time.time() - t0) * 1000)
     _log_action("growth_cycle", {"recs": len(recs), "executed": executed_count}, "ok", duration_ms)
 
+    # ── DAILY TELEGRAM BRIEF (added 2026-06-24) ──
+    try:
+        s = snapshot
+        # Funnel at a glance
+        funnel_lines = [
+            "📊 *Empire AI — Daily Morning Brief*",
+            f"  Run: {t0:.0f} → {duration_ms}ms",
+            "",
+            "*OUTREACH (cumulative)*",
+            f"  sent:     {s['outreach_sent']:>5}",
+            f"  opened:   {s['outreach_opened']:>5}  ({round(100*s['outreach_opened']/max(1,s['outreach_sent']),1)}%)",
+            f"  clicked:  {s['outreach_clicked']:>5}  ({round(100*s['outreach_clicked']/max(1,s['outreach_sent']),1)}%)",
+            f"  paid:     {s['outreach_paid']:>5}",
+            f"  bounced:  {s['outreach_bounced']:>5}",
+            "",
+            "*FUNNEL*",
+            f"  contractors (active):     {s['contractors_active']:>5}",
+            f"  contractors w/ email:     {s['contractors_with_email']:>5}",
+            f"  subs (active):            {s['sub_active']:>5} of {s['sub_total']}",
+            f"  MRR:                      ${s['mrr_usdc']:.0f} USDC",
+            "",
+            "*REVENUE*",
+            f"  fees paid:                ${s['fee_paid_usdc']:,.0f}",
+            f"  fees pending:             ${s['fee_pending_usdc']:,.0f}",
+            f"  invoices paid:            ${s['inv_paid_total']:,.0f}",
+            f"  invoices unpaid:          ${s['inv_pending_total']:,.0f}",
+        ]
+        if recs:
+            funnel_lines.append("")
+            funnel_lines.append(f"*RECOMMENDATIONS ({len(recs)})*")
+            for rec in recs[:5]:
+                sev = rec.get("severity", "?").upper()
+                cat = rec.get("category", "?")
+                title = (rec.get("title") or "")[:80]
+                funnel_lines.append(f"  [{sev}] {cat}: {title}")
+        msg = "\n".join(funnel_lines)
+        # Send via httpx to Telegram
+        import httpx
+        tg_token = os.environ.get("TELEGRAM_BOT_TOKEN", "")
+        tg_chat = os.environ.get("TELEGRAM_HOME_CHANNEL", os.environ.get("TELEGRAM_CHAT", "808657420"))
+        if tg_token:
+            r = httpx.post(
+                f"https://api.telegram.org/bot{tg_token}/sendMessage",
+                json={"chat_id": tg_chat, "text": msg, "parse_mode": "Markdown", "disable_web_page_preview": True},
+                timeout=15,
+            )
+            log.info(f"telegram brief: HTTP {r.status_code}")
+    except Exception as e:
+        log.warning(f"telegram brief failed: {e}")
+
 
 def list_recommendations(status: str = "open", limit: int = 50) -> list:
     sb = _sb()

@@ -1,0 +1,67 @@
+# ── B2B Explainer Pipeline ───────────────────────────────────────────
+# Business-to-business explainer videos for Empire AI products.
+# Research-first approach with data-driven visuals and professional narration.
+
+name: b2b-explainer
+label: B2B Explainer Video
+description: >
+  Produces a professional explainer video for Empire AI's B2B products
+  (storm lead gen, contractor recruitment, AI automation). Research-first
+  with data-driven visuals, professional narration, and call-to-action.
+version: "1.0"
+output_format: mp4
+platforms:
+  - youtube
+  - website
+
+stages:
+  - name: research
+    description: Research market data, competitor positioning, and audience pain points
+    tools:
+      - trend_researcher
+      - revenue_miner
+    config:
+      sources:
+        - youtube
+        - reddit
+        - hacker_news
+      max_sources: 10
+
+  - name: script
+    description: Write a persuasive script with problem → solution → proof → CTA
+    tools:
+      - script_generator
+    config:
+      structure: problem_solution_proof_cta
+      max_duration_s: 120
+      tone: professional
+
+  - name: assets
+    description: Generate professional narration, data visualizations, and branding
+    tools:
+      - deepgram_tts
+      - image_selector
+      - music_selector
+    config:
+      voice_provider: deepgram
+      include_branding: true
+      include_data_viz: true
+
+  - name: render
+    description: Compose with lower-thirds, logo, data overlays, and captions
+    tools:
+      - ffmpeg_composer
+      - caption_burner
+    config:
+      aspect_ratio: "16:9"
+      branding_overlay: true
+      end_card: true
+
+  - name: publish
+    description: Upload with SEO-optimized title, description, and tags
+    tools:
+      - youtube_uploader
+    config:
+      auto_publish: false
+      seo_optimize: true
+    requires_approval: true

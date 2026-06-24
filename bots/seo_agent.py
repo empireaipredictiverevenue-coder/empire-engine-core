@@ -43,6 +43,8 @@ sys.path.insert(0, "/root/empire-v49")
 # Lazy imports for research + content + backlinks agents (avoid circular imports at module level)
 _research_agent = None
 _content_agent = None
+_keyword_gap_tool = None
+_ranking_predictor = None
 
 
 def _get_research_agent():
@@ -59,6 +61,24 @@ def _get_content_agent():
         from bots.content_agent import get_content_agent
         _content_agent = get_content_agent()
     return _content_agent
+
+
+def _get_keyword_gap():
+    """Lazy KeywordGapTool from SEO Idea-to-Shipped engine."""
+    global _keyword_gap_tool
+    if _keyword_gap_tool is None:
+        from products.seo_idea_to_shipped.keyword_gap import KeywordGapTool
+        _keyword_gap_tool = KeywordGapTool()
+    return _keyword_gap_tool
+
+
+def _get_ranking_predictor():
+    """Lazy RankingPredictor from SEO Idea-to-Shipped engine."""
+    global _ranking_predictor
+    if _ranking_predictor is None:
+        from products.seo_idea_to_shipped.ranking_predictor import RankingPredictor
+        _ranking_predictor = RankingPredictor()
+    return _ranking_predictor
 
 try:
     from dotenv import load_dotenv
@@ -175,6 +195,11 @@ class SEOAgent:
         self._research = None  # lazy ResearchAgent
         self._content = None   # lazy ContentAgent
         self._backlinks = _NoOpBacklinks()  # stub (backlinks_agent.py removed 2026-06-19)
+        self._ranking_predict_count = 0  # sampling counter for non-blocking ranking prediction
+        try:
+            self._ranking_sample_rate = int(os.environ.get("SEO_RANKING_SAMPLE_RATE", "3"))
+        except (ValueError, TypeError):
+            self._ranking_sample_rate = 5
 
     @property
     def _r(self):
@@ -254,33 +279,69 @@ Return ONLY JSON with these fields:
 
     # ── KEYWORD RESEARCH ─────────────────────────────────────────────
     async def research_keywords(
-        self, niche: str, metro: str = "", seed_count: int = 10
+        self, niche: str, metro: str = "", seed_count: int = 10,
+        use_groq: bool = False,
     ) -> List[Dict]:
         """
-        Research high-intent keywords for a niche/metro using Ollama.
+        Research high-intent keywords for a niche/metro.
+
+        Two modes:
+          - Ollama (default): Uses local LLM for fast keyword generation.
+          - Groq (use_groq=True): Uses KeywordGapTool from SEO Idea-to-Shipped
+            engine for higher-quality keyword gap analysis via Groq LLM.
+
         Keywords are scored by intent, volume estimate, and competition.
         """
-        seed_keywords = NICHE_KEYWORDS.get(niche, NICHE_KEYWORDS["Local SEO & HVAC"])
-        system = """You are an SEO keyword strategist. Generate high-intent, long-tail keywords
+        keywords: List[Dict] = []
+
+        # ── Groq mode: KeywordGapTool from Idea-to-Shipped engine ──
+        if use_groq:
+            try:
+                gap_tool = _get_keyword_gap()
+                gap_result = await gap_tool.find_gaps(niche, metro, seed_count)
+                # Convert gap format → SEOAgent keyword format
+                for g in gap_result.get("gaps", []):
+                    keywords.append({
+                        "keyword": g.get("keyword", ""),
+                        "intent_score": g.get("value_score", 50),
+                        "volume_estimate": "medium",
+                        "competition": g.get("competition", "medium"),
+                        "category": g.get("search_intent", "transactional"),
+                        "_source": "groq/keyword_gap",
+                        "_is_gap": g.get("is_gap", True),
+                    })
+                log.info(f"[seo] Groq keyword research: {len(keywords)} gaps found "
+                         f"(of {gap_result.get('keywords_found', 0)} total)")
+            except Exception as e:
+                log.warning(f"[seo] Groq keyword research failed, falling back to Ollama: {e}")
+                use_groq = False  # fall through to Ollama path
+
+        # ── Ollama mode (default, or fallback) ────────────────────
+        if not use_groq:
+            seed_keywords = NICHE_KEYWORDS.get(niche, NICHE_KEYWORDS["Local SEO & HVAC"])
+            system = """You are an SEO keyword strategist. Generate high-intent, long-tail keywords
 for a local business. Return ONLY a JSON array of objects:
 [{"keyword": "...", "intent_score": 0-100, "volume_estimate": "low|medium|high", "competition": "low|medium|high", "category": "transactional|informational|navigational"}]"""
 
-        prompt = (
-            f"Niche: {niche}\n"
-            f"Metro: {metro or 'national'}\n"
-            f"Seed keywords: {', '.join(seed_keywords[:5])}\n"
-            f"Generate {seed_count} high-intent long-tail keywords. Return JSON array only."
-        )
+            prompt = (
+                f"Niche: {niche}\n"
+                f"Metro: {metro or 'national'}\n"
+                f"Seed keywords: {', '.join(seed_keywords[:5])}\n"
+                f"Generate {seed_count} high-intent long-tail keywords. Return JSON array only."
+            )
 
-        result = await _llm_json(prompt, system, temperature=0.5)
-        if "_error" in result:
+            result = await _llm_json(prompt, system, temperature=0.5)
+            if "_error" not in result:
+                ollama_kws = result if isinstance(result, list) else result.get("keywords", [])
+                if isinstance(ollama_kws, list):
+                    for kw in ollama_kws:
+                        kw["_source"] = "ollama"
+                    keywords.extend(ollama_kws)
+
+        if not keywords:
             return []
 
-        keywords = result if isinstance(result, list) else result.get("keywords", [])
-        if not isinstance(keywords, list):
-            keywords = []
-
-        # Persist keywords
+        # Persist all keywords (both Ollama and Groq)
         for kw in keywords:
             try:
                 sb = _get_sb()
@@ -358,31 +419,124 @@ Write a webpage section optimized for the target keyword. Return ONLY JSON:
 
         return result
 
+    # ── RANKING STATS ──────────────────────────────────────────────
+    def ranking_stats(self) -> dict:
+        """Expose ranking prediction sampling stats for monitoring.
+
+        Returns _ranking_predict_count (total lead events that called
+        fire_ranking_prediction / record_outcome), _ranking_sample_rate
+        (how many events per prediction), and a derived predictions_fired
+        estimate."""
+        predictions_fired = self._ranking_predict_count // max(self._ranking_sample_rate, 1)
+        # Cost projection: Groq llama-3.3-70b ~$0.65/1K calls (~700+300 tokens per pred)
+        _cost_per_pred = float(os.environ.get("SEO_RANKING_COST_PER_PRED", "0.00065"))
+        cost_rate_3_weekly = round(predictions_fired * (self._ranking_sample_rate / 3) * _cost_per_pred, 4)
+        cost_rate_5_weekly = round(predictions_fired * (self._ranking_sample_rate / 5) * _cost_per_pred, 4)
+        return {
+            "total_events": self._ranking_predict_count,
+            "sample_rate": self._ranking_sample_rate,
+            "predictions_fired": predictions_fired,
+            "sample_pct": round(100 / max(self._ranking_sample_rate, 1), 1),
+            "actual_pct": round(
+                predictions_fired / max(self._ranking_predict_count, 1) * 100, 1
+            ),
+            "groq_model": os.environ.get("GROQ_MODEL", "llama-3.3-70b-versatile"),
+            "cost_per_prediction": _cost_per_pred,
+            "cost_rate_3_weekly": cost_rate_3_weekly,
+            "cost_rate_5_weekly": cost_rate_5_weekly,
+            "cost_delta_weekly": round(cost_rate_3_weekly - cost_rate_5_weekly, 4),
+            "cost_delta_pct": round((cost_rate_3_weekly / max(cost_rate_5_weekly, 1e-10) - 1) * 100, 1),
+            "note": "Costs are projections based on predictions_fired × rate ratio. Actual Groq usage may differ.",
+        }
+
+    # ── PREDICT RANKING (background, non-blocking) ───────────────────
+    async def fire_ranking_prediction(self, keyword: str):
+        """
+        Public fire-and-forget entry point for ranking prediction.
+
+        Uses the same sampling gate as record_outcome() (default: every 5th call)
+        but does NOT record any conversion outcome — safe to call on new leads
+        that haven't converted yet. Internally spawns _predict_ranking_async()
+        via asyncio.create_task() so the caller is never blocked.
+        """
+        self._ranking_predict_count += 1
+        if self._ranking_predict_count % self._ranking_sample_rate == 0:
+            asyncio.create_task(self._predict_ranking_async(keyword))
+
+    async def _predict_ranking_async(self, keyword: str):
+        """
+        Fire-and-forget ranking prediction that runs in a background task.
+        Calls the Idea-to-Shipped RankingPredictor and persists the result
+        to seo_keywords.meta.ranking_prediction without blocking the caller.
+        """
+        try:
+            predictor = _get_ranking_predictor()
+            signal = await predictor.predict_ranking(
+                url="https://empire-ai.co.uk",
+                keyword=keyword,
+                niche="",
+                metro="",
+            )
+            log.info(f"[seo] ranking prediction for '{keyword}': "
+                     f"pos={signal.get('predicted_position', '?')} "
+                     f"conf={signal.get('confidence', 0):.2f}")
+            # Persist to seo_keywords.meta
+            try:
+                sb = _get_sb()
+                r = sb.table("seo_keywords").select("meta").eq("keyword", keyword).limit(1).execute()
+                if r.data:
+                    sb.table("seo_keywords").update({
+                        "meta": {
+                            **(r.data[0].get("meta") or {}),
+                            "ranking_prediction": {
+                                "predicted_position": signal.get("predicted_position"),
+                                "confidence": signal.get("confidence"),
+                                "predicted_at": signal.get("predicted_at"),
+                                "factors": signal.get("factors", {}),
+                            },
+                        },
+                    }).eq("keyword", keyword).execute()
+            except Exception as e:
+                log.debug(f"[seo] ranking persist failed for '{keyword}': {e}")
+        except Exception as e:
+            log.debug(f"[seo] ranking prediction background task failed for '{keyword}': {e}")
+
     # ── RECORD OUTCOME (Learning Loop) ───────────────────────────────
     async def record_outcome(
         self, keyword: str, lead_id: str, success: bool, revenue: float = 0
     ) -> Dict:
         """
-        Called when a lead converts (or doesn't). Updates keyword performance
-        and triggers genome evolution when enough data accumulates.
+        Called when a lead converts (or doesn't). Updates keyword performance,
+        triggers genome evolution when enough data accumulates.
+
+        Ranking prediction runs non-blocking via asyncio.create_task()
+        with a sampling gate (only every Nth outcome, default N=5).
         """
+        # ── Non-blocking ranking prediction (sampling gated) ──────
+        self._ranking_predict_count += 1
+        if self._ranking_predict_count % self._ranking_sample_rate == 0:
+            asyncio.create_task(self._predict_ranking_async(keyword))
+
+        # ── Update keyword performance ────────────────────────────
         try:
             sb = _get_sb()
-            # Update keyword conversion stats
             r = sb.table("seo_keywords").select("conversions,impressions").eq("keyword", keyword).limit(1).execute()
             if r.data:
                 row = r.data[0]
                 conversions = (row.get("conversions") or 0) + (1 if success else 0)
                 impressions = (row.get("impressions") or 0) + 1
                 conv_rate = round(conversions / impressions, 3) if impressions > 0 else 0
-                sb.table("seo_keywords").update({
+
+                update_fields = {
                     "conversions": conversions,
                     "impressions": impressions,
                     "conversion_rate": conv_rate,
                     "total_revenue": (row.get("total_revenue") or 0) + revenue,
                     "last_outcome": "success" if success else "fail",
                     "last_outcome_ts": datetime.now(timezone.utc).isoformat(),
-                }).eq("keyword", keyword).execute()
+                }
+                # Ranking prediction meta is written async by _predict_ranking_async()
+                sb.table("seo_keywords").update(update_fields).eq("keyword", keyword).execute()
 
             # Link lead to SEO content
             if lead_id:
@@ -401,13 +555,21 @@ Write a webpage section optimized for the target keyword. Return ONLY JSON:
         if self.stats["leads_attributed"] >= 20 and self.stats["leads_attributed"] % 10 == 0:
             await self._evolve_genome()
 
-        return {"keyword": keyword, "success": success, "genome_generation": self._evolution_runs}
+        return {
+            "keyword": keyword,
+            "success": success,
+            "genome_generation": self._evolution_runs,
+            "ranking": None,  # async — see _predict_ranking_async() background task
+        }
 
     # ── EVOLVE GENOME (SI Learning) ──────────────────────────────────
     async def _evolve_genome(self) -> Dict:
         """
         Analyze keyword performance data and mutate the genome toward
         traits that drive higher conversion rates.
+
+        Now enriched with ranking predictions from the Idea-to-Shipped
+        engine (seo_rankings table) for more accurate genome adaptation.
         """
         try:
             sb = _get_sb()
@@ -420,6 +582,18 @@ Write a webpage section optimized for the target keyword. Return ONLY JSON:
         if len(keywords) < 10:
             return {"evolved": False, "reason": "insufficient data"}
 
+        # Pull ranking predictions from Idea-to-Shipped engine (seo_rankings)
+        try:
+            rankings_r = sb.table("seo_rankings").select("keyword,predicted_position,confidence,factors") \
+                .order("predicted_at", desc=True).limit(500).execute()
+            rankings_by_kw: Dict[str, dict] = {}
+            for row in (rankings_r.data or []):
+                kw = row.get("keyword", "")
+                if kw and kw not in rankings_by_kw:
+                    rankings_by_kw[kw] = row
+        except Exception:
+            rankings_by_kw = {}
+
         # Sort by conversion rate
         keywords.sort(key=lambda k: k.get("conversion_rate", 0), reverse=True)
         top = keywords[:max(3, len(keywords) // 3)]
@@ -429,6 +603,28 @@ Write a webpage section optimized for the target keyword. Return ONLY JSON:
         local_kw = sum(1 for k in top if k.get("metro") and k.get("metro") != "national") / len(top)
         # content_signal: avg intent_score of top-converting keywords + normalize to 0-1
         content_signal = sum(k.get("intent_score", 50) for k in top) / len(top) / 100
+
+        # ── Enrich with ranking predictions from Idea-to-Shipped engine ──
+        ranking_authority_signal = 0.0
+        ranking_pos_signal = 0.0
+        ranking_count = 0
+        for k in top:
+            kw_name = k.get("keyword", "")
+            if kw_name in rankings_by_kw:
+                pred = rankings_by_kw[kw_name]
+                # Predicted position 1-10 → high authority signal
+                pos = pred.get("predicted_position", 50)
+                ranking_pos_signal += (1.0 - min(pos, 100) / 100)  # position 1 = 0.99, position 100 = 0.0
+                factors = pred.get("factors", {}) or {}
+                ranking_authority_signal += factors.get("authority", 0.5)
+                ranking_count += 1
+        if ranking_count > 0:
+            ranking_pos_signal /= ranking_count
+            ranking_authority_signal /= ranking_count
+        else:
+            # No ranking data — use neutral defaults
+            ranking_pos_signal = 0.5
+            ranking_authority_signal = 0.5
 
         # Pull content-level conversion data to inform content_depth
         try:
@@ -458,8 +654,26 @@ Write a webpage section optimized for the target keyword. Return ONLY JSON:
 
         # Mutate genome toward high-conversion traits (capped movement)
         mutation_rate = 0.1
+
+        # ── Blend ranking signals from Idea-to-Shipped engine ──
+        # Weight by prediction confidence rather than hardcoded 0.5/0.5.
+        # High-confidence predictions drive the genome more aggressively;
+        # low-confidence predictions defer to conversion data.
+        if ranking_count > 0:
+            # Average confidence across all ranking predictions for this batch
+            avg_ranking_confidence = sum(
+                rankings_by_kw.get(k.get("keyword", ""), {}).get("confidence", 0.5)
+                for k in top
+            ) / max(len(top), 1)
+            # Clamp confidence to [0.3, 0.9] so we never fully ignore either signal
+            confidence_weight = max(0.3, min(0.9, avg_ranking_confidence))
+            comp_signal = high_comp * (1 - confidence_weight) + ranking_pos_signal * confidence_weight
+        else:
+            confidence_weight = 0.0
+            comp_signal = high_comp
+
         self.genome["keyword_competitiveness"] = self._clamp(
-            self.genome["keyword_competitiveness"] + (high_comp - 0.5) * mutation_rate
+            self.genome["keyword_competitiveness"] + (comp_signal - 0.5) * mutation_rate
         )
         self.genome["local_intent"] = self._clamp(
             self.genome["local_intent"] + (local_kw - 0.5) * mutation_rate
@@ -470,13 +684,22 @@ Write a webpage section optimized for the target keyword. Return ONLY JSON:
         self.genome["technical_rigor"] = self._clamp(
             self.genome["technical_rigor"] + (tech_signal - 0.5) * mutation_rate
         )
-        # link_authority: use small exploratory drift (backlinks agent parked)
-        try:
+
+        # link_authority: use ranking authority signal weighted by
+        # prediction confidence, fall back to small exploratory drift
+        if ranking_count > 0:
+            # confidence_weight already computed above; reuse it
+            authority_signal = ranking_authority_signal * confidence_weight + 0.5 * (1 - confidence_weight)
             self.genome["link_authority"] = self._clamp(
-                self.genome["link_authority"] + random.uniform(-0.03, 0.03)
+                self.genome["link_authority"] + (authority_signal - 0.5) * mutation_rate
             )
-        except Exception:
-            pass
+        else:
+            try:
+                self.genome["link_authority"] = self._clamp(
+                    self.genome["link_authority"] + random.uniform(-0.03, 0.03)
+                )
+            except Exception:
+                pass
 
         self._evolution_runs += 1
         self._last_evolution = datetime.now(timezone.utc).isoformat()
@@ -867,9 +1090,9 @@ async def run_loop(interval_hours: float = None):
                 "capabilities": [
                     "manage_seo", "track_rankings", "analyze_backlinks",
                     "optimize_content", "audit_onpage", "keyword_research",
-                    "content_generation", "landing_page",
+                    "content_generation", "landing_page", "ranking_prediction",
                 ],
-                "task_types": ["seo.audit", "seo.optimize", "seo.report", "seo.content"],
+                "task_types": ["seo.audit", "seo.optimize", "seo.report", "seo.content", "seo.ranking_prediction"],
             }, on_conflict="agent_name").execute()
         except Exception:
             pass

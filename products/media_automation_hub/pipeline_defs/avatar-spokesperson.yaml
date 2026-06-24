@@ -1,0 +1,73 @@
+# ── AI Avatar Spokesperson Pipeline ─────────────────────────────────
+# Creates talking-head spokesperson videos from a text script using
+# TTS narration + avatar image compositing. Inspired by OpenMontage's
+# avatar-spokesperson pipeline but built on Empire's OmniStudio engine.
+#
+# Use cases:
+#   - Product explainers with AI host
+#   - Social proof / testimonial reenactments
+#   - Outreach videos with personalized avatar
+#   - Rapid content production without filming
+
+name: avatar-spokesperson
+label: AI Avatar Spokesperson Video
+description: >
+  Generates a talking-head spokesperson video from a text script using
+  TTS narration (espeak-ng or Coqui) + avatar image compositing via
+  ffmpeg. Supports still and talking modes. Produces a vertical or
+  horizontal MP4 ready for YouTube, TikTok, or Instagram.
+version: "1.0"
+output_format: mp4
+platforms:
+  - youtube
+  - tiktok
+  - instagram
+  - website
+
+stages:
+  - name: research
+    description: Research trending topics and hooks for the script
+    tools:
+      - trend_researcher
+      - hook_optimizer
+    config:
+      max_topics: 3
+      niche: ai_automation
+
+  - name: script
+    description: Generate the avatar's speaking script with hook, body, and CTA
+    tools:
+      - script_generator
+    config:
+      max_duration_s: 90
+      tone: professional
+      structure: problem_solution_proof_cta
+
+  - name: avatar
+    description: Generate TTS audio + composite avatar video from script
+    tools:
+      - avatar_generator
+    config:
+      mode: talking
+      voice: default
+      resolution: 1080x1920
+
+  - name: thumbnails
+    description: Extract key frames from the avatar video for YouTube thumbnail
+    tools:
+      - keyframe_extractor
+    config:
+      mode: thumbnail
+      count: 3
+      format: jpg
+      quality: 5
+
+  - name: publish
+    description: Upload avatar video with SEO metadata to platforms
+    tools:
+      - youtube_uploader
+      - tiktok_uploader
+    config:
+      auto_publish: false
+      notify_telegram: true
+    requires_approval: true

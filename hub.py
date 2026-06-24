@@ -93,7 +93,7 @@ from empire_fee_operator import register_operator_mark_settled
 from empire_claims import register_claims_routes
 from empire_claim_webhook import register_claim_webhook
 from empire_abtest import register_ab_test_routes
-from empire_predictive import register_predictive_routes, register_organic_signal_routes
+from empire_predictive import register_predictive_routes, register_organic_signal_routes, register_keyword_revenue_routes
 # Mock carrier routes disabled 2026-06-19 — system locked down for production.
 # Re-enable only for local dev/testing with the mock carrier.
 # from empire_carrier import register_mock_carrier_routes
@@ -231,6 +231,11 @@ from products.meetily import MeetilyProduct, MeetilyRoutes
 from products.elite_scraper import EliteScraperProduct, EliteScraperRoutes
 from products.agent_reach_enrichment import AgentReachEnricher, AgentReachRoutes
 from products.graphify_bridge import GraphifyBridge, GraphifyRoutes
+from empire_listmonk import register_listmonk_routes
+from empire_twenty_crm import register_twenty_crm_routes
+from products.media_automation_hub.routes import register_media_hub_routes
+from products.omnichannel_engine.routes import register_omni_routes
+from products.seo_idea_to_shipped.routes import register_seo_its_routes
 from hook_analytics import HookRoutes
 
 # Strategist & Analytics Agents
@@ -1419,6 +1424,7 @@ async def sms_reply_monitor(auth: bool = Depends(require_auth)):
 register_ab_test_routes(app, require_auth=require_auth, get_db=get_db)
 register_predictive_routes(app, require_auth=require_auth, get_db=get_db)
 register_organic_signal_routes(app, require_auth=require_auth, get_db=get_db)  # /api/v1/signal/organic
+register_keyword_revenue_routes(app, require_auth=require_auth, get_db=get_db)  # unified predictive pipeline: keyword→revenue
 # Disabled 2026-06-19 — mock carrier routes removed for production lockdown.
 # register_mock_carrier_routes(app, require_auth=require_auth, get_db=get_db)
 register_carrier_enrollment_routes(app, require_auth=require_auth)
@@ -2281,6 +2287,17 @@ register_bounty_tracker_routes(app, require_auth=require_auth)
 
 # ── Stop Loss Bot — manage trading positions + monitor stop losses ──
 register_stop_loss_routes(app, require_auth=require_auth)
+
+# ── Media Automation Hub — pipeline-driven video production ──────────────
+register_media_hub_routes(app, require_auth=require_auth)
+
+# ── ListMonk — email campaign manager (port 9000) ───────────────────────
+register_listmonk_routes(app, require_auth=require_auth)
+
+# ── Twenty CRM — pipeline management (port 3003) ─────────────────────────
+register_twenty_crm_routes(app, require_auth=require_auth)
+register_omni_routes(app, require_auth=require_auth)
+register_seo_its_routes(app, require_auth=require_auth)
 
 # ── Suite Gateway — 3-Product Monetization ───────────────────────────
 suite_subscriptions = SuiteSubscriptionEngine(get_db=get_db)
@@ -5476,6 +5493,19 @@ async def seo_performance():
         return JSONResponse({"error": str(e), "stats": {}, "keywords": [], "content": []})
 
 
+
+# ── SEO Ranking Stats — monitoring endpoint for ranking prediction sampling ──
+@app.get("/api/seo/ranking-stats")
+async def seo_ranking_stats():
+    """Return ranking prediction sampling stats — total events, sample rate, predictions fired."""
+    try:
+        from bots.seo_agent import get_seo_agent
+        agent = get_seo_agent()
+        return JSONResponse(agent.ranking_stats())
+    except Exception as e:
+        return JSONResponse({"error": str(e)[:80]}, status_code=500)
+
+
 @app.get("/api/seo/products")
 async def seo_products():
     """SEO Optimizer product catalog — 3 tiers from strike_packs."""
@@ -5678,6 +5708,47 @@ async def seo_config_post(req: Request):
         return JSONResponse({"error": str(e)[:80]}, status_code=500)
     except Exception as e:
         return JSONResponse({"error": str(e)[:80]})
+
+
+# -- SEO Keywords -- Groq-powered keyword research on demand --
+@app.post("/api/v1/seo/keywords")
+async def seo_keywords_post(req: Request):
+    """Run Groq-powered keyword gap analysis via the SEO Idea-to-Shipped engine.
+
+    Body: {niche: str, metro?: str, seed_count?: int}
+    Returns: {ok, keywords: [...], count, source}
+    """
+    try:
+        body = await req.json() if req.headers.get("content-type", "").startswith("application/json") else {}
+    except Exception:
+        return JSONResponse({"ok": False, "error": "Invalid JSON"}, status_code=400)
+
+    niche = (body.get("niche") or "").strip()
+    metro = (body.get("metro") or "").strip()
+    seed_count = min(int(body.get("seed_count", 10)), 50)
+
+    if not niche:
+        return JSONResponse({"ok": False, "error": "niche is required"}, status_code=400)
+
+    try:
+        from bots.seo_agent import get_seo_agent
+        agent = get_seo_agent()
+        keywords = await agent.research_keywords(
+            niche=niche,
+            metro=metro,
+            seed_count=seed_count,
+            use_groq=True,
+        )
+        return JSONResponse({
+            "ok": True,
+            "keywords": keywords,
+            "count": len(keywords),
+            "niche": niche,
+            "metro": metro or "national",
+            "source": (keywords[0].get("_source", "groq/keyword_gap") if keywords else "groq/keyword_gap"),
+        })
+    except Exception as e:
+        return JSONResponse({"ok": False, "error": str(e)[:200]}, status_code=500)
 
 
 @app.post("/api/si/parameters")
@@ -6419,6 +6490,15 @@ async def webhook_lead(request: Request, x_empire_secret: str = Header(None, ali
                 },
             ))
             closer_result = {"status": "queued"}
+
+        # ── Non-blocking ranking prediction (fire-and-forget, sampling gated) ──
+        try:
+            from bots.seo_agent import get_seo_agent
+            _kw = (source or data.get("niche", "")).strip()
+            if _kw:
+                await get_seo_agent().fire_ranking_prediction(_kw[:120])
+        except Exception as e:
+            logging.getLogger("empire.hub").debug(f"[webhook-lead] ranking prediction skipped: {e}")
 
         return JSONResponse({
             "status": "success",

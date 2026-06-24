@@ -1,0 +1,110 @@
+# ── YouTube Long-Form Pipeline ───────────────────────────────────────
+# Professional long-form YouTube content (10-30 min horizontal video).
+# Designed for in-depth educational content, documentary-style explainers,
+# industry deep-dives, and authority-building content.
+#
+# Differs from b2b-explainer (2-min B2B product pitch) — this is
+# informational/educational content optimized for YouTube's algorithm:
+# long watch time, multiple chapters, keyword-rich metadata.
+
+name: youtube-long-form
+label: YouTube Long-Form Video (5 min)
+description: >
+  Produces a professional long-form YouTube video (16:9, ~5 min)
+  with multi-chapter structure, deep research, professional narration,
+  visuals, word-level captions, and SEO-optimized metadata.
+  Designed to maximize watch time and subscriber growth.
+version: "1.0"
+output_format: mp4
+platforms:
+  - youtube
+
+stages:
+  - name: deep_research
+    description: Deep research across YouTube, Reddit, and news to find high-demand topics with search volume
+    tools:
+      - trend_researcher
+      - youtube_scraper
+      - revenue_miner
+    config:
+      sources:
+        - youtube
+        - reddit
+        - google_trends
+      max_sources: 20
+      niche: storm_restoration
+
+  - name: script
+    description: Write a long-form script with hook → chapters → body → CTA structure
+    tools:
+      - script_generator
+      - hook_optimizer
+    config:
+      structure: hook_chapters_body_cta
+      max_duration_s: 300
+      tone: educational
+      chapters: 5
+
+  - name: assets
+    description: Generate professional narration, b-roll visuals, chapter markers, and background music
+    tools:
+      - deepgram_tts
+      - kokoro_tts
+      - image_selector
+      - music_selector
+    config:
+      voice_provider: deepgram
+      fallback_provider: kokoro
+      include_chapter_markers: true
+      include_b_roll: true
+      include_branding: true
+
+  - name: render
+    description: Compose 16:9 horizontal video — captions first, then compose with audio
+    tools:
+      - caption_burner
+      - ffmpeg_composer
+    config:
+      aspect_ratio: "16:9"
+      include_captions: true
+      highlight_keywords: true
+      end_screen: true
+      transition: dissolve
+      # ── Wired from prior stage outputs ──
+      audio_path: "{{ctx.assets.wav_path}}"
+      output_path: "/tmp/empire_longform_output.mp4"
+      # input_video → pass via ctx when calling the pipeline:
+      #   orch.run_pipeline("youtube-long-form", ctx={"input_video": "/path/to/base.mp4"})
+      # FFmpegComposer reports a clear error if input_video is missing.
+
+  - name: thumbnails
+    description: Extract key frames and scene changes for YouTube thumbnail selection
+    tools:
+      - keyframe_extractor
+    config:
+      video_path: "{{ctx.render.output_path}}"
+      mode: scenes
+      threshold: 0.4
+      max_frames: 12
+      format: jpg
+      quality: 3
+
+  - name: seo
+    description: Generate SEO-optimized title, description, tags, and chapters from transcript
+    tools:
+      - video_cloner
+      - hook_optimizer
+    config:
+      action: transcribe
+      video_path: "{{ctx.render.output_path}}"
+
+  - name: publish
+    description: Upload to YouTube with full SEO metadata, chapters, and end screen
+    tools:
+      - youtube_uploader
+    config:
+      auto_publish: false
+      seo_optimize: true
+      include_chapters: true
+      notify_telegram: true
+    requires_approval: true

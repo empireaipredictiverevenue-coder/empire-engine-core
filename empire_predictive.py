@@ -357,3 +357,225 @@ def register_organic_signal_routes(app, *, require_auth, get_db=None):
             }
         except Exception as e:
             raise HTTPException(status_code=500, detail=f'organic_signal_error: {e}')
+
+
+# =================================================================
+# UNIFIED PREDICTIVE PIPELINE: KEYWORD → RANKING → REVENUE
+# =================================================================
+# End-to-end: takes a keyword + niche + metro, predicts SERP position,
+# estimates traffic via CTR curve, converts to leads via historical
+# conversion rate, and projects monthly fee revenue.
+#
+# This is the "if we rank #3 for 'roof repair Dallas', that's worth
+# $X/month in fees" endpoint.
+#
+# Wires together:
+#   1. RankingPredictor (products/seo_idea_to_shipped)
+#   2. SalesFunnel.predict_lead_revenue (conversion_funnel.py)
+#   3. radar_asset_enricher ZHVI signals
+# =================================================================
+
+KEYWORD_REVENUE_CACHE_TTL = 3600  # cache predictions for 1 hour
+
+
+def register_keyword_revenue_routes(app, *, require_auth, get_db=None):
+    """Register the unified predictive pipeline endpoint.
+
+    POST /api/v1/predictive/keyword-revenue
+      Body: {keyword, niche?, metro?, url?}
+      Returns: predicted position, traffic, conversions, revenue
+
+    GET /api/v1/predictive/keyword-revenue/batch
+      Query: keywords=roof repair Dallas,hvac repair Austin,...
+      Returns: array of predictions for each keyword
+    """
+
+    # ── Module-level constants ───────────────────────────────────
+    # Position → win rate mapping (position tier → estimated close rate)
+    WIN_RATE_BY_POSITION = {1: 0.20, 3: 0.15, 10: 0.10, 30: 0.05, 50: 0.02, 100: 0.01}
+
+    async def _predict_single(keyword: str, niche: str, metro: str, url: str, db=None) -> dict:
+        """Core prediction logic shared by single and batch endpoints."""
+        try:
+            # ── 1. Ranking prediction ──────────────────────────
+            from products.seo_idea_to_shipped.ranking_predictor import RankingPredictor
+            predictor = RankingPredictor()
+            ranking = await predictor.predict_ranking(
+                url=url, keyword=keyword, niche=niche, metro=metro
+            )
+
+            # ── 2. Extract signals ──────────────────────────────
+            position = ranking.get("predicted_position", 50)
+            confidence = ranking.get("confidence", 0.5)
+            traffic = ranking.get("estimated_traffic", 0)
+            factors = ranking.get("factors", {})
+
+            # ── 3. Get real conversion_rate from Supabase ───────
+            conv_rate = 0.02  # industry default for lead-gen landing page
+            try:
+                db_client = db or (create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_SERVICE_KEY"]) if os.environ.get("SUPABASE_URL") else None)
+                if db_client:
+                    r = db_client.table("seo_keywords").select("conversion_rate").eq("keyword", keyword).limit(1).execute()
+                    if r.data and r.data[0].get("conversion_rate"):
+                        conv_rate = float(r.data[0]["conversion_rate"])
+            except Exception:
+                pass
+
+            # ── 4. Cross-reference with conversion funnel ────────
+            avg_asset = 500_000
+            try:
+                db_client = db or (create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_SERVICE_KEY"]) if os.environ.get("SUPABASE_URL") else None)
+                if db_client:
+                    query = db_client.table("radar_targets").select("asset_value").gt("asset_value", 1000)
+                    if metro:
+                        query = query.ilike("city", f"%{metro.split(',')[0].strip() if ',' in metro else metro}%")
+                    r = query.limit(100).execute()
+                    if r.data:
+                        vals = [row.get("asset_value", 0) for row in r.data if row.get("asset_value")]
+                        if vals:
+                            avg_asset = sum(vals) / len(vals)
+            except Exception:
+                pass
+
+            from conversion_funnel import SalesFunnel, URGENCY_MULTIPLIERS
+            urgency = "Severe" if position <= 10 else ("Moderate" if position <= 30 else "Minor")
+            urgency_mult = URGENCY_MULTIPLIERS.get(urgency, 1.2)
+
+            win_rate = 0.02
+            for pos_threshold, rate in sorted(WIN_RATE_BY_POSITION.items(), reverse=True):
+                if position <= pos_threshold:
+                    win_rate = rate
+
+            rev_per_lead = SalesFunnel.predict_lead_revenue(
+                asset_value=avg_asset, niche=niche, urgency=urgency
+            )
+
+            # Use float — small traffic volumes produce fractional leads
+            monthly_conversions = traffic * conv_rate
+            monthly_revenue = round(monthly_conversions * rev_per_lead, 2)
+
+            # When the unified pipeline computes $0 but the ranking predictor
+            # has a real estimate, use it as the floor projection
+            if monthly_revenue <= 0 and ranking.get("estimated_revenue", 0) > 0:
+                monthly_revenue = ranking["estimated_revenue"]
+
+            # ── 5. Build response ───────────────────────────────
+            return {
+                "ok": True,
+                "keyword": keyword,
+                "niche": niche,
+                "metro": metro,
+                "url": url,
+                "ranking": {
+                    "predicted_position": position,
+                    "confidence": round(confidence, 2),
+                    "timeline": ranking.get("timeline", "3-6 months"),
+                    "factors": factors,
+                    "strengths": ranking.get("strengths", []),
+                    "weaknesses": ranking.get("weaknesses", []),
+                    "actions": ranking.get("actions", []),
+                },
+                "traffic": {
+                    "monthly_visitors": traffic,
+                    "ctr_pct": round(100 * traffic / max(1, 1500), 1) if traffic > 0 else 0,
+                    "method": "serp_ctr_curve",
+                },
+                "conversions": {
+                    "monthly_leads": round(monthly_conversions, 2),
+                    "conversion_rate_pct": round(conv_rate * 100, 1),
+                    "source": "seo_keywords.historical" if conv_rate != 0.02 else "industry_default_2pct",
+                },
+                "revenue": {
+                    "monthly_fees_usd": monthly_revenue,
+                    "annual_fees_usd": round(monthly_revenue * 12, 2),
+                    "per_lead_value_usd": round(rev_per_lead, 2),
+                    "avg_asset_value_usd": int(avg_asset),
+                    "win_rate_pct": round(win_rate * 100, 1),
+                    "urgency_multiplier": urgency_mult,
+                    "urgency": urgency,
+                    "fee_percent": 3.0,
+                },
+                "generated_at": ranking.get("predicted_at", ""),
+                "_pipeline": "keyword→ranking→traffic→conversions→revenue",
+            }
+
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"predictive_keyword_revenue_error: {e}")
+
+    @app.post("/api/v1/predictive/keyword-revenue")
+    async def predictive_keyword_revenue(
+        body: dict,
+        auth: bool = Depends(require_auth),
+    ):
+        """Predict revenue potential for a single keyword.
+
+        Body:
+          keyword: str (required) — Target keyword
+          niche: str (optional) — Service niche
+          metro: str (optional) — Target metro area
+          url: str (optional) — Page URL (default: empire-ai.co.uk niche page)
+
+        Returns the full predictive chain:
+          position → traffic → conversions → revenue
+        """
+        keyword = (body.get("keyword") or "").strip()
+        if not keyword:
+            raise HTTPException(400, "Missing required field: keyword")
+
+        niche = body.get("niche", "")
+        metro = body.get("metro", "")
+        url = body.get("url", f"https://empire-ai.co.uk/for-{niche}" if niche else "https://empire-ai.co.uk")
+
+        db = get_db() if get_db else None
+        return await _predict_single(keyword, niche, metro, url, db)
+
+    @app.get("/api/v1/predictive/keyword-revenue/batch")
+    async def predictive_keyword_revenue_batch(
+        keywords: str = "",
+        niche: str = "",
+        metro: str = "",
+        auth: bool = Depends(require_auth),
+    ):
+        """Batch predict revenue for multiple keywords.
+
+        Query: ?keywords=roof repair Dallas,hvac repair Austin&niche=roofing&metro=Dallas
+        """
+        if not keywords:
+            raise HTTPException(400, "Missing required query param: keywords")
+
+        kw_list = [k.strip() for k in keywords.split(",") if k.strip()]
+        if not kw_list:
+            raise HTTPException(400, "No valid keywords provided")
+
+        if len(kw_list) > 20:
+            raise HTTPException(400, "Max 20 keywords per request")
+
+        results = []
+        db = get_db() if get_db else None
+        for kw in kw_list:
+            url = f"https://empire-ai.co.uk/for-{niche}" if niche else "https://empire-ai.co.uk"
+            try:
+                result = await _predict_single(kw, niche, metro, url, db)
+                results.append(result)
+            except Exception as e:
+                results.append({"ok": False, "keyword": kw, "error": str(e)})
+
+        # Rank by projected revenue
+        results.sort(key=lambda r: r.get("revenue", {}).get("monthly_fees_usd", 0), reverse=True)
+
+        return {
+            "ok": True,
+            "count": len(results),
+            "total_monthly_revenue": round(sum(
+                r.get("revenue", {}).get("monthly_fees_usd", 0) for r in results
+            ), 2),
+            "total_annual_revenue": round(sum(
+                r.get("revenue", {}).get("annual_fees_usd", 0) for r in results
+            ), 2),
+            "results": results,
+        }
+
+    import logging
+    logging.getLogger("empire.predictive").info(
+        "[predictive] unified keyword-revenue pipeline registered (2 endpoints)"
+    )

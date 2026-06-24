@@ -1106,5 +1106,32 @@ module.exports = {
       log_date_format: 'YYYY-MM-DD HH:mm:ss Z',
     },
 
+    // ── Media Hub Orchestrator (pipeline runner: polls media_pipeline_runs table) ──
+    {
+      name: 'media-hub-orchestrator',
+      script: '/root/empire-v49/run_media_hub_orchestrator.py',
+      cwd: '/root/empire-v49',
+      interpreter: 'python3',
+      exec_mode: 'fork',
+      instances: 1,
+      env: {
+        PYTHONUNBUFFERED: '1',
+        MEDIA_HUB_POLL_SEC: '30',
+        PYTHONPATH: '/root/empire-v49',
+      },
+      // Background polling worker — no HTTP server
+      listen_timeout: 3000,
+      kill_timeout: 15000,
+      max_restarts: 10,
+      min_uptime: 15000,
+      restart_delay: 5000,
+      max_memory_restart: '1G',  // FFmpeg + Kokoro TTS can spike
+      error_file: '/root/.pm2/logs/media-hub-orchestrator-error.log',
+      out_file: '/root/.pm2/logs/media-hub-orchestrator-out.log',
+      pid_file: '/root/.pm2/pids/media-hub-orchestrator.pid',
+      merge_logs: true,
+      log_date_format: 'YYYY-MM-DD HH:mm:ss Z',
+    },
+
   ],
 };

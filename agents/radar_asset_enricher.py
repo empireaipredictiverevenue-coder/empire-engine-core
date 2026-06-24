@@ -95,12 +95,24 @@ def _sb():
     return create_client(url, key)
 
 
-def _formula_estimate(row: dict) -> int:
-    """Fallback: estimate $ from business signals when no API works."""
+def _formula_estimate(row: dict, zhvi_val: int | None = None) -> int:
+    """Fallback: estimate $ from business signals when no API works.
+
+    Formula: base × rating_mult × review_mult × recency_mult
+
+    Rating: smooth continuous curve (r/5)^0.7 — gentler than ^1.5,
+    so a 3.5★ business keeps ~78% of value vs 58% with the old curve.
+    Reviews: log-scaled multiplier with velocity bonus.
+    Recency: freshness decay — older reviews count less.
+    ZHVI: when provided, blends 60% formula / 40% metro median.
+    """
     wh = (row.get("warehouse_name") or row.get("name") or "").lower()
     sub = (row.get("sub_niche") or "").lower()
-    rating = float(row.get("meta", {}).get("rating") or 0) if isinstance(row.get("meta"), dict) else 0
-    reviews = int(row.get("meta", {}).get("review_count") or 0) if isinstance(row.get("meta"), dict) else 0
+    meta = row.get("meta", {}) if isinstance(row.get("meta"), dict) else {}
+    rating = float(meta.get("rating") or 0)
+    reviews = int(meta.get("review_count") or 0)
+    review_recency_days = int(meta.get("review_recency_days") or 365)
+    review_velocity = float(meta.get("review_velocity_per_month") or 0)
 
     # 1. Pick base by sub_niche first, then keyword fallback
     base = SUB_NICHE_BASE_USD.get(sub, 0)
@@ -112,32 +124,47 @@ def _formula_estimate(row: dict) -> int:
     if base == 0:
         base = DEFAULT_BASE_USD
 
-    # 2. Rating multiplier (3.0-5.0 → 0.6-1.4)
-    if rating >= 4.5:
-        rating_mult = 1.4
-    elif rating >= 4.0:
-        rating_mult = 1.1
-    elif rating >= 3.0:
-        rating_mult = 0.9
-    elif rating > 0:
-        rating_mult = 0.6
+    # 2. Rating multiplier — smooth curve (rating/5.0)^0.7
+    #    Rating 5.0 → 1.0x, 4.0 → 0.87x, 3.5 → 0.78x, 3.0 → 0.68x, 2.0 → 0.53x, 1.0 → 0.33x
+    #    Uses exponent 0.7 (not 1.5) for a gentler curve that doesn't over-penalize
+    #    decent businesses with 3.5-4.0 ratings.
+    if rating >= 1.0:
+        rating_mult = (rating / 5.0) ** 0.7
+        rating_mult = max(0.1, rating_mult)
     else:
-        rating_mult = 1.0
+        rating_mult = 0.1
 
-    # 3. Reviews signal (10+ reviews → 1.0; 100+ → 1.5)
-    if reviews >= 200:
-        rev_mult = 1.8
-    elif reviews >= 100:
-        rev_mult = 1.5
-    elif reviews >= 50:
-        rev_mult = 1.25
-    elif reviews >= 10:
-        rev_mult = 1.1
+    # 3. Reviews signal — log-scaled with velocity bonus
+    #    Base: log10(reviews+1) capped at 2.0 (~100 reviews)
+    #    Velocity bonus: +15% per review/month up to 50%
+    if reviews > 0:
+        import math
+        log_mult = min(2.0, math.log10(reviews + 1))
+        velocity_bonus = min(0.5, review_velocity * 0.15) if review_velocity > 0 else 0
+        rev_mult = 0.5 + (log_mult / 2.0) * 0.5 + velocity_bonus
+        rev_mult = max(0.5, min(2.0, rev_mult))
     else:
-        rev_mult = 1.0
+        rev_mult = 0.5  # no reviews = baseline penalty
 
-    # 4. Urgency already reflects storm risk; we keep base asset neutral to that
-    est = int(base * rating_mult * rev_mult)
+    # 4. Recency factor — reviews older than 2 years decay to 0.7x
+    recency_mult = 1.0
+    if review_recency_days > 0:
+        # Full weight for reviews < 90 days; linear decay to 0.7x at 730 days
+        if review_recency_days <= 90:
+            recency_mult = 1.0
+        elif review_recency_days <= 730:
+            recency_mult = 1.0 - (review_recency_days - 90) / (730 - 90) * 0.3
+        else:
+            recency_mult = 0.7
+
+    # 5. Blend with ZHVI when available (metro-level median grounds estimate)
+    #    Pass zhvi_val from _lookup_asset to avoid redundant _try_zhvi() call.
+    if zhvi_val and zhvi_val > 10000:
+        est_raw = base * rating_mult * rev_mult * recency_mult
+        est = int(est_raw * 0.6 + zhvi_val * 0.4)
+    else:
+        est = int(base * rating_mult * rev_mult * recency_mult)
+
     # Floor: at least $50k so we exit placeholder tier
     return max(50_000, est)
 
@@ -262,6 +289,7 @@ def _try_rentcast(address: str) -> int | None:
 def _lookup_asset(row: dict) -> tuple[int, str]:
     """Try ATTOM → RentCast → formula. Returns (usd, source)."""
     addr = (row.get("address") or "").strip()
+    zhvi_val = None
     if addr:
         v = _try_attom(addr)
         if v:
@@ -269,11 +297,11 @@ def _lookup_asset(row: dict) -> tuple[int, str]:
         v = _try_rentcast(addr)
         if v:
             return v, "rentcast"
-    # Try Zillow ZHVI zip / city / metro / state data first (best free signal).
-    v = _try_zhvi(addr, row)
-    if v:
-        return v, "zillow_zhvi"
-    return _formula_estimate(row), "formula"
+    # Try Zillow ZHVI once — pass result to _formula_estimate to avoid double-query
+    zhvi_val = _try_zhvi(addr, row)
+    if zhvi_val:
+        return zhvi_val, "zillow_zhvi"
+    return _formula_estimate(row, zhvi_val=zhvi_val), "formula"
 
 
 def _log_activity(sb, agent_name, run_id, started_at, status, summary, rows_seen=0, rows_updated=0, error=None):

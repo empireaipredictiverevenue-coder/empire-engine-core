@@ -105,10 +105,13 @@ B2B_NICHES = {
     "workers comp lawyer", "medical malpractice lawyer",
     # insurance
     "medicare advantage agent", "life insurance agent", "final expense insurance",
+    "auto insurance", "auto insurance agent", "insurance agency",
     # financial
     "debt consolidation", "business loan broker", "mortgage broker",
     # senior care
     "assisted living", "home health agency",
+    # medical claims / billing (added 2026-06-24, kanban t_5184edcf)
+    "medical billing", "medical claims", "medical advocate", "medical bill review",
     # healthcare
     "addiction treatment center", "mental health clinic", "medical alert system",
     # education
