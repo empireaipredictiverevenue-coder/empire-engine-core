@@ -118,11 +118,37 @@ def _update_config(sb, status, finished_at):
         pass
 
 
-def _already_has_fee_event(sb, carrier_claim_id: str) -> bool:
-    """Check if a fee_event already exists for this carrier_claim."""
+def _already_has_fee_event(sb, carrier_claim_id: str, dispatch_id: str = "") -> bool:
+    """Check if a fee_event already exists for this carrier_claim.
+
+    Two checks (any match wins):
+      1. claim_id == carrier_claim_id   - the original dedup
+      2. meta->>dispatch_id == dispatch_id - catches the webhook-created
+         fee_event whose claim_id is a user-supplied string (e.g.
+         "REAL-CLAIM-001"), not the carrier_claim UUID. The webhook
+         handler inserts a carrier_claims row with an auto-generated
+         UUID, so the fee_watcher poll would otherwise create a second
+         fee_event for the same dispatch.
+
+    Without the dispatch_id check, a webhook -> fee_watcher cron race
+    fires ~2 minutes apart and inserts two fee_events for the same
+    settled claim (observed 2026-06-24 with Porter & Sons Roofing).
+    """
     try:
         r = sb.table("fee_events").select("id").eq("claim_id", carrier_claim_id).limit(1).execute()
-        return bool(r.data)
+        if r.data:
+            return True
+        if dispatch_id:
+            r2 = (
+                sb.table("fee_events")
+                .select("id")
+                .eq("meta->>dispatch_id", dispatch_id)
+                .limit(1)
+                .execute()
+            )
+            if r2.data:
+                return True
+        return False
     except Exception:
         return False
 
@@ -238,8 +264,9 @@ def run_once(dry_run_override=None) -> dict:
                 errors.append("claim missing id")
                 continue
 
-            # Skip if fee_event already exists
-            if _already_has_fee_event(sb, claim_id):
+            # Skip if fee_event already exists (checks claim_id AND dispatch_id)
+            claim_dispatch_id = str(claim.get("dispatch_id") or "")
+            if _already_has_fee_event(sb, claim_id, claim_dispatch_id):
                 continue
 
             result = _create_fee_event(sb, claim, dry_run, fee_percent)
