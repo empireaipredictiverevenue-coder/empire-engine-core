@@ -31,11 +31,12 @@ FIRE_BASE = "https://api.firecrawl.dev/v1"
 FDA_RECALLS_URL = "https://www.fda.gov/safety/recalls-market-withdrawals-safety-alerts"
 
 
-def _scrape(url: str) -> dict:
-    """Firecrawl v1 scrape."""
+def _scrape(url: str, formats: list = None) -> dict:
+    """Firecrawl v1 scrape. Defaults to markdown; pass formats=['markdown','rawHtml'] for HTML parsing."""
+    fmts = formats or ["markdown"]
     req = urllib.request.Request(
         f"{FIRE_BASE}/scrape",
-        data=json.dumps({"url": url, "formats": ["markdown"]}).encode(),
+        data=json.dumps({"url": url, "formats": fmts}).encode(),
         headers={"Authorization": f"Bearer {FIRE_KEY}", "Content-Type": "application/json", "User-Agent": "Empire-AI/1.0"},
     )
     try:
@@ -84,27 +85,59 @@ def fetch_fda_recalls() -> list:
 
 
 def fetch_class_action_docket(target_court: str = "S.D.N.Y.") -> list:
-    """Scrape courtlistener for recent class-action / mass tort dockets."""
+    """Scrape courtlistener for recent class-action / mass tort dockets.
+
+    Note: Firecrawl's markdown conversion drops <a> link URLs inside <h3>
+    result titles, so we parse the raw HTML and extract each <article> title
+    anchor.
+    """
     out = []
-    url = f"https://www.courtlistener.com/?q=mass+tort+class+action&type=o&order_by=dateFiled+desc"
-    r = _scrape(url)
+    url = "https://www.courtlistener.com/?q=mass+tort+class+action&type=o&order_by=dateFiled+desc"
+    r = _scrape(url, formats=["markdown", "rawHtml"])
     if r.get("error"):
         return out
-    content = (r.get("data") or {}).get("markdown", "")
-    # Extract case names + links
-    pattern = re.compile(r'\[([^\]]{10,150})\]\((https?://www\.courtlistener\.com/opinion/\d+/[^)]+)\)', re.M)
+    data = r.get("data") or {}
+    html = data.get("rawHtml") or data.get("html") or ""
+    md = data.get("markdown") or ""
+    # 1) primary: rawHtml article anchors (preserves URLs)
+    art_pat = re.compile(
+        r'<article[^>]*>\s*<h3[^>]*>\s*<a[^>]+href="(https?://www\.courtlistener\.com/opinion/\d+/[^"]+?/?)"[^>]*>\s*(.+?)\s*</a>',
+        re.S,
+    )
     seen = set()
-    for m in pattern.finditer(content):
-        name, link = m.group(1).strip(), m.group(2).strip()
-        if link in seen: continue
-        seen.add(link)
+    for m in art_pat.finditer(html):
+        href, txt = m.group(1), m.group(2)
+        clean_url = re.sub(r"\?[^/]*$", "", href).rstrip("/")
+        clean_txt = txt.replace("&nbsp;", " ").replace("\xa0", " ")
+        clean_txt = re.sub(r"<[^>]+>", " ", clean_txt)
+        clean_txt = re.sub(r"\s+", " ", clean_txt).strip()
+        if not clean_url or clean_url in seen:
+            continue
+        seen.add(clean_url)
         out.append({
-            "name": f"{name[:120]} (court opinion)",
-            "url": link,
+            "name": f"{clean_txt[:160]} (court opinion)",
+            "url": clean_url,
             "niche": "mass_tort",
             "source": "courtlistener_firecrawl",
         })
+    # 2) fallback: markdown regex (in case rawHtml isn't returned)
+    if not out and md:
+        md_pat = re.compile(r'\[([^\]]{10,150})\]\((https?://www\.courtlistener\.com/opinion/\d+/[^)]+)\)', re.M)
+        for m in md_pat.finditer(md):
+            name, link = m.group(1).strip(), m.group(2).strip()
+            link = re.sub(r"\?[^/]*$", "", link).rstrip("/")
+            if link in seen:
+                continue
+            seen.add(link)
+            out.append({
+                "name": f"{name[:120]} (court opinion)",
+                "url": link,
+                "niche": "mass_tort",
+                "source": "courtlistener_firecrawl",
+            })
     return out
+
+
 
 
 def upsert_prospects(prospects: list) -> int:
