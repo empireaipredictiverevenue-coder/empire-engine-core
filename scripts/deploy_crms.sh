@@ -14,6 +14,7 @@
 #   ./scripts/deploy_crms.sh --listmonk-only   # deploy only ListMonk
 #   ./scripts/deploy_crms.sh --twenty-only     # deploy only Twenty
 #   ./scripts/deploy_crms.sh --import-only     # import contractors into ListMonk
+#   ./scripts/deploy_crms.sh --fix-config      # regenerate config.toml + restart ListMonk
 #
 # Prerequisites:
 #   - Docker + docker-compose-plugin installed
@@ -38,6 +39,7 @@ DRY_RUN=false
 DEPLOY_LISTMONK=true
 DEPLOY_TWENTY=true
 IMPORT_ONLY=false
+FIX_CONFIG=false
 
 for arg in "$@"; do
   case "$arg" in
@@ -45,6 +47,7 @@ for arg in "$@"; do
     --listmonk-only) DEPLOY_TWENTY=false ;;
     --twenty-only) DEPLOY_LISTMONK=false ;;
     --import-only) IMPORT_ONLY=true; DEPLOY_LISTMONK=false; DEPLOY_TWENTY=false ;;
+    --fix-config) FIX_CONFIG=true ;;
     *) err "Unknown arg: $arg"; exit 1 ;;
   esac
 done
@@ -115,12 +118,14 @@ deploy_listmonk() {
     log "PostgreSQL container listmonk-db already running"
   fi
 
-  # ── 3. Create config.toml ──────────────────────────────────────────
+  # ── 3. Always write config.toml (regenerated every run) ─────────
+  #    This ensures the SMTP password stays in sync with the current
+  #    RESEND_API_KEY from /root/.env even after container redeploy.
   mkdir -p /tmp/listmonk-config
   if $DRY_RUN; then
     info "[DRY-RUN] Would write config.toml to /tmp/listmonk-config/config.toml"
   else
-    # Write config with placeholder, then replace the password
+    # Write config with placeholder, then replace the password via sed
     cat > /tmp/listmonk-config/config.toml << 'TOML'
 [app]
 address = "0.0.0.0:9000"
@@ -145,17 +150,47 @@ username = "resend"
 password = "__SMTP_PASSWORD__"
 from_email = "ops@empire-ai.co.uk"
 TOML
-    # Replace placeholder with actual password (escaping for sed)
+    # Replace placeholder with actual password (escaping special chars for sed)
     ESCAPED_PASS=$(echo "${RESEND_API_KEY}" | sed 's/[&/\]/\\&/g')
     sed -i "s/__SMTP_PASSWORD__/${ESCAPED_PASS}/g" /tmp/listmonk-config/config.toml
-    log "Written config.toml with SMTP settings"
+    log "Written config.toml with current SMTP settings"
   fi
 
-  # ── 4. Run ListMonk — first-time install + start ───────────────────
-  if ! docker ps --format '{{.Names}}' | grep -q '^listmonk-q$'; then
+  # ── 4. Determine if DB needs first-time install ──────────────
+  #    The --install --yes flag WIPES all data and recreates tables.
+  #    It must ONLY run once on first deploy. Every restart should
+  #    use plain ./listmonk to preserve data and custom SMTP settings.
+  DB_NEEDS_INSTALL=false
+  if docker ps -a --format '{{.Names}}' | grep -q '^listmonk-db$'; then
+    # Check if campaigns table exists (sign of prior install)
+    DB_HAS_TABLES=$(docker exec -i listmonk-db psql -U listmonk -d listmonk -c \
+      "SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name='campaigns');" 2>/dev/null | grep -c 't' || echo "0")
+    if [ "$DB_HAS_TABLES" != "1" ]; then
+      DB_NEEDS_INSTALL=true
+    fi
+  else
+    # No DB container yet — will need install after DB starts
+    DB_NEEDS_INSTALL=true
+  fi
+
+  # ── 5. Remove old container and recreate ───────────────────────────
+  if docker ps -a --format '{{.Names}}' | grep -q '^listmonk-q$'; then
     if $DRY_RUN; then
-      info "[DRY-RUN] Would start ListMonk container: listmonk-q (port 9000)"
+      info "[DRY-RUN] Would remove listmonk-q and recreate with fresh config"
     else
+      docker rm -f listmonk-q 2>/dev/null
+      log "Removed old listmonk-q container"
+    fi
+  fi
+
+  if $DRY_RUN; then
+    if $DB_NEEDS_INSTALL; then
+      info "[DRY-RUN] Would start ListMonk with --install --yes (first-time DB setup)"
+    else
+      info "[DRY-RUN] Would start ListMonk without --install (DB already initialized)"
+    fi
+  else
+    if $DB_NEEDS_INSTALL; then
       docker run -d --name listmonk-q \
         -p 9000:9000 \
         -v /tmp/listmonk-config/config.toml:/listmonk/config.toml:ro \
@@ -163,13 +198,40 @@ TOML
         -e LISTMONK_ADMIN_PASSWORD="${LISTMONK_ADMIN_PASS}" \
         --network listmonk-net \
         listmonk/listmonk:latest sh -c './listmonk --install --yes && ./listmonk' 2>/dev/null
-      log "Started ListMonk container: listmonk-q"
+      log "Started ListMonk with --install --yes (first-time DB setup)"
+      sleep 5  # wait for install to complete
+    else
+      docker run -d --name listmonk-q \
+        -p 9000:9000 \
+        -v /tmp/listmonk-config/config.toml:/listmonk/config.toml:ro \
+        -e LISTMONK_ADMIN_USER="admin" \
+        -e LISTMONK_ADMIN_PASSWORD="${LISTMONK_ADMIN_PASS}" \
+        --network listmonk-net \
+        listmonk/listmonk:latest ./listmonk 2>/dev/null
+      log "Started ListMonk without --install (preserving DB data + SMTP settings)"
     fi
-  else
-    log "ListMonk container already running"
   fi
 
-  # ── 5. Wait for health ─────────────────────────────────────────────
+  # ── 6. Override DB SMTP settings to use Resend ───────────────────
+  #    The --install command creates a default SMTP setting pointing at
+  #    smtp.yoursite.com:25. We override it here to use Resend so that
+  #    the DB settings match the config.toml (fixing the init message).
+  if ! $DRY_RUN; then
+    # Wait for the config to be loaded and the settings table to exist
+    sleep 3
+    docker exec -i listmonk-db psql -U listmonk -d listmonk -c "
+      UPDATE settings SET value = '{
+        \"host\": \"smtp.resend.com\",
+        \"port\": 587,
+        \"auth_protocol\": \"login\",
+        \"username\": \"resend\",
+        \"password\": \"${RESEND_API_KEY}\",
+        \"from_email\": \"ops@empire-ai.co.uk\"
+      }' WHERE key = 'smtp';
+    " 2>/dev/null && log "Updated DB SMTP setting to use Resend" || warn "Could not update DB SMTP setting (may need restart)"
+  fi
+
+  # ── 7. Wait for health ─────────────────────────────────────────────
   if ! $DRY_RUN; then
     info "Waiting for ListMonk to be ready..."
     for i in $(seq 1 12); do
@@ -404,6 +466,10 @@ main() {
 
   if $IMPORT_ONLY; then
     import_contractors
+  elif $FIX_CONFIG; then
+    # --fix-config: regenerate config.toml + restart listmonk-q only
+    info "=== --fix-config mode: regenerate config + restart ==="
+    deploy_listmonk
   else
     if $DEPLOY_LISTMONK; then deploy_listmonk; fi
     if $DEPLOY_TWENTY; then deploy_twenty; fi
