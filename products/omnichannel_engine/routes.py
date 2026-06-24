@@ -158,12 +158,18 @@ def register_omni_routes(app, require_auth=None):
     ):
         """Run the full 3-layer pipeline: ingest → classify → schedule.
 
+        When dry_run=false, persists classified leads and agenda items to
+        Supabase (agent_activity / omni_log) and auto-syncs to ListMonk.
+
         Body:
           limit: int (optional, default 50) — Max leads to ingest
           concurrency: int (optional, default 3) — Groq parallelism
+          dry_run: bool (optional, default true) — If false, persist + sync
         """
+        import os as _os, datetime as _dt, uuid as _uuid
         limit = int(body.get("limit", 50))
         concurrency = int(body.get("concurrency", 3))
+        dry_run = bool(body.get("dry_run", True))
 
         # Layer 1: Ingest
         leads = await hub.ingest_leads(limit=limit)
@@ -176,15 +182,97 @@ def register_omni_routes(app, require_auth=None):
         # Layer 3: Schedule
         items = await agenda.schedule_batch(classified)
 
+        # ── If not dry_run: persist + sync ────────────────────────────
+        persisted = 0
+        sync_result = []
+        if not dry_run:
+            # Persist to Supabase agent_activity
+            try:
+                from supabase import create_client as _cc
+                sb = _cc(_os.environ.get("SUPABASE_URL", ""), _os.environ.get("SUPABASE_SERVICE_KEY", ""))
+                now = _dt.datetime.now(_dt.timezone.utc).isoformat()
+
+                # Write pipeline summary record
+                hot = sum(1 for l in classified if l.get("temperature") == "hot")
+                warm = sum(1 for l in classified if l.get("temperature") == "warm")
+                run_uuid = str(_uuid.uuid4())
+                sb.table("agent_activity").insert({
+                    "agent_name": "omni_pipeline",
+                    "run_id": run_uuid,
+                    "started_at": now,
+                    "status": "ok",
+                    "rows_processed": len(classified),
+                    "summary": f"Omni run: {len(leads)} ingested, {len(classified)} classified, {len(items)} agenda",
+                    "meta": {
+                        "ingested": len(leads),
+                        "classified": len(classified),
+                        "hot": hot,
+                        "warm": warm,
+                        "agenda_items": len(items),
+                    },
+                }).execute()
+                persisted += 1
+
+                # Write individual classified lead records
+                for cl in classified:
+                    sb.table("agent_activity").insert({
+                        "agent_name": f"omni_classified_{cl.get('temperature','?')}",
+                        "run_id": str(_uuid.uuid4()),
+                        "started_at": cl.get("classified_at", now),
+                        "status": "ok",
+                        "rows_processed": 1,
+                        "summary": f"{cl.get('name','')[:40]} → {cl.get('temperature','?')} (conf={cl.get('confidence',0)})",
+                        "meta": {
+                            "confidence": cl.get("confidence", 0),
+                            "email": (cl.get("email") or "")[:80],
+                            "phone": cl.get("phone", ""),
+                            "city": cl.get("city", ""),
+                            "state": cl.get("state", ""),
+                            "niche": cl.get("niche", ""),
+                        },
+                    }).execute()
+                    persisted += 1
+
+                # Write agenda items
+                for item in items:
+                    ts = item.get("scheduled_at", now)
+                    sb.table("agent_activity").insert({
+                        "agent_name": f"omni_agenda_{item.get('channel','?')}",
+                        "run_id": str(_uuid.uuid4()),
+                        "started_at": ts,
+                        "status": "ok",
+                        "rows_processed": 1,
+                        "summary": f"{item.get('channel','?')}: {item.get('label','')} for {item.get('lead_name','')[:30]}",
+                        "meta": {
+                            "channel": item.get("channel", ""),
+                            "step": item.get("step", 0),
+                            "scheduled_at": ts,
+                            "delay_hours": item.get("delay_hours", 0),
+                            "temperature": item.get("temperature", ""),
+                        },
+                    }).execute()
+            except Exception as e:
+                log.warning(f"[omni] persist failed: {e}")
+
+            # Auto-sync to ListMonk
+            try:
+                lm_count = await hub.sync_to_listmonk(classified)
+                sync_result.append(f"listmonk={lm_count}")
+            except Exception as e:
+                sync_result.append(f"listmonk_error={e}")
+
         return {
             "ok": True,
             "pipeline": "ingest → classify → schedule",
+            "dry_run": dry_run,
             "ingested": len(leads),
             "classified": len(classified),
             "hot": sum(1 for l in classified if l.get("temperature") == "hot"),
             "warm": sum(1 for l in classified if l.get("temperature") == "warm"),
             "cold": sum(1 for l in classified if l.get("temperature") == "cold"),
             "agenda_items": len(items),
+            "persisted_to_db": persisted if not dry_run else 0,
+            "auto_sync": ", ".join(sync_result) if sync_result else "dry_run",
             "stats": {
                 "leads_hub": hub.snapshot(),
                 "classifier": classifier.snapshot(),

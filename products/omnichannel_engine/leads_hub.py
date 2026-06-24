@@ -267,28 +267,149 @@ class LeadsHub:
 
     # ── LISTMONK SYNC ───────────────────────────────────────────────────
 
-    async def sync_to_listmonk(self, leads: List[dict]) -> int:
-        """Sync leads to ListMonk as subscribers in metro-based lists."""
-        import subprocess, asyncio
-        synced = 0
+    # SQL helpers for direct ListMonk DB access (same pattern as sync_listmonk.py)
+    _PSQL = ["docker", "exec", "-t", "listmonk-db", "psql", "-U", "listmonk", "-d", "listmonk", "-c"]
 
-        # Use the existing sync_listmonk.py for bulk import (run in thread to avoid blocking)
+    @staticmethod
+    def _lmsql(query: str) -> str:
+        import subprocess as _sp
         try:
-            result = await asyncio.to_thread(
-                subprocess.run,
-                ["python3", "/root/empire-v49/scripts/sync_listmonk.py"],
-                capture_output=True,
-                text=True,
-                timeout=120,
-                cwd="/root/empire-v49",
-            )
-            if result.returncode == 0:
-                synced = len(leads)  # approximate
-                log.info(f"[leads_hub] ListMonk sync triggered ({synced} leads)")
-        except Exception as e:
-            log.warning(f"[leads_hub] ListMonk sync failed: {e}")
+            r = _sp.run(LeadsHub._PSQL + [query], stdout=_sp.PIPE, stderr=_sp.PIPE,
+                       text=True, timeout=10)
+            return r.stdout
+        except Exception:
+            return ""
 
-        self.stats["synced_listmonk"] = synced
+    async def sync_to_listmonk(self, leads: List[dict]) -> int:
+        """Sync classified omni leads to ListMonk as subscribers.
+
+        Inserts each lead as a subscriber (with email, name, attribs) and
+        links them to the 'Omni Leads' list. Uses the same SQL pattern as
+        sync_listmonk.py but operates on the leads passed in.
+        """
+        import asyncio, uuid, json as _json
+
+        if not leads:
+            return 0
+
+        # Ensure the "Omni Leads" list exists
+        omni_list_id = 0
+        out = self._lmsql("SELECT id FROM lists WHERE name = 'Omni Leads';")
+        for line in out.split("\n"):
+            line = line.strip()
+            if line.isdigit():
+                omni_list_id = int(line)
+                break
+        if not omni_list_id:
+            self._lmsql("INSERT INTO lists (name, type, optin, description, created_at, updated_at) "
+                         "VALUES ('Omni Leads', 'private', 'single', 'Classified leads from omni engine', NOW(), NOW());")
+            out2 = self._lmsql("SELECT id FROM lists WHERE name = 'Omni Leads';")
+            for line in out2.split("\n"):
+                line = line.strip()
+                if line.isdigit():
+                    omni_list_id = int(line)
+                    break
+
+        # Also ensure the Default list exists for fallback
+        default_list_id = 0
+        out = self._lmsql("SELECT id FROM lists WHERE name = 'Default list';")
+        for line in out.split("\n"):
+            line = line.strip()
+            if line.isdigit():
+                default_list_id = int(line)
+                break
+
+        def _add_subscriber(email: str, name: str, attribs: dict) -> int:
+            """Create or update a subscriber. Returns subscriber ID."""
+            sub_uuid = str(uuid.uuid5(uuid.NAMESPACE_DNS, f"empire-omni-{email}"))
+            safe_email = email.replace("'", "''")
+            safe_name = name.replace("'", "''")
+            attribs_json = _json.dumps(attribs).replace("'", "''")
+
+            check = self._lmsql(f"SELECT id FROM subscribers WHERE email = '{safe_email}';")
+            for line in check.split("\n"):
+                line = line.strip()
+                if line.isdigit():
+                    self._lmsql(f"UPDATE subscribers SET name = '{safe_name}', attribs = '{attribs_json}'::jsonb, "
+                                f"updated_at = NOW() WHERE id = {line};")
+                    return int(line)
+
+            self._lmsql(f"INSERT INTO subscribers (uuid, email, name, attribs, status, created_at, updated_at) "
+                         f"VALUES ('{sub_uuid}', '{safe_email}', '{safe_name}', '{attribs_json}'::jsonb, "
+                         f"'enabled', NOW(), NOW());")
+            check2 = self._lmsql(f"SELECT id FROM subscribers WHERE email = '{safe_email}';")
+            for line in check2.split("\n"):
+                line = line.strip()
+                if line.isdigit():
+                    return int(line)
+            return 0
+
+        def _subscribe(sub_id: int, list_id: int) -> None:
+            if not sub_id or not list_id:
+                return
+            self._lmsql(f"INSERT INTO subscriber_lists (subscriber_id, list_id, status, created_at, updated_at) "
+                         f"VALUES ({sub_id}, {list_id}, 'confirmed', NOW(), NOW()) "
+                         f"ON CONFLICT (subscriber_id, list_id) DO NOTHING;")
+
+        # ── Build temperature-based lists ──
+        hot_list_id = 0
+        warm_list_id = 0
+        cold_list_id = 0
+        for temp in ["Hot Leads", "Warm Leads", "Cold Leads"]:
+            out = self._lmsql(f"SELECT id FROM lists WHERE name = '{temp}';")
+            for line in out.split("\n"):
+                line = line.strip()
+                if line.isdigit():
+                    lid = int(line)
+                    if "Hot" in temp: hot_list_id = lid
+                    elif "Warm" in temp: warm_list_id = lid
+                    else: cold_list_id = lid
+
+        synced = 0
+        for lead in leads:
+            email = (lead.get("email") or "").strip()
+            phone = (lead.get("phone") or "").strip()
+            name = (lead.get("name") or lead.get("address", "Property Owner")[:40]).strip()
+
+            # Fall back to phone-based identifier if no email
+            if email and "@" in email:
+                identifier = email
+            elif phone:
+                identifier = f"{phone.replace(' ', '')}@phone-omni.empire-ai.co.uk"
+                name = f"{name} ({phone})"
+            else:
+                log.debug(f"[leads_hub] skipping lead without email/phone: {name[:30]}")
+                continue
+
+            # Use identifier (which is email or phone-based synthetic email)
+            email = identifier
+            temp = lead.get("temperature", "cold")
+            attribs = {
+                "source": "omni_engine",
+                "temperature": temp,
+                "phone": lead.get("phone", ""),
+                "city": lead.get("city", ""),
+                "state": lead.get("state", ""),
+                "niche": lead.get("niche", ""),
+                "urgency": lead.get("urgency_score", 0),
+                "classified_at": lead.get("classified_at", ""),
+            }
+
+            try:
+                sub_id = _add_subscriber(email, name, attribs)
+                if sub_id:
+                    # Link to omni list + temperature list + default
+                    _subscribe(sub_id, omni_list_id)
+                    if temp == "hot" and hot_list_id: _subscribe(sub_id, hot_list_id)
+                    elif temp == "warm" and warm_list_id: _subscribe(sub_id, warm_list_id)
+                    elif cold_list_id: _subscribe(sub_id, cold_list_id)
+                    if default_list_id: _subscribe(sub_id, default_list_id)
+                    synced += 1
+            except Exception as e:
+                log.debug(f"[leads_hub] ListMonk subscriber insert failed for {email[:30]}: {e}")
+
+        self.stats["synced_listmonk"] += synced
+        log.info(f"[leads_hub] synced {synced}/{len(leads)} omni leads to ListMonk (Omni Leads list)")
         return synced
 
     def snapshot(self) -> dict:

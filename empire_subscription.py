@@ -241,7 +241,7 @@ if __name__ == "__main__":
         subs = sb.table("contractor_subscriptions").select("contractor_id,wallet_address,tier,monthly_amount_usdc").in_("status", ["pending", "active", "lapsed"]).execute().data
         verified = 0
         for s in subs or []:
-            r = verify_subscription(s["contractor_id"])
+            r = asyncio.run(verify_subscription(s["contractor_id"]))
             if r.get("verified"):
                 verified += 1
                 print(f"  ✅ {s['contractor_id'][:8]} {s['tier']} ${s['monthly_amount_usdc']}/mo → verified")
