@@ -85,6 +85,7 @@ except Exception:
 from empire_mrr import register_mrr_routes
 from empire_for_contractors import render_for_contractors_page
 from empire_resend_webhook import register_resend_webhook
+from empire_ppc_forwarder import router as ppc_forwarder_router
 import agents.business_growth_agent as growth_agent
 from empire_funnel import register_funnel_route
 from empire_youtube_stats import register_youtube_routes
@@ -1276,6 +1277,7 @@ try:
     register_resend_webhook(app)
 except Exception as _e:
     log.warning(f"[hub] resend webhook register failed: {_e}")
+app.include_router(ppc_forwarder_router)
 try:
     register_funnel_route(app)
     register_youtube_routes(app)
