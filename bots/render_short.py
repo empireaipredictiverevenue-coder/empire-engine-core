@@ -80,7 +80,7 @@ def _tts_deepgram(text: str, wav_path: str, speed: float = 1.0) -> float:
             "DEEPGRAM_API_KEY not set. Add it to /root/.env or pass --voice-provider kokoro"
         )
 
-    url = f"https://api.deepgram.com/v1/speak?model={DEEPGRAM_TTS_MODEL}&encoding=linear16&sample_rate=24000&speed={speed}"
+    url = f"https://api.deepgram.com/v1/speak?model={DEEPGRAM_TTS_MODEL}&encoding=linear16&sample_rate=24000"
     headers = {
         "Authorization": f"Token {DEEPGRAM_API_KEY}",
         "Content-Type": "application/json",
