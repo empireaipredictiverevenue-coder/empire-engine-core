@@ -100,6 +100,7 @@ def _build_payment_body(
     discount_percent: float = 0.0,
     discount_amount: float = 0.0,
     discount_expires_at: str = "",
+    settle_url: str = "",
 ) -> str:
     """Build the payment request body. ~300 chars, fits in 2 SMS segments.
 
@@ -108,6 +109,8 @@ def _build_payment_body(
     Copy stays short, human, direct — no AI-polished phrasing.
 
     pay_url: full HTTPS payment URL (e.g. https://empire-ai.co.uk/pay/<claim_id>)
+    settle_url: optional /settle/<dispatch_id>?t=<token> URL — appended so the
+                 reminder doubles as a settlement-conversion prompt.
     """
     prefix = "Empire AI:"
     header = "Payment reminder" if is_follow_up else "Settlement notice"
@@ -136,11 +139,12 @@ def _build_payment_body(
             f"Pay: {pay_url} STOP to opt out."
         )
     else:
+        settle_line = f" Settled yet? Confirm: {settle_url}" if settle_url else ""
         return (
             f"{prefix} {header} — "
             f"${fee_amount:,.0f} fee on ${claim_amount:,.0f} claim. "
             f"Pay here: {pay_url} "
-            f"(QR + wallet, takes 60s). "
+            f"(QR + wallet, takes 60s).{settle_line} "
             f"Reply HELP for help. STOP to opt out."
         )
 
@@ -502,6 +506,18 @@ async def run_collection(
         claim_id_pay = fe.get("claim_id") or fee_id
         pay_url = f"https://empire-ai.co.uk/pay/{claim_id_pay}"
 
+        # Look up the dispatch + token so we can append a /settle URL. Turns
+        # every fee reminder into a settlement-conversion opportunity.
+        settle_url = ""
+        try:
+            cc_row = sb.table("carrier_claims").select("dispatch_id").eq("id", claim_id_pay).limit(1).execute().data
+            if cc_row:
+                disp_row = sb.table("dispatches").select("id,token").eq("id", cc_row[0]["dispatch_id"]).limit(1).execute().data
+                if disp_row and disp_row[0].get("token"):
+                    settle_url = f"https://empire-ai.co.uk/settle/{disp_row[0]['id']}?t={disp_row[0]['token']}"
+        except Exception:
+            pass
+
         # Discount lives on the fee row directly (not in meta)
         disc_pct = fe.get("discount_percent")
         disc_amt = fe.get("discount_amount")
@@ -516,6 +532,7 @@ async def run_collection(
             discount_percent=float(disc_pct or 0),
             discount_amount=float(disc_amt or 0),
             discount_expires_at=disc_exp or "",
+            settle_url=settle_url,
         )
 
         log.info(
