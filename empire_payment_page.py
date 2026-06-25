@@ -30,8 +30,6 @@ from pathlib import Path
 from fastapi import Request, HTTPException
 from fastapi.responses import HTMLResponse, JSONResponse
 
-from empire_tokens import empire_head
-
 log = logging.getLogger("empire.payment_page")
 
 # Mirror of the wallet in scripts/vault_monitor.py / scripts/fee_collection_agent.py
@@ -40,202 +38,114 @@ VAULT_WALLET = os.environ.get("EMPIRE_VAULT_WALLET", "egJ1t9NZkDs8FvMbfnQTqXzC4K
 USDC_MINT = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
 USDC_DECIMALS = 6
 
-_PAYMENT_PAGE_CSS = """
-/* Payment page styles — built on Empire design system variables */
-.pay-wrap {
-  min-height: 100vh; display: flex; align-items: center; justify-content: center;
-  padding: 20px;
-}
-.pay-card {
-  max-width: 480px; width: 100%;
-  background: var(--empire-surface);
-  border: 1px solid var(--empire-border);
-  border-radius: var(--radius-xl);
-  padding: var(--space-8);
-  box-shadow: var(--shadow-elevated);
-}
-.pay-brand {
-  display: flex; align-items: center; gap: 10px; margin-bottom: 24px;
-}
-.pay-brand-mark {
-  width: 36px; height: 36px;
-  background: linear-gradient(135deg, var(--signal-teal), var(--strike-cyan));
-  border-radius: var(--radius-md);
-  display: flex; align-items: center; justify-content: center;
-  font-weight: 700; color: var(--empire-black); font-family: var(--font-display);
-}
-.pay-brand-name {
-  font-size: 14px; font-weight: 600; letter-spacing: .5px;
-  color: var(--empire-mist);
-}
-.pay-title { font-size: 22px; font-weight: 700; margin-bottom: 6px; color: var(--empire-white); }
-.pay-sub { color: var(--empire-mist); font-size: 13px; margin-bottom: 24px; }
-.pay-amount {
-  background: var(--empire-elevated); border: 1px solid var(--empire-border);
-  border-radius: var(--radius-lg); padding: 20px; text-align: center; margin-bottom: 20px;
-}
-.pay-amount-fee { font-size: 38px; font-weight: 700; color: var(--signal-teal); letter-spacing: -.5px; }
-.pay-amount-claim { font-size: 13px; color: var(--empire-mist); margin-top: 6px; }
-.pay-qr-wrap {
-  background: #fff; border-radius: var(--radius-lg); padding: 16px;
-  display: flex; justify-content: center; margin-bottom: 18px;
-}
-.pay-qr-wrap img { display: block; max-width: 240px; width: 100%; height: auto; }
-.pay-wallet {
-  background: rgba(0,0,0,0.4); border: 1px solid var(--empire-border);
-  border-radius: var(--radius-md); padding: 14px; margin-bottom: 18px;
-}
-.pay-wallet-label {
-  font-family: var(--font-mono); font-size: 10px; text-transform: uppercase;
-  letter-spacing: 1px; color: var(--empire-mist); margin-bottom: 8px;
-}
-.pay-wallet-addr {
-  font-family: var(--font-mono); font-size: 13px; color: var(--empire-silver);
-  word-break: break-all; line-height: 1.5;
-}
-.pay-copy-btn {
-  margin-top: 10px; background: var(--empire-elevated); color: var(--empire-silver);
-  border: 1px solid var(--empire-border); padding: 8px 14px; border-radius: var(--radius-sm);
-  font-size: 12px; cursor: pointer; width: 100%; font-weight: 500;
-  font-family: var(--font-ui); transition: all .15s;
-}
-.pay-copy-btn:hover { background: var(--empire-shadow); color: var(--empire-white); }
-.pay-copy-btn.copied { background: #16a34a; color: #fff; border-color: #16a34a; }
-.pay-steps {
-  background: rgba(0,0,0,0.4); border: 1px solid var(--empire-divider);
-  border-radius: var(--radius-md); padding: 16px; margin-bottom: 18px;
-}
-.pay-steps h3 {
-  font-family: var(--font-mono); font-size: 10px; text-transform: uppercase;
-  letter-spacing: 1px; color: var(--empire-mist); margin-bottom: 12px; font-weight: 600;
-}
-.pay-step {
-  display: flex; gap: 12px; margin-bottom: 10px;
-  font-size: 13px; color: var(--empire-silver); line-height: 1.5;
-}
-.pay-step-num {
-  flex-shrink: 0; width: 22px; height: 22px;
-  background: var(--signal-teal); color: var(--empire-black);
-  border-radius: 50%; display: flex; align-items: center; justify-content: center;
-  font-weight: 700; font-size: 11px; font-family: var(--font-mono);
-}
-.pay-btn {
-  display: block; width: 100%;
-  background: var(--signal-teal); color: var(--empire-black);
-  border: 1px solid var(--signal-teal);
-  padding: 14px; border-radius: var(--radius-md);
-  font-size: 15px; font-weight: 700; cursor: pointer;
-  font-family: var(--font-ui); transition: all .15s;
-}
-.pay-btn:hover {
-  background: transparent; color: var(--signal-teal);
-  box-shadow: var(--glow-soft); transform: translateY(-1px);
-}
-.pay-btn:disabled {
-  background: var(--empire-shadow); color: var(--empire-mist);
-  border-color: var(--empire-divider); cursor: not-allowed; transform: none;
-}
-.pay-status {
-  margin-top: 14px; padding: 12px; border-radius: var(--radius-sm);
-  font-family: var(--font-mono); font-size: 12px; text-align: center; display: none;
-}
-.pay-status.show { display: block; }
-.pay-status.checking { background: var(--strike-cyan-soft); color: var(--strike-cyan); border: 1px solid rgba(90,200,250,0.3); }
-.pay-status.paid { background: var(--signal-teal-soft); color: var(--signal-teal); border: 1px solid rgba(68,229,184,0.3); }
-.pay-status.error { background: var(--status-red-soft); color: var(--status-red); border: 1px solid rgba(255,71,87,0.3); }
-.pay-meta {
-  background: rgba(0,0,0,0.4); border: 1px solid var(--empire-divider);
-  border-radius: var(--radius-sm); padding: 12px; margin-bottom: 18px;
-  font-size: 12px; color: var(--empire-mist); line-height: 1.6;
-}
-.pay-meta-row { display: flex; justify-content: space-between; gap: 8px; }
-.pay-meta-label { color: var(--empire-fog); font-family: var(--font-mono); font-size: 10px; letter-spacing: .08em; }
-.pay-footer {
-  text-align: center; color: var(--empire-fog);
-  font-family: var(--font-mono); font-size: 10px; margin-top: 18px; letter-spacing: .04em;
-}
-.pay-discount-badge {
-  display: inline-block;
-  background: linear-gradient(135deg, var(--status-amber), #f59e0b);
-  color: #1f2937; padding: 6px 14px; border-radius: var(--radius-pill);
-  font-family: var(--font-mono); font-size: 11px; font-weight: 700;
-  letter-spacing: .5px; margin-bottom: 10px;
-}
-.pay-og-line {
-  font-size: 13px; text-decoration: line-through;
-  color: var(--empire-fog); margin-top: 2px;
-}
-"""
-
 PAYMENT_PAGE_HTML = """<!DOCTYPE html>
 <html lang="en">
-{head_html}
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>Empire AI · Pay Fee · {claim_id_short}</title>
+<style>
+  *{{box-sizing:border-box;margin:0;padding:0}}
+  body{{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#0a0e1a;color:#e6edf3;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}}
+  .card{{background:#131a2e;border:1px solid #1f2a44;border-radius:16px;max-width:480px;width:100%;padding:32px;box-shadow:0 20px 60px rgba(0,0,0,.5)}}
+  .brand{{display:flex;align-items:center;gap:10px;margin-bottom:24px}}
+  .brand-mark{{width:36px;height:36px;background:linear-gradient(135deg,#3b82f6,#8b5cf6);border-radius:8px;display:flex;align-items:center;justify-content:center;font-weight:700;color:#fff}}
+  .brand-name{{font-size:14px;font-weight:600;letter-spacing:.5px;color:#9aa7bd}}
+  h1{{font-size:22px;font-weight:700;margin-bottom:6px;color:#fff}}
+  .sub{{color:#7a8699;font-size:13px;margin-bottom:24px}}
+  .amount{{background:linear-gradient(135deg,#1e293b,#0f172a);border:1px solid #334155;border-radius:12px;padding:20px;text-align:center;margin-bottom:20px}}
+  .amount-fee{{font-size:38px;font-weight:700;color:#22d3ee;letter-spacing:-.5px}}
+  .amount-claim{{font-size:13px;color:#94a3b8;margin-top:6px}}
+  .qr-wrap{{background:#fff;border-radius:12px;padding:16px;display:flex;justify-content:center;margin-bottom:18px}}
+  .qr-wrap img{{display:block;max-width:240px;width:100%;height:auto}}
+  .wallet{{background:#0f172a;border:1px solid #334155;border-radius:10px;padding:14px;margin-bottom:18px}}
+  .wallet-label{{font-size:11px;text-transform:uppercase;letter-spacing:1px;color:#64748b;margin-bottom:8px}}
+  .wallet-addr{{font-family:'SF Mono','Monaco',monospace;font-size:13px;color:#e2e8f0;word-break:break-all;line-height:1.5}}
+  .copy-btn{{margin-top:10px;background:#1e293b;color:#cbd5e1;border:1px solid #334155;padding:8px 14px;border-radius:6px;font-size:12px;cursor:pointer;width:100%;font-weight:500;transition:all .15s}}
+  .copy-btn:hover{{background:#334155;color:#fff}}
+  .copy-btn.copied{{background:#16a34a;color:#fff;border-color:#16a34a}}
+  .steps{{background:#0f172a;border:1px solid #1e293b;border-radius:10px;padding:16px;margin-bottom:18px}}
+  .steps h3{{font-size:12px;text-transform:uppercase;letter-spacing:1px;color:#64748b;margin-bottom:12px;font-weight:600}}
+  .step{{display:flex;gap:12px;margin-bottom:10px;font-size:13px;color:#cbd5e1;line-height:1.5}}
+  .step-num{{flex-shrink:0;width:22px;height:22px;background:#3b82f6;color:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:600;font-size:11px}}
+  .btn{{display:block;width:100%;background:linear-gradient(135deg,#22c55e,#16a34a);color:#fff;border:none;padding:14px;border-radius:10px;font-size:15px;font-weight:600;cursor:pointer;transition:all .15s}}
+  .btn:hover{{transform:translateY(-1px);box-shadow:0 8px 20px rgba(34,197,94,.3)}}
+  .btn:disabled{{background:#475569;cursor:not-allowed;transform:none}}
+  .status{{margin-top:14px;padding:12px;border-radius:8px;font-size:13px;text-align:center;display:none}}
+  .status.show{{display:block}}
+  .status.checking{{background:#1e3a8a;color:#93c5fd;border:1px solid #2563eb}}
+  .status.success{{background:#14532d;color:#86efac;border:1px solid #16a34a}}
+  .status.error{{background:#7f1d1d;color:#fca5a5;border:1px solid #dc2626}}
+  .footer{{text-align:center;color:#475569;font-size:11px;margin-top:18px}}
+  .meta{{background:#0f172a;border:1px solid #1e293b;border-radius:8px;padding:12px;margin-bottom:18px;font-size:12px;color:#94a3b8;line-height:1.6}}
+  .meta-row{{display:flex;justify-content:space-between;gap:8px}}
+  .meta-label{{color:#64748b}}
+</style>
+</head>
 <body>
-<div class="pay-wrap">
-<div class="pay-card">
-  <div class="pay-brand">
-    <div class="pay-brand-mark">E</div>
-    <div class="pay-brand-name">EMPIRE AI · empire-ai.co.uk</div>
+<div class="card">
+  <div class="brand">
+    <div class="brand-mark">E</div>
+    <div class="brand-name">EMPIRE AI · empire-ai.co.uk</div>
   </div>
 
-  <h1 class="pay-title">Settle Your Fee</h1>
-  <div class="pay-sub">Claim {claim_id} · Pay {fee_usdc} USDC to Empire AI vault.</div>
+  <h1>Settle Your Fee</h1>
+  <div class="sub">Claim {claim_id} · Pay {fee_usdc} USDC to Empire AI vault.</div>
 
-  <div class="pay-amount">
-    {discount_badge}
-    <div class="pay-amount-fee">${fee_usd}</div>
-    {original_fee_line}
-    <div class="pay-amount-claim">3% of ${claim_usd} settled claim</div>
+  <div class="amount">
+    <div class="amount-fee">${fee_usd}</div>
+    <div class="amount-claim">3% of ${claim_usd} settled claim</div>
   </div>
 
-  <div class="pay-meta">
-    <div class="pay-meta-row"><span class="pay-meta-label">Contractor</span><span>{contractor_name}</span></div>
-    <div class="pay-meta-row"><span class="pay-meta-label">Network</span><span>Solana · USDC</span></div>
-    <div class="pay-meta-row"><span class="pay-meta-label">Status</span><span style="color:var(--status-amber)">Awaiting payment</span></div>
+  <div class="meta">
+    <div class="meta-row"><span class="meta-label">Contractor</span><span>{contractor_name}</span></div>
+    <div class="meta-row"><span class="meta-label">Network</span><span>Solana · USDC</span></div>
+    <div class="meta-row"><span class="meta-label">Status</span><span style="color:#fbbf24">Awaiting payment</span></div>
   </div>
 
-  <div class="pay-qr-wrap">
+  <div class="qr-wrap">
     <img src="data:image/svg+xml;utf8,{qr_svg}" alt="Solana Pay QR code" />
   </div>
 
-  <div class="pay-wallet">
-    <div class="pay-wallet-label">Vault Wallet (USDC on Solana)</div>
-    <div class="pay-wallet-addr" id="wallet">{wallet}</div>
-    <button class="pay-copy-btn" id="copyBtn" onclick="copyWallet()">📋 Copy wallet address</button>
+  <div class="wallet">
+    <div class="wallet-label">Vault Wallet (USDC on Solana)</div>
+    <div class="wallet-addr" id="wallet">{wallet}</div>
+    <button class="copy-btn" id="copyBtn" onclick="copyWallet()">📋 Copy wallet address</button>
   </div>
 
-  <div class="pay-steps">
+  <div class="steps">
     <h3>How to pay</h3>
-    <div class="pay-step"><div class="pay-step-num">1</div><div>Open Phantom, Solflare, or any Solana wallet. Scan the QR code or paste the vault address above.</div></div>
-    <div class="pay-step"><div class="pay-step-num">2</div><div>Send exactly <strong>{fee_usdc} USDC</strong> (not SOL). USDC on Solana mainnet.</div></div>
-    <div class="pay-step"><div class="pay-step-num">3</div><div>Click <strong>I have paid</strong> below. We auto-verify the on-chain transfer.</div></div>
+    <div class="step"><div class="step-num">1</div><div>Open Phantom, Solflare, or any Solana wallet. Scan the QR code or paste the vault address above.</div></div>
+    <div class="step"><div class="step-num">2</div><div>Send exactly <strong>{fee_usdc} USDC</strong> (not SOL). USDC on Solana mainnet.</div></div>
+    <div class="step"><div class="step-num">3</div><div>Click <strong>I have paid</strong> below. We auto-verify the on-chain transfer.</div></div>
   </div>
 
-  <button class="pay-btn" id="paidBtn" onclick="markPaid()">✓ I have paid {fee_usdc} USDC</button>
-  <div class="pay-status" id="status"></div>
+  <button class="btn" id="paidBtn" onclick="markPaid()">✓ I have paid {fee_usdc} USDC</button>
+  <div class="status" id="status"></div>
 
-  <div class="pay-footer">
+  <div class="footer">
     Need help? Reply to the original SMS or email ops@empire-ai.co.uk.<br>
     Powered by Empire AI · {claim_id_short}
   </div>
 </div>
-</div>
 
 <script>
 const CLAIM_ID = "{claim_id}";
-function copyWallet() {{
+async function copyWallet() {{
   const addr = document.getElementById('wallet').textContent.trim();
-  navigator.clipboard.writeText(addr).then(() => {{
+  try {{
+    await navigator.clipboard.writeText(addr);
     const btn = document.getElementById('copyBtn');
     btn.textContent = '✓ Copied to clipboard';
     btn.classList.add('copied');
     setTimeout(() => {{ btn.textContent = '📋 Copy wallet address'; btn.classList.remove('copied'); }}, 2500);
-  }}).catch(() => {{
+  }} catch (e) {{
+    // fallback: select text
     const range = document.createRange();
     range.selectNode(document.getElementById('wallet'));
     window.getSelection().removeAllRanges();
     window.getSelection().addRange(range);
-  }});
+  }}
 }}
 
 async function markPaid() {{
@@ -243,7 +153,7 @@ async function markPaid() {{
   const status = document.getElementById('status');
   btn.disabled = true;
   btn.textContent = 'Checking on-chain transfer...';
-  status.className = 'pay-status show checking';
+  status.className = 'status show checking';
   status.textContent = 'Verifying your USDC transfer on Solana...';
 
   try {{
@@ -254,23 +164,23 @@ async function markPaid() {{
     }});
     const data = await res.json();
     if (res.ok && data.paid) {{
-      status.className = 'pay-status show paid';
+      status.className = 'status show success';
       status.innerHTML = '✓ Payment confirmed! Fee marked paid. Thank you.<br>Your contractor account has been updated.';
       btn.textContent = '✓ Paid';
       btn.style.background = '#16a34a';
     }} else if (data.found_pending) {{
-      status.className = 'pay-status show error';
+      status.className = 'status show error';
       status.innerHTML = '⚠ We see your transaction in the mempool but it is not yet confirmed. Wait 30 seconds and click again.';
       btn.disabled = false;
       btn.textContent = '✓ I have paid {fee_usdc} USDC';
     }} else {{
-      status.className = 'pay-status show error';
+      status.className = 'status show error';
       status.innerHTML = '⚠ No matching transfer found yet. Make sure you sent <strong>{fee_usdc} USDC</strong> (not SOL) to <code style="font-size:11px">{wallet_short}</code>. Allow 30-60 seconds for confirmation.';
       btn.disabled = false;
       btn.textContent = '✓ I have paid {fee_usdc} USDC';
     }}
   }} catch (e) {{
-    status.className = 'pay-status show error';
+    status.className = 'status show error';
     status.textContent = 'Network error: ' + e.message + '. Try again in a moment.';
     btn.disabled = false;
     btn.textContent = '✓ I have paid {fee_usdc} USDC';
@@ -340,41 +250,20 @@ def _build_solana_pay_qr_svg(wallet: str, amount_usdc: float, label: str = "Empi
 
 
 def _resolve_fee(claim_id: str):
-    """Look up fee_event by claim_id, with a fallback to dispatch_id.
+    """Look up fee_event by claim_id, falling back to fee_event.id.
 
-    Why the fallback: SMS templates historically embedded dispatch_id
-    in the pay URL (e.g. empire-ai.co.uk/pay/<dispatch_id>), but
-    fee_events rows are keyed by claim_id (carrier_claims.id). Without
-    the fallback every old SMS link 404s, which is why contractors
-    see "Payment not found" when they tap the link.
-
-    Resolution order:
-      1. fee_events.claim_id == claim_id           (canonical, post-fix SMS)
-      2. fee_events.meta->>dispatch_id == claim_id (legacy SMS links)
-    Returns the row or None.
+    Historical SMS pushed the fee_event.id as the URL slug (bug — the route
+    param was meant to be claim_id). Accept either so old links 404 no more.
     """
     from supabase import create_client
     db = create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_SERVICE_KEY"])
-    # 1. canonical: by carrier_claim.id
     r = db.table("fee_events").select("*").eq("claim_id", claim_id).limit(1).execute()
     if r.data:
         return r.data[0]
-    # 2. legacy: by dispatches.id stored in meta
-    try:
-        r2 = db.table("fee_events").select("*").eq("meta->>dispatch_id", claim_id).limit(1).execute()
-        if r2.data:
-            return r2.data[0]
-    except Exception:
-        # Some PostgREST versions / older schemas may not support ->> on jsonb.
-        # Fall back to a Python-side filter over a small page of pending fees.
-        try:
-            r3 = db.table("fee_events").select("*").eq("status", "pending").limit(500).execute()
-            for row in r3.data or []:
-                meta = row.get("meta") or {}
-                if meta.get("dispatch_id") == claim_id:
-                    return row
-        except Exception:
-            pass
+    # Fallback: maybe it's the fee_event.id itself
+    r2 = db.table("fee_events").select("*").eq("id", claim_id).limit(1).execute()
+    if r2.data:
+        return r2.data[0]
     return None
 
 
@@ -433,52 +322,9 @@ def register_payment_routes(app, get_db=None):
                 pass
 
         fee_usdc = _fee_usdc_amount(fee_amount)
-
-        # Discount badge (if a discount has been offered on this fee_event)
-        discount_amount = float(fee.get("discount_amount") or 0)
-        discount_expires_at = fee.get("discount_expires_at")
-        discount_percent = fee.get("discount_percent")
-        discounted_fee = max(0.0, fee_amount - discount_amount)
-        if discount_amount > 0 and discount_expires_at:
-            # Only show if not expired
-            try:
-                exp = datetime.fromisoformat(discount_expires_at.replace("Z", "+00:00"))
-            except Exception:
-                exp = None
-            if exp is None or exp > datetime.now(timezone.utc):
-                pct_int = int(round(float(discount_percent or 0) * 100))
-                discount_badge = (
-                    f'<div style="display:inline-block;background:linear-gradient(135deg,#fbbf24,#f59e0b);'
-                    f'color:#1f2937;padding:6px 14px;border-radius:999px;font-size:12px;font-weight:700;'
-                    f'letter-spacing:.5px;margin-bottom:10px">'
-                    f'🔥 {pct_int}% OFF — pay by {exp.strftime("%b %d") if exp else "soon"}'
-                    f'</div>'
-                )
-                original_fee_line = (
-                    f'<div class="amount-claim" style="text-decoration:line-through;color:#64748b;margin-top:2px">'
-                    f'was ${fee_amount:,.2f} — save ${discount_amount:,.2f}'
-                    f'</div>'
-                )
-                # Use the discounted amount everywhere on the page
-                fee_usdc = _fee_usdc_amount(discounted_fee)
-                fee_amount = discounted_fee
-                fee_usd = f"{discounted_fee:,.2f}"
-            else:
-                discount_badge = ""
-                original_fee_line = ""
-        else:
-            discount_badge = ""
-            original_fee_line = ""
-
         qr_svg = _build_solana_pay_qr_svg(VAULT_WALLET, fee_amount, "Empire AI")
 
-        head_html = empire_head(
-            title="Empire AI · Payment",
-            extra=_PAYMENT_PAGE_CSS,
-        )
-
         html = PAYMENT_PAGE_HTML.format(
-            head_html=head_html,
             claim_id=claim_id,
             claim_id_short=claim_id[:13],
             fee_usdc=fee_usdc,
@@ -488,8 +334,6 @@ def register_payment_routes(app, get_db=None):
             wallet=VAULT_WALLET,
             wallet_short=f"{VAULT_WALLET[:6]}...{VAULT_WALLET[-4:]}",
             qr_svg=qr_svg,
-            discount_badge=discount_badge,
-            original_fee_line=original_fee_line,
         )
         return HTMLResponse(html)
 
